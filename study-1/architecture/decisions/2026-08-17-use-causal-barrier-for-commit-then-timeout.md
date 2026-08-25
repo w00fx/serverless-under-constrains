@@ -1,0 +1,3 @@
+# Use a causal barrier for COMMIT_THEN_TIMEOUT
+
+Every `COMMIT_THEN_TIMEOUT` trial uses an experiment-control barrier with distinct ownership: the caller durably records its timeout, a shared controller consumes that inserted journal record through DynamoDB Streams and conditionally advances provider control to `TIMEOUT_SIGNALLED`, and the provider records `TIMEOUT_OBSERVED` before `RESPONSE_RELEASED`. At-least-once controller delivery is accepted only when the existing transition references the same causal event; conflicting signals invalidate control evidence. A fixed sleep or caller-owned control mutation cannot establish the required order independently, so any safety-deadline release remains `unverified` treatment evidence.
