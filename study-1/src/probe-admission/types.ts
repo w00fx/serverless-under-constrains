@@ -8,6 +8,13 @@ export const PROBE_TOTAL_TARGET_SECONDS = 1200;
 export const PROBE_STABILIZATION_INTERVAL_SECONDS = 120;
 export const PROBE_USAGE_CEILING_USD_MINOR = 100;
 export const EXPECTED_COORDINATION_SCHEMA_VERSION = 1;
+export const PROVIDER_CLIENT_DEADLINE_SECONDS = 3;
+export const PROVIDER_SAFETY_RELEASE_SECONDS = 15;
+export const PROVIDER_EXECUTION_TIMEOUT_SECONDS = 30;
+export const TREATMENT_STATE_POLLING_INTERVAL_MILLISECONDS = 250;
+export const RETRY_JITTER = "NONE";
+export const FIDELITY_BASIS = "causal_plus_cross_source_clock_assumption";
+export const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
 
 export type RejectionCategory =
   | "configuration"
@@ -117,3 +124,13 @@ export type ProbeAdmissionResult =
       journal_path: string;
       reasons: RejectionReason[];
     };
+
+export type ProbeFreezeResult =
+  | {
+      status: "frozen";
+      transport_probe_id: string;
+      probe_attempt_id: string;
+      manifest_path: string;
+      manifest_sha256: string;
+    }
+  | Extract<ProbeAdmissionResult, { status: "rejected" }>;

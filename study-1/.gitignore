@@ -1,5 +1,6 @@
 node_modules/
 probe-attempts/
+transport-probes/
 dist/
 coverage/
 *.tsbuildinfo

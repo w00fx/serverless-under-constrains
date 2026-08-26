@@ -1,0 +1,147 @@
+{
+  "account": {
+    "allowlisted_account_id": "123456789012",
+    "resolved_caller_account_id": "123456789012"
+  },
+  "approved_decision": {
+    "approved_amount_minor": 10000,
+    "currency": "BRL",
+    "decision": "APPROVED",
+    "payment_id": "pay-poc-001",
+    "record_type": "approved_decision",
+    "refund_request_id": "ref-poc-001",
+    "schema_version": 1
+  },
+  "clock_assumption": {
+    "assumption_id": "CA-1",
+    "assumption_type": "clock_alignment",
+    "record_type": "clock_assumption",
+    "schema_version": 1,
+    "scope": "same-account, same-Region AWS Lambda execution environments",
+    "statement": "UTC wall-clock timestamps preserve the ordering of the provider commit and caller timer events for this PoC.",
+    "status": "declared_not_service_guaranteed"
+  },
+  "clock_assumption_refs": [
+    "CA-1"
+  ],
+  "coordination": {
+    "coordination_resource_arn": "arn:aws:dynamodb:us-east-1:123456789012:table/study-1-coordination",
+    "coordination_stack_identity": "study-1-coordination",
+    "expected_coordination_schema_version": 1
+  },
+  "environment_input_sha256": "a47938ed4a158b3777c4cfc874d762177d8c96d7a09e489928bc5f8eb62ff3e5",
+  "fidelity_basis": "causal_plus_cross_source_clock_assumption",
+  "frozen_at": "2026-08-25T17:17:00.000Z",
+  "payment": {
+    "captured_amount_minor": 10000,
+    "currency": "BRL",
+    "payment_id": "pay-poc-001",
+    "record_type": "payment",
+    "schema_version": 1
+  },
+  "probe_attempt_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  "record_type": "transport_probe_manifest",
+  "region": "us-east-1",
+  "safety": {
+    "active_probe_time_seconds": 600,
+    "estimated_attributable_usage_usd_minor": 100,
+    "ownership_strategy": "resource_tags",
+    "region": "us-east-1",
+    "reserved_cleanup_seconds": 600,
+    "stabilization_interval_seconds": 120,
+    "total_target_seconds": 1200
+  },
+  "schema_digests": [
+    {
+      "artifact_path": "src/probe-admission/schemas/approved_decision.v1.json",
+      "artifact_sha256": "d7a86fe371bdd363523e4e37d3b04888debb2a02c6e664976ee8066388693bad"
+    },
+    {
+      "artifact_path": "src/probe-admission/schemas/clock_assumption.v1.json",
+      "artifact_sha256": "98e042a269bcb24b06055e162bc3a3df2cebada8f8771bb91015d47f4299ac87"
+    },
+    {
+      "artifact_path": "src/probe-admission/schemas/payment.v1.json",
+      "artifact_sha256": "d6574bbe64d2ab9fcda7572464a23ec278d85ed1332d95485c8ec3ace7fcafcc"
+    },
+    {
+      "artifact_path": "src/probe-admission/schemas/transport_probe_manifest.v1.json",
+      "artifact_sha256": "2a6d02ae0a95d24fedc7f0b1705995274adedf3cdf4eb9b97bdfbffbf4aa9d87"
+    },
+    {
+      "artifact_path": "src/probe-admission/schemas/transport_qualification_condition.v1.json",
+      "artifact_sha256": "69442d5d58b73c60d40566e416300de9a1afec36d56ef563349fb5eb6548f5d0"
+    }
+  ],
+  "schema_version": 1,
+  "selected_predecessor_probe_ids": [],
+  "source": {
+    "head_revision": "666de374f7ef9facda60702ea9f3ceaf209ccdc2",
+    "lockfile_present": true,
+    "lockfile_tracked": true
+  },
+  "timing": {
+    "provider_client_deadline_seconds": 3,
+    "provider_execution_timeout_seconds": 30,
+    "provider_safety_release_seconds": 15,
+    "retry_jitter": "NONE",
+    "treatment_state_polling_interval_milliseconds": 250
+  },
+  "tools": {
+    "node_version": "24.15.0"
+  },
+  "tq_definitions": [
+    {
+      "clock_assumption_refs": [
+        "CA-1"
+      ],
+      "condition_id": "TQ-1",
+      "ordering_basis": "cross_source_wall_clock",
+      "record_type": "transport_qualification_condition",
+      "schema_version": 1,
+      "statement": "The provider transaction must be durably committed before the caller timer wins.",
+      "title": "Commit Before Timer"
+    },
+    {
+      "clock_assumption_refs": [],
+      "condition_id": "TQ-2",
+      "record_type": "transport_qualification_condition",
+      "schema_version": 1,
+      "statement": "The application-owned timer must win after at least three seconds of source-local monotonic elapsed time while the transport promise remains unsettled, abort transport, and cause the durable caller_timeout_recorded event.",
+      "title": "Application Timeout"
+    },
+    {
+      "clock_assumption_refs": [],
+      "condition_id": "TQ-3",
+      "record_type": "transport_qualification_condition",
+      "schema_version": 1,
+      "statement": "The provider must continue executing after the caller aborts.",
+      "title": "Continued Provider Execution"
+    },
+    {
+      "clock_assumption_refs": [],
+      "condition_id": "TQ-4",
+      "record_type": "transport_qualification_condition",
+      "schema_version": 1,
+      "statement": "The controller signal must be immediately caused by both provider commit and caller timeout, and the provider must subsequently observe that signal.",
+      "title": "Causal Join and Observation"
+    },
+    {
+      "clock_assumption_refs": [],
+      "condition_id": "TQ-5",
+      "record_type": "transport_qualification_condition",
+      "schema_version": 1,
+      "statement": "The provider must release only after timeout observation, and no safety release may occur.",
+      "title": "Controlled Release"
+    },
+    {
+      "clock_assumption_refs": [],
+      "condition_id": "TQ-6",
+      "record_type": "transport_qualification_condition",
+      "schema_version": 1,
+      "statement": "The caller must never observe a successful provider response for the targeted attempt.",
+      "title": "No Caller-Observed Success"
+    }
+  ],
+  "transport_probe_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+}

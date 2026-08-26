@@ -1,7 +1,12 @@
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
-import { formatUtcTimestamp, isLowercaseUuidV4 } from "./identity.ts";
+import {
+  formatUtcTimestamp,
+  resolveLowercaseUuidV4,
+  TerminalProbeIdentityError,
+} from "./identity.ts";
+import { isNormalizedRelativePosixPath, isPlainObject } from "./value-guards.ts";
 import type {
   ProbeAdmissionDependencies,
   ProbeAdmissionResult,
@@ -32,7 +37,25 @@ export async function admitProbeAttempt(
   proposal: ProbeAttemptProposal,
   deps: ProbeAdmissionDependencies,
 ): Promise<ProbeAdmissionResult> {
-  const probeAttemptId = resolveProbeAttemptId(deps.createId);
+  const probeAttemptId = resolveLowercaseUuidV4(deps.createId);
+  const frozenManifestPath = join(
+    deps.evidenceRoot,
+    "transport-probes",
+    probeAttemptId,
+    "transport-probe-manifest.json",
+  );
+  if (await exists(frozenManifestPath)) {
+    throw new TerminalProbeIdentityError(probeAttemptId, "frozen");
+  }
+
+  const probeAttemptsDir = join(deps.evidenceRoot, "probe-attempts");
+  const attemptDir = join(probeAttemptsDir, probeAttemptId);
+  const rejectionPath = join(attemptDir, "probe-rejection.json");
+  const journalPath = join(attemptDir, "preflight-journal.jsonl");
+  if (await exists(rejectionPath)) {
+    throw new TerminalProbeIdentityError(probeAttemptId, "rejected");
+  }
+
   const occurredAt = formatUtcTimestamp((deps.now ?? (() => new Date()))());
   const reasons = collectReasons(proposal);
   const serializedReasons = reasons.map(serializeReason);
@@ -40,11 +63,6 @@ export async function admitProbeAttempt(
   if (serializedReasons.length === 0) {
     return { status: "admitted", probe_attempt_id: probeAttemptId };
   }
-
-  const probeAttemptsDir = join(deps.evidenceRoot, "probe-attempts");
-  const attemptDir = join(probeAttemptsDir, probeAttemptId);
-  const rejectionPath = join(attemptDir, "probe-rejection.json");
-  const journalPath = join(attemptDir, "preflight-journal.jsonl");
 
   const rejection = {
     schema_version: SCHEMA_VERSION,
@@ -98,12 +116,16 @@ async function persistRejectedAttempt(
   }
 }
 
-function resolveProbeAttemptId(createId: (() => string) | undefined): string {
-  const id = createId?.() ?? randomUUID();
-  if (!isLowercaseUuidV4(id)) {
-    throw new Error("probe attempt identity must be a lowercase UUIDv4");
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path, fsConstants.F_OK);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
-  return id;
 }
 
 function collectReasons(proposal: ProbeAttemptProposal): RejectionReason[] {
@@ -609,27 +631,12 @@ function declaredDurationReasons(
   ];
 }
 
-function isNormalizedRelativePosixPath(value: unknown): value is string {
-  if (typeof value !== "string" || value === "") {
-    return false;
-  }
-  if (value.includes("\\") || value.startsWith("/") || /^[A-Za-z]:/.test(value)) {
-    return false;
-  }
-  const segments = value.split("/");
-  return segments.every((segment) => segment !== "" && segment !== "." && segment !== "..");
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
 function nonemptyIdentifier(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
   const trimmed = value.trim();
-  return trimmed === "" ? undefined : trimmed;
+  return trimmed !== "" && value === trimmed ? value : undefined;
 }
 
 function asNonNegativeSafeInteger(value: unknown): number | undefined {

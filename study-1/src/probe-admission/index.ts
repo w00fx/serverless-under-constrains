@@ -1,5 +1,17 @@
 export { admitProbeAttempt } from "./admit-probe-attempt.ts";
-export { isLowercaseUuidV4 } from "./identity.ts";
+export {
+  freezeProbeDefinition,
+  FrozenArtifactError,
+  ProbeManifestValidationError,
+  serializeProbeManifest,
+} from "./freeze-probe-definition.ts";
+export { serializeCanonicalJson, sha256Bytes } from "./canonical-json.ts";
+export {
+  isCanonicalRecordType,
+  isCanonicalUtcMillisecondTimestamp,
+  isLowercaseUuidV4,
+  TerminalProbeIdentityError,
+} from "./identity.ts";
 export {
   ALLOWED_CURRENCY,
   ALLOWED_REGION,
@@ -13,5 +25,6 @@ export type {
   ProbeAdmissionDependencies,
   ProbeAdmissionResult,
   ProbeAttemptProposal,
+  ProbeFreezeResult,
   RejectionReason,
 } from "./types.ts";

@@ -1,0 +1,6 @@
+{
+  "described_schema_version": 1,
+  "describes_record_type": "transport_probe_manifest",
+  "record_type": "record_schema",
+  "schema_version": 1
+}
