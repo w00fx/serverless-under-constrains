@@ -5,3 +5,5 @@ dist/
 coverage/
 *.tsbuildinfo
 .eslintcache
+cdk.out/
+cdk.context.json

@@ -6,6 +6,12 @@ export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.recommended,
   {
-    ignores: ["node_modules/**", "dist/**", "probe-attempts/**", "transport-probes/**"],
+    ignores: [
+      "node_modules/**",
+      "dist/**",
+      "probe-attempts/**",
+      "transport-probes/**",
+      "cdk.out/**",
+    ],
   },
 );

@@ -1,10 +1,12 @@
 # Serverless Under Constraints
 
-Status: Project charter v0.1
-Date: August 17, 2026
+Status: Project charter v0.2
+Date: August 27, 2026
 First deliverable: Study 1, refunds under ambiguous outcomes
 
-Primary specification: [Study 1: Refunds Under Ambiguous Outcomes](specs/refund-under-ambiguous-outcome/refund-under-ambiguous-outcome.md)
+Primary specification: [Study 1: Evaluate Refund-Invariant Preservation Under Ambiguous Outcomes](study-1/specs/refund-under-ambiguous-outcome.md)
+
+This charter states the lab's purpose, vocabulary, safety posture, and Study 1 delivery sequence. Protocol rules, acceptance criteria, numeric fixtures, and milestone gates live only in the specification and the Study 1 architecture decisions.
 
 ## Purpose
 
@@ -58,6 +60,8 @@ _Avoid:_ test when the scope is ambiguous.
 **Runner:** the local coordinator for the experimental cycle.
 _Avoid:_ platform, simulator.
 
+Study 1 adds protocol terms that this charter does not redefine: transport qualification, coordination lease, settlement, evidence freeze, amendment, package eligibility, cleanup, and leak audit. Their definitions live in the specification.
+
 ## Experimental Cycle
 
 ```text
@@ -74,7 +78,15 @@ preflight
   -> leak audit
 ```
 
-The runner records each phase transition in a journal. When a phase fails, the runner preserves the available evidence, classifies the trial, and runs cleanup.
+The protocol requires a journal of each phase transition. When a phase fails, available evidence is preserved, the trial is classified, and cleanup runs.
+
+Study 1 places a blocking transport qualification before citable study runs, holds a coordination lease around experimental mutation, requires settlement before evidence freeze, and treats late evidence and billing as immutable amendments. Those rules are specified, not restated here.
+
+## Study 1 Scope
+
+The approved vertical PoC is two variants (conventional Lambda and SQS, and Lambda durable functions), two scenarios (`CONTROL` and `COMMIT_THEN_TIMEOUT`), one fixed full-refund decision, a controlled provider, an independent oracle, immutable evidence, cleanup, and leak audit.
+
+The specification lists the PoC non-goals. They include a third variant, a second treatment, an agentic decision lane, a generic plugin system or multi-study runner, and a parent-level shared library.
 
 ## Initial Core Boundary
 
@@ -101,6 +113,8 @@ Study 1 must not introduce an invariant DSL, plugin system, web interface, hoste
 
 ## Architecture of the First Vertical Slice
 
+This is the target Study 1 architecture. It is not a claim that these components already exist in the repository.
+
 ```text
 Experiment definition
         |
@@ -124,113 +138,78 @@ Variant   Workload   Treatment controller   Evidence collector
 
 The refund provider simulates a controlled external dependency. The variants use real AWS services for functions, queues, tables, and orchestration.
 
-## Initial Technical Decisions for the PoC
+## Technical Baseline
 
-- Application and runner language: TypeScript.
-- Target runtime: Node.js 24, subject to confirmation during bootstrap.
+The specification freezes these choices:
+
+- Application language: TypeScript.
+- Runtime: Node.js 24. Other major versions are out of scope.
 - Infrastructure as code: AWS CDK v2.
-- Package manager: npm with a versioned lockfile.
-- Initial Region: `us-east-1`, configurable and subject to service availability.
+- Package manager: npm with a committed lockfile.
+- Region: `us-east-1`. Admission rejects any other Region.
 - Environment: an allowlisted AWS sandbox account with no production credentials.
 - Money: integers in the currency's minor unit. BRL values use cents.
 - Time and identifiers: UTC, UUIDs, and ISO 8601 timestamps.
 
-The lockfile owns exact dependency versions. The project must verify runtime and Region support before the first deployment.
+The lockfile owns exact dependency versions. Live AWS work still requires operator-supplied account and coordination identity; those inputs are not unspecified protocol decisions.
 
-## Initial Repository Structure
+## Repository Layout
+
+Current layout:
 
 ```text
 .
+├── AGENTS.md
 ├── PROJECT.md
 ├── README.md
-├── specs/
-│   └── refund-under-ambiguous-outcome/
-│       └── refund-under-ambiguous-outcome.md
-├── studies/
-│   └── 01-refund-under-ambiguous-outcome/
-│       ├── experiment.yaml
-│       ├── infrastructure/
-│       ├── scenarios/
-│       ├── variants/
-│       └── README.md
-├── packages/
-│   └── runner/
-└── runs/                    # ignored by Git; stores local artifacts
+└── study-1/
+    ├── AGENTS.md
+    ├── package.json
+    ├── package-lock.json
+    ├── tsconfig.json
+    ├── eslint.config.js
+    ├── specs/
+    │   └── refund-under-ambiguous-outcome.md
+    ├── architecture/
+    │   └── decisions/
+    ├── src/
+    │   ├── probe-admission/
+    │   └── coordination/
+    └── test/
 ```
 
-This tree describes the PoC target. Bootstrap should create only the directories that receive code in the current increment.
+Later Study 1 implementation stays under `study-1/`. The repository does not have a top-level `specs/`, `studies/`, or `packages/runner` tree.
 
 ## Operational Safety
 
-Before provisioning resources, the runner must:
+Before provisioning resources, execution must:
 
 - require an explicit allowlisted sandbox account ID;
-- confirm the Region;
+- require Region `us-east-1`;
 - require a maximum run duration;
-- reject resources without study and run tags;
+- reject resources without the required study and run tags;
 - record the commit and tool versions;
 - show the resource plan and spending cap when available.
 
 Every deployment needs idempotent cleanup in a construct equivalent to `finally`. The leak audit searches for resources by run tags. The project does not run against production or move real money.
 
-## Deliverables
+Baseline coordination is operator-managed infrastructure, not a run-owned resource. Probes and runs may verify and use its frozen identity; they do not bootstrap, migrate, or destroy it as part of trial cleanup.
 
-### Milestone 0: Documentation and Skeleton
+## Delivery Sequence
 
-- versioned charter and specification;
-- initialized repository;
-- local validation commands;
-- no deployed infrastructure.
+Study 1 uses the specification's M0 through M4 sequence. Checkpoint names below are labels only; completion criteria remain in the specification.
 
-### Milestone 1: Vertical PoC
+- **M0** — protocol foundation and treatment-transport qualification, with internal checkpoints M0-A through M0-D.
+- **M1** — offline oracle and canonical study contracts from immutable synthetic evidence.
+- **M2** — conventional variant vertical validation.
+- **M3** — Durable variant vertical validation.
+- **M4** — canonical four-cell study run.
 
-- a controlled refund dependency with an independent ledger;
-- the `COMMIT_THEN_TIMEOUT` treatment;
-- a conventional Lambda and SQS variant;
-- a Lambda durable functions variant;
-- a reproducible minimal workload;
-- an executable oracle;
-- an evidence package for at least one trial per variant.
+This charter does not mark any milestone complete. Current code status belongs in [README.md](README.md).
 
-### Milestone 2: Repeatable Protocol
+## Operator Inputs Versus Open Questions
 
-- trial count and seeds fixed before collection;
-- randomized variant order;
-- verified reset and cleanup;
-- one command derives raw data and the summary;
-- recorded limitations and threats to validity.
-
-### Milestone 3: Complete Study 1
-
-- a third variant selected and implemented;
-- a second treatment selected and implemented;
-- an agentic lane added without mixing model variability into architecture recovery measurements;
-- cost per correct completion calculated;
-- canonical study published in English and Portuguese.
-
-## PoC Definition of Done
-
-The PoC is complete when a person can use the repository to:
-
-1. validate the account and tools;
-2. deploy both variants and the controlled provider;
-3. run the normal case;
-4. run `COMMIT_THEN_TIMEOUT` with the same data;
-5. receive an oracle result tied to the ledger;
-6. inspect the artifacts supporting that result;
-7. remove the resources and confirm that the leak audit passed.
-
-A screenshot or trace without a manifest, oracle result, and raw data does not complete the PoC.
-
-## Open Questions Before the First Deployment
-
-1. Which sandbox account ID may the runner use?
-2. What spending cap and maximum duration apply to each run?
-3. How many trials and which seeds make up the publishable collection?
-4. Which delay will cause a timeout in each variant without changing the commit point?
-5. Will the study compare complete architecture recipes or separate architecture and idempotency through a factorial design?
-6. Which third variant will enter the full study, and how will AgentCore participate without becoming a confounding variable?
-7. What name will the fictional marketplace use?
+The specification's Open Questions section is `None`. Remaining live-AWS values are operator-supplied deployment inputs, including the allowlisted 12-digit sandbox account ID and the coordination resource identity. They do not reopen protocol or design questions.
 
 ## Initial Technical Sources
 
@@ -238,8 +217,7 @@ A screenshot or trace without a manifest, oracle result, and raw data does not c
 - [Retries for Lambda durable functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-sdk-retries.html)
 - [Durable functions or Step Functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-step-functions.html)
 - [Testing serverless functions and applications](https://docs.aws.amazon.com/lambda/latest/dg/testing-guide.html)
-- [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html)
 
-## Instruction for Codex CLI
+## Instruction for Agents
 
-Read this file and the Study 1 specification before proposing code. Start with Milestone 0. Do not implement later milestones to prepare for future work. Stop and surface any open decision that changes observable behavior, safety, cost, or experimental validity before writing code.
+Read this file and the Study 1 specification before proposing code. Follow the specification's current milestone. Do not implement later milestones to prepare for future work. Do not treat operator-supplied account or coordination values as unresolved specification questions.

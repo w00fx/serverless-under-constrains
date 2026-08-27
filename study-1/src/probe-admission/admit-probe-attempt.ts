@@ -2,6 +2,11 @@ import { access, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { join } from "node:path";
 import {
+  EXPECTED_COORDINATION_SCHEMA_VERSION,
+  isTwelveDigitAccountId,
+  parseCoordinationArn,
+} from "../coordination/identity.ts";
+import {
   formatUtcTimestamp,
   resolveLowercaseUuidV4,
   TerminalProbeIdentityError,
@@ -18,7 +23,6 @@ import type {
 import {
   ALLOWED_CURRENCY,
   ALLOWED_REGION,
-  EXPECTED_COORDINATION_SCHEMA_VERSION,
   MAX_SAFE_AMOUNT_MINOR,
   PROBE_ACTIVE_TIME_SECONDS,
   PROBE_RESERVED_CLEANUP_SECONDS,
@@ -30,8 +34,6 @@ import {
 
 const CREDENTIAL_KEY_PATTERN =
   /(credential|token|password|secret|access_key|credential_process)/i;
-
-const ACCOUNT_ID_PATTERN = /^[0-9]{12}$/;
 
 export async function admitProbeAttempt(
   proposal: ProbeAttemptProposal,
@@ -329,7 +331,7 @@ function accountReasons(proposal: ProbeAttemptProposal): RejectionReason[] {
   const allowlisted = proposal.environment.allowlisted_account_id;
   const caller = proposal.resolved_caller_account_id;
 
-  if (typeof allowlisted !== "string" || !ACCOUNT_ID_PATTERN.test(allowlisted)) {
+  if (!isTwelveDigitAccountId(allowlisted)) {
     reasons.push({
       code: "account_not_12_digit",
       category: "account",
@@ -337,7 +339,7 @@ function accountReasons(proposal: ProbeAttemptProposal): RejectionReason[] {
       observed: allowlisted,
     });
   }
-  if (typeof caller !== "string" || !ACCOUNT_ID_PATTERN.test(caller)) {
+  if (!isTwelveDigitAccountId(caller)) {
     reasons.push({
       code: "account_not_12_digit",
       category: "account",
@@ -346,10 +348,8 @@ function accountReasons(proposal: ProbeAttemptProposal): RejectionReason[] {
     });
   }
   if (
-    typeof allowlisted === "string" &&
-    ACCOUNT_ID_PATTERN.test(allowlisted) &&
-    typeof caller === "string" &&
-    ACCOUNT_ID_PATTERN.test(caller) &&
+    isTwelveDigitAccountId(allowlisted) &&
+    isTwelveDigitAccountId(caller) &&
     allowlisted !== caller
   ) {
     reasons.push({
@@ -435,7 +435,7 @@ function coordinationReasons(proposal: ProbeAttemptProposal): RejectionReason[] 
   const arn = environment.coordination_resource_arn;
   const stack = nonemptyIdentifier(environment.coordination_stack_identity);
   const schemaVersion = environment.expected_coordination_schema_version;
-  const parsedArn = typeof arn === "string" ? parseArn(arn) : undefined;
+  const parsedArn = typeof arn === "string" ? parseCoordinationArn(arn) : undefined;
   const account =
     typeof environment.allowlisted_account_id === "string"
       ? environment.allowlisted_account_id
@@ -673,31 +673,6 @@ function forbiddenCredentialKeys(
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].toSorted();
-}
-
-function parseArn(
-  arn: string,
-): { region: string; accountId: string } | undefined {
-  const parts = arn.split(":");
-  if (parts.length < 6 || parts[0] !== "arn" || parts[1] !== "aws") {
-    return undefined;
-  }
-  const service = parts[2];
-  const region = parts[3];
-  const accountId = parts[4];
-  const resource = parts.slice(5).join(":");
-  if (
-    service === undefined ||
-    service === "" ||
-    region === undefined ||
-    region === "" ||
-    accountId === undefined ||
-    accountId === "" ||
-    resource === ""
-  ) {
-    return undefined;
-  }
-  return { region, accountId };
 }
 
 function serializeReason(reason: RejectionReason): RejectionReason {
