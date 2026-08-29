@@ -1,12 +1,12 @@
-Study 1 is governed by @specs/refund-under-ambiguous-outcome.md and the decisions under @architecture/decisions/.
+This project is based on @../specs/refund-under-ambiguous-outcome.md
 
-Before proposing or implementing work:
+## Commands
 
-- read the complete specification and applicable architecture decisions;
-- follow the M0 through M4 delivery sequence;
-- implement only the current delivery task and its required evidence;
-- keep all Study 1 implementation under this directory;
-- treat the sandbox account and coordination identity as operator inputs, not open design questions;
-- perform no AWS mutation until the specification's admission and safety gates permit it.
+From `study-1/`, Node.js 24:
 
-The initial commit contains no toolchain or implementation commands. The delivery task that introduces them must document and verify them.
+- `npm run lint`
+- `npm run typecheck`
+- `npm test` — `node --experimental-strip-types --test`
+- `npm run check` — lint, typecheck, and tests
+
+`src/protocol-records/` is the local M0-A contract surface: create, reject, serialize, hash, and verify deterministic protocol records. It performs no cloud mutation.
