@@ -1,0 +1,3 @@
+# Deploy the frozen cloud assembly
+
+An evidence-bearing run or transport probe builds and synthesizes once into staging, copies the completed cloud assembly into its private evidence package, inventories that copy by normalized path, mode, size, and SHA-256 digest, freezes its manifest, and deploys only from that verified copy without resynthesis. The raw package preserves every regular assembly file; symlinks, special files, and Docker image assets are excluded so provenance cannot silently diverge from the infrastructure and Lambda artifacts actually exercised. Any redacted public release is a separately digested derived artifact, never a mutation of the raw package.

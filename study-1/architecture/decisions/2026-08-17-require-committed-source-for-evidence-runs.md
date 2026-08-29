@@ -1,0 +1,3 @@
+# Require committed source for evidence-bearing runs
+
+A canonical four-trial cloud run requires a committed `HEAD`, no staged or unstaged changes, no nonignored untracked files or unfinished Git operation, and a tracked, unmodified package lockfile at the `study-1` repository root; dirty or revisionless source is limited to development activities and cannot produce citable oracle evidence. This deliberately rejects source-classification and patch/archive reconstruction machinery from the PoC in exchange for simple, exact provenance; detached `HEAD` remains valid because the commit, not a branch name, is authoritative.

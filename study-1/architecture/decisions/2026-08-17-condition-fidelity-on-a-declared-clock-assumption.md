@@ -1,0 +1,3 @@
+# Condition fidelity on a declared clock assumption
+
+The PoC may mark treatment fidelity `verified` only as conditional empirical verification: manifest-bound provider behavior and the causal barrier establish commit-before-wait and timeout-to-release, while strict commit-before-timer ordering relies on declared assumption `CA-1` that same-account, same-Region Lambda UTC timestamps preserve that ordering. AWS provides no Lambda-specific clock-accuracy guarantee for this use, so every result must disclose `causal_plus_cross_source_clock_assumption`; formal happened-before proof would require a redesigned provider-to-caller signal.

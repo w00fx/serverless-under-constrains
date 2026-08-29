@@ -1,0 +1,3 @@
+# Require an atomic run lease
+
+Only one canonical run, pre-study transport probe, or variant validation may be active for Study 1, an AWS account, and a Region, enforced by one conditional lease in a pre-existing coordination resource using `owner_kind`, `owner_id`, owner-manifest digest, expiry, and heartbeat. A failed heartbeat blocks new publication; ownership mismatch or 300 seconds without confirmation stops experimental work, while incomplete cleanup leaves `RECOVERY_REQUIRED` and an unknowable coordination state remains `unverified`. All three owner kinds contend for the same key; TTL expiry never proves release, tag scans cannot substitute for the lease, and recovery remains an operator action for the same owner rather than a hosted watchdog or janitor.
