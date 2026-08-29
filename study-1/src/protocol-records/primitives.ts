@@ -74,5 +74,9 @@ export function isCanonicalMonotonicNanos(value: unknown): value is string {
 }
 
 export function isCanonicalJsonPointer(value: unknown): value is string {
-  return typeof value === "string" && value.startsWith("/") && value.length > 0;
+  return typeof value === "string" && value.startsWith("/");
+}
+
+export function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

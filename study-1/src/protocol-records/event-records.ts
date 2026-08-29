@@ -1,5 +1,6 @@
 import { omitUndefinedAndSort } from "./serialize.ts";
 import {
+  compareCodeUnits,
   isCanonicalRecordType,
   isCanonicalUtcMillisecondTimestamp,
   isLowercaseUuidV4,
@@ -155,7 +156,12 @@ export function createPrimaryEvent(input: unknown): ValidationResult<PrimaryEven
   ]);
   for (const [key, value] of Object.entries(raw)) {
     if (!reserved.has(key) && value !== undefined) {
-      event[key] = value;
+      Object.defineProperty(event, key, {
+        value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
   }
   return { ok: true, value: event };
@@ -235,7 +241,18 @@ export function classifyEventSequence(
       continue;
     }
 
-    const structural = JSON.stringify(omitUndefinedAndSort(item));
+    let structural: string;
+    try {
+      structural = JSON.stringify(omitUndefinedAndSort(item));
+    } catch (error) {
+      reasons.push({
+        code: "unserializable_event",
+        field: `events[${index}]`,
+        expected: "JSON-serializable event content",
+        observed: error instanceof Error ? error.message : error,
+      });
+      continue;
+    }
     const priorId = byEventId.get(item.event_id);
     if (priorId === undefined) {
       byEventId.set(item.event_id, { structural, count: 1 });
@@ -287,14 +304,14 @@ export function classifyEventSequence(
     }
   }
 
-  if (reasons.length > 0) {
-    return { ok: false, reasons };
-  }
-
   const duplicate_event_ids = [...byEventId.entries()]
     .filter(([, entry]) => entry.count > 1)
     .map(([event_id, entry]) => ({ event_id, count: entry.count }))
-    .toSorted((left, right) => left.event_id.localeCompare(right.event_id));
+    .toSorted((left, right) => compareCodeUnits(left.event_id, right.event_id));
+
+  if (reasons.length > 0) {
+    return { ok: false, reasons, duplicate_event_ids };
+  }
 
   return { ok: true, value: { duplicate_event_ids } };
 }
@@ -339,7 +356,9 @@ function validateCausationEventIds(
     });
   }
   const allStrings = value.every((id) => typeof id === "string");
-  const sorted = allStrings ? [...(value as string[])].toSorted((left, right) => left.localeCompare(right)) : [];
+  const sorted = allStrings
+    ? [...(value as string[])].toSorted((left, right) => compareCodeUnits(left, right))
+    : [];
   if (sorted.length === value.length && value.some((id, index) => id !== sorted[index])) {
     reasons.push({
       code: "unsorted_causation_event_ids",

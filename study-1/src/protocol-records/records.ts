@@ -1,4 +1,5 @@
 import {
+  compareCodeUnits,
   isCanonicalJsonPointer,
   isLowercaseUuidV4,
   isNormalizedRelativePosixPath,
@@ -346,9 +347,12 @@ function createEvidenceRefArray(
       });
     }
     seen.add(duplicateKey);
+    if (!isSha256Hex(item.artifact_sha256)) {
+      continue;
+    }
     const ref: EvidenceRef = {
       artifact_path: item.artifact_path,
-      artifact_sha256: typeof item.artifact_sha256 === "string" ? item.artifact_sha256 : "",
+      artifact_sha256: item.artifact_sha256,
     };
     if (typeof item.event_id === "string") {
       ref.event_id = item.event_id;
@@ -378,12 +382,12 @@ function compareOptional(left: string | undefined, right: string | undefined): n
   if (right === undefined) {
     return 1;
   }
-  return left.localeCompare(right);
+  return compareCodeUnits(left, right);
 }
 
 function compareEvidenceRefs(left: EvidenceRef, right: EvidenceRef): number {
   return (
-    left.artifact_path.localeCompare(right.artifact_path) ||
+    compareCodeUnits(left.artifact_path, right.artifact_path) ||
     compareOptional(left.event_id, right.event_id) ||
     compareOptional(left.json_pointer, right.json_pointer) ||
     compareOptional(left.package_index_sha256, right.package_index_sha256)

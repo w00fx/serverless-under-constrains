@@ -13,7 +13,6 @@ export type {
   Payment,
   PrimaryEvent,
   RejectionReason,
-  SequenceClassification,
   ValidationResult,
 } from "./types.ts";
 export {

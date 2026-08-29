@@ -40,14 +40,10 @@ export type ValidationOk<T> = {
 export type ValidationErr = {
   ok: false;
   reasons: RejectionReason[];
+  duplicate_event_ids?: Array<{ event_id: string; count: number }>;
 };
 
 export type ValidationResult<T> = ValidationOk<T> | ValidationErr;
-
-export type SequenceClassification = {
-  ok: true;
-  duplicate_event_ids: Array<{ event_id: string; count: number }>;
-};
 
 export type Payment = {
   schema_version: 1;
