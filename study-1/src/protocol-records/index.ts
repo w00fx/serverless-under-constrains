@@ -36,3 +36,5 @@ export {
   verifyCanonicalJson,
   verifyCanonicalJsonl,
 } from "./serialize.ts";
+export { createApprovedDecision, createEvidenceRefs, createPayment } from "./records.ts";
+export { classifyEventSequence, createPrimaryEvent } from "./event-records.ts";

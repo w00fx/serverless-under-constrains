@@ -1,0 +1,12 @@
+[
+  {
+    "artifact_path": "events/caller.jsonl",
+    "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "event_id": "11111111-1111-4111-8111-111111111111"
+  },
+  {
+    "artifact_path": "ledger/snapshot.json",
+    "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "json_pointer": "/transactions/0"
+  }
+]
