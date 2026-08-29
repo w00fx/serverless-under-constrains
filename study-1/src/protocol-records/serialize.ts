@@ -15,7 +15,12 @@ export function omitUndefinedAndSort(value: unknown): unknown {
     if (item === undefined) {
       continue;
     }
-    sorted[key] = omitUndefinedAndSort(item);
+    Object.defineProperty(sorted, key, {
+      value: omitUndefinedAndSort(item),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return sorted;
 }

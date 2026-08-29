@@ -227,6 +227,24 @@ test("M0-A#refused keeps an extra __proto__ field as an own property", () => {
   assert.equal(Object.hasOwn(created.value, "__proto__"), true);
   assert.equal(Object.getPrototypeOf(created.value) === Object.prototype, true);
   assert.equal((created.value as { pwned?: boolean }).pwned, undefined);
+  const bytes = serializeCanonicalJson(created.value);
+  assert.match(bytes, /"__proto__"/);
+  const withoutExtra = createPrimaryEvent({
+    schema_version: 1,
+    record_type: "dispatch_started",
+    event_id: "11111111-1111-4111-8111-111111111111",
+    occurred_at: "2026-08-25T17:17:00.000Z",
+    source: "caller",
+    source_instance_id: "22222222-2222-4222-8222-222222222222",
+    source_sequence: 1,
+    trial_manifest_sha256: "c".repeat(64),
+    run_id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  });
+  assert.equal(withoutExtra.ok, true);
+  if (!withoutExtra.ok) {
+    throw new Error("expected event");
+  }
+  assert.notEqual(sha256Bytes(bytes), sha256Bytes(serializeCanonicalJson(withoutExtra.value)));
 });
 
 test("M0-A#refused rejects an unserializable sequence event instead of throwing", () => {
