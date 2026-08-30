@@ -24,6 +24,25 @@ It does not contain variants, a provider, transport qualification, an oracle, or
 
 ## Local commands
 
+From the repository root, after `make bootstrap` (Node.js 24):
+
+| Command | Purpose |
+| --- | --- |
+| `make check` | Lint, typecheck, and tests |
+| `make check-study-1` | Same, scoped to Study 1 |
+| `make golden` | Locked fixtures and spec tables |
+| `make golden-mutation` | Sabotage one table row and require the table harness to fail |
+| `make mutation-study-1` | Stryker on protocol records |
+| `make fuzz-study-1` | Seeded invalid-input properties |
+| `make complexity` | ESLint complexity on the eligible target |
+| `make duplication` | Cross-file token-window duplication |
+| `make secrets` | gitleaks (blocking) |
+| `make security` | `npm audit --audit-level=high` |
+| `make build` | TypeScript compile check |
+| `make metrics` | Lint / audit / coverage ratchet |
+| `make check-e2e` | N/A — no UI |
+| `make race` | N/A — no Go race detector |
+
 From `study-1/`, on Node.js 24:
 
 | Command | Purpose |
@@ -33,6 +52,8 @@ From `study-1/`, on Node.js 24:
 | `npm test` | built-in Node test runner |
 | `npm run check` | lint, typecheck, and tests |
 | `npm run golden` | locked canonical-byte fixtures |
+| `npm run golden-tables` | `specs/tables/` reference rows |
+| `npm run fuzz` | seeded invalid-input properties |
 | `npm run coverage` | line and branch coverage for protocol records |
 | `npm run mutation` | Stryker on protocol records |
 

@@ -1,0 +1,26 @@
+{
+  "id": "M0-A-003-approved-decision-accept",
+  "requirement": "M0-A",
+  "operation": "createApprovedDecision",
+  "input": {
+    "schema_version": 1,
+    "record_type": "approved_decision",
+    "refund_request_id": "ref-poc-001",
+    "payment_id": "pay-poc-001",
+    "decision": "APPROVED",
+    "approved_amount_minor": 10000,
+    "currency": "BRL"
+  },
+  "expect": {
+    "ok": true,
+    "value": {
+      "schema_version": 1,
+      "record_type": "approved_decision",
+      "refund_request_id": "ref-poc-001",
+      "payment_id": "pay-poc-001",
+      "decision": "APPROVED",
+      "approved_amount_minor": 10000,
+      "currency": "BRL"
+    }
+  }
+}
