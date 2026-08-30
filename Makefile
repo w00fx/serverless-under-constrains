@@ -45,10 +45,10 @@ fuzz-study-1:
 	cd $(STUDY1) && npm run fuzz
 
 complexity:
-	cd $(STUDY1) && npx eslint src/protocol-records --rule 'complexity: [error, 23]' --max-warnings 0
+	cd $(STUDY1) && npx eslint src/protocol-records src/controlled-provider --rule 'complexity: [error, 23]' --max-warnings 0
 
 duplication:
-	node scripts/duplication.mjs
+	node study-1/scripts/duplication.mjs
 
 secrets:
 	bash scripts/gitleaks.sh

@@ -6,7 +6,8 @@
     "command": "node --experimental-strip-types --test"
   },
   "mutate": [
-    "src/protocol-records/**/*.ts"
+    "src/protocol-records/**/*.ts",
+    "src/controlled-provider/**/*.ts"
   ],
   "coverageAnalysis": "off",
   "timeoutMS": 60000,

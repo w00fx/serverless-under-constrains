@@ -11,6 +11,8 @@ Before proposing or implementing work:
 
 `src/protocol-records/` is the local M0-A contract surface: create, reject, serialize, hash, and verify deterministic protocol records. It performs no cloud mutation.
 
+`src/controlled-provider/` is the local M0-B provider and ledger surface: accept or reject refund calls, persist an in-memory authoritative ledger and provider journals, and enforce the variant/independent authority boundary. It performs no cloud mutation.
+
 ## Commands
 
 From `study-1/`, Node.js 24:
@@ -22,7 +24,7 @@ From `study-1/`, Node.js 24:
 - `npm run golden` — locked canonical-byte fixtures
 - `npm run golden-tables` — `specs/tables/` reference rows
 - `npm run fuzz` — seeded invalid-input properties
-- `npm run coverage` — line and branch coverage for `src/protocol-records`
-- `npm run mutation` — Stryker on `src/protocol-records`
+- `npm run coverage` — line and branch coverage for `src/protocol-records` and `src/controlled-provider`
+- `npm run mutation` — Stryker on `src/protocol-records` and `src/controlled-provider`
 
 Root `make check`, `make golden`, `make mutation-study-1`, and `make fuzz-study-1` wrap these. See the repository `AGENTS.md` Commands table.
