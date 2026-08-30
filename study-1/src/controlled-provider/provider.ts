@@ -99,7 +99,7 @@ function readExecutionMatches(
   return isUuidV4(execution[key]) && active[key] === execution[key];
 }
 
-function copyBinding<T extends RefundCall | RefundTransaction>(from: RefundCall, to: T): T {
+function copyBinding(from: RefundCall, to: RefundTransaction): RefundTransaction {
   const key = bindingKeyOf(from);
   if (key !== undefined) {
     to[key] = from[key];
@@ -147,20 +147,22 @@ function reject(
   if (call === undefined) {
     return { outcome: "rejected", provider_call_id: ids.provider_call_id, reasons };
   }
+  const sequence = store.peekSequence(ids.source_instance_id);
   const event = journalEvent(
     "provider_call_rejected",
     call,
     ids,
     occurredAt,
-    store.nextSequence(ids.source_instance_id),
+    sequence,
     { reasons },
   );
   if (event === undefined) {
     return { outcome: "rejected", provider_call_id: ids.provider_call_id, reasons };
   }
-  const persisted = store.transact([
-    { collection: "journal", key: `${call.trial_id}\n${event.event_id}`, value: event },
-  ]);
+  const persisted = store.transact(
+    [{ collection: "journal", key: `${call.trial_id}\n${event.event_id}`, value: event }],
+    { source_instance_id: ids.source_instance_id, source_sequence: sequence },
+  );
   if (!persisted) {
     return { outcome: "failed", provider_call_id: ids.provider_call_id, reasons: ["transact_failed"] };
   }
@@ -262,12 +264,13 @@ function commitAccepted(
     status: "SUCCEEDED",
     committed_at: occurredAt,
   });
+  const sequence = store.peekSequence(ids.source_instance_id);
   const event = journalEvent(
     "provider_committed",
     call,
     ids,
     occurredAt,
-    store.nextSequence(ids.source_instance_id),
+    sequence,
     {
       provider_transaction_id: ids.provider_transaction_id,
       provider_commit_id: ids.provider_commit_id,
@@ -280,6 +283,7 @@ function commitAccepted(
   }
   const existingTreatment = currentTreatment(store, call.trial_id);
   const treatment = consumeTreatment(existingTreatment, call, ids, active.scenario);
+  const consumesTreatment = treatment.state !== existingTreatment.state;
   const writes: StoreWrite[] = [
     {
       collection: "ledger",
@@ -288,13 +292,21 @@ function commitAccepted(
     },
     { collection: "journal", key: `${call.trial_id}\n${event.event_id}`, value: event },
   ];
-  if (treatment.state !== existingTreatment.state) {
+  if (consumesTreatment) {
     writes.push({ collection: "treatment", key: call.trial_id, value: treatment });
   }
-  if (!store.transact(writes)) {
+  const committed = store.transact(writes, {
+    source_instance_id: ids.source_instance_id,
+    source_sequence: sequence,
+  });
+  if (!committed) {
     return { outcome: "failed", provider_call_id: ids.provider_call_id, reasons: ["transact_failed"] };
   }
-  release({ provider_commit_id: ids.provider_commit_id, treatment });
+  // Only the targeted call holds the treatment barrier, so only its commit may
+  // release. A CONTROL accept and every later untargeted accept just return.
+  if (consumesTreatment) {
+    release({ provider_commit_id: ids.provider_commit_id, treatment });
+  }
   return {
     outcome: "accepted",
     provider_call_id: ids.provider_call_id,

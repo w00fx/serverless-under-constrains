@@ -18,6 +18,11 @@ export type StoreWrite = {
   value: unknown;
 };
 
+export type SequenceCommit = {
+  source_instance_id: string;
+  source_sequence: number;
+};
+
 const COLLECTIONS: readonly StoreCollection[] = [
   "payments",
   "executions",
@@ -79,13 +84,14 @@ export class InMemoryProviderStore {
     return this.#prefixed("journal", trialId) as PrimaryEvent[];
   }
 
-  nextSequence(sourceInstanceId: string): number {
-    const next = (this.#sequences.get(sourceInstanceId) ?? 0) + 1;
-    this.#sequences.set(sourceInstanceId, next);
-    return next;
+  // Peeking leaves the counter untouched so an append that never lands cannot
+  // burn a sequence: `source_sequence` must stay dense per source instance, and
+  // a retry of a definitively failed append has to reuse the same value.
+  peekSequence(sourceInstanceId: string): number {
+    return (this.#sequences.get(sourceInstanceId) ?? 0) + 1;
   }
 
-  transact(writes: readonly StoreWrite[]): boolean {
+  transact(writes: readonly StoreWrite[], sequence?: SequenceCommit): boolean {
     if (this.#failNext) {
       this.#failNext = false;
       return false;
@@ -99,6 +105,9 @@ export class InMemoryProviderStore {
     }
     for (const name of COLLECTIONS) {
       this.#data.set(name, snapshot.get(name)!);
+    }
+    if (sequence !== undefined) {
+      this.#sequences.set(sequence.source_instance_id, sequence.source_sequence);
     }
     return true;
   }

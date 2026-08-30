@@ -1,4 +1,4 @@
-import type { Principal, ProviderOperation } from "./types.ts";
+import type { DeniedOperation, Principal, ProviderOperation } from "./types.ts";
 
 export const PROVIDER_TABLES = [
   {
@@ -35,7 +35,7 @@ export const PROVIDER_TABLES = [
 
 export const AUTHORIZATION: Record<
   Principal,
-  { allow: readonly ProviderOperation[]; deny: readonly string[] }
+  { allow: readonly ProviderOperation[]; deny: readonly DeniedOperation[] }
 > = {
   variant: {
     allow: ["refund"],

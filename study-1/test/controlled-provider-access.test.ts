@@ -9,6 +9,7 @@ import {
   readLedger,
   readTreatmentState,
 } from "../src/controlled-provider/index.ts";
+import type { Principal, ProviderOperation } from "../src/controlled-provider/types.ts";
 import { createPayment } from "../src/protocol-records/index.ts";
 
 const DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -98,41 +99,58 @@ describe("BR-5 authority boundary", () => {
     assert.equal(treatment.ok, true);
   });
 
-  it("does not expose a provider-status operation", () => {
-    const variant = authorize("variant", "refund");
-    assert.equal(variant.ok, true);
-    assert.equal(AUTHORIZATION.variant.allow.includes("refund"), true);
-    assert.equal(AUTHORIZATION.variant.deny.includes("provider_status"), true);
-    assert.equal(AUTHORIZATION.independent.deny.includes("provider_status"), true);
-    assert.equal(
-      AUTHORIZATION.variant.allow.includes("read_ledger" as "refund"),
-      false,
-    );
-    const denied = authorize("variant", "read_ledger");
-    assert.equal(denied.ok, false);
+  // A `Record<ProviderOperation, ...>` literal fails to compile if a new
+  // operation is declared without deciding who may call it.
+  const PERMITTED: Record<ProviderOperation, readonly Principal[]> = {
+    refund: ["variant", "independent"],
+    read_ledger: ["independent"],
+    read_treatment_state: ["independent"],
+  };
+
+  it("authorizes every declared principal and operation exactly once", () => {
+    for (const [operation, permitted] of Object.entries(PERMITTED) as [
+      ProviderOperation,
+      readonly Principal[],
+    ][]) {
+      for (const principal of ["variant", "independent"] as const) {
+        const decision = authorize(principal, operation);
+        assert.equal(
+          decision.ok,
+          permitted.includes(principal),
+          `${principal} -> ${operation}`,
+        );
+        if (!decision.ok) {
+          assert.deepEqual([...decision.reasons], ["unauthorized"]);
+        }
+      }
+    }
   });
 
-  it("declares strongly consistent trial-scoped tables and the IAM matrix", () => {
-    assert.equal(PROVIDER_TABLES.every((table) => table.consistent_read), true);
+  it("treats an undeclared principal as unauthenticated", () => {
+    const decision = authorize("operator", "refund");
+    assert.equal(decision.ok, false);
+    if (!decision.ok) {
+      assert.deepEqual([...decision.reasons], ["unauthenticated"]);
+    }
+  });
+
+  it("denies exactly the operations it does not allow, plus provider status", () => {
+    for (const principal of ["variant", "independent"] as const) {
+      const { allow, deny } = AUTHORIZATION[principal];
+      const unallowed = (Object.keys(PERMITTED) as ProviderOperation[]).filter(
+        (operation) => !allow.includes(operation),
+      );
+      assert.deepEqual([...deny].toSorted(), [...unallowed, "provider_status"].toSorted());
+    }
+  });
+
+  it("declares strongly consistent trial-scoped tables", () => {
+    assert.equal(PROVIDER_TABLES.length, 5);
     assert.deepEqual(
-      PROVIDER_TABLES.map((table) => table.partition_key),
-      [
-        "trial_id",
-        "trial_id",
-        "trial_id",
-        "trial_id",
-        "trial_id",
-      ],
+      PROVIDER_TABLES.filter(
+        (table) => !table.consistent_read || table.partition_key !== "trial_id",
+      ),
+      [],
     );
-    assert.deepEqual([...AUTHORIZATION.variant.deny].toSorted(), [
-      "provider_status",
-      "read_ledger",
-      "read_treatment_state",
-    ]);
-    assert.deepEqual([...AUTHORIZATION.independent.allow].toSorted(), [
-      "read_ledger",
-      "read_treatment_state",
-      "refund",
-    ]);
   });
 });

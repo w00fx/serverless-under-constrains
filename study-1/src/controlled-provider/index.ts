@@ -5,6 +5,7 @@ export { InMemoryProviderStore } from "./store.ts";
 export type {
   AcceptedRefund,
   ActiveExecution,
+  DeniedOperation,
   DeniedRead,
   FailedRefund,
   LedgerPage,

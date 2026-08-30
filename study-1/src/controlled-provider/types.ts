@@ -2,6 +2,9 @@ import type { PaymentRecord, PrimaryEvent } from "../protocol-records/types.ts";
 
 export type Principal = "variant" | "independent";
 export type ProviderOperation = "refund" | "read_ledger" | "read_treatment_state";
+// `provider_status` is denied to every principal and is deliberately not a
+// `ProviderOperation`: the provider exposes no such endpoint to deny at runtime.
+export type DeniedOperation = ProviderOperation | "provider_status";
 export type Scenario = "CONTROL" | "COMMIT_THEN_TIMEOUT";
 export type TreatmentStateName = "UNARMED" | "ARMED" | "COMMITTED_WAITING";
 

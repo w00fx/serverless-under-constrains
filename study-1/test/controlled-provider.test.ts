@@ -7,7 +7,7 @@ import {
   readLedger,
   readTreatmentState,
 } from "../src/controlled-provider/index.ts";
-import { createPayment } from "../src/protocol-records/index.ts";
+import { classifyEventSequence, createPayment } from "../src/protocol-records/index.ts";
 import type { ValidationResult } from "../src/protocol-records/types.ts";
 import type { ActiveExecution, ProviderIds } from "../src/controlled-provider/types.ts";
 
@@ -27,6 +27,19 @@ const IDS: ProviderIds = {
   event_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
   source_instance_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
 };
+
+function idsFor(index: number): ProviderIds {
+  const suffix = String(index);
+  const uuid = (char: string): string =>
+    `${char.repeat(8)}-${char.repeat(4)}-4${char.repeat(3)}-8${char.repeat(3)}-${char.repeat(11)}${suffix}`;
+  return {
+    provider_call_id: uuid("a"),
+    provider_transaction_id: uuid("b"),
+    provider_commit_id: uuid("c"),
+    event_id: uuid("d"),
+    source_instance_id: IDS.source_instance_id,
+  };
+}
 
 function payment() {
   const created = createPayment({
@@ -175,15 +188,7 @@ describe("controlled provider contract", () => {
   it("does not suppress a second accepted effect", () => {
     const store = seed("COMMIT_THEN_TIMEOUT");
     const first = process(store);
-    const second = process(store, call(), {
-      ids: {
-        ...IDS,
-        provider_call_id: "12121212-1212-4121-8121-121212121212",
-        provider_transaction_id: "13131313-1313-4131-8131-131313131313",
-        provider_commit_id: "14141414-1414-4141-8141-141414141414",
-        event_id: "15151515-1515-4151-8151-151515151515",
-      },
-    });
+    const second = process(store, call(), { ids: idsFor(1) });
     assert.equal(first.outcome, "accepted");
     assert.equal(second.outcome, "accepted");
     assert.equal(store.listLedger(TRIAL).length, 2);
@@ -220,6 +225,71 @@ describe("controlled provider contract", () => {
     assert.equal(result.treatment.provider_commit_id, IDS.provider_commit_id);
     assert.equal(result.treatment.provider_transaction_id, IDS.provider_transaction_id);
     assert.equal(store.getTreatment(TRIAL)?.provider_call_id, IDS.provider_call_id);
+  });
+
+  it("does not release a barrier for a CONTROL accept", () => {
+    const store = seed("CONTROL");
+    let released = 0;
+    const result = processRefundCall(store, {
+      principal: "variant",
+      call: call(),
+      now: NOW,
+      ids: IDS,
+      release: () => {
+        released += 1;
+      },
+    });
+    assert.equal(result.outcome, "accepted");
+    assert.equal(released, 0);
+  });
+
+  it("releases only for the accept that consumes treatment", () => {
+    const store = seed("COMMIT_THEN_TIMEOUT");
+    const released: string[] = [];
+    const release = (context: { provider_commit_id: string }): void => {
+      released.push(context.provider_commit_id);
+    };
+    const first = processRefundCall(store, {
+      principal: "variant",
+      call: call(),
+      now: NOW,
+      ids: idsFor(0),
+      release,
+    });
+    const second = processRefundCall(store, {
+      principal: "variant",
+      call: call(),
+      now: NOW,
+      ids: idsFor(1),
+      release,
+    });
+    assert.equal(first.outcome, "accepted");
+    assert.equal(second.outcome, "accepted");
+    assert.equal(store.listLedger(TRIAL).length, 2);
+    assert.deepEqual(released, [idsFor(0).provider_commit_id]);
+  });
+
+  it("keeps journal sequences dense when an append does not land", () => {
+    const store = seed();
+    assert.equal(process(store, call(), { ids: idsFor(0) }).outcome, "accepted");
+    store.failNextTransact();
+    assert.equal(process(store, call(), { ids: idsFor(1) }).outcome, "failed");
+    store.failNextTransact();
+    assert.equal(
+      process(store, call({ payment_id: "missing" }), { ids: idsFor(2) }).outcome,
+      "failed",
+    );
+    assert.equal(process(store, call(), { ids: idsFor(3) }).outcome, "accepted");
+    const journal = store.listJournal(TRIAL);
+    assert.deepEqual(
+      journal.map((event) => event.source_sequence).toSorted(),
+      [1, 2],
+    );
+    const report = classifyEventSequence(journal);
+    assert.equal(report.ok, true);
+    if (report.ok) {
+      assert.deepEqual(report.value.gaps, []);
+    }
   });
 
   it("records rejected calls without a transaction or treatment consume", () => {
@@ -317,12 +387,14 @@ describe("controlled provider contract", () => {
   });
 
   it("generates identities and returns immediately when factories are omitted", () => {
-    const store = seed();
+    const store = seed("COMMIT_THEN_TIMEOUT");
     const result = processRefundCall(store, { principal: "variant", call: call() });
     assert.equal(result.outcome, "accepted");
     if (result.outcome === "accepted") {
       assert.match(result.provider_call_id, /^[0-9a-f-]{36}$/);
       assert.equal(result.transaction.status, "SUCCEEDED");
+      assert.equal(result.treatment.state, "COMMITTED_WAITING");
+      assert.equal(result.transaction.committed_at, store.listLedger(TRIAL)[0]?.committed_at);
     }
   });
 
@@ -359,23 +431,9 @@ describe("controlled provider contract", () => {
 describe("ledger pagination", () => {
   function threeTransactions(): InMemoryProviderStore {
     const store = seed();
-    const ids = [
-      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-    ];
-    ids.forEach((transactionId, index) => {
-      const result = process(store, call(), {
-        ids: {
-          provider_call_id: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${String(index)}`,
-          provider_transaction_id: transactionId,
-          provider_commit_id: `eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee${String(index)}`,
-          event_id: `ffffffff-ffff-4fff-8fff-fffffffffff${String(index)}`,
-          source_instance_id: IDS.source_instance_id,
-        },
-      });
-      assert.equal(result.outcome, "accepted");
-    });
+    for (const index of [0, 1, 2]) {
+      assert.equal(process(store, call(), { ids: idsFor(index) }).outcome, "accepted");
+    }
     return store;
   }
 
