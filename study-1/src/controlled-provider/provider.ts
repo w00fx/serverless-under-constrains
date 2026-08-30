@@ -66,15 +66,15 @@ function defaultNow(): string {
 
 function defaultRelease(): void {}
 
-function executionMatches(call: RefundCall, active: ActiveExecution | undefined): boolean {
-  if (active === undefined || active.trial_id !== call.trial_id) {
+function executionMatches(call: RefundCall, active: ActiveExecution): boolean {
+  if (active.trial_id !== call.trial_id) {
     return false;
   }
   if (active.trial_manifest_sha256 !== call.trial_manifest_sha256) {
     return false;
   }
   const key = bindingKeyOf(call);
-  return key !== undefined && active[key] === call[key];
+  return active[key] === call[key];
 }
 
 function readExecutionMatches(
@@ -101,9 +101,7 @@ function readExecutionMatches(
 
 function copyBinding(from: RefundCall, to: RefundTransaction): RefundTransaction {
   const key = bindingKeyOf(from);
-  if (key !== undefined) {
-    to[key] = from[key];
-  }
+  to[key] = from[key];
   return to;
 }
 
@@ -115,7 +113,7 @@ function journalEvent(
   sequence: number,
   extra: Record<string, unknown>,
 ): PrimaryEvent | undefined {
-  const key = bindingKeyOf(call)!;
+  const key = bindingKeyOf(call);
   const created = createPrimaryEvent({
     schema_version: 1,
     record_type: recordType,
@@ -357,9 +355,8 @@ export function readLedger(
   const all = store.listLedger(guard.trialId);
   let start = 0;
   if (input.cursor !== undefined) {
-    if (typeof input.cursor !== "string") {
-      return { ok: false, reasons: ["invalid_cursor"] };
-    }
+    // No non-string can equal a transaction id, so the lookup is the only
+    // validation a cursor needs: an unmatched cursor of any type is invalid.
     const index = all.findIndex((row) => row.provider_transaction_id === input.cursor);
     if (index < 0) {
       return { ok: false, reasons: ["invalid_cursor"] };

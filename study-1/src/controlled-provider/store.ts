@@ -112,11 +112,15 @@ export class InMemoryProviderStore {
     return true;
   }
 
+  // Sorting the keys rather than the entries keeps the order on the default
+  // UTF-16 code-unit comparison, which is the collation the partition/sort key
+  // pair already encodes.
   #prefixed(collection: StoreCollection, trialId: string): unknown[] {
     const prefix = `${trialId}\n`;
-    return [...this.#data.get(collection)!.entries()]
-      .filter(([key]) => key.startsWith(prefix))
-      .toSorted(([left], [right]) => (left > right ? 1 : 0) - (left < right ? 1 : 0))
-      .map(([, value]) => value);
+    const rows = this.#data.get(collection)!;
+    return [...rows.keys()]
+      .filter((key) => key.startsWith(prefix))
+      .toSorted()
+      .map((key) => rows.get(key));
   }
 }

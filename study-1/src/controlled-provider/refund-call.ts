@@ -34,10 +34,10 @@ const BINDING_KEYS: readonly ExecutionBindingKey[] = [
   "variant_validation_id",
 ];
 
-export function bindingKeyOf(
-  value: Pick<RefundCall, ExecutionBindingKey>,
-): ExecutionBindingKey | undefined {
-  return BINDING_KEYS.find((key) => value[key] !== undefined);
+// `createRefundCall` rejects a call carrying zero or several bindings, so every
+// parsed call resolves to exactly one key here.
+export function bindingKeyOf(value: Pick<RefundCall, ExecutionBindingKey>): ExecutionBindingKey {
+  return BINDING_KEYS.find((key) => value[key] !== undefined)!;
 }
 
 function identityReason(value: unknown): string {

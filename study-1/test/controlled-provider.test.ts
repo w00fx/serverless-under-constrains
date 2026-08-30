@@ -9,7 +9,7 @@ import {
 } from "../src/controlled-provider/index.ts";
 import { classifyEventSequence, createPayment } from "../src/protocol-records/index.ts";
 import type { ValidationResult } from "../src/protocol-records/types.ts";
-import type { ActiveExecution, ProviderIds } from "../src/controlled-provider/types.ts";
+import type { ActiveExecution, DeniedRead, ProviderIds } from "../src/controlled-provider/types.ts";
 
 const DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const TRIAL = "66666666-6666-4666-8666-666666666666";
@@ -18,6 +18,8 @@ const PROBE = "44444444-4444-4444-8444-444444444444";
 const VALIDATION = "55555555-5555-4555-8555-555555555555";
 const ATTEMPT = "11111111-1111-4111-8111-111111111111";
 const REQUEST = "77777777-7777-4777-8777-777777777777";
+const OTHER_RUN = "88888888-8888-4888-8888-888888888888";
+const OTHER_TRIAL = "22222222-2222-4222-8222-222222222222";
 const NOW = "2026-08-30T12:00:00.000Z";
 
 const IDS: ProviderIds = {
@@ -119,6 +121,13 @@ function assertRejected(result: ValidationResult<unknown>, ...expected: string[]
   assert.deepEqual([...result.reasons].toSorted(), [...expected].toSorted());
 }
 
+function assertDenied(read: { ok: true } | DeniedRead): void {
+  assert.equal(read.ok, false);
+  if (!read.ok) {
+    assert.deepEqual([...read.reasons], ["inactive_execution"]);
+  }
+}
+
 describe("refund call records", () => {
   it("accepts a valid call and trims identities", () => {
     const created = createRefundCall(call({ payment_id: "  pay-poc-001  " }));
@@ -162,8 +171,24 @@ describe("controlled provider contract", () => {
     if (result.outcome !== "accepted") {
       return;
     }
-    assert.equal(result.transaction.status, "SUCCEEDED");
-    assert.equal(result.transaction.provider_commit_id, IDS.provider_commit_id);
+    assert.deepEqual(result.transaction, {
+      schema_version: 1,
+      record_type: "refund_transaction",
+      provider_transaction_id: IDS.provider_transaction_id,
+      provider_call_id: IDS.provider_call_id,
+      provider_commit_id: IDS.provider_commit_id,
+      trial_id: TRIAL,
+      trial_manifest_sha256: DIGEST,
+      attempt_id: ATTEMPT,
+      provider_request_id: REQUEST,
+      payment_id: "pay-poc-001",
+      refund_request_id: "ref-poc-001",
+      amount_minor: 10000,
+      currency: "BRL",
+      status: "SUCCEEDED",
+      committed_at: NOW,
+      run_id: RUN,
+    });
     assert.equal(result.event.record_type, "provider_committed");
     assert.equal(result.event.provider_commit_id, IDS.provider_commit_id);
     assert.equal(result.treatment.state, "UNARMED");
@@ -221,10 +246,18 @@ describe("controlled provider contract", () => {
     if (result.outcome !== "accepted") {
       return;
     }
-    assert.equal(result.treatment.state, "COMMITTED_WAITING");
-    assert.equal(result.treatment.provider_commit_id, IDS.provider_commit_id);
-    assert.equal(result.treatment.provider_transaction_id, IDS.provider_transaction_id);
-    assert.equal(store.getTreatment(TRIAL)?.provider_call_id, IDS.provider_call_id);
+    assert.deepEqual(result.treatment, {
+      schema_version: 1,
+      record_type: "treatment_state",
+      trial_id: TRIAL,
+      state: "COMMITTED_WAITING",
+      provider_commit_id: IDS.provider_commit_id,
+      attempt_id: ATTEMPT,
+      provider_request_id: REQUEST,
+      provider_call_id: IDS.provider_call_id,
+      provider_transaction_id: IDS.provider_transaction_id,
+    });
+    assert.deepEqual(store.getTreatment(TRIAL), result.treatment);
   });
 
   it("does not release a barrier for a CONTROL accept", () => {
@@ -292,6 +325,99 @@ describe("controlled provider contract", () => {
     }
   });
 
+  it("rejects a call bound to an execution other than the active one", () => {
+    const store = seed();
+    const result = process(store, call({ run_id: OTHER_RUN }));
+    assert.equal(result.outcome, "rejected");
+    if (result.outcome === "rejected") {
+      assert.deepEqual([...result.reasons], ["inactive_execution"]);
+    }
+    assert.equal(store.listLedger(TRIAL).length, 0);
+  });
+
+  it("never consumes treatment under CONTROL even when a row is armed", () => {
+    const store = seed("CONTROL");
+    store.seedTreatment({
+      schema_version: 1,
+      record_type: "treatment_state",
+      trial_id: TRIAL,
+      state: "ARMED",
+    });
+    let released = 0;
+    const result = processRefundCall(store, {
+      principal: "variant",
+      call: call(),
+      now: NOW,
+      ids: IDS,
+      release: () => {
+        released += 1;
+      },
+    });
+    assert.equal(result.outcome, "accepted");
+    assert.equal(released, 0);
+    if (result.outcome === "accepted") {
+      assert.equal(result.treatment.state, "ARMED");
+    }
+    assert.equal(store.getTreatment(TRIAL)?.state, "ARMED");
+    assert.equal(store.getTreatment(TRIAL)?.provider_commit_id, undefined);
+  });
+
+  it("journals every rejection with its own reasons and a dense sequence", () => {
+    const store = seed();
+    const missing = process(store, call({ payment_id: "missing" }), { ids: idsFor(0) });
+    const inactive = process(store, call({ trial_manifest_sha256: "a".repeat(64) }), {
+      ids: idsFor(1),
+    });
+    assert.equal(missing.outcome, "rejected");
+    assert.equal(inactive.outcome, "rejected");
+    const journal = store.listJournal(TRIAL);
+    assert.deepEqual(
+      journal.map((event) => event.event_id),
+      [idsFor(0).event_id, idsFor(1).event_id],
+    );
+    assert.deepEqual(
+      journal.map((event) => event.record_type),
+      ["provider_call_rejected", "provider_call_rejected"],
+    );
+    assert.deepEqual(
+      journal.map((event) => event.source_sequence),
+      [1, 2],
+    );
+    assert.deepEqual(journal[0]?.reasons, ["payment_not_found"]);
+    assert.deepEqual(journal[1]?.reasons, ["inactive_execution"]);
+    assert.equal(journal[0]?.run_id, RUN);
+  });
+
+  it("scopes ledger and journal rows to the trial that produced them", () => {
+    const store = seed();
+    store.seedPayment(OTHER_TRIAL, payment());
+    store.seedExecution(execution({ trial_id: OTHER_TRIAL }));
+    assert.equal(process(store, call(), { ids: idsFor(0) }).outcome, "accepted");
+    assert.equal(
+      process(store, call({ trial_id: OTHER_TRIAL }), { ids: idsFor(1) }).outcome,
+      "accepted",
+    );
+    assert.deepEqual(
+      store.listLedger(TRIAL).map((row) => row.provider_transaction_id),
+      [idsFor(0).provider_transaction_id],
+    );
+    assert.deepEqual(
+      store.listJournal(OTHER_TRIAL).map((event) => event.event_id),
+      [idsFor(1).event_id],
+    );
+  });
+
+  it("returns ledger rows in transaction-id order whatever the write order", () => {
+    const store = seed();
+    for (const index of [2, 0, 1]) {
+      assert.equal(process(store, call(), { ids: idsFor(index) }).outcome, "accepted");
+    }
+    assert.deepEqual(
+      store.listLedger(TRIAL).map((row) => row.provider_transaction_id),
+      [0, 1, 2].map((index) => idsFor(index).provider_transaction_id),
+    );
+  });
+
   it("records rejected calls without a transaction or treatment consume", () => {
     const store = seed("COMMIT_THEN_TIMEOUT");
     const result = process(store, call({ payment_id: "missing" }));
@@ -317,6 +443,9 @@ describe("controlled provider contract", () => {
       call({ trial_id: "99999999-9999-4999-8999-999999999999" }),
     );
     assert.equal(unknownTrial.outcome, "rejected");
+    if (unknownTrial.outcome === "rejected") {
+      assert.deepEqual([...unknownTrial.reasons], ["inactive_execution"]);
+    }
     store.seedPayment(TRIAL, { ...payment(), currency: "USD" as "BRL" });
     const mismatch = process(store, call());
     assert.equal(mismatch.outcome, "rejected");
@@ -332,6 +461,12 @@ describe("controlled provider contract", () => {
     ]);
     const mismatched = process(store, call());
     assert.equal(mismatched.outcome, "rejected");
+    if (mismatched.outcome === "rejected") {
+      // The execution row is consulted before the payment, so a row that no
+      // longer names this trial must report the binding rather than the
+      // currency the seeded payment now disagrees on.
+      assert.deepEqual([...mismatched.reasons], ["inactive_execution"]);
+    }
     const unauth = process(store, call(), { principal: "other" });
     assert.equal(unauth.outcome, "rejected");
     if (unauth.outcome === "rejected") {
@@ -363,6 +498,9 @@ describe("controlled provider contract", () => {
     store.failNextTransact();
     const result = process(store, call({ payment_id: "missing" }));
     assert.equal(result.outcome, "failed");
+    if (result.outcome === "failed") {
+      assert.deepEqual([...result.reasons], ["transact_failed"]);
+    }
     assert.equal(store.listJournal(TRIAL).length, 0);
   });
 
@@ -525,6 +663,9 @@ describe("ledger pagination", () => {
       cursor: 1,
     });
     assert.equal(typed.ok, false);
+    if (!typed.ok) {
+      assert.deepEqual([...typed.reasons], ["invalid_cursor"]);
+    }
     const limit = readLedger(store, {
       principal: "independent",
       trial_id: TRIAL,
@@ -564,7 +705,12 @@ describe("treatment and execution reads", () => {
     });
     assert.equal(read.ok, true);
     if (read.ok) {
-      assert.equal(read.treatment.state, "UNARMED");
+      assert.deepEqual(read.treatment, {
+        schema_version: 1,
+        record_type: "treatment_state",
+        trial_id: TRIAL,
+        state: "UNARMED",
+      });
     }
   });
 
@@ -575,31 +721,41 @@ describe("treatment and execution reads", () => {
       trial_id: TRIAL,
       execution: "nope",
     });
-    assert.equal(missing.ok, false);
+    assertDenied(missing);
+    // A null execution would dereference inside the matcher, so the shape guard
+    // has to deny it before the active row is consulted.
+    assertDenied(readLedger(store, { principal: "independent", trial_id: TRIAL, execution: null }));
     const digest = readTreatmentState(store, {
       principal: "independent",
       trial_id: TRIAL,
       execution: { run_id: RUN, trial_manifest_sha256: "b".repeat(64) },
     });
-    assert.equal(digest.ok, false);
+    assertDenied(digest);
+    assertDenied(
+      readLedger(store, {
+        principal: "independent",
+        trial_id: TRIAL,
+        execution: { run_id: OTHER_RUN, trial_manifest_sha256: DIGEST },
+      }),
+    );
     const bindings = readLedger(store, {
       principal: "independent",
       trial_id: TRIAL,
       execution: { run_id: RUN, transport_probe_id: PROBE, trial_manifest_sha256: DIGEST },
     });
-    assert.equal(bindings.ok, false);
+    assertDenied(bindings);
     const trial = readLedger(store, {
       principal: "independent",
       trial_id: "not-uuid",
       execution: exec,
     });
-    assert.equal(trial.ok, false);
+    assertDenied(trial);
     const unknownTrial = readLedger(store, {
       principal: "independent",
       trial_id: "99999999-9999-4999-8999-999999999999",
       execution: exec,
     });
-    assert.equal(unknownTrial.ok, false);
+    assertDenied(unknownTrial);
     store.transact([
       {
         collection: "executions",
@@ -612,11 +768,37 @@ describe("treatment and execution reads", () => {
         },
       },
     ]);
-    const mismatched = readTreatmentState(store, {
+    assertDenied(
+      readTreatmentState(store, {
+        principal: "independent",
+        trial_id: TRIAL,
+        execution: exec,
+      }),
+    );
+  });
+
+  it("reads through an execution bound by variant validation", () => {
+    const store = new InMemoryProviderStore();
+    store.seedPayment(TRIAL, payment());
+    store.seedExecution({
+      trial_id: TRIAL,
+      trial_manifest_sha256: DIGEST,
+      scenario: "CONTROL",
+      variant_validation_id: VALIDATION,
+    });
+    const bound = { variant_validation_id: VALIDATION, trial_manifest_sha256: DIGEST };
+    const read = readTreatmentState(store, {
       principal: "independent",
       trial_id: TRIAL,
-      execution: exec,
+      execution: bound,
     });
-    assert.equal(mismatched.ok, false);
+    assert.equal(read.ok, true);
+    assertDenied(
+      readTreatmentState(store, {
+        principal: "independent",
+        trial_id: TRIAL,
+        execution: { variant_validation_id: RUN, trial_manifest_sha256: DIGEST },
+      }),
+    );
   });
 });

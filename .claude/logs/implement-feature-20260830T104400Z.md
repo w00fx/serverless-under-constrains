@@ -57,3 +57,60 @@ Human accepted the recommended set: 1.1, 2.1, 3.1, 4.1, 5.1, 6 as written, 7.1.
 ## Phase 7–10
 
 Pending after Owner candidate commit.
+
+## Mutation hardening — authoring pass
+
+- role: mutation-hardener (`effort=max`), isolated worktree, no push
+- input candidate: `64db7bdfd7ce266d868d09d33aa809bfc604b5e8`
+- eligible target: `study-1/src/controlled-provider/**`
+- Node v24.15.0 via nvm
+
+First differential run on the eligible target: 510 mutants, 458 killed, 52 survived
+(89.80%). Survivors fell into three classes, resolved as follows.
+
+Unreachable guards removed, because no test could ever observe them:
+
+- `bindingKeyOf` returned an optional key although `createRefundCall` rejects any
+  call with zero or several bindings. It now returns the key, and the three
+  redundant `key !== undefined` guards in `executionMatches`, `copyBinding`, and
+  `journalEvent` are gone.
+- `executionMatches` re-checked `active === undefined` after its only caller had
+  already done so. It now takes a non-optional `ActiveExecution`, which makes the
+  caller's guard load-bearing and observable.
+- `readLedger` rejected a non-string cursor before a lookup that cannot match a
+  non-string anyway. The lookup is now the only cursor validation; the
+  non-string cursor test still asserts `invalid_cursor`.
+- `InMemoryProviderStore.#prefixed` carried a private copy of the three-way
+  `compareCodeUnits` comparator to sort by a single string key. It now sorts the
+  keys with the default UTF-16 code-unit order, matching `serialize.ts` and
+  `event-records.ts`. This also removed the last cross-file duplication window.
+
+Behaviour that was implemented but never proven, now covered by tests:
+
+- a refund bound to an execution instance other than the active one is rejected;
+- a corrupted execution row that no longer names the trial reports
+  `inactive_execution`, not the currency the payment disagrees on;
+- CONTROL never consumes an armed treatment and never releases the barrier;
+- every rejection is journalled with its own reasons, its event key, and a dense
+  `source_sequence` across consecutive rejections;
+- a failed reject transact reports `transact_failed`;
+- ledger and journal rows are scoped to the trial that produced them, and are
+  returned in transaction-id order whatever the write order;
+- reads are denied with `inactive_execution` for a null execution, a mismatched
+  binding value, and an unknown trial;
+- reads work through a `variant_validation_id` binding;
+- exact record shapes for `refund_transaction` and both `treatment_state` forms.
+
+Second differential run: 479 mutants, 479 killed, 0 survived, 0 no-coverage,
+0 errors, 0 timeouts — 100.00% on every file of the eligible target. No
+equivalent or tooling-limited mutant had to be proposed.
+
+Verification, all exit 0: `make check` (70 tests), `make golden`, `make coverage`
+(100% line/branch/function/statement on both eligible trees), `make complexity`,
+`make duplication` (0 cross-file windows), `make fuzz-study-1`, `make build`,
+`make golden-mutation`, `make metrics`, `make security`, and
+`npx stryker run --mutate 'src/controlled-provider/**/*.ts'`.
+
+`make mutation-study-1` was not run: it also mutates `src/protocol-records`,
+which this pass did not touch and was scoped out of the hardening loop.
+No thresholds, exclusions, oracles, specs, or tables were changed.
