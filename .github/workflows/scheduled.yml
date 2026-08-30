@@ -1,0 +1,50 @@
+name: scheduled
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-breadth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: study-1/package-lock.json
+      - run: npm ci
+        working-directory: study-1
+      - run: make mutation-study-1
+
+  golden-mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: study-1/package-lock.json
+      - run: npm ci
+        working-directory: study-1
+      - run: make golden-mutation
+
+  fuzz-campaign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: study-1/package-lock.json
+      - run: npm ci
+        working-directory: study-1
+      - run: make fuzz-study-1

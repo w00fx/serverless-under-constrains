@@ -1,0 +1,17 @@
+{
+  "lint_errors": 0,
+  "npm_audit": {
+    "info": 0,
+    "low": 0,
+    "moderate": 2,
+    "high": 0,
+    "critical": 0,
+    "total": 2
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100,
+    "statements": 100
+  }
+}

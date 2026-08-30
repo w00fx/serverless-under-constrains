@@ -1,0 +1,9 @@
+{
+  "approved_amount_minor": 10000,
+  "currency": "BRL",
+  "decision": "APPROVED",
+  "payment_id": "pay-poc-001",
+  "record_type": "approved_decision",
+  "refund_request_id": "ref-poc-001",
+  "schema_version": 1
+}

@@ -9,4 +9,20 @@ Before proposing or implementing work:
 - treat the sandbox account and coordination identity as operator inputs, not open design questions;
 - perform no AWS mutation until the specification's admission and safety gates permit it.
 
-The initial commit contains no toolchain or implementation commands. The delivery task that introduces them must document and verify them.
+`src/protocol-records/` is the local M0-A contract surface: create, reject, serialize, hash, and verify deterministic protocol records. It performs no cloud mutation.
+
+## Commands
+
+From `study-1/`, Node.js 24:
+
+- `npm run lint`
+- `npm run typecheck`
+- `npm test` — `node --experimental-strip-types --test`
+- `npm run check` — lint, typecheck, and tests
+- `npm run golden` — locked canonical-byte fixtures
+- `npm run golden-tables` — `specs/tables/` reference rows
+- `npm run fuzz` — seeded invalid-input properties
+- `npm run coverage` — line and branch coverage for `src/protocol-records`
+- `npm run mutation` — Stryker on `src/protocol-records`
+
+Root `make check`, `make golden`, `make mutation-study-1`, and `make fuzz-study-1` wrap these. See the repository `AGENTS.md` Commands table.

@@ -1,0 +1,7 @@
+{
+  "captured_amount_minor": 10000,
+  "currency": "BRL",
+  "payment_id": "pay-poc-001",
+  "record_type": "payment",
+  "schema_version": 1
+}
