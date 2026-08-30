@@ -155,6 +155,17 @@ describe("evidence references", () => {
     ]);
     assert.equal(withPointer.ok, true);
   });
+
+  it("keeps refs distinct when a path and a pointer share separator characters", () => {
+    const created = createEvidenceRefs([
+      { artifact_path: "a\n/x", artifact_sha256: DIGEST, json_pointer: "/y" },
+      { artifact_path: "a", artifact_sha256: DIGEST, json_pointer: "/x\n/y" },
+    ]);
+    assert.equal(created.ok, true);
+    if (created.ok) {
+      assert.equal(created.value.length, 2);
+    }
+  });
 });
 
 describe("primary events", () => {
@@ -179,6 +190,21 @@ describe("primary events", () => {
     }));
     assert.equal(probe.ok, true);
     assert.equal(validation.ok, true);
+  });
+
+  it("carries a __proto__ correlation property as serializable data", () => {
+    const injected = JSON.parse('{"__proto__":{"injected":true}}') as Record<string, unknown>;
+    const created = createPrimaryEvent({ ...event(), ...injected });
+    assert.equal(created.ok, true);
+    if (!created.ok) {
+      return;
+    }
+    assert.equal(Object.getPrototypeOf(created.value), Object.prototype);
+    const serialized = serializeCanonicalJson(created.value);
+    assert.equal(serialized.ok, true);
+    if (serialized.ok) {
+      assert.ok(serialized.value.includes('"__proto__": {\n    "injected": true\n  }'));
+    }
   });
 
   it("rejects invalid event envelopes", () => {
@@ -271,6 +297,52 @@ describe("canonical bytes and digests", () => {
       assert.equal(jsonl.value.endsWith("\n"), true);
       assert.equal(jsonl.value.includes("\n  "), false);
     }
+  });
+
+  it("orders integer-like keys by UTF-16 code unit rather than numeric value", () => {
+    const json = serializeCanonicalJson({ "10": "a", "2": "b", "1": "c", b: 1 });
+    assert.equal(json.ok, true);
+    if (json.ok) {
+      assert.equal(
+        json.value,
+        '{\n  "1": "c",\n  "10": "a",\n  "2": "b",\n  "b": 1\n}\n',
+      );
+    }
+    const compact = structuralKey({ "10": "a", "2": "b" });
+    assert.equal(compact.ok, true);
+    if (compact.ok) {
+      assert.equal(compact.value, '{"10":"a","2":"b"}');
+    }
+  });
+
+  it("writes atomics and empty containers in canonical form", () => {
+    const empties = serializeCanonicalJson({ list: [], nested: {}, nothing: null });
+    assert.equal(empties.ok, true);
+    if (empties.ok) {
+      assert.equal(
+        empties.value,
+        '{\n  "list": [],\n  "nested": {},\n  "nothing": null\n}\n',
+      );
+    }
+    const compact = serializeCanonicalJsonl([[], {}]);
+    assert.equal(compact.ok, true);
+    if (compact.ok) {
+      assert.equal(compact.value, "[]\n{}\n");
+    }
+  });
+
+  it("serializes a value referenced more than once without reporting a cycle", () => {
+    const shared = { a: 1 };
+    const json = serializeCanonicalJson({ x: shared, y: shared });
+    assert.equal(json.ok, true);
+    if (json.ok) {
+      assert.equal(
+        json.value,
+        '{\n  "x": {\n    "a": 1\n  },\n  "y": {\n    "a": 1\n  }\n}\n',
+      );
+    }
+    const sharedList = [1];
+    assert.equal(serializeCanonicalJson([sharedList, sharedList]).ok, true);
   });
 
   it("verifies exact bytes and lowercase SHA-256", () => {

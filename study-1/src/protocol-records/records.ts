@@ -176,10 +176,14 @@ function createEvidenceRef(input: unknown): ValidationResult<EvidenceRef> {
   }
   const reasons: string[] = [];
   pushUnknown(reasons, input, EVIDENCE_KEYS);
-  if (!isNormalizedRelativePosixPath(input.artifact_path)) {
+  const artifactPath = isNormalizedRelativePosixPath(input.artifact_path)
+    ? input.artifact_path
+    : undefined;
+  if (artifactPath === undefined) {
     reasons.push("invalid_path");
   }
-  if (!isSha256Hex(input.artifact_sha256)) {
+  const artifactSha256 = isSha256Hex(input.artifact_sha256) ? input.artifact_sha256 : undefined;
+  if (artifactSha256 === undefined) {
     reasons.push("invalid_sha256");
   }
   if (input.event_id !== undefined && !isUuidV4(input.event_id)) {
@@ -191,12 +195,12 @@ function createEvidenceRef(input: unknown): ValidationResult<EvidenceRef> {
   if (input.package_index_sha256 !== undefined && !isSha256Hex(input.package_index_sha256)) {
     reasons.push("invalid_sha256");
   }
-  if (reasons.length > 0 || !isNormalizedRelativePosixPath(input.artifact_path) || !isSha256Hex(input.artifact_sha256)) {
+  if (reasons.length > 0 || artifactPath === undefined || artifactSha256 === undefined) {
     return fail(reasons);
   }
   const ref: EvidenceRef = {
-    artifact_path: input.artifact_path,
-    artifact_sha256: input.artifact_sha256,
+    artifact_path: artifactPath,
+    artifact_sha256: artifactSha256,
   };
   if (typeof input.event_id === "string") {
     ref.event_id = input.event_id;
@@ -230,7 +234,7 @@ export function createEvidenceRefs(input: unknown): ValidationResult<EvidenceRef
   const sorted = [...refs].toSorted(compareEvidence);
   const seen = new Set<string>();
   for (const ref of sorted) {
-    const key = `${ref.artifact_path}\n${ref.json_pointer ?? ""}`;
+    const key = JSON.stringify([ref.artifact_path, ref.json_pointer ?? ""]);
     if (seen.has(key)) {
       return fail(["duplicate_evidence_ref"]);
     }

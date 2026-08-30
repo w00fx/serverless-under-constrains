@@ -124,7 +124,15 @@ export function createPrimaryEvent(input: unknown): ValidationResult<PrimaryEven
   }
   for (const key of ownKeys(input)) {
     if (!RESERVED.has(key) && !REJECTED_ALIASES.includes(key) && input[key] !== undefined) {
-      event[key] = input[key];
+      // Plain assignment would invoke the inherited `__proto__` setter instead of
+      // creating an own property, silently dropping the value or replacing the
+      // prototype of the record being built.
+      Object.defineProperty(event, key, {
+        configurable: true,
+        enumerable: true,
+        value: input[key],
+        writable: true,
+      });
     }
   }
   return ok(event);
@@ -157,7 +165,7 @@ export function classifyEventSequence(input: unknown): ValidationResult<EventSeq
   }
   const byEventId = new Map<string, string>();
   const bySequence = new Map<string, string>();
-  const sequences = new Map<string, number[]>();
+  const instances = new Map<string, { highest: number; observed: Set<number> }>();
   const presentIds = new Set(events.map((event) => event.event_id));
   let equivalentDuplicates = 0;
   const contentConflicts: string[] = [];
@@ -185,23 +193,19 @@ export function classifyEventSequence(input: unknown): ValidationResult<EventSeq
       sequenceConflicts.push(seqId);
     }
     const instance = instanceKey(event);
-    const list = sequences.get(instance) ?? [];
-    list.push(event.source_sequence);
-    sequences.set(instance, list);
+    const tracked = instances.get(instance) ?? { highest: 0, observed: new Set<number>() };
+    tracked.observed.add(event.source_sequence);
+    tracked.highest = Math.max(tracked.highest, event.source_sequence);
+    instances.set(instance, tracked);
     for (const predecessor of event.causation_event_ids ?? []) {
       if (!presentIds.has(predecessor) && !missingCausation.includes(predecessor)) {
         missingCausation.push(predecessor);
       }
     }
   }
-  for (const [instance, values] of sequences) {
-    const unique = [...new Set(values)].toSorted((left, right) => left - right);
-    let expected = 0;
-    for (const value of unique) {
-      expected = value;
-    }
-    for (let sequence = 1; sequence <= expected; sequence += 1) {
-      if (!unique.includes(sequence)) {
+  for (const [instance, tracked] of instances) {
+    for (let sequence = 1; sequence < tracked.highest; sequence += 1) {
+      if (!tracked.observed.has(sequence)) {
         gaps.push(`${instance}\n${sequence}`);
       }
     }
