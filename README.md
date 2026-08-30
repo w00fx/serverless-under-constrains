@@ -14,12 +14,29 @@ Protocol rules, fixtures, acceptance criteria, and delivery gates live in the [S
 
 ## Repository status
 
-The initial commit contains:
+This branch contains:
 
-- the project charter and repository guidance;
-- the Study 1 specification and architecture decisions.
+- the project charter, Study 1 specification, and architecture decisions;
+- a Node.js 24 TypeScript project at `study-1/` with a committed lockfile;
+- local M0-A protocol records that create, reject, serialize, hash, and verify deterministic contracts.
 
-No application code, package manifest, lockfile, test suite, infrastructure definition, or deployed AWS resource exists yet. Delivery starts with Milestone 0 and follows the sequence in the specification.
+It does not contain variants, a provider, transport qualification, an oracle, or any live AWS mutation.
+
+## Local commands
+
+From `study-1/`, on Node.js 24:
+
+| Command | Purpose |
+| --- | --- |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | built-in Node test runner |
+| `npm run check` | lint, typecheck, and tests |
+| `npm run golden` | locked canonical-byte fixtures |
+| `npm run coverage` | line and branch coverage for protocol records |
+| `npm run mutation` | Stryker on protocol records |
+
+`npm run check` is the declared local gate.
 
 ## Start here
 

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "record_type": "evidence_ref",
+  "required": ["artifact_path", "artifact_sha256"],
+  "optional": ["event_id", "json_pointer", "package_index_sha256"]
+}

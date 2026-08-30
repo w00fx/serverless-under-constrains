@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "record_type": "approved_decision",
+  "required": [
+    "schema_version",
+    "record_type",
+    "refund_request_id",
+    "payment_id",
+    "decision",
+    "approved_amount_minor",
+    "currency"
+  ]
+}

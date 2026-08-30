@@ -6,4 +6,6 @@ dist/
 coverage/
 *.tsbuildinfo
 .eslintcache
+reports/
+.stryker-tmp/
 
