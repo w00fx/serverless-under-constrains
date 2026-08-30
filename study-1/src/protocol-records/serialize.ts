@@ -9,7 +9,7 @@ function isJsonAtomic(value: unknown): boolean {
     value === null ||
     typeof value === "string" ||
     typeof value === "boolean" ||
-    (typeof value === "number" && Number.isFinite(value))
+    Number.isFinite(value)
   );
 }
 

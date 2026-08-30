@@ -14,20 +14,11 @@ import {
 import { structuralKey } from "./serialize.ts";
 import type { EventSequenceReport, PrimaryEvent, ValidationResult } from "./types.ts";
 
-const RESERVED = new Set([
-  "schema_version",
-  "record_type",
-  "event_id",
-  "occurred_at",
-  "source",
-  "source_instance_id",
-  "source_sequence",
-  "causation_event_ids",
-  "trial_manifest_sha256",
-  "run_id",
-  "transport_probe_id",
-  "variant_validation_id",
-]);
+const RESERVED = new Set(
+  "schema_version record_type event_id occurred_at source source_instance_id source_sequence causation_event_ids trial_manifest_sha256 run_id transport_probe_id variant_validation_id".split(
+    " ",
+  ),
+);
 
 const BINDING_KEYS = ["run_id", "transport_probe_id", "variant_validation_id"] as const;
 
@@ -95,11 +86,8 @@ export function createPrimaryEvent(input: unknown): ValidationResult<PrimaryEven
     reasons.push("missing_execution_binding");
   } else if (bindings.length > 1) {
     reasons.push("ambiguous_execution_binding");
-  } else {
-    const bindingKey = bindings[0];
-    if (bindingKey !== undefined && !isUuidV4(input[bindingKey])) {
-      reasons.push("invalid_uuid");
-    }
+  } else if (!isUuidV4(input[bindings[0]!])) {
+    reasons.push("invalid_uuid");
   }
   const causation = createCausation(input.causation_event_ids, reasons);
   if (reasons.length > 0) {
@@ -115,10 +103,8 @@ export function createPrimaryEvent(input: unknown): ValidationResult<PrimaryEven
     source_sequence: input.source_sequence as number,
     trial_manifest_sha256: input.trial_manifest_sha256 as string,
   };
-  const bindingKey = bindings[0];
-  if (bindingKey !== undefined && isUuidV4(input[bindingKey])) {
-    event[bindingKey] = input[bindingKey];
-  }
+  const bindingKey = bindings[0]!;
+  event[bindingKey] = input[bindingKey] as string;
   if (causation !== undefined) {
     event.causation_event_ids = causation;
   }
@@ -128,10 +114,8 @@ export function createPrimaryEvent(input: unknown): ValidationResult<PrimaryEven
       // creating an own property, silently dropping the value or replacing the
       // prototype of the record being built.
       Object.defineProperty(event, key, {
-        configurable: true,
         enumerable: true,
         value: input[key],
-        writable: true,
       });
     }
   }
@@ -150,22 +134,15 @@ export function classifyEventSequence(input: unknown): ValidationResult<EventSeq
   if (!Array.isArray(input)) {
     return fail(["not_an_object"]);
   }
-  const events: PrimaryEvent[] = [];
-  const reasons: string[] = [];
-  for (const item of input) {
-    const created = createPrimaryEvent(item);
-    if (!created.ok) {
-      reasons.push(...created.reasons);
-      continue;
-    }
-    events.push(created.value);
-  }
+  const created = input.map((item) => createPrimaryEvent(item));
+  const reasons = created.flatMap((item) => (item.ok ? [] : [...item.reasons]));
   if (reasons.length > 0) {
     return fail(reasons);
   }
+  const events = created.map((item) => (item as { ok: true; value: PrimaryEvent }).value);
   const byEventId = new Map<string, string>();
   const bySequence = new Map<string, string>();
-  const instances = new Map<string, { highest: number; observed: Set<number> }>();
+  const instances = new Map<string, Set<number>>();
   const presentIds = new Set(events.map((event) => event.event_id));
   let equivalentDuplicates = 0;
   const contentConflicts: string[] = [];
@@ -193,9 +170,8 @@ export function classifyEventSequence(input: unknown): ValidationResult<EventSeq
       sequenceConflicts.push(seqId);
     }
     const instance = instanceKey(event);
-    const tracked = instances.get(instance) ?? { highest: 0, observed: new Set<number>() };
-    tracked.observed.add(event.source_sequence);
-    tracked.highest = Math.max(tracked.highest, event.source_sequence);
+    const tracked = instances.get(instance) ?? new Set<number>();
+    tracked.add(event.source_sequence);
     instances.set(instance, tracked);
     for (const predecessor of event.causation_event_ids ?? []) {
       if (!presentIds.has(predecessor) && !missingCausation.includes(predecessor)) {
@@ -203,9 +179,12 @@ export function classifyEventSequence(input: unknown): ValidationResult<EventSeq
       }
     }
   }
-  for (const [instance, tracked] of instances) {
-    for (let sequence = 1; sequence < tracked.highest; sequence += 1) {
-      if (!tracked.observed.has(sequence)) {
+  for (const [instance, observed] of instances) {
+    const remaining = new Set(observed);
+    for (let sequence = 1; remaining.size > 0; sequence += 1) {
+      if (remaining.has(sequence)) {
+        remaining.delete(sequence);
+      } else {
         gaps.push(`${instance}\n${sequence}`);
       }
     }

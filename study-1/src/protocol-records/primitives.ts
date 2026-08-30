@@ -8,6 +8,8 @@ export const TIMESTAMP =
 export const RECORD_TYPE = /^[a-z][a-z0-9_]*$/;
 export const REJECTED_ALIASES = ["evidence_references", "evidence", "references"];
 
+const DAYS_IN_MONTH = [0, 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
 export function ok<T>(value: T): ValidationResult<T> {
   return { ok: true, value };
 }
@@ -21,7 +23,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function isPositiveSafeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+  return Number.isSafeInteger(value) && (value as number) > 0;
 }
 
 export function isSha256Hex(value: unknown): value is string {
@@ -30,6 +32,19 @@ export function isSha256Hex(value: unknown): value is string {
 
 export function isUuidV4(value: unknown): value is string {
   return typeof value === "string" && UUID_V4.test(value);
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    if (year % 400 === 0) {
+      return 29;
+    }
+    if (year % 100 === 0) {
+      return 28;
+    }
+    return year % 4 === 0 ? 29 : 28;
+  }
+  return DAYS_IN_MONTH[month] ?? 0;
 }
 
 export function isUtcMillisecondTimestamp(value: unknown): value is string {
@@ -46,16 +61,16 @@ export function isUtcMillisecondTimestamp(value: unknown): value is string {
   const hour = Number(match[4]);
   const minute = Number(match[5]);
   const second = Number(match[6]);
-  const millisecond = Number(match[7]);
-  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  // Date.UTC maps years 0-99 to 1900-1999, so those four-digit years are not
+  // round-trippable as written. Keep that rejection while checking the calendar
+  // fields directly so each bound is independently observable.
   return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day &&
-    date.getUTCHours() === hour &&
-    date.getUTCMinutes() === minute &&
-    date.getUTCSeconds() === second &&
-    date.getUTCMilliseconds() === millisecond
+    year >= 100 &&
+    day >= 1 &&
+    day <= daysInMonth(year, month) &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59
   );
 }
 
@@ -68,14 +83,10 @@ export function trimmedIdentity(value: unknown): string | undefined {
 }
 
 export function isNormalizedRelativePosixPath(value: unknown): value is string {
-  if (typeof value !== "string" || value === "" || value.startsWith("/") || value.includes("\\")) {
+  if (typeof value !== "string" || value.includes("\\") || value.includes(":")) {
     return false;
   }
-  if (value.endsWith("/") || value.includes(":")) {
-    return false;
-  }
-  const segments = value.split("/");
-  return segments.every((segment) => segment !== "" && segment !== "." && segment !== "..");
+  return value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
 export function isJsonPointer(value: unknown): value is string {

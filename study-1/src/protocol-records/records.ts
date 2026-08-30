@@ -101,15 +101,15 @@ export function createPayment(input: unknown): ValidationResult<PaymentRecord> {
   const paymentId = pushIdentity(reasons, input.payment_id);
   const amount = pushAmount(reasons, input.captured_amount_minor);
   const currency = pushCurrency(reasons, input.currency);
-  if (reasons.length > 0 || paymentId === undefined || amount === undefined || currency === undefined) {
+  if (reasons.length > 0) {
     return fail(reasons);
   }
   return ok({
     schema_version: 1,
     record_type: "payment",
-    payment_id: paymentId,
-    captured_amount_minor: amount,
-    currency,
+    payment_id: paymentId as string,
+    captured_amount_minor: amount as number,
+    currency: currency as "BRL",
   });
 }
 
@@ -127,47 +127,26 @@ export function createApprovedDecision(input: unknown): ValidationResult<Approve
   }
   const amount = pushAmount(reasons, input.approved_amount_minor);
   const currency = pushCurrency(reasons, input.currency);
-  if (
-    reasons.length > 0 ||
-    refundRequestId === undefined ||
-    paymentId === undefined ||
-    amount === undefined ||
-    currency === undefined
-  ) {
+  if (reasons.length > 0) {
     return fail(reasons);
   }
   return ok({
     schema_version: 1,
     record_type: "approved_decision",
-    refund_request_id: refundRequestId,
-    payment_id: paymentId,
+    refund_request_id: refundRequestId as string,
+    payment_id: paymentId as string,
     decision: "APPROVED",
-    approved_amount_minor: amount,
-    currency,
+    approved_amount_minor: amount as number,
+    currency: currency as "BRL",
   });
 }
 
-function compareOptional(left: string | undefined, right: string | undefined): number {
-  const leftRank = left === undefined ? 0 : 1;
-  const rightRank = right === undefined ? 0 : 1;
-  if (leftRank !== rightRank) {
-    return leftRank - rightRank;
-  }
-  if (left === undefined || right === undefined) {
-    return 0;
-  }
-  return left < right ? -1 : left > right ? 1 : 0;
+function evidenceSortKey(ref: EvidenceRef): string {
+  return JSON.stringify([ref.artifact_path, ref.event_id ?? "", ref.json_pointer ?? ""]);
 }
 
 function compareEvidence(left: EvidenceRef, right: EvidenceRef): number {
-  if (left.artifact_path !== right.artifact_path) {
-    return Number(left.artifact_path > right.artifact_path) - Number(left.artifact_path < right.artifact_path);
-  }
-  return (
-    compareOptional(left.event_id, right.event_id) ||
-    compareOptional(left.json_pointer, right.json_pointer) ||
-    compareOptional(left.package_index_sha256, right.package_index_sha256)
-  );
+  return evidenceSortKey(left).localeCompare(evidenceSortKey(right));
 }
 
 function createEvidenceRef(input: unknown): ValidationResult<EvidenceRef> {
@@ -195,21 +174,21 @@ function createEvidenceRef(input: unknown): ValidationResult<EvidenceRef> {
   if (input.package_index_sha256 !== undefined && !isSha256Hex(input.package_index_sha256)) {
     reasons.push("invalid_sha256");
   }
-  if (reasons.length > 0 || artifactPath === undefined || artifactSha256 === undefined) {
+  if (reasons.length > 0) {
     return fail(reasons);
   }
   const ref: EvidenceRef = {
-    artifact_path: artifactPath,
-    artifact_sha256: artifactSha256,
+    artifact_path: artifactPath as string,
+    artifact_sha256: artifactSha256 as string,
   };
-  if (typeof input.event_id === "string") {
-    ref.event_id = input.event_id;
+  if (input.event_id !== undefined) {
+    ref.event_id = input.event_id as string;
   }
-  if (typeof input.json_pointer === "string") {
-    ref.json_pointer = input.json_pointer;
+  if (input.json_pointer !== undefined) {
+    ref.json_pointer = input.json_pointer as string;
   }
-  if (typeof input.package_index_sha256 === "string") {
-    ref.package_index_sha256 = input.package_index_sha256;
+  if (input.package_index_sha256 !== undefined) {
+    ref.package_index_sha256 = input.package_index_sha256 as string;
   }
   return ok(ref);
 }

@@ -8,7 +8,6 @@
   "mutate": [
     "src/protocol-records/**/*.ts"
   ],
-  "ignoreStatic": true,
   "coverageAnalysis": "off",
   "timeoutMS": 60000,
   "reporters": ["clear-text", "json"],
