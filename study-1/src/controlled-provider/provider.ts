@@ -50,13 +50,15 @@ export function authorize(
   return { ok: true, value: principal };
 }
 
+const DEFAULT_SOURCE_INSTANCE_ID = randomUUID();
+
 function defaultIds(): ProviderIds {
   return {
     provider_call_id: randomUUID(),
     provider_transaction_id: randomUUID(),
     provider_commit_id: randomUUID(),
     event_id: randomUUID(),
-    source_instance_id: randomUUID(),
+    source_instance_id: DEFAULT_SOURCE_INSTANCE_ID,
   };
 }
 

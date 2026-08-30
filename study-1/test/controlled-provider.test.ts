@@ -160,6 +160,10 @@ describe("refund call records", () => {
     assertRejected(createRefundCall(call({ currency: "USD" })), "invalid_currency");
     assertRejected(createRefundCall(call({ extra: true })), "unknown_property");
     assertRejected(createRefundCall(call({ evidence: [] })), "alias_rejected");
+    assertRejected(
+      createRefundCall(call({ run_id: "not-uuid", trial_id: "also-not-uuid" })),
+      "invalid_uuid",
+    );
   });
 });
 
@@ -534,6 +538,23 @@ describe("controlled provider contract", () => {
       assert.equal(result.treatment.state, "COMMITTED_WAITING");
       assert.equal(result.transaction.committed_at, store.listLedger(TRIAL)[0]?.committed_at);
     }
+  });
+
+  it("reuses one default source instance so journal sequences stay dense", () => {
+    const store = seed();
+    const first = processRefundCall(store, { principal: "variant", call: call() });
+    const second = processRefundCall(store, { principal: "variant", call: call() });
+    assert.equal(first.outcome, "accepted");
+    assert.equal(second.outcome, "accepted");
+    if (first.outcome !== "accepted" || second.outcome !== "accepted") {
+      return;
+    }
+    assert.equal(first.event.source_instance_id, second.event.source_instance_id);
+    assert.notEqual(first.event.event_id, second.event.event_id);
+    assert.deepEqual(
+      store.listJournal(TRIAL).map((event) => event.source_sequence).toSorted(),
+      [1, 2],
+    );
   });
 
   it("accepts the other execution bindings", () => {
