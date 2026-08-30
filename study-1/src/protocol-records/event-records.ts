@@ -179,12 +179,13 @@ export function classifyEventSequence(input: unknown): ValidationResult<EventSeq
       }
     }
   }
+  // A dense instance holding `n` sequences is exactly 1..n, so any absence in
+  // that window proves the instance is not dense. Walking to the highest
+  // observed sequence instead would scale with the sequence value rather than
+  // the event count, and a single valid safe integer would exhaust memory.
   for (const [instance, observed] of instances) {
-    const remaining = new Set(observed);
-    for (let sequence = 1; remaining.size > 0; sequence += 1) {
-      if (remaining.has(sequence)) {
-        remaining.delete(sequence);
-      } else {
+    for (let sequence = 1; sequence <= observed.size; sequence += 1) {
+      if (!observed.has(sequence)) {
         gaps.push(`${instance}\n${sequence}`);
       }
     }

@@ -141,12 +141,21 @@ export function createApprovedDecision(input: unknown): ValidationResult<Approve
   });
 }
 
-function evidenceSortKey(ref: EvidenceRef): string {
-  return JSON.stringify([ref.artifact_path, ref.event_id ?? "", ref.json_pointer ?? ""]);
+// Collation must not be used here: it is locale-sensitive and reports distinct
+// strings as equal, which would make the canonical order depend on input order.
+function compareCodeUnits(left: string, right: string): number {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
 }
 
 function compareEvidence(left: EvidenceRef, right: EvidenceRef): number {
-  return evidenceSortKey(left).localeCompare(evidenceSortKey(right));
+  return (
+    compareCodeUnits(left.artifact_path, right.artifact_path) ||
+    compareCodeUnits(left.event_id ?? "", right.event_id ?? "") ||
+    compareCodeUnits(left.json_pointer ?? "", right.json_pointer ?? "")
+  );
 }
 
 function createEvidenceRef(input: unknown): ValidationResult<EvidenceRef> {

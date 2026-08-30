@@ -201,6 +201,28 @@ describe("evidence references", () => {
     assert.equal(created.length, 2);
   });
 
+  it("orders refs by UTF-16 code unit rather than locale collation", () => {
+    const created = assertAccepted(createEvidenceRefs([
+      { artifact_path: "a/ledger.json", artifact_sha256: DIGEST },
+      { artifact_path: "a/Ledger.json", artifact_sha256: DIGEST },
+    ]));
+    assert.deepEqual(created.map((ref) => ref.artifact_path), ["a/Ledger.json", "a/ledger.json"]);
+  });
+
+  it("produces identical canonical bytes for the same refs given in any input order", () => {
+    // A soft hyphen is collation-ignorable, so these distinct paths compare
+    // equal under localeCompare and would keep whichever order they arrived in.
+    const plain = { artifact_path: "ab/x.json", artifact_sha256: DIGEST };
+    const ignorable = { artifact_path: "a\u00ADb/x.json", artifact_sha256: DIGEST };
+    const forward = assertAccepted(createEvidenceRefs([plain, ignorable]));
+    const reverse = assertAccepted(createEvidenceRefs([ignorable, plain]));
+    assert.deepEqual(forward.map((ref) => ref.artifact_path), ["ab/x.json", "a\u00ADb/x.json"]);
+    assert.equal(
+      assertAccepted(serializeCanonicalJson(forward)),
+      assertAccepted(serializeCanonicalJson(reverse)),
+    );
+  });
+
   it("treats a missing pointer and an empty pointer as the same duplicate key", () => {
     assertRejected(
       createEvidenceRefs([
@@ -440,6 +462,30 @@ describe("event sequences", () => {
     assertRejected(classifyEventSequence(null), "not_an_object");
     assertRejected(classifyEventSequence([event({ event_id: "bad" })]), "invalid_uuid");
     assertRejected(classifyEventSequence([event({ extra: 1n })]), "unserializable_value");
+  });
+
+  it("reports every missing sequence inside the observed window", () => {
+    const trailing = assertAccepted(classifyEventSequence([
+      event({ source_sequence: 2 }),
+      event({ event_id: CAUSE_A, source_sequence: 3 }),
+    ]));
+    assert.deepEqual(trailing.gaps, [`runner\n${SOURCE_INSTANCE}\n1`]);
+    const twoHoles = assertAccepted(classifyEventSequence([
+      event({ source_sequence: 2 }),
+      event({ event_id: CAUSE_A, source_sequence: 5 }),
+      event({ event_id: CAUSE_B, source_sequence: 6 }),
+    ]));
+    assert.deepEqual(twoHoles.gaps, [
+      `runner\n${SOURCE_INSTANCE}\n1`,
+      `runner\n${SOURCE_INSTANCE}\n3`,
+    ]);
+  });
+
+  it("reports a gap for a far sequence without scaling work to its value", () => {
+    const far = assertAccepted(classifyEventSequence([
+      event({ source_sequence: Number.MAX_SAFE_INTEGER }),
+    ]));
+    assert.deepEqual(far.gaps, [`runner\n${SOURCE_INSTANCE}\n1`]);
   });
 });
 
