@@ -143,11 +143,11 @@ export function createApprovedDecision(input: unknown): ValidationResult<Approve
 
 // Collation must not be used here: it is locale-sensitive and reports distinct
 // strings as equal, which would make the canonical order depend on input order.
+// Subtract both directions so a zero result is only equality: that zero is what
+// lets the multi-key `||` chain consult event and pointer, and it keeps each
+// relational operator observable. Array#toSorted alone only sees the sign.
 function compareCodeUnits(left: string, right: string): number {
-  if (left < right) {
-    return -1;
-  }
-  return left > right ? 1 : 0;
+  return (left > right ? 1 : 0) - (left < right ? 1 : 0);
 }
 
 function compareEvidence(left: EvidenceRef, right: EvidenceRef): number {

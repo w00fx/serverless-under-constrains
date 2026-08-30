@@ -173,11 +173,27 @@ describe("evidence references", () => {
     ]));
     assert.deepEqual(equalIds.map((ref) => ref.json_pointer), ["/a", "/b"]);
 
-    const missingPointerFirst = assertAccepted(createEvidenceRefs([
-      { artifact_path: "p.json", artifact_sha256: DIGEST, json_pointer: "/a" },
-      { artifact_path: "p.json", artifact_sha256: DIGEST },
-    ]));
-    assert.deepEqual(missingPointerFirst.map((ref) => ref.json_pointer), [undefined, "/a"]);
+    const withoutPointer = { artifact_path: "p.json", artifact_sha256: DIGEST };
+    const withPointer = { artifact_path: "p.json", artifact_sha256: DIGEST, json_pointer: "/a" };
+    for (const input of [[withoutPointer, withPointer], [withPointer, withoutPointer]]) {
+      const missingPointerFirst = assertAccepted(createEvidenceRefs(input));
+      assert.deepEqual(missingPointerFirst.map((ref) => ref.json_pointer), [undefined, "/a"]);
+    }
+
+    const withoutEvent = { artifact_path: "same.json", artifact_sha256: DIGEST, json_pointer: "/c" };
+    const withEvent = {
+      artifact_path: "same.json",
+      artifact_sha256: DIGEST,
+      json_pointer: "/a",
+      event_id: CAUSE_A,
+    };
+    for (const input of [[withoutEvent, withEvent], [withEvent, withoutEvent]]) {
+      const missingEventFirst = assertAccepted(createEvidenceRefs(input));
+      assert.deepEqual(
+        missingEventFirst.map((ref) => [ref.event_id, ref.json_pointer]),
+        [[undefined, "/c"], [CAUSE_A, "/a"]],
+      );
+    }
 
     const packages = assertAccepted(createEvidenceRefs([
       { artifact_path: "q.json", artifact_sha256: DIGEST, json_pointer: "/b", package_index_sha256: sha256Hex("b") },
@@ -199,6 +215,21 @@ describe("evidence references", () => {
       { artifact_path: "a", artifact_sha256: DIGEST, json_pointer: "/x\n/y" },
     ]));
     assert.equal(created.length, 2);
+  });
+
+  it("does not let optional keys invert a path inequality", () => {
+    const greaterPath = { artifact_path: "b.json", artifact_sha256: DIGEST };
+    const lesserPath = { artifact_path: "a.json", artifact_sha256: DIGEST, event_id: CAUSE_A };
+    for (const input of [[greaterPath, lesserPath], [lesserPath, greaterPath]]) {
+      const created = assertAccepted(createEvidenceRefs(input));
+      assert.deepEqual(created.map((ref) => ref.artifact_path), ["a.json", "b.json"]);
+    }
+    const greaterPointer = { artifact_path: "d.json", artifact_sha256: DIGEST, json_pointer: "/z" };
+    const lesserPlain = { artifact_path: "c.json", artifact_sha256: DIGEST };
+    for (const input of [[greaterPointer, lesserPlain], [lesserPlain, greaterPointer]]) {
+      const created = assertAccepted(createEvidenceRefs(input));
+      assert.deepEqual(created.map((ref) => ref.artifact_path), ["c.json", "d.json"]);
+    }
   });
 
   it("orders refs by UTF-16 code unit rather than locale collation", () => {
