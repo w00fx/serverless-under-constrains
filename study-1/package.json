@@ -12,8 +12,8 @@
     "check": "npm run lint && npm run typecheck && npm test",
     "golden": "node --experimental-strip-types --test test/fixtures/protocol-records.test.ts",
     "golden-tables": "node --experimental-strip-types --test test/tables-harness.test.ts",
-    "fuzz": "node --experimental-strip-types --test test/fuzz/protocol-records.fuzz.ts",
-    "coverage": "c8 --src src/protocol-records --lines=100 --branches=100 --functions=100 --statements=100 --check-coverage node --experimental-strip-types --test",
+    "fuzz": "node --experimental-strip-types --test test/fuzz/*.fuzz.ts",
+    "coverage": "c8 --src src/protocol-records --src src/controlled-provider --lines=100 --branches=100 --functions=100 --statements=100 --check-coverage node --experimental-strip-types --test",
     "mutation": "stryker run"
   },
   "devDependencies": {
