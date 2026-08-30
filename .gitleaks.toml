@@ -1,0 +1,9 @@
+title = "serverless-under-constrains"
+[allowlist]
+description = "lockfiles and generated reports"
+paths = [
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)coverage/''',
+  '''(^|/)coverage-metrics/''',
+  '''(^|/)\.stryker-tmp/''',
+]

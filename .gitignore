@@ -8,4 +8,5 @@ coverage/
 .eslintcache
 reports/
 .stryker-tmp/
+tools/bin/
 

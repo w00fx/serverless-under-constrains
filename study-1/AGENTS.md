@@ -20,5 +20,9 @@ From `study-1/`, Node.js 24:
 - `npm test` — `node --experimental-strip-types --test`
 - `npm run check` — lint, typecheck, and tests
 - `npm run golden` — locked canonical-byte fixtures
+- `npm run golden-tables` — `specs/tables/` reference rows
+- `npm run fuzz` — seeded invalid-input properties
 - `npm run coverage` — line and branch coverage for `src/protocol-records`
 - `npm run mutation` — Stryker on `src/protocol-records`
+
+Root `make check`, `make golden`, `make mutation-study-1`, and `make fuzz-study-1` wrap these. See the repository `AGENTS.md` Commands table.

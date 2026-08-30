@@ -1,0 +1,22 @@
+{
+  "id": "M0-A-001-payment-accept",
+  "requirement": "M0-A",
+  "operation": "createPayment",
+  "input": {
+    "schema_version": 1,
+    "record_type": "payment",
+    "payment_id": "pay-poc-001",
+    "captured_amount_minor": 10000,
+    "currency": "BRL"
+  },
+  "expect": {
+    "ok": true,
+    "value": {
+      "schema_version": 1,
+      "record_type": "payment",
+      "payment_id": "pay-poc-001",
+      "captured_amount_minor": 10000,
+      "currency": "BRL"
+    }
+  }
+}
