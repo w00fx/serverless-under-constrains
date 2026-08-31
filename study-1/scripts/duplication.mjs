@@ -9,6 +9,7 @@ const ROOT = join(STUDY1, "..");
 const TARGETS = [
   join(STUDY1, "src/protocol-records"),
   join(STUDY1, "src/controlled-provider"),
+  join(STUDY1, "src/coordination"),
 ];
 const WINDOW = 12;
 const MIN_DUPES = 2;

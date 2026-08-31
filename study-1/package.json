@@ -10,10 +10,13 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test",
     "check": "npm run lint && npm run typecheck && npm test",
+    "coordination:bootstrap": "node --experimental-strip-types src/coordination/cli.ts bootstrap",
+    "coordination:verify": "node --experimental-strip-types src/coordination/cli.ts verify",
+    "coordination:destroy": "node --experimental-strip-types src/coordination/cli.ts destroy",
     "golden": "node --experimental-strip-types --test test/fixtures/protocol-records.test.ts",
     "golden-tables": "node --experimental-strip-types --test test/tables-harness.test.ts",
     "fuzz": "node --experimental-strip-types --test test/fuzz/*.fuzz.ts",
-    "coverage": "c8 --src src/protocol-records --src src/controlled-provider --lines=100 --branches=100 --functions=100 --statements=100 --check-coverage node --experimental-strip-types --test",
+    "coverage": "c8 --src src/protocol-records --src src/controlled-provider --src src/coordination --lines=100 --branches=100 --functions=100 --statements=100 --check-coverage node --experimental-strip-types --test",
     "mutation": "stryker run"
   },
   "devDependencies": {
@@ -24,5 +27,9 @@
     "eslint": "^9.39.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.267.0",
+    "constructs": "^10.8.1"
   }
 }

@@ -19,9 +19,10 @@ This branch contains:
 - the project charter, Study 1 specification, and architecture decisions;
 - a Node.js 24 TypeScript project at `study-1/` with a committed lockfile;
 - local M0-A protocol records that create, reject, serialize, hash, and verify deterministic contracts;
-- a local controlled refund provider and in-memory authoritative ledger.
+- a local controlled refund provider and in-memory authoritative ledger;
+- an operator-managed coordination baseline (separate CDK entry, verify, and guarded destroy).
 
-It does not contain variants, transport qualification, an oracle, or any live AWS mutation.
+It does not contain variants, transport qualification, an oracle, or any live AWS mutation. Experimental paths cannot provision or destroy the coordination baseline.
 
 ## Local commands
 
@@ -55,8 +56,11 @@ From `study-1/`, on Node.js 24:
 | `npm run golden` | locked canonical-byte fixtures |
 | `npm run golden-tables` | `specs/tables/` reference rows |
 | `npm run fuzz` | seeded invalid-input properties |
-| `npm run coverage` | line and branch coverage for protocol records and the controlled provider |
-| `npm run mutation` | Stryker on protocol records and the controlled provider |
+| `npm run coverage` | line and branch coverage for protocol records, the controlled provider, and coordination |
+| `npm run mutation` | Stryker on protocol records, the controlled provider, and coordination |
+| `npm run coordination:bootstrap` | operator bootstrap (injected cloud adapter; no live AWS bind) |
+| `npm run coordination:verify` | read-only frozen-identity verify |
+| `npm run coordination:destroy` | guarded destroy; refuses blocking or unverifiable leases |
 
 `npm run check` is the declared local gate.
 
