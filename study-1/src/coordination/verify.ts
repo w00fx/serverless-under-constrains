@@ -24,10 +24,49 @@ export async function readDeployedBaseline(cloud: CoordinationCloud): Promise<{
   stack: StackObservation | undefined;
   table: TableObservation | undefined;
 }> {
-  return {
-    stack: await cloud.describeStack(COORDINATION_STACK_ID),
-    table: await cloud.describeTable(COORDINATION_TABLE_NAME),
-  };
+  const [stack, table] = await Promise.all([
+    cloud.describeStack(COORDINATION_STACK_ID),
+    cloud.describeTable(COORDINATION_TABLE_NAME),
+  ]);
+  return { stack, table };
+}
+
+export async function observeDeployedBaseline(
+  cloud: CoordinationCloud,
+): Promise<
+  | {
+      ok: true;
+      stack: StackObservation | undefined;
+      table: TableObservation | undefined;
+    }
+  | { ok: false; result: CoordinationCommandResult }
+> {
+  try {
+    const baseline = await readDeployedBaseline(cloud);
+    return { ok: true, ...baseline };
+  } catch (error) {
+    return {
+      ok: false,
+      result: unverifiedCoordination(
+        "readable deployed baseline",
+        error instanceof Error ? error.message : "baseline describe failed",
+      ),
+    };
+  }
+}
+
+export function unverifiedCoordination(
+  expected: string,
+  observed: unknown,
+): CoordinationCommandResult {
+  return reject([
+    {
+      code: "coordination_state_unverified",
+      category: "coordination",
+      expected,
+      observed,
+    },
+  ]);
 }
 
 export async function gateOperatorCommand(

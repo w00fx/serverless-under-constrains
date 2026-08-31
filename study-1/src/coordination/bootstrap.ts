@@ -15,6 +15,7 @@ import type {
 import {
   collectDeployedIdentityReasons,
   collectRequestIdentityReasons,
+  observeDeployedBaseline,
   readDeployedBaseline,
   reject,
 } from "./verify.ts";
@@ -62,6 +63,19 @@ export async function bootstrapCoordination(
 
   const template = synthesizeCoordinationTemplate(callerAccountId, ALLOWED_REGION);
   await cloud.deploy({ stackId: COORDINATION_STACK_ID, template });
+  const observed = await observeDeployedBaseline(cloud);
+  if (!observed.ok) {
+    return observed.result;
+  }
+  const deployedReasons = collectDeployedIdentityReasons(
+    callerAccountId,
+    ALLOWED_REGION,
+    observed.stack,
+    observed.table,
+  );
+  if (deployedReasons.length > 0) {
+    return reject(deployedReasons);
+  }
   return { status: "bootstrapped" };
 }
 

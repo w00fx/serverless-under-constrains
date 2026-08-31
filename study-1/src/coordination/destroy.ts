@@ -9,7 +9,12 @@ import type {
   CoordinationCommandResult,
   CoordinationRejection,
 } from "./types.ts";
-import { gateOperatorCommand, reject } from "./verify.ts";
+import {
+  gateOperatorCommand,
+  observeDeployedBaseline,
+  reject,
+  unverifiedCoordination,
+} from "./verify.ts";
 
 const DESTROY_LEASE_CODES = {
   active: "coordination_lease_active",
@@ -42,14 +47,10 @@ export async function destroyCoordination(
   try {
     leases = await cloud.listLeases();
   } catch (error) {
-    return reject([
-      {
-        code: "coordination_state_unverified",
-        category: "coordination",
-        expected: "readable lease items",
-        observed: error instanceof Error ? error.message : "lease scan failed",
-      },
-    ]);
+    return unverifiedCoordination(
+      "readable lease items",
+      error instanceof Error ? error.message : "lease scan failed",
+    );
   }
 
   const checkedAt = now();
@@ -72,5 +73,21 @@ export async function destroyCoordination(
   }
 
   await cloud.destroyStack(COORDINATION_STACK_ID);
+  return confirmDestroyed(cloud);
+}
+
+async function confirmDestroyed(
+  cloud: CoordinationCloud,
+): Promise<CoordinationCommandResult> {
+  const observed = await observeDeployedBaseline(cloud);
+  if (!observed.ok) {
+    return observed.result;
+  }
+  if (observed.stack !== undefined || observed.table !== undefined) {
+    return unverifiedCoordination("absent stack and table", {
+      stack: observed.stack,
+      table: observed.table,
+    });
+  }
   return { status: "destroyed" };
 }

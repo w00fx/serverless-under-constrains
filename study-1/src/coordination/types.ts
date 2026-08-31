@@ -60,7 +60,9 @@ export interface CoordinationCloud {
     tableName: string,
   ): Promise<TableObservation | undefined> | TableObservation | undefined;
   listLeases(): Promise<LeaseItem[]> | LeaseItem[];
+  /** Resolves only after the mutation is terminal; callers re-observe. */
   deploy(request: DeployRequest): Promise<void> | void;
+  /** Resolves only after the mutation is terminal; callers re-observe. */
   destroyStack(stackId: string): Promise<void> | void;
 }
 

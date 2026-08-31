@@ -22,6 +22,15 @@ export class FakeCoordinationCloud implements CoordinationCloud {
   table: TableObservation | undefined;
   leases: LeaseItem[] = [];
   listLeasesError: unknown;
+  materializeOnDeploy = true;
+  deployedStack: StackObservation | undefined;
+  deployedTable: TableObservation | undefined;
+  clearStackOnDestroy = true;
+  clearTableOnDestroy = true;
+  clearLeasesOnDestroy = true;
+  failDescribeStackAfter: number | undefined;
+  describeStackError: unknown = new Error("describe stack failed");
+  describeStackCalls = 0;
   readonly describedStacks: string[] = [];
   readonly describedTables: string[] = [];
   readonly deploys: DeployRequest[] = [];
@@ -33,6 +42,13 @@ export class FakeCoordinationCloud implements CoordinationCloud {
 
   describeStack(stackId: string): StackObservation | undefined {
     this.describedStacks.push(stackId);
+    this.describeStackCalls += 1;
+    if (
+      this.failDescribeStackAfter !== undefined &&
+      this.describeStackCalls > this.failDescribeStackAfter
+    ) {
+      throw this.describeStackError;
+    }
     return this.stack;
   }
 
@@ -50,10 +66,23 @@ export class FakeCoordinationCloud implements CoordinationCloud {
 
   deploy(request: DeployRequest): void {
     this.deploys.push(request);
+    if (this.materializeOnDeploy) {
+      this.stack = this.deployedStack ?? matchingStack();
+      this.table = this.deployedTable ?? matchingTable();
+    }
   }
 
   destroyStack(stackId: string): void {
     this.destroys.push(stackId);
+    if (this.clearStackOnDestroy) {
+      this.stack = undefined;
+    }
+    if (this.clearTableOnDestroy) {
+      this.table = undefined;
+    }
+    if (this.clearLeasesOnDestroy) {
+      this.leases = [];
+    }
   }
 }
 
