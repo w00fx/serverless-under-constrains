@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
+import { existsSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
-import { bootstrapCoordination } from "../src/coordination/bootstrap.ts";
+import { fileURLToPath } from "node:url";
+import {
+  bootstrapCoordination,
+  synthesizeCoordinationTemplate,
+} from "../src/coordination/bootstrap.ts";
 import { dispatchCoordinationCommand } from "../src/coordination/cli.ts";
 import { destroyCoordination } from "../src/coordination/destroy.ts";
 import {
+  ALLOWED_REGION,
   buildCoordinationTableArn,
   COORDINATION_DESTROY_CONFIRMATION,
   COORDINATION_LEASE_KEY_ATTRIBUTE,
@@ -323,12 +331,54 @@ describe("coordination bootstrap", () => {
     const stackOnlyResult = await bootstrapCoordination(validRequest(), stackOnly);
     assertRejected(stackOnlyResult, "coordination_baseline_incompatible", "stack only");
     assert.deepEqual(stackOnly.deploys, []);
+    if (stackOnlyResult.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(stackOnlyResult.reasons, [
+      {
+        code: "coordination_baseline_incompatible",
+        category: "coordination",
+        expected: "absent or complete matching stack and table",
+        observed: { stack: COORDINATION_STACK_ID, table: undefined },
+      },
+    ]);
 
     const tableOnly = new FakeCoordinationCloud();
     tableOnly.table = matchingTable();
     const tableOnlyResult = await bootstrapCoordination(validRequest(), tableOnly);
     assertRejected(tableOnlyResult, "coordination_baseline_incompatible", "table only");
     assert.deepEqual(tableOnly.deploys, []);
+    if (tableOnlyResult.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(tableOnlyResult.reasons, [
+      {
+        code: "coordination_baseline_incompatible",
+        category: "coordination",
+        expected: "absent or complete matching stack and table",
+        observed: { stack: undefined, table: COORDINATION_TABLE_NAME },
+      },
+    ]);
+  });
+
+  it("synthesizes the template in an isolated directory and deletes it", () => {
+    const prefix = COORDINATION_STACK_ID;
+    const studyRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const cdkOut = join(studyRoot, "cdk.out");
+    rmSync(cdkOut, { recursive: true, force: true });
+    const before = new Set(
+      readdirSync(tmpdir()).filter((name) => name.startsWith(prefix)),
+    );
+    const template = synthesizeCoordinationTemplate(ACCOUNT, ALLOWED_REGION);
+    const resources = template.Resources as Record<string, { Type?: string }>;
+    assert.ok(
+      Object.values(resources ?? {}).some((resource) => resource.Type === "AWS::DynamoDB::Table"),
+    );
+    const leftovers = readdirSync(tmpdir()).filter(
+      (name) => name.startsWith(prefix) && !before.has(name),
+    );
+    assert.deepEqual(leftovers, []);
+    assert.equal(existsSync(cdkOut), false);
   });
 });
 
@@ -534,11 +584,75 @@ describe("coordination destroy", () => {
 
   it("uses the clock default when destroy is not given an explicit now", async () => {
     const cloud = matchingCloud();
+    cloud.leases = [
+      {
+        ...releasedLease(),
+        heartbeat: "2020-01-01T00:00:00.000Z",
+      },
+    ];
     const result = await destroyCoordination({
       ...validRequest(),
       confirmation: COORDINATION_DESTROY_CONFIRMATION,
     }, cloud);
     assert.equal(result.status, "destroyed");
+    assert.deepEqual(cloud.destroys, [COORDINATION_STACK_ID]);
+  });
+
+  it("records destroy confirmation, scan, and lease-block diagnostics", async () => {
+    const missingConfirmation = await destroyCoordination(validRequest(), matchingCloud(), () => NOW);
+    assert.equal(missingConfirmation.status, "rejected");
+    if (missingConfirmation.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(missingConfirmation.reasons, [
+      {
+        code: "destroy_confirmation_invalid",
+        category: "configuration",
+        expected: COORDINATION_DESTROY_CONFIRMATION,
+        observed: undefined,
+      },
+    ]);
+
+    const scanCloud = matchingCloud();
+    scanCloud.listLeasesError = "scan failed";
+    const unread = await destroyCoordination(
+      { ...validRequest(), confirmation: COORDINATION_DESTROY_CONFIRMATION },
+      scanCloud,
+      () => NOW,
+    );
+    assert.equal(unread.status, "rejected");
+    if (unread.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(unread.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "readable lease items",
+        observed: "lease scan failed",
+      },
+    ]);
+
+    const blockedCloud = matchingCloud();
+    const recoveryLease = { ...releasedLease(), lease_status: "recovery_required" };
+    blockedCloud.leases = [recoveryLease];
+    const blocked = await destroyCoordination(
+      { ...validRequest(), confirmation: COORDINATION_DESTROY_CONFIRMATION },
+      blockedCloud,
+      () => NOW,
+    );
+    assert.equal(blocked.status, "rejected");
+    if (blocked.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(blocked.reasons, [
+      {
+        code: "coordination_lease_recovery_required",
+        category: "coordination",
+        expected: "no active, non-stale, or recovery-required leases",
+        observed: recoveryLease,
+      },
+    ]);
   });
 });
 

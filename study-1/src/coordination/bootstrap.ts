@@ -69,7 +69,7 @@ export function synthesizeCoordinationTemplate(
   accountId: string,
   region: string,
 ): Record<string, unknown> {
-  const outdir = mkdtempSync(join(tmpdir(), "study-1-coordination-synth-"));
+  const outdir = mkdtempSync(join(tmpdir(), COORDINATION_STACK_ID));
   try {
     const app = createCoordinationApp(
       accountId,
@@ -82,6 +82,6 @@ export function synthesizeCoordinationTemplate(
       unknown
     >;
   } finally {
-    rmSync(outdir, { recursive: true, force: true });
+    rmSync(outdir, { recursive: true });
   }
 }

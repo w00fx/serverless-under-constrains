@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   ALLOWED_REGION,
   buildCoordinationTableArn,
+  COORDINATION_LEASE_KEY_ATTRIBUTE,
+  COORDINATION_STACK_ID,
   COORDINATION_TABLE_NAME,
   isExpectedCoordinationSchemaVersion,
   isFrozenCoordinationTableArn,
@@ -12,6 +14,13 @@ import {
 } from "../src/coordination/identity.ts";
 
 describe("coordination identity contract", () => {
+  it("pins the frozen table, stack, and lease-key literals", () => {
+    assert.equal(COORDINATION_TABLE_NAME, "study-1-coordination");
+    assert.equal(COORDINATION_STACK_ID, "study-1-coordination");
+    assert.equal(COORDINATION_LEASE_KEY_ATTRIBUTE, "lease_key");
+    assert.equal(ALLOWED_REGION, "us-east-1");
+  });
+
   it("accepts only a 12-digit account string", () => {
     assert.equal(isTwelveDigitAccountId("123456789012"), true);
     assert.equal(isTwelveDigitAccountId("000000000000"), true);
@@ -47,12 +56,43 @@ describe("coordination identity contract", () => {
       accountId: "123456789012",
       resource: `table/${COORDINATION_TABLE_NAME}`,
     });
+    assert.deepEqual(
+      parseCoordinationArn(
+        `arn:aws:dynamodb:${ALLOWED_REGION}:123456789012:table/${COORDINATION_TABLE_NAME}:extra`,
+      ),
+      {
+        service: "dynamodb",
+        region: ALLOWED_REGION,
+        accountId: "123456789012",
+        resource: `table/${COORDINATION_TABLE_NAME}:extra`,
+      },
+    );
     assert.equal(parseCoordinationArn("arn:aws:dynamodb"), undefined);
+    assert.equal(parseCoordinationArn("arn:aws::us-east-1:123456789012:table/x"), undefined);
+    assert.equal(parseCoordinationArn("arn:aws:dynamodb::123456789012:table/x"), undefined);
     assert.equal(parseCoordinationArn("arn:aws:dynamodb:::table/x"), undefined);
     assert.equal(parseCoordinationArn("arn:aws:dynamodb:us-east-1::table/x"), undefined);
     assert.equal(parseCoordinationArn("arn:aws:dynamodb:us-east-1:123456789012:"), undefined);
     assert.equal(parseCoordinationArn("foo:aws:dynamodb:us-east-1:123456789012:table/x"), undefined);
     assert.equal(parseCoordinationArn("arn:gcp:dynamodb:us-east-1:123456789012:table/x"), undefined);
+    assert.equal(parseCoordinationArn(`x${arn}`), undefined);
+    assert.equal(parseCoordinationArn(`${arn}\ntrailing`), undefined);
+    assert.equal(
+      parseCoordinationArn(
+        "nope-arn:aws:dynamodb:us-east-1:123456789012:table/study-1-coordination",
+      ),
+      undefined,
+    );
+    assert.equal(parseCoordinationArn(`${arn} `), undefined);
+    assert.equal(parseCoordinationArn(`${arn}/extra`), undefined);
+    assert.equal(
+      parseCoordinationArn(`arn:aws:dynamodb:${ALLOWED_REGION}:123456789012:bucket/x`),
+      undefined,
+    );
+    assert.equal(
+      parseCoordinationArn(`arn:aws:dynamodb:${ALLOWED_REGION}:123456789012:table/`),
+      undefined,
+    );
   });
 
   it("accepts only the frozen table ARN for the caller account and Region", () => {
@@ -87,5 +127,33 @@ describe("coordination identity contract", () => {
       isFrozenCoordinationTableArn(`${matching}/index/gsi`, account, ALLOWED_REGION),
       false,
     );
+    assert.equal(
+      isFrozenCoordinationTableArn(
+        `arn:aws:dynamodb:${ALLOWED_REGION}:${account}:table/other-table`,
+        account,
+        ALLOWED_REGION,
+      ),
+      false,
+    );
+    assert.equal(
+      isFrozenCoordinationTableArn(
+        `arn:aws:dynamodb:${ALLOWED_REGION}:${account}:table/${COORDINATION_TABLE_NAME}:extra`,
+        account,
+        ALLOWED_REGION,
+      ),
+      false,
+    );
+    assert.equal(isFrozenCoordinationTableArn("arn:aws:dynamodb", account, ALLOWED_REGION), false);
+    assert.equal(isFrozenCoordinationTableArn("not-an-arn", account, ALLOWED_REGION), false);
+    assert.equal(
+      isFrozenCoordinationTableArn(
+        "nope-arn:aws:dynamodb:us-east-1:123456789012:table/study-1-coordination",
+        account,
+        ALLOWED_REGION,
+      ),
+      false,
+    );
+    assert.equal(isFrozenCoordinationTableArn(`${matching} `, account, ALLOWED_REGION), false);
+    assert.equal(isFrozenCoordinationTableArn(`${matching}/extra`, account, ALLOWED_REGION), false);
   });
 });

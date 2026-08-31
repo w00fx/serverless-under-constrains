@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parseCoordinationCommand } from "../src/coordination/cli.ts";
+import { isExecutedAsMain } from "../src/coordination/main-module.ts";
 import * as coordination from "../src/coordination/index.ts";
 
 const studyRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -132,5 +133,19 @@ describe("coordination command separation", () => {
       { cwd: studyRoot, encoding: "utf8", env },
     );
     assert.notEqual(cdk.status, 0);
+  });
+
+  it("does not treat a missing process entry as the main module", () => {
+    const previousEntry = process.argv[1];
+    delete process.argv[1];
+    try {
+      assert.equal(isExecutedAsMain("file:///coordination-cli.ts"), false);
+    } finally {
+      if (previousEntry === undefined) {
+        delete process.argv[1];
+      } else {
+        process.argv[1] = previousEntry;
+      }
+    }
   });
 });

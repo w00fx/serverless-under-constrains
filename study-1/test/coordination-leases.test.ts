@@ -23,6 +23,7 @@ describe("destroy lease classification", () => {
     assert.equal(classifyLeaseForDestroy(released(), NOW), "allow");
     assert.equal(classifyLeaseForDestroy(released({ schema_version: "1" }), NOW), "allow");
     assert.equal(classifyLeaseForDestroy(released({ heartbeat: null }), NOW), "allow");
+    assert.equal(classifyLeaseForDestroy(released({ heartbeat: undefined }), NOW), "allow");
     assert.equal(
       classifyLeaseForDestroy(
         released({ owner_id: "probe-1", owner_kind: "TRANSPORT_PROBE" }),
@@ -44,6 +45,17 @@ describe("destroy lease classification", () => {
       ),
       "active",
     );
+    assert.equal(
+      classifyLeaseForDestroy(released({ lease_status: undefined, owner_id: "probe-1" }), NOW),
+      "active",
+    );
+    assert.equal(
+      classifyLeaseForDestroy(
+        released({ lease_status: undefined, owner_kind: "TRANSPORT_PROBE" }),
+        NOW,
+      ),
+      "active",
+    );
     assert.equal(classifyLeaseForDestroy(released({ heartbeat: FRESH }), NOW), "non_stale");
     assert.equal(
       classifyLeaseForDestroy(
@@ -58,6 +70,17 @@ describe("destroy lease classification", () => {
     );
     assert.equal(
       classifyLeaseForDestroy(released({ lease_status: "unverified" }), NOW),
+      "unverified",
+    );
+    assert.equal(
+      classifyLeaseForDestroy(
+        released({
+          lease_status: "held",
+          owner_kind: "TRANSPORT_PROBE",
+          owner_id: "probe-1",
+        }),
+        NOW,
+      ),
       "unverified",
     );
     assert.equal(

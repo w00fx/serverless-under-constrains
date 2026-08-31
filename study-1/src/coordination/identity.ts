@@ -30,10 +30,7 @@ export function isExpectedCoordinationSchemaVersion(value: unknown): boolean {
 }
 
 export function isReadyCoordinationStackStatus(value: unknown): boolean {
-  return (
-    typeof value === "string" &&
-    (READY_COORDINATION_STACK_STATUSES as readonly string[]).includes(value)
-  );
+  return READY_COORDINATION_STACK_STATUSES.some((status) => status === value);
 }
 
 export function buildCoordinationTableArn(accountId: string, region: string): string {
@@ -41,26 +38,16 @@ export function buildCoordinationTableArn(accountId: string, region: string): st
 }
 
 export function parseCoordinationArn(arn: string): ParsedCoordinationArn | undefined {
-  const parts = arn.split(":");
-  if (parts.length < 6 || parts[0] !== "arn" || parts[1] !== "aws") {
+  const match = /^arn:aws:([^:]+):([^:]+):([^:]+):(table\/[^/\s]+)$/.exec(arn);
+  if (match === null) {
     return undefined;
   }
-  const service = parts[2];
-  const region = parts[3];
-  const accountId = parts[4];
-  const resource = parts.slice(5).join(":");
-  if (
-    service === undefined ||
-    service === "" ||
-    region === undefined ||
-    region === "" ||
-    accountId === undefined ||
-    accountId === "" ||
-    resource === ""
-  ) {
-    return undefined;
-  }
-  return { service, region, accountId, resource };
+  return {
+    service: match[1] as string,
+    region: match[2] as string,
+    accountId: match[3] as string,
+    resource: match[4] as string,
+  };
 }
 
 export function isFrozenCoordinationTableArn(

@@ -16,6 +16,14 @@ export type DestroyLeaseVerdict =
   | "recovery_required"
   | "unverified";
 
+const HEARTBEAT_INVALID = 0;
+const HEARTBEAT_NOT_FRESH = 1;
+const HEARTBEAT_FRESH = 2;
+
+const OWNER_ABSENT = 0;
+const OWNER_PRESENT = 1;
+const OWNER_INVALID = 2;
+
 export function classifyLeaseForDestroy(
   item: LeaseItem,
   now: Date,
@@ -39,38 +47,46 @@ export function classifyLeaseForDestroy(
     return "unverified";
   }
 
-  const heartbeatMs = parseHeartbeat(item.heartbeat);
-  if (item.heartbeat !== undefined && item.heartbeat !== null && heartbeatMs === undefined) {
+  const heartbeat = readHeartbeat(item.heartbeat, now);
+  if (heartbeat === HEARTBEAT_INVALID) {
     return "unverified";
   }
-  if (heartbeatMs !== undefined && now.getTime() - heartbeatMs < STALE_BOUNDARY_MS) {
+  if (heartbeat === HEARTBEAT_FRESH) {
     return "non_stale";
   }
 
-  const ownerId = classifyOwnerField(item.owner_id);
-  const ownerKind = classifyOwnerField(item.owner_kind);
-  if (ownerId === "invalid" || ownerKind === "invalid") {
+  const ownerId = readOwnerField(item.owner_id);
+  const ownerKind = readOwnerField(item.owner_kind);
+  if (ownerId === OWNER_INVALID || ownerKind === OWNER_INVALID) {
     return "unverified";
-  }
-  const ownerPresent = ownerId === "valid" || ownerKind === "valid";
-  if (status !== "released" && ownerPresent) {
-    return "active";
   }
   if (status !== "released") {
-    return "unverified";
+    return ownerId === OWNER_PRESENT || ownerKind === OWNER_PRESENT
+      ? "active"
+      : "unverified";
   }
 
   return "allow";
 }
 
-function classifyOwnerField(value: unknown): "absent" | "valid" | "invalid" {
-  if (value === undefined) {
-    return "absent";
+function readHeartbeat(value: unknown, now: Date): number {
+  if (value === undefined || value === null) {
+    return HEARTBEAT_NOT_FRESH;
   }
-  return trimmedIdentity(value) === undefined ? "invalid" : "valid";
+  if (!isUtcMillisecondTimestamp(value)) {
+    return HEARTBEAT_INVALID;
+  }
+  return now.getTime() - Date.parse(value) < STALE_BOUNDARY_MS
+    ? HEARTBEAT_FRESH
+    : HEARTBEAT_NOT_FRESH;
 }
 
-function parseHeartbeat(value: unknown): number | undefined {
-  return isUtcMillisecondTimestamp(value) ? Date.parse(value) : undefined;
+function readOwnerField(value: unknown): number {
+  if (value === undefined) {
+    return OWNER_ABSENT;
+  }
+  if (trimmedIdentity(value) === undefined) {
+    return OWNER_INVALID;
+  }
+  return OWNER_PRESENT;
 }
-

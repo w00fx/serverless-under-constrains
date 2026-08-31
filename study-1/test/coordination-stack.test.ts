@@ -39,14 +39,16 @@ describe("coordination stack synthesis", () => {
       };
     };
     const properties = table.Properties;
+    assert.equal(properties?.TableName, "study-1-coordination");
     assert.equal(properties?.TableName, COORDINATION_TABLE_NAME);
     assert.equal(properties?.BillingMode, "PAY_PER_REQUEST");
     assert.deepEqual(properties?.AttributeDefinitions, [
-      { AttributeName: COORDINATION_LEASE_KEY_ATTRIBUTE, AttributeType: "S" },
+      { AttributeName: "lease_key", AttributeType: "S" },
     ]);
     assert.deepEqual(properties?.KeySchema, [
-      { AttributeName: COORDINATION_LEASE_KEY_ATTRIBUTE, KeyType: "HASH" },
+      { AttributeName: "lease_key", KeyType: "HASH" },
     ]);
+    assert.equal(COORDINATION_LEASE_KEY_ATTRIBUTE, "lease_key");
     assert.notEqual(properties?.SSESpecification?.SSEEnabled, true);
     assert.equal(properties?.TimeToLiveSpecification, undefined);
     assert.equal(properties?.PointInTimeRecoverySpecification, undefined);
@@ -79,6 +81,12 @@ describe("coordination stack synthesis", () => {
     const stack = app.node.findChild(COORDINATION_STACK_ID);
     assert.ok(stack instanceof CoordinationStack);
     assert.equal(stack.stackName, COORDINATION_STACK_ID);
+    assert.equal(stack.account, "123456789012");
+    assert.equal(stack.region, "us-east-1");
+    assert.equal(
+      stack.templateOptions.description,
+      "Study 1 baseline coordination lease table. Not run-owned. Operator-managed only.",
+    );
   });
 
   it("reads account and Region from the CDK environment when omitted", () => {
@@ -88,7 +96,10 @@ describe("coordination stack synthesis", () => {
     delete process.env.CDK_DEFAULT_REGION;
     try {
       const app = createCoordinationApp();
-      assert.ok(app.node.findChild(COORDINATION_STACK_ID) instanceof CoordinationStack);
+      const stack = app.node.findChild(COORDINATION_STACK_ID);
+      assert.ok(stack instanceof CoordinationStack);
+      assert.equal(stack.account, "123456789012");
+      assert.equal(stack.region, "us-east-1");
     } finally {
       if (previousAccount === undefined) {
         delete process.env.CDK_DEFAULT_ACCOUNT;

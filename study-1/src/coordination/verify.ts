@@ -220,9 +220,15 @@ export function reject(reasons: CoordinationRejection[]): CoordinationCommandRes
 }
 
 function hasFrozenKeySchema(table: TableObservation): boolean {
+  if (table.keySchema.length !== 1) {
+    return false;
+  }
+  const key = table.keySchema[0];
+  if (key === undefined) {
+    return false;
+  }
   return (
-    table.keySchema.length === 1 &&
-    table.keySchema[0]?.attributeName === COORDINATION_LEASE_KEY_ATTRIBUTE &&
-    table.keySchema[0]?.keyType === "HASH"
+    key.attributeName === COORDINATION_LEASE_KEY_ATTRIBUTE &&
+    key.keyType === "HASH"
   );
 }
