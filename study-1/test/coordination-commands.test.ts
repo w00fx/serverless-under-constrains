@@ -293,6 +293,17 @@ describe("coordination bootstrap", () => {
     const errorResult = await bootstrapCoordination(validRequest(), errorCloud);
     assertRejected(errorResult, "coordination_state_unverified", "describe error");
     assert.equal(errorCloud.deploys.length, 1);
+    if (errorResult.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(errorResult.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "readable deployed baseline",
+        observed: "describe stack failed",
+      },
+    ]);
 
     const opaque = new FakeCoordinationCloud();
     opaque.failDescribeStackAfter = 1;
@@ -302,7 +313,14 @@ describe("coordination bootstrap", () => {
     if (opaqueResult.status !== "rejected") {
       throw new Error("expected rejection");
     }
-    assert.equal(opaqueResult.reasons[0]?.observed, "baseline describe failed");
+    assert.deepEqual(opaqueResult.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "readable deployed baseline",
+        observed: "baseline describe failed",
+      },
+    ]);
     assert.equal(opaque.deploys.length, 1);
   });
 
@@ -444,6 +462,17 @@ describe("coordination destroy", () => {
     assertRejected(leftoverStackResult, "coordination_state_unverified", "leftover stack");
     assert.deepEqual(leftoverStack.destroys, [COORDINATION_STACK_ID]);
     assert.deepEqual(leftoverStack.stack, matchingStack());
+    if (leftoverStackResult.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(leftoverStackResult.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "absent stack and table",
+        observed: { stack: matchingStack(), table: undefined },
+      },
+    ]);
 
     const leftoverTable = matchingCloud();
     leftoverTable.clearStackOnDestroy = true;
@@ -456,6 +485,17 @@ describe("coordination destroy", () => {
     assertRejected(leftoverTableResult, "coordination_state_unverified", "leftover table");
     assert.deepEqual(leftoverTable.destroys, [COORDINATION_STACK_ID]);
     assert.deepEqual(leftoverTable.table, matchingTable());
+    if (leftoverTableResult.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(leftoverTableResult.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "absent stack and table",
+        observed: { stack: undefined, table: matchingTable() },
+      },
+    ]);
   });
 
   it("rejects when the post-destroy baseline cannot be read", async () => {
@@ -468,6 +508,17 @@ describe("coordination destroy", () => {
     );
     assertRejected(errorResult, "coordination_state_unverified", "describe error");
     assert.deepEqual(errorCloud.destroys, [COORDINATION_STACK_ID]);
+    if (errorResult.status !== "rejected") {
+      throw new Error("expected rejection");
+    }
+    assert.deepEqual(errorResult.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "readable deployed baseline",
+        observed: "describe stack failed",
+      },
+    ]);
 
     const opaque = matchingCloud();
     opaque.failDescribeStackAfter = 1;
@@ -481,7 +532,14 @@ describe("coordination destroy", () => {
     if (opaqueResult.status !== "rejected") {
       throw new Error("expected rejection");
     }
-    assert.equal(opaqueResult.reasons[0]?.observed, "baseline describe failed");
+    assert.deepEqual(opaqueResult.reasons, [
+      {
+        code: "coordination_state_unverified",
+        category: "coordination",
+        expected: "readable deployed baseline",
+        observed: "baseline describe failed",
+      },
+    ]);
     assert.deepEqual(opaque.destroys, [COORDINATION_STACK_ID]);
   });
 

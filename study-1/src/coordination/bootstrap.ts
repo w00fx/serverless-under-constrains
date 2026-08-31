@@ -1,5 +1,5 @@
 import * as cdk from "aws-cdk-lib";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCoordinationApp } from "./cdk-app.ts";
@@ -90,11 +90,10 @@ export function synthesizeCoordinationTemplate(
       region,
       new cdk.App({ outdir }),
     );
-    const assembly = app.synth();
-    return assembly.getStackByName(COORDINATION_STACK_ID).template as Record<
-      string,
-      unknown
-    >;
+    app.synth();
+    return JSON.parse(
+      readFileSync(join(outdir, `${COORDINATION_STACK_ID}.template.json`), "utf8"),
+    ) as Record<string, unknown>;
   } finally {
     rmSync(outdir, { recursive: true });
   }
