@@ -46,6 +46,13 @@ describe("destroy lease classification", () => {
     );
     assert.equal(classifyLeaseForDestroy(released({ heartbeat: FRESH }), NOW), "non_stale");
     assert.equal(
+      classifyLeaseForDestroy(
+        released({ heartbeat: new Date(NOW.getTime() + 1).toISOString() }),
+        NOW,
+      ),
+      "non_stale",
+    );
+    assert.equal(
       classifyLeaseForDestroy(released({ lease_status: "recovery_required" }), NOW),
       "recovery_required",
     );
@@ -71,6 +78,11 @@ describe("destroy lease classification", () => {
     assert.equal(classifyLeaseForDestroy(released({ lease_status: "" }), NOW), "unverified");
     assert.equal(classifyLeaseForDestroy(released({ heartbeat: "not-a-time" }), NOW), "unverified");
     assert.equal(classifyLeaseForDestroy(released({ heartbeat: "" }), NOW), "unverified");
+    assert.equal(classifyLeaseForDestroy(released({ heartbeat: "2020" }), NOW), "unverified");
+    assert.equal(
+      classifyLeaseForDestroy(released({ heartbeat: "2020-01-01T00:00:00Z" }), NOW),
+      "unverified",
+    );
     assert.equal(classifyLeaseForDestroy(released({ owner_id: 42 }), NOW), "unverified");
     assert.equal(classifyLeaseForDestroy(released({ owner_kind: "" }), NOW), "unverified");
     assert.equal(classifyLeaseForDestroy(released({ owner_id: "   " }), NOW), "unverified");

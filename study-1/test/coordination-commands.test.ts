@@ -173,6 +173,28 @@ describe("coordination verify", () => {
         code: "coordination_key_schema_mismatch",
       },
       {
+        name: "hash attribute is not lease_key",
+        setup: (cloud) => {
+          cloud.table = {
+            ...matchingTable(),
+            keySchema: [{ attributeName: "id", keyType: "HASH" }],
+          };
+        },
+        code: "coordination_key_schema_mismatch",
+      },
+      {
+        name: "lease_key is RANGE not HASH",
+        setup: (cloud) => {
+          cloud.table = {
+            ...matchingTable(),
+            keySchema: [
+              { attributeName: COORDINATION_LEASE_KEY_ATTRIBUTE, keyType: "RANGE" },
+            ],
+          };
+        },
+        code: "coordination_key_schema_mismatch",
+      },
+      {
         name: "wrong schema version",
         setup: (cloud) => {
           cloud.table = { ...matchingTable(), schemaVersion: 2 };
@@ -473,6 +495,14 @@ describe("coordination destroy", () => {
         },
         code: "coordination_state_unverified",
       },
+      {
+        name: "non-canonical heartbeat",
+        setup: (cloud, request) => {
+          request.confirmation = COORDINATION_DESTROY_CONFIRMATION;
+          cloud.leases = [{ ...releasedLease(), heartbeat: "2020" }];
+        },
+        code: "coordination_state_unverified",
+      },
     ];
 
     for (const testCase of cases) {
@@ -484,6 +514,22 @@ describe("coordination destroy", () => {
       assert.deepEqual(cloud.destroys, [], testCase.name);
       assert.deepEqual(cloud.deploys, [], testCase.name);
     }
+  });
+
+  it("refuses destroy when any lease blocks even if another is released", async () => {
+    const cloud = matchingCloud();
+    cloud.leases = [
+      releasedLease(),
+      { ...releasedLease(), lease_status: "recovery_required" },
+    ];
+    const result = await destroyCoordination(
+      { ...validRequest(), confirmation: COORDINATION_DESTROY_CONFIRMATION },
+      cloud,
+      () => NOW,
+    );
+    assertRejected(result, "coordination_lease_recovery_required", "mixed");
+    assert.deepEqual(cloud.destroys, []);
+    assert.deepEqual(cloud.deploys, []);
   });
 
   it("uses the clock default when destroy is not given an explicit now", async () => {

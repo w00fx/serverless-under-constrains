@@ -34,7 +34,7 @@ From the repository root, after `make bootstrap` (Node.js 24):
 | `make check-study-1` | Same, scoped to Study 1 |
 | `make golden` | Locked fixtures and spec tables |
 | `make golden-mutation` | Sabotage one table row and require the table harness to fail |
-| `make mutation-study-1` | Stryker on protocol records and the controlled provider |
+| `make mutation-study-1` | Stryker on protocol records, the controlled provider, and coordination |
 | `make fuzz-study-1` | Seeded invalid-input properties |
 | `make complexity` | ESLint complexity on the eligible target |
 | `make duplication` | Cross-file token-window duplication |

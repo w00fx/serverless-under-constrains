@@ -5,6 +5,7 @@ import { isExecutedAsMain } from "./main-module.ts";
 import type {
   CoordinationCloud,
   CoordinationCommandRequest,
+  CoordinationCommandResult,
 } from "./types.ts";
 import { verifyCoordination } from "./verify.ts";
 
@@ -28,7 +29,7 @@ export async function dispatchCoordinationCommand(
   request: CoordinationCommandRequest,
   cloud: CoordinationCloud,
   now?: () => Date,
-) {
+): Promise<CoordinationCommandResult> {
   switch (command) {
     case "bootstrap":
       return bootstrapCoordination(request, cloud);

@@ -1,4 +1,8 @@
-import { isRecord, trimmedIdentity } from "../protocol-records/primitives.ts";
+import {
+  isRecord,
+  isUtcMillisecondTimestamp,
+  trimmedIdentity,
+} from "../protocol-records/primitives.ts";
 import {
   isExpectedCoordinationSchemaVersion,
   STALE_BOUNDARY_MS,
@@ -31,15 +35,7 @@ export function classifyLeaseForDestroy(
   if (status === "recovery_required") {
     return "recovery_required";
   }
-  if (status === "unverified") {
-    return "unverified";
-  }
-  if (
-    status !== undefined &&
-    status !== "released" &&
-    status !== "recovery_required" &&
-    status !== "unverified"
-  ) {
+  if (status !== undefined && status !== "released") {
     return "unverified";
   }
 
@@ -75,10 +71,6 @@ function classifyOwnerField(value: unknown): "absent" | "valid" | "invalid" {
 }
 
 function parseHeartbeat(value: unknown): number | undefined {
-  if (typeof value !== "string" || value.trim() === "") {
-    return undefined;
-  }
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? undefined : ms;
+  return isUtcMillisecondTimestamp(value) ? Date.parse(value) : undefined;
 }
 

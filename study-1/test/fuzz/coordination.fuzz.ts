@@ -98,7 +98,16 @@ describe("fuzz-study-1 coordination (seed 20260830)", () => {
 
   it("rejects generated request identities with declared codes only", () => {
     const rng = mulberry32(SEED + 1);
-    let accepted = 0;
+    const validReasons = collectRequestIdentityReasons(
+      {
+        allowlistedAccountId: "123456789012",
+        region: "us-east-1",
+        stackId: COORDINATION_STACK_ID,
+      },
+      "123456789012",
+    );
+    assert.deepEqual(validReasons, []);
+
     for (let i = 0; i < 500; i += 1) {
       const allowlisted = pick(rng, HOSTILE);
       const caller = pick(rng, ["123456789012", "999999999999", "abc", 12, ""]);
@@ -111,7 +120,6 @@ describe("fuzz-study-1 coordination (seed 20260830)", () => {
         String(caller),
       );
       if (reasons.length === 0) {
-        accepted += 1;
         assert.equal(allowlisted, "123456789012");
         assert.equal(String(caller), "123456789012");
         continue;
@@ -120,6 +128,5 @@ describe("fuzz-study-1 coordination (seed 20260830)", () => {
         assert.ok(REQUEST_CODES.has(reason.code), reason.code);
       }
     }
-    assert.ok(accepted >= 0);
   });
 });
