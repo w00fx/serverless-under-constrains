@@ -1,7 +1,7 @@
 import { fail, ok, type ValidationResult } from "./result.ts";
 import type { PackageStore, PrefixCheckpoint } from "./types.ts";
 import { decodeUtf8 } from "./utf8.ts";
-import { CHECKPOINT_PATH, JOURNAL_PATH, isPackagePath } from "./paths.ts";
+import { CHECKPOINT_PATH, JOURNAL_PATH } from "./paths.ts";
 import { storeBytes } from "./store.ts";
 import { sha256Hex } from "../protocol-records/serialize.ts";
 import {
@@ -39,7 +39,7 @@ export function createPrefixCheckpoint(input: unknown): ValidationResult<PrefixC
   if (input.record_type !== "coordination_prefix_checkpoint") {
     problems.push("invalid_record_type");
   }
-  if (isPackagePath(input.path) === false || input.path !== JOURNAL_PATH) {
+  if (input.path !== JOURNAL_PATH) {
     problems.push("invalid_path");
   }
   if (isPositiveSafeInteger(input.prefix_byte_count) === false) {
@@ -72,18 +72,11 @@ export function createPrefixCheckpoint(input: unknown): ValidationResult<PrefixC
 }
 
 function parseJsonlObjects(text: string): unknown[] | undefined {
-  const objects: unknown[] = [];
-  for (const line of text.slice(0, -1).split("\n")) {
-    if (line === "") {
-      return undefined;
-    }
-    try {
-      objects.push(JSON.parse(line));
-    } catch {
-      return undefined;
-    }
+  try {
+    return text.slice(0, -1).split("\n").map((line) => JSON.parse(line));
+  } catch {
+    return undefined;
   }
-  return objects;
 }
 
 export function lastJournalEvent(objects: readonly unknown[]): { event_id: string; source_sequence: number } | undefined {
@@ -110,7 +103,7 @@ export function validateCheckpointAgainstJournal(
     return fail(["malformed_checkpoint"]);
   }
   const objects = parseJsonlObjects(text);
-  if (objects === undefined || objects.length === 0) {
+  if (objects === undefined) {
     return fail(["malformed_checkpoint"]);
   }
   const last = lastJournalEvent(objects);
@@ -125,17 +118,11 @@ export function validateCheckpointAgainstJournal(
 }
 
 export function readCheckpoint(bytes: Uint8Array): ValidationResult<PrefixCheckpoint> {
-  const text = decodeUtf8(bytes);
-  if (text === undefined) {
-    return fail(["malformed_checkpoint"]);
-  }
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    return createPrefixCheckpoint(JSON.parse(String(decodeUtf8(bytes))));
   } catch {
     return fail(["malformed_checkpoint"]);
   }
-  return createPrefixCheckpoint(parsed);
 }
 
 export function checkpointAlignmentReasons(

@@ -20,10 +20,6 @@ function classificationOf(
   reasons: string[],
 ): ArtifactClassification | undefined {
   const value = classifications[path];
-  if (value === undefined) {
-    reasons.push("invalid_classification");
-    return undefined;
-  }
   if (!isClassification(value)) {
     reasons.push("invalid_classification");
     return undefined;
@@ -60,10 +56,10 @@ export function writeEvidenceIndex(
     }
     const bytes = storeBytes(store, path);
     const classification = classificationOf(classifications, path, reasons);
-    if (bytes === undefined || classification === undefined) {
+    if (bytes === undefined) {
       continue;
     }
-    entries.push(evidenceEntryOf(path, bytes, classification));
+    entries.push(evidenceEntryOf(path, bytes, classification as ArtifactClassification));
   }
   for (const path of Object.keys(classifications)) {
     if (isExcludedFromEvidenceIndex(path, checkpoint.hasCheckpoint)) {

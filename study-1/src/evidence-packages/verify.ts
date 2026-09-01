@@ -18,15 +18,8 @@ import { decodeUtf8 } from "./utf8.ts";
 const EMPTY_DIGEST = sha256Hex(new Uint8Array());
 
 function parseJson(bytes: Uint8Array | undefined): unknown {
-  if (bytes === undefined) {
-    return undefined;
-  }
-  const text = decodeUtf8(bytes);
-  if (text === undefined) {
-    return undefined;
-  }
   try {
-    return JSON.parse(text);
+    return JSON.parse(String(decodeUtf8(bytes ?? new Uint8Array())));
   } catch {
     return undefined;
   }
@@ -60,7 +53,6 @@ function packageIndexReasons(store: PackageStore, record: PackageIndexRecord | u
   }
   for (const name of [...store.keys()]) {
     if (reserved.isPackagePath(name) === false) {
-      reasons.push("invalid_path");
       continue;
     }
     if (name !== reserved.PACKAGE_INDEX_PATH && !listed.has(name)) {

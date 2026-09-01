@@ -6,9 +6,11 @@ export function encodeUtf8(text: string): Uint8Array {
 }
 
 export function decodeUtf8(bytes: Uint8Array): string | undefined {
+  let decoded = "";
   try {
-    return decoder.decode(bytes);
+    decoded = decoder.decode(bytes);
   } catch {
     return undefined;
   }
+  return decoded;
 }

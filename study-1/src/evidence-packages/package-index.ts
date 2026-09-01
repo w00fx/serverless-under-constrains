@@ -17,7 +17,7 @@ export function writePackageIndex(store: unknown): ValidationResult<PackageIndex
   const reasons: string[] = [];
   const entries: IndexEntry[] = [];
   for (const path of store.keys()) {
-    if (!isPackagePath(path) || path === PACKAGE_INDEX_PATH) {
+    if (!isPackagePath(path)) {
       reasons.push("invalid_path");
       continue;
     }

@@ -41,12 +41,12 @@ function walkDir(
   for (const name of readdirSync(dir).toSorted()) {
     const abs = join(dir, name);
     const stat = lstatSync(abs);
-    if (stat.isSymbolicLink() || !stat.isFile() && !stat.isDirectory()) {
-      reasons.push("invalid_path");
-      continue;
-    }
     if (stat.isDirectory()) {
       walkDir(root, abs, store, reasons);
+      continue;
+    }
+    if (stat.isFile() === false || stat.isSymbolicLink()) {
+      reasons.push("invalid_path");
       continue;
     }
     const rel = relative(root, abs).split(sep).join("/");

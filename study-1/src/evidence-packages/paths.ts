@@ -29,8 +29,5 @@ export function isEvidenceIndexedPath(path: string, hasCheckpoint: boolean): boo
 }
 
 export function comparePaths(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-  return left < right ? -1 : 1;
+  return Number(left > right) - Number(left < right);
 }

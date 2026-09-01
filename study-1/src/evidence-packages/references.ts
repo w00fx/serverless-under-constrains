@@ -47,63 +47,42 @@ function addEventId(value: unknown, ids: Set<string>): void {
   if (!isRecord(value)) {
     return;
   }
-  if (typeof value.event_id === "string") {
-    ids.add(value.event_id);
-  }
-  for (const key of Object.keys(value)) {
-    if (key !== "event_id") {
-      addEventId(value[key], ids);
+  for (const [key, nested] of Object.entries(value)) {
+    if (key === "event_id" && typeof nested === "string") {
+      ids.add(nested);
+      continue;
     }
+    addEventId(nested, ids);
   }
 }
 
-export function eventIdsIn(bytes: Uint8Array): Set<string> {
-  const ids = new Set<string>();
-  const text = decodeUtf8(bytes);
-  if (text === undefined) {
-    return ids;
-  }
+function parseJsonLine(line: string): unknown {
   try {
-    addEventId(JSON.parse(text), ids);
-    return ids;
+    return JSON.parse(line);
   } catch {
-    const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
-    for (const line of lines) {
-      if (line === "") {
-        continue;
-      }
-      try {
-        addEventId(JSON.parse(line), ids);
-      } catch {
-        continue;
-      }
-    }
+    return undefined;
   }
-  return ids;
+}
+
+function parseJsonlDocuments(text: string): unknown[] {
+  return text.split("\n").map(parseJsonLine);
 }
 
 function parseJsonDocuments(bytes: Uint8Array): unknown[] {
   const text = decodeUtf8(bytes);
   if (text === undefined) {
-    return [];
+    return parseJsonlDocuments("");
   }
-  try {
-    return [JSON.parse(text)];
-  } catch {
-    const documents: unknown[] = [];
-    const lines = text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n");
-    for (const line of lines) {
-      if (line === "") {
-        continue;
-      }
-      try {
-        documents.push(JSON.parse(line));
-      } catch {
-        continue;
-      }
-    }
-    return documents;
+  const parsed = parseJsonLine(text);
+  return parsed === undefined ? parseJsonlDocuments(text) : [parsed];
+}
+
+export function eventIdsIn(bytes: Uint8Array): Set<string> {
+  const ids = new Set<string>();
+  for (const document of parseJsonDocuments(bytes)) {
+    addEventId(document, ids);
   }
+  return ids;
 }
 
 function refsInDocument(document: unknown): ValidationResult<EvidenceRef[]> {
@@ -123,10 +102,7 @@ export function collectReferenceReasons(
     if (!isPackagePath(path)) {
       continue;
     }
-    const bytes = storeBytes(store, path);
-    if (bytes === undefined) {
-      continue;
-    }
+    const bytes = storeBytes(store, path) ?? new Uint8Array();
     for (const document of parseJsonDocuments(bytes)) {
       const refs = refsInDocument(document);
       if (!refs.ok) {
@@ -157,13 +133,8 @@ export function collectReferenceReasons(
           reasons.push("missing_event");
         }
         if (ref.json_pointer !== undefined) {
-          const text = decodeUtf8(target);
-          if (text === undefined) {
-            reasons.push("invalid_json_pointer");
-            continue;
-          }
           try {
-            if (!jsonPointerExists(JSON.parse(text), ref.json_pointer)) {
+            if (!jsonPointerExists(JSON.parse(String(decodeUtf8(target))), ref.json_pointer)) {
               reasons.push("unresolved_reference");
             }
           } catch {

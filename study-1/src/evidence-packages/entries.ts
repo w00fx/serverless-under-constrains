@@ -16,7 +16,7 @@ const INDEX_ENTRY_KEYS = new Set(["artifact_path", "artifact_sha256", "byte_coun
 const EVIDENCE_ENTRY_KEYS = new Set([...INDEX_ENTRY_KEYS, "classification"]);
 
 export function isByteCount(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
 export function isClassification(value: unknown): value is ArtifactClassification {
@@ -59,18 +59,14 @@ function parseIndexEntry(
   }
   if (!isPackagePath(input.artifact_path)) {
     reasons.push("invalid_path");
+    return undefined;
   }
   if (!isSha256Hex(input.artifact_sha256)) {
     reasons.push("invalid_sha256");
+    return undefined;
   }
   if (!isByteCount(input.byte_count)) {
     reasons.push("invalid_byte_count");
-  }
-  if (
-    !isPackagePath(input.artifact_path) ||
-    !isSha256Hex(input.artifact_sha256) ||
-    !isByteCount(input.byte_count)
-  ) {
     return undefined;
   }
   return {
@@ -80,35 +76,39 @@ function parseIndexEntry(
   };
 }
 
-function parseEntries(
-  value: unknown,
+function collectIndexEntries<T extends IndexEntry>(
+  items: readonly unknown[],
   allowed: ReadonlySet<string>,
   reasons: string[],
-): IndexEntry[] | undefined {
-  if (!Array.isArray(value)) {
-    reasons.push("not_an_object");
-    return undefined;
-  }
-  const entries: IndexEntry[] = [];
+  classify: (item: Record<string, unknown>, entry: IndexEntry, reasons: string[]) => T | undefined,
+): T[] {
+  const entries: T[] = [];
   const seen = new Set<string>();
-  for (const item of value) {
+  for (const item of items) {
     const entry = parseIndexEntry(item, allowed, reasons);
     if (entry === undefined) {
       continue;
     }
-    if (seen.has(entry.artifact_path)) {
+    const classified = classify(item as Record<string, unknown>, entry, reasons);
+    if (classified === undefined) {
+      continue;
+    }
+    if (seen.has(classified.artifact_path)) {
       reasons.push("duplicate_index_entry");
       continue;
     }
-    seen.add(entry.artifact_path);
-    entries.push(entry);
+    seen.add(classified.artifact_path);
+    entries.push(classified);
   }
   return entries;
 }
 
-export function parseEvidenceIndex(value: unknown): ValidationResult<EvidenceIndexRecord> {
+function readIndexEnvelope(
+  value: unknown,
+  recordType: string,
+): { reasons: string[]; items: unknown[] | undefined } {
   if (!isRecord(value)) {
-    return fail(["not_an_object"]);
+    return { reasons: ["not_an_object"], items: undefined };
   }
   const reasons: string[] = [];
   for (const key of ownKeys(value)) {
@@ -116,93 +116,65 @@ export function parseEvidenceIndex(value: unknown): ValidationResult<EvidenceInd
       reasons.push("unknown_property");
     }
   }
-  if (value.schema_version !== 1) {
+  const versionOk = value.schema_version === 1;
+  if (!versionOk) {
     reasons.push("invalid_schema_version");
   }
-  if (value.record_type !== "evidence_index") {
+  const typeOk = value.record_type === recordType;
+  if (!typeOk) {
     reasons.push("invalid_record_type");
   }
   if (!Array.isArray(value.entries)) {
     reasons.push("not_an_object");
-    return fail(reasons);
+    return { reasons, items: undefined };
   }
-  const entries: EvidenceIndexEntry[] = [];
-  const seen = new Set<string>();
-  for (const item of value.entries) {
-    if (!isRecord(item)) {
-      reasons.push("not_an_object");
-      continue;
-    }
-    for (const key of ownKeys(item)) {
-      if (!EVIDENCE_ENTRY_KEYS.has(key)) {
-        reasons.push("unknown_property");
+  return { reasons, items: value.entries };
+}
+
+export function parseEvidenceIndex(value: unknown): ValidationResult<EvidenceIndexRecord> {
+  const envelope = readIndexEnvelope(value, "evidence_index");
+  if (envelope.items === undefined) {
+    return fail(envelope.reasons);
+  }
+  const entries = collectIndexEntries(
+    envelope.items,
+    EVIDENCE_ENTRY_KEYS,
+    envelope.reasons,
+    (item, entry, reasons) => {
+      if (!isClassification(item.classification)) {
+        reasons.push("invalid_classification");
+        return undefined;
       }
-    }
-    if (!isPackagePath(item.artifact_path)) {
-      reasons.push("invalid_path");
-    }
-    if (!isSha256Hex(item.artifact_sha256)) {
-      reasons.push("invalid_sha256");
-    }
-    if (!isByteCount(item.byte_count)) {
-      reasons.push("invalid_byte_count");
-    }
-    if (!isClassification(item.classification)) {
-      reasons.push("invalid_classification");
-    }
-    if (
-      !isPackagePath(item.artifact_path) ||
-      !isSha256Hex(item.artifact_sha256) ||
-      !isByteCount(item.byte_count) ||
-      !isClassification(item.classification)
-    ) {
-      continue;
-    }
-    if (seen.has(item.artifact_path)) {
-      reasons.push("duplicate_index_entry");
-      continue;
-    }
-    seen.add(item.artifact_path);
-    entries.push({
-      artifact_path: item.artifact_path,
-      artifact_sha256: item.artifact_sha256,
-      byte_count: item.byte_count,
-      classification: item.classification,
-    });
-  }
-  return reasons.length === 0
+      return { ...entry, classification: item.classification };
+    },
+  );
+  return envelope.reasons.length === 0
     ? ok({
         schema_version: 1,
         record_type: "evidence_index",
         entries: sortByPath(entries),
       })
-    : fail(reasons);
+    : fail(envelope.reasons);
 }
 
 export function parsePackageIndex(value: unknown): ValidationResult<PackageIndexRecord> {
-  if (!isRecord(value)) {
-    return fail(["not_an_object"]);
+  const envelope = readIndexEnvelope(value, "package_index");
+  if (envelope.items === undefined) {
+    return fail(envelope.reasons);
   }
-  const reasons: string[] = [];
-  for (const key of ownKeys(value)) {
-    if (key !== "schema_version" && key !== "record_type" && key !== "entries") {
-      reasons.push("unknown_property");
-    }
-  }
-  if (value.schema_version !== 1) {
-    reasons.push("invalid_schema_version");
-  }
-  if (value.record_type !== "package_index") {
-    reasons.push("invalid_record_type");
-  }
-  const entries = parseEntries(value.entries, INDEX_ENTRY_KEYS, reasons);
-  return entries !== undefined && reasons.length === 0
+  const entries = collectIndexEntries(
+    envelope.items,
+    INDEX_ENTRY_KEYS,
+    envelope.reasons,
+    (_item, entry) => entry,
+  );
+  return envelope.reasons.length === 0
     ? ok({
         schema_version: 1,
         record_type: "package_index",
         entries: sortByPath(entries),
       })
-    : fail(reasons);
+    : fail(envelope.reasons);
 }
 
 export function writeIndexFile(
