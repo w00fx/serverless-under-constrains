@@ -8,7 +8,8 @@
   "mutate": [
     "src/protocol-records/**/*.ts",
     "src/controlled-provider/**/*.ts",
-    "src/coordination/**/*.ts"
+    "src/coordination/**/*.ts",
+    "src/evidence-packages/**/*.ts"
   ],
   "coverageAnalysis": "off",
   "timeoutMS": 60000,

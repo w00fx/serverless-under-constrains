@@ -15,6 +15,8 @@ Before proposing or implementing work:
 
 `src/coordination/` is the M0-C operator baseline: a separate CDK entry point plus bootstrap, read-only verify, and guarded destroy. Experimental code may only verify and use the frozen identity and schema. Commands require an injected cloud adapter; they do not bind live AWS.
 
+`src/evidence-packages/` is the local M0-C original-package surface: write-once evidence and package indexes, prefix checkpoints, and read-only original-package verification with no selected amendment. It performs no cloud mutation and does not write eligibility into an original package.
+
 ## Commands
 
 From `study-1/`, Node.js 24:
@@ -26,8 +28,8 @@ From `study-1/`, Node.js 24:
 - `npm run golden` — locked canonical-byte fixtures
 - `npm run golden-tables` — `specs/tables/` reference rows
 - `npm run fuzz` — seeded invalid-input properties
-- `npm run coverage` — line and branch coverage for `src/protocol-records`, `src/controlled-provider`, and `src/coordination`
-- `npm run mutation` — Stryker on `src/protocol-records`, `src/controlled-provider`, and `src/coordination`
+- `npm run coverage` — line and branch coverage for `src/protocol-records`, `src/controlled-provider`, `src/coordination`, and `src/evidence-packages`
+- `npm run mutation` — Stryker on `src/protocol-records`, `src/controlled-provider`, `src/coordination`, and `src/evidence-packages`
 - `npm run coordination:bootstrap` / `coordination:verify` / `coordination:destroy` — operator baseline commands (injected adapter only)
 
 Root `make check`, `make golden`, `make mutation-study-1`, and `make fuzz-study-1` wrap these. See the repository `AGENTS.md` Commands table.
