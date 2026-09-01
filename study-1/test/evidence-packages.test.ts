@@ -285,6 +285,23 @@ describe("original evidence packages", () => {
     });
     const missingEvent = verify(event);
     assert.equal(missingEvent.package_ineligibility_reasons.includes("missing_event"), true);
+    const mention = buildEligibleValidation();
+    const mentionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    putCanonical(mention, "primary/journals/provider.jsonl", {
+      nested: { evidence_refs: [{ event_id: mentionId }] },
+    });
+    putCanonical(mention, "derived/oracle-result.json", {
+      schema_version: 1,
+      record_type: "oracle_result",
+      evidence_refs: [
+        {
+          artifact_path: "primary/journals/provider.jsonl",
+          artifact_sha256: sha256Hex(mention.get("primary/journals/provider.jsonl") as Uint8Array),
+          event_id: mentionId,
+        },
+      ],
+    });
+    assert.equal(verify(mention).package_ineligibility_reasons.includes("missing_event"), true);
     const conflict = buildEligibleValidation();
     putCanonical(conflict, "derived/attempt-projection.json", {
       evidence_refs: [
@@ -353,6 +370,11 @@ describe("original evidence packages", () => {
     badStore.set("../x", new Uint8Array([1]));
     assert.equal(savePackageDir(badStore, root).ok, false);
     assert.equal(putUtf8(store, "../x", "no").ok, false);
+    const missingRoot = join(root, "does-not-exist");
+    assert.equal(loadPackageDir(missingRoot).ok, false);
+    const fileTarget = join(root, "save-over-file");
+    writeFileSync(fileTarget, "x");
+    assert.equal(savePackageDir(store, fileTarget).ok, false);
   });
 
   it("creates and rejects prefix checkpoints with exact reasons", () => {

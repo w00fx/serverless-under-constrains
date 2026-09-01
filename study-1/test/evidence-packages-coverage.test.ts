@@ -313,6 +313,10 @@ describe("evidence-package coverage seams", () => {
     const arrayEvents = eventIdsIn(new TextEncoder().encode(JSON.stringify([{ event_id: EVENT_ONE }, { nested: [{ event_id: EVENT_TWO }] }])));
     assert.equal(arrayEvents.has(EVENT_ONE), true);
     assert.equal(arrayEvents.has(EVENT_TWO), true);
+    const mentionOnly = eventIdsIn(
+      new TextEncoder().encode(JSON.stringify({ evidence_refs: [{ event_id: EVENT_ONE }] })),
+    );
+    assert.equal(mentionOnly.has(EVENT_ONE), false);
   });
 
   it("covers index parsers and unsafe directory entries", () => {
@@ -348,5 +352,6 @@ describe("evidence-package coverage seams", () => {
     symlinkSync(real, link);
     assert.equal(loadPackageDir(link).ok, false);
     mkdirSync(join(root, "nested"), { recursive: true });
+    assert.equal(loadPackageDir(join(root, "no-such-dir")).ok, false);
   });
 });

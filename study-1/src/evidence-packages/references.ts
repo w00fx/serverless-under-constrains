@@ -48,6 +48,9 @@ function addEventId(value: unknown, ids: Set<string>): void {
     return;
   }
   for (const [key, nested] of Object.entries(value)) {
+    if (key === "evidence_refs") {
+      continue;
+    }
     if (key === "event_id" && typeof nested === "string") {
       ids.add(nested);
       continue;
@@ -98,12 +101,42 @@ export function collectReferenceReasons(
 ): string[] {
   const reasons: string[] = [];
   const seen = new Map<string, string>();
+  const documentsByPath = new Map<string, unknown[]>();
+  const digestByPath = new Map<string, string>();
+  const eventIdsByPath = new Map<string, Set<string>>();
+  const documentsOf = (path: string, bytes: Uint8Array): unknown[] => {
+    let documents = documentsByPath.get(path);
+    if (documents === undefined) {
+      documents = parseJsonDocuments(bytes);
+      documentsByPath.set(path, documents);
+    }
+    return documents;
+  };
+  const digestOf = (path: string, bytes: Uint8Array): string => {
+    let digest = digestByPath.get(path);
+    if (digest === undefined) {
+      digest = sha256Hex(bytes);
+      digestByPath.set(path, digest);
+    }
+    return digest;
+  };
+  const eventIdsOf = (path: string, bytes: Uint8Array): Set<string> => {
+    let ids = eventIdsByPath.get(path);
+    if (ids === undefined) {
+      ids = new Set<string>();
+      for (const document of documentsOf(path, bytes)) {
+        addEventId(document, ids);
+      }
+      eventIdsByPath.set(path, ids);
+    }
+    return ids;
+  };
   for (const path of store.keys()) {
     if (!isPackagePath(path)) {
       continue;
     }
     const bytes = storeBytes(store, path) ?? new Uint8Array();
-    for (const document of parseJsonDocuments(bytes)) {
+    for (const document of documentsOf(path, bytes)) {
       const refs = refsInDocument(document);
       if (!refs.ok) {
         reasons.push(...refs.reasons);
@@ -115,7 +148,7 @@ export function collectReferenceReasons(
           reasons.push("unresolved_reference");
           continue;
         }
-        if (sha256Hex(target) !== ref.artifact_sha256) {
+        if (digestOf(ref.artifact_path, target) !== ref.artifact_sha256) {
           reasons.push("unresolved_reference");
         }
         const previous = seen.get(ref.artifact_path);
@@ -129,7 +162,7 @@ export function collectReferenceReasons(
         ) {
           reasons.push("unresolved_reference");
         }
-        if (ref.event_id !== undefined && !eventIdsIn(target).has(ref.event_id)) {
+        if (ref.event_id !== undefined && !eventIdsOf(ref.artifact_path, target).has(ref.event_id)) {
           reasons.push("missing_event");
         }
         if (ref.json_pointer !== undefined) {

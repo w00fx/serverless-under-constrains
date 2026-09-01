@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -284,6 +284,29 @@ describe("evidence-packages mutation hardening", () => {
     const slashDir = mkdtempSync(join(tmpdir(), "pkg-mh-slash-"));
     writeFileSync(join(slashDir, "foo\\bar"), "x");
     assertRejected(loadPackageDir(slashDir), "invalid_path");
+    const missingRoot = join(root, "missing-package");
+    assertRejected(loadPackageDir(missingRoot), "invalid_path");
+    assertRejected(loadPackageDir("\0"), "invalid_path");
+    const fileTarget = join(root, "save-over-file");
+    writeFileSync(fileTarget, "x");
+    assertRejected(savePackageDir(store, fileTarget), "invalid_path");
+    const createdRoot = join(root, "created-package");
+    const created = savePackageDir(store, createdRoot);
+    assert.equal(created.ok, true);
+    const blocked = createPackageStore();
+    putCanonical(blocked, "nested/file.json", { ok: true });
+    const blockedRoot = mkdtempSync(join(tmpdir(), "pkg-mh-block-"));
+    writeFileSync(join(blockedRoot, "nested"), "x");
+    assertRejected(savePackageDir(blocked, blockedRoot), "invalid_path");
+    const unreadableRoot = mkdtempSync(join(tmpdir(), "pkg-mh-unreadable-"));
+    const unreadableFile = join(unreadableRoot, "secret.json");
+    writeFileSync(unreadableFile, "{}");
+    chmodSync(unreadableFile, 0);
+    try {
+      assertRejected(loadPackageDir(unreadableRoot), "invalid_path");
+    } finally {
+      chmodSync(unreadableFile, 0o644);
+    }
   });
 
   it("refuses rewrite when only one index is present and requires primary reserved paths", () => {
@@ -416,6 +439,11 @@ describe("evidence-packages mutation hardening", () => {
     assert.equal(otherIds.has("not-an-id"), false);
     assert.equal(otherIds.size, 1);
     assert.equal(eventIdsIn(new TextEncoder().encode('{"k":"v"}')).size, 0);
+    const mentionIds = eventIdsIn(
+      new TextEncoder().encode(JSON.stringify({ evidence_refs: [{ event_id: "x" }], nested: { event_id: "y" } })),
+    );
+    assert.equal(mentionIds.has("x"), false);
+    assert.equal(mentionIds.has("y"), true);
   });
 
   it("rejects writer and verifier faults with exact isolated reasons", () => {

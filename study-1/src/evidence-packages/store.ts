@@ -32,6 +32,22 @@ export function putUtf8(
   return ok(bytes);
 }
 
+function isEnoent(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function existingDirectory(root: string): boolean | undefined {
+  try {
+    const stat = lstatSync(root);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      return false;
+    }
+    return true;
+  } catch (error) {
+    return isEnoent(error) ? undefined : false;
+  }
+}
+
 function walkDir(
   root: string,
   dir: string,
@@ -59,30 +75,44 @@ function walkDir(
 }
 
 export function loadPackageDir(root: string): ValidationResult<PackageStore> {
-  const store = createPackageStore();
-  const reasons: string[] = [];
-  const stat = lstatSync(root);
-  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+  try {
+    if (existingDirectory(root) !== true) {
+      return fail(["invalid_path"]);
+    }
+    const store = createPackageStore();
+    const reasons: string[] = [];
+    walkDir(root, root, store, reasons);
+    if (reasons.length > 0) {
+      return fail(reasons);
+    }
+    return ok(store);
+  } catch {
     return fail(["invalid_path"]);
   }
-  walkDir(root, root, store, reasons);
-  if (reasons.length > 0) {
-    return fail(reasons);
-  }
-  return ok(store);
 }
 
 export function savePackageDir(store: PackageStore, root: string): ValidationResult<true> {
   if (!isPackageStore(store)) {
     return fail(["not_an_object"]);
   }
-  for (const [path, bytes] of store) {
-    if (!isPackagePath(path) || !(bytes instanceof Uint8Array)) {
+  try {
+    const directory = existingDirectory(root);
+    if (directory === false) {
       return fail(["invalid_path"]);
     }
-    const abs = join(root, ...path.split("/"));
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, bytes);
+    if (directory === undefined) {
+      mkdirSync(root, { recursive: true });
+    }
+    for (const [path, bytes] of store) {
+      if (!isPackagePath(path) || !(bytes instanceof Uint8Array)) {
+        return fail(["invalid_path"]);
+      }
+      const abs = join(root, ...path.split("/"));
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, bytes);
+    }
+    return ok(true);
+  } catch {
+    return fail(["invalid_path"]);
   }
-  return ok(true);
 }
