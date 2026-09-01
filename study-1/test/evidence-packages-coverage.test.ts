@@ -250,6 +250,7 @@ describe("evidence-package coverage seams", () => {
     requireOk(putUtf8(badIndex, EVIDENCE_INDEX_PATH, "{\"schema_version\":1}"), "bad-ei");
     const parsed = verify(badIndex);
     assert.equal(parsed.package_ineligibility_reasons.includes("invalid_record_type"), true);
+    assert.equal(parsed.package_ineligibility_reasons.includes("missing_file"), false);
     const refs = buildEligibleProbe();
     putCanonical(refs, "derived/probe-summary.json", { evidence_refs: "nope" });
     assert.equal(verify(refs).package_ineligibility_reasons.includes("not_an_object"), true);

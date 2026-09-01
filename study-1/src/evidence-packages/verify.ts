@@ -1,4 +1,4 @@
-import { readCheckpoint, validateCheckpointAgainstJournal } from "./checkpoint.ts";
+import { checkpointAlignmentReasons } from "./checkpoint.ts";
 import { isRecord, isUtcMillisecondTimestamp } from "../protocol-records/primitives.ts";
 import { sha256Hex } from "../protocol-records/serialize.ts";
 import * as outcome from "./result.ts";
@@ -36,7 +36,9 @@ function packageIndexReasons(store: PackageStore, record: PackageIndexRecord | u
   const reasons: string[] = [];
   const listed = new Set<string>();
   if (record === undefined) {
-    reasons.push("missing_file");
+    if (storeBytes(store, reserved.PACKAGE_INDEX_PATH) === undefined) {
+      reasons.push("missing_file");
+    }
     return reasons;
   }
   for (const entry of record.entries) {
@@ -70,19 +72,10 @@ function packageIndexReasons(store: PackageStore, record: PackageIndexRecord | u
 
 function expectedEvidencePaths(store: PackageStore, hasCheckpoint: boolean): Set<string> {
   const expected = new Set<string>();
-  for (const name of [...store.keys()]) {
-    if (reserved.isPackagePath(name) === false) {
-      continue;
+  for (const name of store.keys()) {
+    if (reserved.isEvidenceIndexedPath(name, hasCheckpoint)) {
+      expected.add(name);
     }
-    if (
-      name === reserved.EVIDENCE_INDEX_PATH ||
-      name === reserved.PACKAGE_INDEX_PATH ||
-      reserved.isLateEvidencePath(name) ||
-      (hasCheckpoint && name === reserved.JOURNAL_PATH)
-    ) {
-      continue;
-    }
-    expected.add(name);
   }
   return expected;
 }
@@ -94,7 +87,9 @@ function evidenceIndexReasons(
 ): string[] {
   const reasons: string[] = [];
   if (record === undefined) {
-    reasons.push(storeBytes(store, reserved.EVIDENCE_INDEX_PATH) === undefined ? "missing_evidence_index" : "invalid_record_type");
+    if (storeBytes(store, reserved.EVIDENCE_INDEX_PATH) === undefined) {
+      reasons.push("missing_evidence_index");
+    }
     return reasons;
   }
   const listed = new Set<string>();
@@ -132,23 +127,6 @@ function evidenceIndexReasons(
   return reasons;
 }
 
-function checkpointReasons(store: PackageStore): { reasons: string[]; hasCheckpoint: boolean } {
-  const bytes = storeBytes(store, reserved.CHECKPOINT_PATH);
-  if (bytes === undefined) {
-    return { reasons: [], hasCheckpoint: false };
-  }
-  const journal = storeBytes(store, reserved.JOURNAL_PATH);
-  const checkpoint = readCheckpoint(bytes);
-  if (!checkpoint.ok) {
-    return { reasons: ["malformed_checkpoint"], hasCheckpoint: true };
-  }
-  if (journal === undefined) {
-    return { reasons: ["missing_file"], hasCheckpoint: true };
-  }
-  const aligned = validateCheckpointAgainstJournal(checkpoint.value, journal);
-  return { reasons: aligned.ok ? [] : [...aligned.reasons], hasCheckpoint: true };
-}
-
 export function verifyOriginalPackage(
   store: unknown,
   request: unknown,
@@ -177,7 +155,7 @@ export function verifyOriginalPackage(
     reasons.push(...parsedPackage.reasons);
   }
   reasons.push(...packageIndexReasons(store, packageRecord));
-  const checkpoint = checkpointReasons(store);
+  const checkpoint = checkpointAlignmentReasons(store);
   reasons.push(...checkpoint.reasons);
   const evidenceBytes = storeBytes(store, reserved.EVIDENCE_INDEX_PATH);
   const parsedEvidence = parseEvidenceIndex(parseJson(evidenceBytes));

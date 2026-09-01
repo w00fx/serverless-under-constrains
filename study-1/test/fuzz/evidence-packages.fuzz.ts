@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { sha256Hex } from "../../src/protocol-records/index.ts";
 import {
+  EVIDENCE_INDEX_PATH,
+  JOURNAL_PATH,
+  PACKAGE_INDEX_PATH,
   createPackageStore,
   createPrefixCheckpoint,
   putUtf8,
@@ -9,7 +12,8 @@ import {
   writeEvidenceIndex,
 } from "../../src/evidence-packages/index.ts";
 import { jsonPointerExists } from "../../src/evidence-packages/references.ts";
-import { NOW } from "../fixtures/evidence-packages/build.ts";
+import { parseEvidenceIndex, parsePackageIndex } from "../../src/evidence-packages/entries.ts";
+import { NOW, buildEligibleProbe, putCanonical, requireOk } from "../fixtures/evidence-packages/build.ts";
 
 const SEED = 20260831;
 
@@ -59,6 +63,55 @@ describe("fuzz-study-1 evidence-packages (seed 20260831)", () => {
       } else {
         assert.equal(checkpoint.ok, false, `checkpoint seed-step ${i}`);
       }
+    }
+  });
+
+  it("rejects self-indexed, truncated-journal, and digest-mutated packages", () => {
+    const rng = mulberry32(SEED);
+    for (let i = 0; i < 32; i += 1) {
+      const store = buildEligibleProbe();
+      const pick = Math.floor(rng() * 4);
+      if (pick === 0) {
+        const evidenceBytes = store.get(EVIDENCE_INDEX_PATH);
+        const evidence = requireOk(
+          parseEvidenceIndex(JSON.parse(new TextDecoder().decode(evidenceBytes))),
+          `self-ei-${i}`,
+        );
+        evidence.entries.push({
+          artifact_path: EVIDENCE_INDEX_PATH,
+          artifact_sha256: sha256Hex(evidenceBytes as Uint8Array),
+          byte_count: (evidenceBytes as Uint8Array).byteLength,
+          classification: "derived",
+        });
+        putCanonical(store, EVIDENCE_INDEX_PATH, evidence);
+      } else if (pick === 1) {
+        const packageBytes = store.get(PACKAGE_INDEX_PATH);
+        const pack = requireOk(
+          parsePackageIndex(JSON.parse(new TextDecoder().decode(packageBytes))),
+          `self-pi-${i}`,
+        );
+        pack.entries.push({
+          artifact_path: PACKAGE_INDEX_PATH,
+          artifact_sha256: sha256Hex(packageBytes as Uint8Array),
+          byte_count: (packageBytes as Uint8Array).byteLength,
+        });
+        putCanonical(store, PACKAGE_INDEX_PATH, pack);
+      } else if (pick === 2) {
+        const journal = store.get(JOURNAL_PATH);
+        assert.notEqual(journal, undefined, `journal seed-step ${i}`);
+        store.set(JOURNAL_PATH, (journal as Uint8Array).subarray(0, Math.max(1, (journal as Uint8Array).byteLength - 1)));
+      } else {
+        store.set("primary/execution-manifest.json", new Uint8Array([i + 1, 2, 3]));
+      }
+      const verified = verifyOriginalPackage(store, {
+        selected_amendment_head_sha256: null,
+        now: () => NOW,
+      });
+      assert.equal(
+        verified.ok && verified.value.package_eligibility === "ineligible",
+        true,
+        `payload seed-step ${i} pick ${pick}`,
+      );
     }
   });
 });

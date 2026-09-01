@@ -88,6 +88,30 @@ describe("original evidence packages", () => {
     assert.equal(result.package_eligibility, "eligible");
   });
 
+  it("resolves evidence_refs carried in JSONL artifacts", () => {
+    const store = createPackageStore();
+    putCanonical(store, "primary/execution-manifest.json", { artifact: "manifest" });
+    const target = store.get("primary/execution-manifest.json");
+    assert.notEqual(target, undefined);
+    requireOk(
+      putUtf8(
+        store,
+        "derived/refs.jsonl",
+        `{"k":1}\n{"evidence_refs":[{"artifact_path":"primary/execution-manifest.json","artifact_sha256":"${sha256Hex(target as Uint8Array)}"}]}\n`,
+      ),
+      "jsonl-refs",
+    );
+    requireOk(
+      writeEvidenceIndex(store, {
+        "primary/execution-manifest.json": "primary",
+        "derived/refs.jsonl": "derived",
+      }),
+      "ei",
+    );
+    requireOk(writePackageIndex(store), "pi");
+    assert.equal(verify(store).package_eligibility, "eligible");
+  });
+
   it("refuses to rewrite indexes", () => {
     const store = buildEligibleProbe();
     const rewriteEvidence = writeEvidenceIndex(store, {});
@@ -119,6 +143,9 @@ describe("original evidence packages", () => {
     putCanonical(store, "late-evidence/arrival.json", { late: true });
     const missing = writeEvidenceIndex(store, {});
     assert.equal(missing.ok, false);
+    if (!missing.ok) {
+      assert.equal(missing.reasons.includes("invalid_classification"), true);
+    }
     const late = writeEvidenceIndex(store, {
       "primary/execution-manifest.json": "primary",
       "late-evidence/arrival.json": "primary",
@@ -127,11 +154,18 @@ describe("original evidence packages", () => {
     if (!late.ok) {
       assert.equal(late.reasons.includes("invalid_classification"), true);
     }
+    requireOk(
+      putUtf8(store, JOURNAL_PATH, `{"event_id":"${EVENT_ONE}","source_sequence":1}\n`),
+      "journal",
+    );
     const derivedJournal = writeEvidenceIndex(store, {
       "primary/execution-manifest.json": "primary",
       [JOURNAL_PATH]: "derived",
     });
     assert.equal(derivedJournal.ok, false);
+    if (!derivedJournal.ok) {
+      assert.equal(derivedJournal.reasons.includes("invalid_classification"), true);
+    }
     store.set("../escape", new Uint8Array([1]));
     const badPath = writeEvidenceIndex(store, { "primary/execution-manifest.json": "primary" });
     assert.equal(badPath.ok, false);
@@ -150,7 +184,8 @@ describe("original evidence packages", () => {
     });
     assert.equal(malformed.ok, false);
     if (!malformed.ok) {
-      assert.equal(malformed.reasons.includes("malformed_checkpoint") || malformed.reasons.includes("missing_file"), true);
+      assert.equal(malformed.reasons.includes("malformed_checkpoint"), true);
+      assert.equal(malformed.reasons.includes("missing_file"), true);
     }
   });
 
@@ -272,11 +307,8 @@ describe("original evidence packages", () => {
     const mismatch = buildEligibleProbe();
     requireOk(putUtf8(mismatch, JOURNAL_PATH, '{"event_id":"11111111-1111-4111-8111-111111111111","source_sequence":9}\n'), "journal");
     const mismatchResult = verify(mismatch);
-    assert.equal(
-      mismatchResult.package_ineligibility_reasons.includes("checkpoint_prefix_mismatch") ||
-        mismatchResult.package_ineligibility_reasons.includes("malformed_checkpoint"),
-      true,
-    );
+    assert.equal(mismatchResult.package_ineligibility_reasons.includes("checkpoint_prefix_mismatch"), true);
+    assert.equal(mismatchResult.package_ineligibility_reasons.includes("digest_mismatch"), true);
   });
 
   it("rejects invalid verify requests and store paths", () => {
@@ -290,6 +322,15 @@ describe("original evidence packages", () => {
     store.set("../x", new Uint8Array([1]));
     const result = verify(store);
     assert.equal(result.package_ineligibility_reasons.includes("invalid_path"), true);
+  });
+
+  it("does not treat a present malformed package index as a missing file", () => {
+    const store = buildEligibleProbe();
+    requireOk(putUtf8(store, PACKAGE_INDEX_PATH, "{\"schema_version\":1}"), "bad-pi");
+    const result = verify(store);
+    assert.equal(result.package_eligibility, "ineligible");
+    assert.equal(result.package_ineligibility_reasons.includes("invalid_record_type"), true);
+    assert.equal(result.package_ineligibility_reasons.includes("missing_file"), false);
   });
 
   it("round-trips a package directory and rejects unsafe entries", () => {

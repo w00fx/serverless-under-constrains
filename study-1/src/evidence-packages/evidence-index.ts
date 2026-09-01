@@ -1,4 +1,4 @@
-import { readCheckpoint, validateCheckpointAgainstJournal } from "./checkpoint.ts";
+import { checkpointAlignmentReasons } from "./checkpoint.ts";
 import { isRecord } from "../protocol-records/primitives.ts";
 import { evidenceEntryOf, isClassification, sortByPath, writeIndexFile } from "./entries.ts";
 import { fail, ok, type ValidationResult } from "./result.ts";
@@ -7,11 +7,12 @@ import {
   EVIDENCE_INDEX_PATH,
   JOURNAL_PATH,
   PACKAGE_INDEX_PATH,
-  isLateEvidencePath,
+  isExcludedFromEvidenceIndex,
+  isEvidenceIndexedPath,
   isPackagePath,
 } from "./paths.ts";
 import { isPackageStore, storeBytes } from "./store.ts";
-import type { ArtifactClassification, EvidenceIndexEntry, EvidenceIndexRecord, PackageStore } from "./types.ts";
+import type { ArtifactClassification, EvidenceIndexEntry, EvidenceIndexRecord } from "./types.ts";
 
 function classificationOf(
   classifications: Record<string, unknown>,
@@ -34,26 +35,6 @@ function classificationOf(
   return value;
 }
 
-function indexedPaths(
-  store: PackageStore,
-  hasCheckpoint: boolean,
-): string[] {
-  const paths: string[] = [];
-  for (const path of store.keys()) {
-    if (!isPackagePath(path)) {
-      continue;
-    }
-    if (isLateEvidencePath(path) || path === EVIDENCE_INDEX_PATH || path === PACKAGE_INDEX_PATH) {
-      continue;
-    }
-    if (hasCheckpoint && path === JOURNAL_PATH) {
-      continue;
-    }
-    paths.push(path);
-  }
-  return paths;
-}
-
 export function writeEvidenceIndex(
   store: unknown,
   classifications: unknown,
@@ -70,27 +51,13 @@ export function writeEvidenceIndex(
       reasons.push("invalid_path");
     }
   }
-  const checkpointBytes = storeBytes(store, CHECKPOINT_PATH);
-  const journalBytes = storeBytes(store, JOURNAL_PATH);
-  const hasCheckpoint = checkpointBytes !== undefined;
-  if (hasCheckpoint) {
-    if (journalBytes === undefined) {
-      reasons.push("missing_file");
-    } else {
-      const checkpoint = readCheckpoint(checkpointBytes);
-      if (!checkpoint.ok) {
-        reasons.push("malformed_checkpoint");
-      } else {
-        const aligned = validateCheckpointAgainstJournal(checkpoint.value, journalBytes);
-        if (!aligned.ok) {
-          reasons.push(...aligned.reasons);
-        }
-      }
-    }
-  }
+  const checkpoint = checkpointAlignmentReasons(store);
+  reasons.push(...checkpoint.reasons);
   const entries: EvidenceIndexEntry[] = [];
-  const indexed = indexedPaths(store, hasCheckpoint);
-  for (const path of indexed) {
+  for (const path of store.keys()) {
+    if (!isEvidenceIndexedPath(path, checkpoint.hasCheckpoint)) {
+      continue;
+    }
     const bytes = storeBytes(store, path);
     const classification = classificationOf(classifications, path, reasons);
     if (bytes === undefined || classification === undefined) {
@@ -99,12 +66,7 @@ export function writeEvidenceIndex(
     entries.push(evidenceEntryOf(path, bytes, classification));
   }
   for (const path of Object.keys(classifications)) {
-    if (
-      isLateEvidencePath(path) ||
-      path === EVIDENCE_INDEX_PATH ||
-      path === PACKAGE_INDEX_PATH ||
-      (hasCheckpoint && path === JOURNAL_PATH)
-    ) {
+    if (isExcludedFromEvidenceIndex(path, checkpoint.hasCheckpoint)) {
       reasons.push("invalid_classification");
       continue;
     }

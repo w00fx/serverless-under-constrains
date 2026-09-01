@@ -2,6 +2,7 @@ import type { EvidenceRef } from "../protocol-records/types.ts";
 import { createEvidenceRefs } from "../protocol-records/records.ts";
 import { sha256Hex } from "../protocol-records/serialize.ts";
 import { isRecord } from "../protocol-records/primitives.ts";
+import { ok, type ValidationResult } from "./result.ts";
 import { isPackagePath } from "./paths.ts";
 import { storeBytes } from "./store.ts";
 import type { PackageStore } from "./types.ts";
@@ -105,12 +106,11 @@ function parseJsonDocuments(bytes: Uint8Array): unknown[] {
   }
 }
 
-function refsInDocument(document: unknown): EvidenceRef[] | string[] {
+function refsInDocument(document: unknown): ValidationResult<EvidenceRef[]> {
   if (!isRecord(document) || document.evidence_refs === undefined) {
-    return [];
+    return ok([]);
   }
-  const created = createEvidenceRefs(document.evidence_refs);
-  return created.ok ? created.value : [...created.reasons];
+  return createEvidenceRefs(document.evidence_refs);
 }
 
 export function collectReferenceReasons(
@@ -129,11 +129,11 @@ export function collectReferenceReasons(
     }
     for (const document of parseJsonDocuments(bytes)) {
       const refs = refsInDocument(document);
-      if (refs.length > 0 && typeof refs[0] === "string") {
-        reasons.push(...(refs as string[]));
+      if (!refs.ok) {
+        reasons.push(...refs.reasons);
         continue;
       }
-      for (const ref of refs as EvidenceRef[]) {
+      for (const ref of refs.value) {
         const target = storeBytes(store, ref.artifact_path);
         if (target === undefined) {
           reasons.push("unresolved_reference");

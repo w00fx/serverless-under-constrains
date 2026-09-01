@@ -1,7 +1,8 @@
 import { fail, ok, type ValidationResult } from "./result.ts";
-import type { PrefixCheckpoint } from "./types.ts";
+import type { PackageStore, PrefixCheckpoint } from "./types.ts";
 import { decodeUtf8 } from "./utf8.ts";
-import { JOURNAL_PATH, isPackagePath } from "./paths.ts";
+import { CHECKPOINT_PATH, JOURNAL_PATH, isPackagePath } from "./paths.ts";
+import { storeBytes } from "./store.ts";
 import { sha256Hex } from "../protocol-records/serialize.ts";
 import {
   isPositiveSafeInteger,
@@ -135,4 +136,28 @@ export function readCheckpoint(bytes: Uint8Array): ValidationResult<PrefixCheckp
     return fail(["malformed_checkpoint"]);
   }
   return createPrefixCheckpoint(parsed);
+}
+
+export function checkpointAlignmentReasons(
+  store: PackageStore,
+): { reasons: string[]; hasCheckpoint: boolean } {
+  const bytes = storeBytes(store, CHECKPOINT_PATH);
+  if (bytes === undefined) {
+    return { reasons: [], hasCheckpoint: false };
+  }
+  const reasons: string[] = [];
+  const journal = storeBytes(store, JOURNAL_PATH);
+  const checkpoint = readCheckpoint(bytes);
+  if (!checkpoint.ok) {
+    reasons.push("malformed_checkpoint");
+  }
+  if (journal === undefined) {
+    reasons.push("missing_file");
+  } else if (checkpoint.ok) {
+    const aligned = validateCheckpointAgainstJournal(checkpoint.value, journal);
+    if (!aligned.ok) {
+      reasons.push(...aligned.reasons);
+    }
+  }
+  return { reasons, hasCheckpoint: true };
 }
