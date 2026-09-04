@@ -59,7 +59,7 @@ function accepted(): TransportResult {
   };
 }
 
-describe("caller coverage seams", () => {
+describe("caller coverage seams", { timeout: 2000 }, () => {
   it("writes nothing when pre-dispatch event construction fails after open", async () => {
     let calls = 0;
     const result = await invokeAttempt(request(), {

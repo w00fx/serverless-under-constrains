@@ -22,7 +22,7 @@ import {
   attempt,
 } from "./caller-helpers.ts";
 
-describe("BR-4 knowledge and retry-layer processing", () => {
+describe("BR-4 knowledge and retry-layer processing", { timeout: 2000 }, () => {
   it("applies the absorbing UNKNOWN transitions", () => {
     assert.equal(projectKnowledge([]), "NOT_ATTEMPTED");
     assert.equal(projectKnowledge([attempt("FAILED", "NOT_DISPATCHED")]), "NOT_ATTEMPTED");
@@ -80,6 +80,7 @@ describe("BR-4 knowledge and retry-layer processing", () => {
     if (!rejected.ok) {
       throw new Error("rejected");
     }
+    assert.equal(rejected.value.processing_state, "FINISHED");
     assert.equal(rejected.value.processing_terminal_reason, "PROVIDER_REJECTED");
     const empty = projectProcessing([], { inner_remaining: 1, upstream_remaining: 0 });
     assert.equal(empty.ok, true);
@@ -96,7 +97,7 @@ describe("BR-4 knowledge and retry-layer processing", () => {
   });
 });
 
-describe("projections from journals", () => {
+describe("projections from journals", { timeout: 2000 }, () => {
   it("projects attempts from caller events and ignores records without identities", () => {
     const timeout = createPrimaryEvent({
       schema_version: 1,

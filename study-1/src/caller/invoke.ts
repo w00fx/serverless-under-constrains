@@ -153,9 +153,13 @@ function writeFinished(
   ctx: InvokeContext,
   outcome: AttemptOutcome,
   causation: readonly string[],
+  extra: Record<string, unknown> = {},
 ): InvokeSuccess {
   const dispatchState = classifyDispatch(ctx.journal.list(), ctx.call.attempt_id);
-  writeEvent(ctx, "attempt_finished", causation, finishedExtra(outcome, dispatchState));
+  writeEvent(ctx, "attempt_finished", causation, {
+    ...finishedExtra(outcome, dispatchState),
+    ...extra,
+  });
   return snapshot(ctx);
 }
 
@@ -218,12 +222,13 @@ function interpretTransport(result: unknown): AttemptOutcome {
   return "FAILED";
 }
 
-function transportFault(error: unknown): TransportResult {
-  const name = error instanceof Error ? error.name : "";
+function transportFault(): TransportResult {
+  // Abort vs generic throw is unobservable at the invoke boundary: both are a
+  // transport-layer fault and become FAILED, never TIMED_OUT (AC-16).
   return {
     layer: "transport",
-    kind: name === "AbortError" ? "aborted" : "error",
-    reasons: [name === "AbortError" ? "aborted" : "transport_error"],
+    kind: "error",
+    reasons: ["transport_error"],
   };
 }
 
@@ -267,10 +272,10 @@ function raceDeadline(ctx: InvokeContext, originNs: bigint): Promise<Settlement>
       if (won === undefined) {
         return;
       }
-      if (won.winner === "timer") {
-        transportAbort.abort();
-      } else {
+      if (won.winner === "transport") {
         timerAbort.abort();
+      } else {
+        transportAbort.abort();
       }
       resolve(won);
     };
@@ -283,10 +288,10 @@ function raceDeadline(ctx: InvokeContext, originNs: bigint): Promise<Settlement>
           elapsed_ns: ctx.monotonic.nowNs() - originNs,
         });
       },
-      (error: unknown) => {
+      () => {
         deliver({
           winner: "transport",
-          result: transportFault(error),
+          result: transportFault(),
           elapsed_ns: ctx.monotonic.nowNs() - originNs,
         });
       },
@@ -325,7 +330,13 @@ async function settleDispatched(ctx: InvokeContext, dispatchEvent: PrimaryEvent)
     return recordTimeout(ctx, dispatchEvent, settlement, dispatchedAt);
   }
   const outcome = interpretTransport(settlement.result);
-  return writeFinished(ctx, outcome, [dispatchEvent.event_id]);
+  const result = settlement.result;
+  return writeFinished(ctx, outcome, [dispatchEvent.event_id], {
+    layer: result.layer,
+    ...("kind" in result ? { kind: result.kind } : {}),
+    ...("reasons" in result ? { reasons: result.reasons } : {}),
+    elapsed_monotonic_ns: settlement.elapsed_ns.toString(),
+  });
 }
 
 /**

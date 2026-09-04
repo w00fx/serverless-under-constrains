@@ -27,7 +27,7 @@ import {
   resolveTransport,
 } from "./caller-helpers.ts";
 
-describe("deadline arbiter and AC-16", () => {
+describe("deadline arbiter and AC-16", { timeout: 2000 }, () => {
   it("records TIMED_OUT only after 3s, abort, and a durable timeout event", async () => {
     const clock = clocks(APPLICATION_DEADLINE_NS, [
       NOW,
@@ -67,6 +67,10 @@ describe("deadline arbiter and AC-16", () => {
     assert.equal(timeout.timer_fired_at, "2026-09-03T12:00:03.010Z");
     assert.equal(timeout.abort_requested_at, "2026-09-03T12:00:03.020Z");
     assert.equal(timeout.timeout_recorded_at, "2026-09-03T12:00:03.030Z");
+    const finished = result.value.events.find((event) => event.record_type === "attempt_finished");
+    assert.equal(finished !== undefined, true);
+    assert.equal(finished?.outcome, "TIMED_OUT");
+    assert.deepEqual(finished?.causation_event_ids, [timeout.event_id]);
     assert.equal(projectKnowledge([result.value.attempt]), "UNKNOWN");
   });
 
@@ -294,7 +298,7 @@ describe("deadline arbiter and AC-16", () => {
   });
 });
 
-describe("arbiter and timer helpers", () => {
+describe("arbiter and timer helpers", { timeout: 2000 }, () => {
   it("covers arbiter, timer, and duration helpers", async () => {
     const arbiter = createArbiter();
     const first = arbiter.settle({
@@ -317,9 +321,9 @@ describe("arbiter and timer helpers", () => {
     aborted.abort();
     await assert.rejects(() => waitDuration(1n, aborted.signal));
     const live = new AbortController();
-    const pending = waitDuration(60_000_000_000n, live.signal);
-    live.abort();
-    await assert.rejects(() => pending);
+    const pending = waitDuration(2_000_000_000n, live.signal);
+    live.abort("stop");
+    await assert.rejects(() => pending, (error: unknown) => error === "stop");
     assert.equal(deadlineTimestamp(NOW), "2026-09-03T12:00:03.000Z");
     assert.equal(deadlineTimestamp("not-a-timestamp"), "not-a-timestamp");
   });

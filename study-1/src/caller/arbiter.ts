@@ -35,24 +35,20 @@ export function waitDuration(durationNs: bigint, signal: AbortSignal): Promise<v
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
-    const onAbort = (): void => {
+    const handle = setTimeout(resolve, durationToMs(durationNs));
+    signal.addEventListener("abort", () => {
       clearTimeout(handle);
       reject(abortReason(signal));
-    };
-    const handle = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, durationToMs(durationNs));
-    signal.addEventListener("abort", onAbort, { once: true });
+    });
   });
 }
 
 export function durationToMs(durationNs: bigint): number {
-  const ms = durationNs / 1_000_000n;
-  if (ms > BigInt(Number.MAX_SAFE_INTEGER)) {
+  const ms = Number(durationNs / 1_000_000n);
+  if (!Number.isSafeInteger(ms)) {
     return Number.MAX_SAFE_INTEGER;
   }
-  return Number(ms);
+  return ms;
 }
 
 export function deadlineTimestamp(dispatchedAt: string): string {

@@ -31,7 +31,7 @@ async function listTypescript(directory: string): Promise<string[]> {
   return files;
 }
 
-describe("caller authority boundary", () => {
+describe("caller authority boundary", { timeout: 2000 }, () => {
   it("does not import ledger, treatment, or coordination mutation surfaces", async () => {
     const files = await listTypescript(srcRoot);
     assert.ok(files.length > 0);

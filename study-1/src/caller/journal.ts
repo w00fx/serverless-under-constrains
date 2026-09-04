@@ -73,8 +73,11 @@ export class InMemoryCallerJournal implements CallerJournal {
 }
 
 function compareEvents(left: PrimaryEvent, right: PrimaryEvent): number {
-  if (left.source_instance_id !== right.source_instance_id) {
-    return left.source_instance_id < right.source_instance_id ? -1 : 1;
+  if (left.source_instance_id < right.source_instance_id) {
+    return -1;
+  }
+  if (left.source_instance_id > right.source_instance_id) {
+    return 1;
   }
   return left.source_sequence - right.source_sequence;
 }

@@ -92,16 +92,20 @@ export function attemptFromEvents(
 }
 
 export function projectAttempts(events: readonly PrimaryEvent[]): AttemptRecord[] {
-  const seen: string[] = [];
+  const records: AttemptRecord[] = [];
   for (const event of events) {
-    if (typeof event.attempt_id === "string" && !seen.includes(event.attempt_id)) {
-      seen.push(event.attempt_id);
+    if (typeof event.attempt_id !== "string") {
+      continue;
+    }
+    if (records.some((record) => record.attempt_id === event.attempt_id)) {
+      continue;
+    }
+    const record = attemptFromEvents(events, event.attempt_id);
+    if (record !== undefined) {
+      records.push(record);
     }
   }
-  return seen.flatMap((attemptId) => {
-    const record = attemptFromEvents(events, attemptId);
-    return record === undefined ? [] : [record];
-  });
+  return records;
 }
 
 function nextFailedKnowledge(
@@ -155,11 +159,11 @@ export function projectKnowledge(attempts: readonly AttemptRecord[]): EffectKnow
   return state;
 }
 
-function isNonnegativeSafeInteger(value: unknown): value is number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+function isNonnegativeSafeInteger(candidate: unknown): candidate is number {
+  if (!Number.isSafeInteger(candidate)) {
     return false;
   }
-  return value >= 0;
+  return Number(candidate) >= 0;
 }
 
 export function createRetryEnvelope(input: unknown): ValidationResult<RetryEnvelope> {

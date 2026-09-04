@@ -22,7 +22,7 @@ import {
   resolveTransport,
 } from "./caller-helpers.ts";
 
-describe("AC-15 dispatch classification", () => {
+describe("AC-15 dispatch classification", { timeout: 2000 }, () => {
   it("records NOT_DISPATCHED only after a conditional pre-dispatch proof", async () => {
     const journal = new InMemoryCallerJournal();
     const transport = resolveTransport(accepted());
@@ -55,6 +55,7 @@ describe("AC-15 dispatch classification", () => {
       throw new Error("invoke");
     }
     assert.equal(result.value.attempt.dispatch_state, "UNKNOWN");
+    assert.equal(result.value.attempt.outcome, "FAILED");
     assert.equal(result.value.events.length, 0);
     assert.equal(classifyDispatch([], ATTEMPT), "UNKNOWN");
   });
@@ -151,6 +152,10 @@ describe("AC-15 dispatch classification", () => {
       throw new Error("recovered");
     }
     assert.equal(proved.value.attempt.dispatch_state, "NOT_DISPATCHED");
+    assert.equal(
+      proved.value.events.some((event) => event.record_type === "attempt_finished"),
+      true,
+    );
   });
 
   it("does not treat a missing dispatch_started write as NOT_DISPATCHED", async () => {
@@ -182,6 +187,7 @@ describe("AC-15 dispatch classification", () => {
       throw new Error("bad clock");
     }
     assert.equal(badClock.value.attempt.dispatch_state, "UNKNOWN");
+    assert.equal(badClock.value.attempt.outcome, "FAILED");
     assert.equal(badClock.value.events.length, 0);
   });
 });

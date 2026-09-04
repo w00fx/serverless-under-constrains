@@ -45,7 +45,7 @@ const ENVELOPE_REASONS = new Set(["not_an_object", "invalid_retry_envelope"]);
 const OUTCOMES = ["SUCCEEDED", "REJECTED", "TIMED_OUT", "FAILED"] as const;
 const DISPATCH = ["NOT_DISPATCHED", "DISPATCHED", "UNKNOWN"] as const;
 
-describe("fuzz-study-1 caller (seed 20260903)", () => {
+describe("fuzz-study-1 caller (seed 20260903)", { timeout: 2000 }, () => {
   it("rejects hostile identity and envelope inputs with declared reasons", () => {
     const rng = mulberry32(SEED);
     for (let i = 0; i < 64; i += 1) {

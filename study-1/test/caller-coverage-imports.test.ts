@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "../src/caller");
 
-describe("caller coverage imports", () => {
+describe("caller coverage imports", { timeout: 2000 }, () => {
   it("loads every source file so c8 cannot skip an unimported module", async () => {
     const files = readdirSync(SRC).filter((name) => name.endsWith(".ts")).toSorted();
     assert.ok(files.length > 0);

@@ -1,6 +1,13 @@
 import { InMemoryCallerJournal } from "../src/caller/index.ts";
-import type { InvokePorts, ProviderTransport, TransportResult } from "../src/caller/index.ts";
+import type {
+  CallerJournal,
+  InvokePorts,
+  JournalAppendResult,
+  ProviderTransport,
+  TransportResult,
+} from "../src/caller/index.ts";
 import type { AttemptRecord } from "../src/caller/types.ts";
+import type { PrimaryEvent } from "../src/protocol-records/types.ts";
 
 export const DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 export const TRIAL = "66666666-6666-4666-8666-666666666666";
@@ -129,4 +136,49 @@ export function attempt(
     outcome,
     dispatch_state: dispatch,
   };
+}
+
+/**
+ * Journal that returns scripted append results so retry/ambiguous branches
+ * stay observable without InMemory stop-after-ambiguous coupling.
+ */
+export class ScriptedCallerJournal implements CallerJournal {
+  readonly #script: JournalAppendResult[];
+  readonly #events: PrimaryEvent[] = [];
+  #cursor = 0;
+
+  constructor(script: readonly JournalAppendResult[]) {
+    this.#script = [...script];
+  }
+
+  isStopped(): boolean {
+    return false;
+  }
+
+  peekSequence(sourceInstanceId: string): number {
+    return this.#events.filter((event) => event.source_instance_id === sourceInstanceId).length + 1;
+  }
+
+  list(): PrimaryEvent[] {
+    return [...this.#events];
+  }
+
+  append(event: PrimaryEvent): JournalAppendResult {
+    const result = this.#script[this.#cursor] ?? "committed";
+    this.#cursor += 1;
+    if (result === "committed") {
+      this.#events.push(event);
+    }
+    return result;
+  }
+
+  appendConditional(
+    event: PrimaryEvent,
+    predicate: (events: readonly PrimaryEvent[]) => boolean,
+  ): JournalAppendResult {
+    if (!predicate(this.list())) {
+      return "failed";
+    }
+    return this.append(event);
+  }
 }

@@ -16,7 +16,7 @@ import {
   resolveTransport,
 } from "./caller-helpers.ts";
 
-describe("caller identities", () => {
+describe("caller identities", { timeout: 2000 }, () => {
   it("mints fresh physical ids and preserves the logical refund identity", () => {
     const first = createAttemptIdentities({ refund_request_id: "  ref-poc-001  " });
     const second = createAttemptIdentities({ refund_request_id: "ref-poc-001" });
@@ -55,7 +55,7 @@ describe("caller identities", () => {
   });
 });
 
-describe("BR-3 stable logical identity", () => {
+describe("BR-3 stable logical identity", { timeout: 2000 }, () => {
   it("keeps refund_request_id across two physical invokes", async () => {
     const journal = new InMemoryCallerJournal();
     const transport = resolveTransport(accepted());
@@ -90,7 +90,7 @@ describe("BR-3 stable logical identity", () => {
   });
 });
 
-describe("transport parsing and journal appends", () => {
+describe("transport parsing and journal appends", { timeout: 2000 }, () => {
   it("parses function accept, reject, fail, and transport errors without retrying", async () => {
     const accept = resolveTransport(accepted());
     const acceptedResult = await invokeAttempt(request(), ports({ transport: accept }));
@@ -169,7 +169,7 @@ describe("transport parsing and journal appends", () => {
   it("rejects invalid invoke input before opening an attempt", async () => {
     const journal = new InMemoryCallerJournal();
     const invalid = await invokeAttempt("nope", ports({ journal, transport: hangTransport() }));
-    assert.equal(invalid.ok, false);
+    assert.deepEqual(invalid, { ok: false, reasons: ["not_an_object"] });
     assert.equal(journal.list().length, 0);
     const badSource = await invokeAttempt(
       request(),
@@ -179,7 +179,7 @@ describe("transport parsing and journal appends", () => {
         identities: { source_instance_id: "bad" },
       }),
     );
-    assert.equal(badSource.ok, false);
+    assert.deepEqual(badSource, { ok: false, reasons: ["invalid_uuid"] });
     const badAmount = await invokeAttempt(
       request({ amount_minor: 0 }),
       ports({ journal, transport: hangTransport() }),
