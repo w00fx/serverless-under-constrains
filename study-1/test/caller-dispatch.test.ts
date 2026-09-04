@@ -92,7 +92,7 @@ describe("AC-15 dispatch classification", () => {
     assert.notEqual(crossed.value.attempt.dispatch_state, "NOT_DISPATCHED");
   });
 
-  it("classifies an uncertain pre-dispatch write as UNKNOWN", async () => {
+  it("classifies a failed pre-dispatch proof as UNKNOWN", async () => {
     const failedProof = new InMemoryCallerJournal();
     failedProof.skipNext(1);
     failedProof.failNext(2);
@@ -113,6 +113,9 @@ describe("AC-15 dispatch classification", () => {
       uncertain.value.events.some((event) => event.record_type === "pre_dispatch_failed"),
       false,
     );
+  });
+
+  it("classifies an ambiguous pre-dispatch proof as UNKNOWN", async () => {
     const ambiguousProof = new InMemoryCallerJournal();
     ambiguousProof.skipNext(1);
     ambiguousProof.ambiguousNext();
@@ -129,6 +132,9 @@ describe("AC-15 dispatch classification", () => {
       throw new Error("ambiguous proof");
     }
     assert.equal(ambiguous.value.attempt.dispatch_state, "UNKNOWN");
+  });
+
+  it("retries one failed pre-dispatch proof and then records NOT_DISPATCHED", async () => {
     const recovered = new InMemoryCallerJournal();
     recovered.skipNext(1);
     recovered.failNext(1);
@@ -145,6 +151,9 @@ describe("AC-15 dispatch classification", () => {
       throw new Error("recovered");
     }
     assert.equal(proved.value.attempt.dispatch_state, "NOT_DISPATCHED");
+  });
+
+  it("does not treat a missing dispatch_started write as NOT_DISPATCHED", async () => {
     const dispatchUnknown = new InMemoryCallerJournal();
     dispatchUnknown.skipNext(1);
     dispatchUnknown.failNext(2);
@@ -157,6 +166,9 @@ describe("AC-15 dispatch classification", () => {
       throw new Error("missing dispatch");
     }
     assert.equal(missingDispatch.value.attempt.dispatch_state, "UNKNOWN");
+  });
+
+  it("does not treat an unwritable opening timestamp as NOT_DISPATCHED", async () => {
     const badClock = await invokeAttempt(
       request(),
       ports({

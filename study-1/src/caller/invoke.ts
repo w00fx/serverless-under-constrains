@@ -62,10 +62,10 @@ function appendOnce(journal: CallerJournal, event: PrimaryEvent): PrimaryEvent |
 
 function snapshot(ctx: InvokeContext): InvokeSuccess {
   const attemptId = ctx.call.attempt_id;
-  const events = ctx.journal.list().filter((event) => event.attempt_id === attemptId);
-  const attempt = attemptFromEvents(ctx.journal.list(), attemptId);
+  const journaled = ctx.journal.list();
+  const events = journaled.filter((event) => event.attempt_id === attemptId);
   return {
-    attempt: attempt ?? unknownAttempt(ctx.call),
+    attempt: attemptFromEvents(journaled, attemptId) ?? unknownAttempt(ctx.call),
     events,
   };
 }
@@ -227,6 +227,36 @@ function transportFault(error: unknown): TransportResult {
   };
 }
 
+function scheduleTimer(
+  ctx: InvokeContext,
+  originNs: bigint,
+  durationNs: bigint,
+  timerAbort: AbortController,
+  deliver: (settlement: Settlement) => void,
+  allowRearm: boolean,
+): void {
+  ctx.timer.wait(durationNs, timerAbort.signal).then(
+    () => {
+      if (timerAbort.signal.aborted) {
+        return;
+      }
+      const elapsed = ctx.monotonic.nowNs() - originNs;
+      if (elapsed >= APPLICATION_DEADLINE_NS) {
+        deliver({ winner: "timer", elapsed_ns: elapsed, fired_at: ctx.wall.now() });
+        return;
+      }
+      if (!allowRearm) {
+        return;
+      }
+      // A wait port can resolve before source-local monotonic time reaches 3s.
+      // One remaining-duration retry keeps the application deadline alive so an
+      // early fire cannot drop TIMED_OUT while transport stays unsettled.
+      scheduleTimer(ctx, originNs, APPLICATION_DEADLINE_NS - elapsed, timerAbort, deliver, false);
+    },
+    () => undefined,
+  );
+}
+
 function raceDeadline(ctx: InvokeContext, originNs: bigint): Promise<Settlement> {
   const arbiter = createArbiter();
   const transportAbort = new AbortController();
@@ -244,15 +274,7 @@ function raceDeadline(ctx: InvokeContext, originNs: bigint): Promise<Settlement>
       }
       resolve(won);
     };
-    ctx.timer.wait(APPLICATION_DEADLINE_NS, timerAbort.signal).then(
-      () => {
-        const elapsed = ctx.monotonic.nowNs() - originNs;
-        if (elapsed >= APPLICATION_DEADLINE_NS) {
-          deliver({ winner: "timer", elapsed_ns: elapsed, fired_at: ctx.wall.now() });
-        }
-      },
-      () => undefined,
-    );
+    scheduleTimer(ctx, originNs, APPLICATION_DEADLINE_NS, timerAbort, deliver, true);
     ctx.transport.invoke(ctx.call, transportAbort.signal).then(
       (result) => {
         deliver({

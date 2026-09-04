@@ -62,8 +62,11 @@ describe("deadline arbiter and AC-16", () => {
     assert.equal(timeout.elapsed_monotonic_ns, "3000000000");
     assert.equal(timeout.monotonic_origin_event_id, EVENT_B);
     assert.deepEqual(timeout.causation_event_ids, [EVENT_B]);
-    assert.equal(typeof timeout.dispatched_at, "string");
-    assert.equal(timeout.deadline_at, deadlineTimestamp(String(timeout.dispatched_at)));
+    assert.equal(timeout.dispatched_at, "2026-09-03T12:00:03.000Z");
+    assert.equal(timeout.deadline_at, "2026-09-03T12:00:06.000Z");
+    assert.equal(timeout.timer_fired_at, "2026-09-03T12:00:03.010Z");
+    assert.equal(timeout.abort_requested_at, "2026-09-03T12:00:03.020Z");
+    assert.equal(timeout.timeout_recorded_at, "2026-09-03T12:00:03.030Z");
     assert.equal(projectKnowledge([result.value.attempt]), "UNKNOWN");
   });
 
@@ -109,6 +112,120 @@ describe("deadline arbiter and AC-16", () => {
       aborted.value.events.some((event) => event.record_type === "caller_timeout_recorded"),
       false,
     );
+  });
+
+  it("re-arms an early timer so TIMED_OUT still requires a full 3s of monotonic time", async () => {
+    let waits = 0;
+    let reads = 0;
+    const result = await invokeAttempt(
+      request(),
+      ports({
+        transport: hangTransport(),
+        timer: {
+          wait: async () => {
+            waits += 1;
+          },
+        },
+        monotonic: {
+          nowNs: () => {
+            reads += 1;
+            if (reads === 1) {
+              return 0n;
+            }
+            return waits === 1 ? APPLICATION_DEADLINE_NS - 1n : APPLICATION_DEADLINE_NS;
+          },
+        },
+      }),
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      throw new Error("re-arm");
+    }
+    assert.equal(waits, 2);
+    assert.equal(result.value.attempt.outcome, "TIMED_OUT");
+    assert.equal(
+      result.value.events.some((event) => event.record_type === "caller_timeout_recorded"),
+      true,
+    );
+  });
+
+  it("lets transport finish after a second premature timer fire", async () => {
+    let releaseTransport: ((result: TransportResult) => void) | undefined;
+    let waits = 0;
+    const transport: ProviderTransport = {
+      invoke: () =>
+        new Promise((resolve) => {
+          releaseTransport = resolve;
+        }),
+    };
+    const pending = invokeAttempt(
+      request(),
+      ports({
+        transport,
+        timer: {
+          wait: async () => {
+            waits += 1;
+            if (waits === 2) {
+              queueMicrotask(() => releaseTransport?.(accepted()));
+            }
+          },
+        },
+        monotonic: {
+          nowNs: (() => {
+            let reads = 0;
+            return () => {
+              reads += 1;
+              return reads === 1 ? 0n : APPLICATION_DEADLINE_NS - 1n;
+            };
+          })(),
+        },
+      }),
+    );
+    const result = await pending;
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      throw new Error("second early fire");
+    }
+    assert.equal(waits, 2);
+    assert.equal(result.value.attempt.outcome, "SUCCEEDED");
+    assert.equal(
+      result.value.events.some((event) => event.record_type === "caller_timeout_recorded"),
+      false,
+    );
+  });
+
+  it("records timeout diagnostics when dispatch wall time is not a timestamp", async () => {
+    let reads = 0;
+    const result = await invokeAttempt(
+      request(),
+      ports({
+        transport: hangTransport(),
+        timer: { wait: async () => undefined },
+        wall: {
+          now: () => {
+            reads += 1;
+            return reads === 3 ? "not-a-timestamp" : NOW;
+          },
+        },
+        monotonic: {
+          nowNs: (() => {
+            let ticks = 0;
+            return () => {
+              ticks += 1;
+              return ticks === 1 ? 0n : APPLICATION_DEADLINE_NS;
+            };
+          })(),
+        },
+      }),
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      throw new Error("invalid dispatched_at");
+    }
+    assert.equal(result.value.attempt.outcome, "TIMED_OUT");
+    const timeout = result.value.events.find((event) => event.record_type === "caller_timeout_recorded");
+    assert.equal(timeout?.dispatched_at, "not-a-timestamp");
+    assert.equal(timeout?.deadline_at, "not-a-timestamp");
   });
 
   it("lets only one winner settle when timer and transport race", async () => {
@@ -204,5 +321,6 @@ describe("arbiter and timer helpers", () => {
     live.abort();
     await assert.rejects(() => pending);
     assert.equal(deadlineTimestamp(NOW), "2026-09-03T12:00:03.000Z");
+    assert.equal(deadlineTimestamp("not-a-timestamp"), "not-a-timestamp");
   });
 });

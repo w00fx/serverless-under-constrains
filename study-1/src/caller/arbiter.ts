@@ -56,7 +56,11 @@ export function durationToMs(durationNs: bigint): number {
 }
 
 export function deadlineTimestamp(dispatchedAt: string): string {
-  return new Date(Date.parse(dispatchedAt) + 3000).toISOString();
+  const parsed = Date.parse(dispatchedAt);
+  if (!Number.isFinite(parsed)) {
+    return dispatchedAt;
+  }
+  return new Date(parsed + 3000).toISOString();
 }
 
 function abortReason(signal: AbortSignal): unknown {

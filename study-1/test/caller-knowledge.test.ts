@@ -47,6 +47,13 @@ describe("BR-4 knowledge and retry-layer processing", () => {
       projectKnowledge([attempt("REJECTED", "DISPATCHED"), attempt("SUCCEEDED", "DISPATCHED", "2")]),
       "ONE_EFFECT_CONFIRMED",
     );
+    assert.equal(
+      projectKnowledge([
+        attempt("SUCCEEDED", "DISPATCHED"),
+        attempt("FAILED", "NOT_DISPATCHED", "2"),
+      ]),
+      "ONE_EFFECT_CONFIRMED",
+    );
   });
 
   it("does not exhaust retries while an upstream layer remains", () => {

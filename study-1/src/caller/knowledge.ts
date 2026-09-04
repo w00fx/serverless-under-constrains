@@ -30,7 +30,11 @@ export function hasDispatchEvidence(events: readonly PrimaryEvent[], attemptId: 
     if (event.record_type === "caller_timeout_recorded") {
       return true;
     }
-    if (event.record_type === "attempt_finished" && IMPLIED_DISPATCHED.has(event.outcome as AttemptOutcome)) {
+    if (
+      event.record_type === "attempt_finished" &&
+      isAttemptOutcome(event.outcome) &&
+      IMPLIED_DISPATCHED.has(event.outcome)
+    ) {
       return true;
     }
   }
@@ -131,16 +135,16 @@ export function nextKnowledge(
   if (current === "UNKNOWN") {
     return "UNKNOWN";
   }
-  if (attempt.outcome === "TIMED_OUT") {
-    return "UNKNOWN";
+  switch (attempt.outcome) {
+    case "TIMED_OUT":
+      return "UNKNOWN";
+    case "FAILED":
+      return nextFailedKnowledge(current, attempt.dispatch_state);
+    case "SUCCEEDED":
+      return nextSuccessKnowledge(current);
+    case "REJECTED":
+      return nextRejectedKnowledge(current);
   }
-  if (attempt.outcome === "FAILED") {
-    return nextFailedKnowledge(current, attempt.dispatch_state);
-  }
-  if (attempt.outcome === "SUCCEEDED") {
-    return nextSuccessKnowledge(current);
-  }
-  return nextRejectedKnowledge(current);
 }
 
 export function projectKnowledge(attempts: readonly AttemptRecord[]): EffectKnowledgeState {

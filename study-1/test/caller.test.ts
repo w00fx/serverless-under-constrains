@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createAttemptIdentities, InMemoryCallerJournal, invokeAttempt } from "../src/caller/index.ts";
 import {
+  EVENT_A,
   PROBE,
   SOURCE,
   VALIDATION,
@@ -140,6 +141,7 @@ describe("transport parsing and journal appends", () => {
     if (!retried.ok) {
       throw new Error("retry");
     }
+    assert.equal(retried.value.events[0]?.event_id, EVENT_A);
     assert.equal(retried.value.events[0]?.source_sequence, 1);
     const ambiguous = new InMemoryCallerJournal();
     ambiguous.ambiguousNext();
