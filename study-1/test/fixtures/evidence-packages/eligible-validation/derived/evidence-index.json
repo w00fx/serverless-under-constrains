@@ -1,0 +1,120 @@
+{
+  "entries": [
+    {
+      "artifact_path": "derived/attempt-projection.json",
+      "artifact_sha256": "d4949bc3740e1c27fe7bfa089d6dfb48666cb7c0a5ef78069eceb64b55e4ccc5",
+      "byte_count": 42,
+      "classification": "derived"
+    },
+    {
+      "artifact_path": "derived/oracle-result.json",
+      "artifact_sha256": "ddc7c6136cd072f2acb33c0e074b5438647addcf751c087a4f713577c333a8a7",
+      "byte_count": 501,
+      "classification": "derived"
+    },
+    {
+      "artifact_path": "derived/validation-summary.json",
+      "artifact_sha256": "bdc5232074888d0704a0461c8b4f56363bc412c967e8f8033f5d6b5d1c0dbd13",
+      "byte_count": 42,
+      "classification": "derived"
+    },
+    {
+      "artifact_path": "primary/assembly/inventory.json",
+      "artifact_sha256": "b0501bb581544dc979e7ab9ca11a1178ee1cb6496af2384e4d8f14ea59441aa1",
+      "byte_count": 52,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/coordination/prefix-checkpoint.json",
+      "artifact_sha256": "d39ed55048e1c5f2bfb863c2fbb9e28ab987ad44b989f4499af778a2053401f4",
+      "byte_count": 387,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/execution-manifest.json",
+      "artifact_sha256": "1250dbedd17f7d9bd5e4c5ca0ede489190df104d25131b5a9c15be4b2f9fd62b",
+      "byte_count": 52,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/execution/authoritative-record.json",
+      "artifact_sha256": "19661a4552ebf431b816a6976bec994f1ace8b88f25d03861ddfae4fc4291c51",
+      "byte_count": 64,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/inputs/approved-decision.json",
+      "artifact_sha256": "e193032457a22d370a2e2566f474845b0c189a7951fd9003b98d6c90a78b5083",
+      "byte_count": 58,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/inputs/payment.json",
+      "artifact_sha256": "b04e10c3eb9b068af91b6a8aa2ba4ae8a493cf3d22f349196ef65f1517356f2c",
+      "byte_count": 48,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/inputs/published-message.json",
+      "artifact_sha256": "8952422d0d74598f1eb233f43b6204ab737f97c636c7edbb4b52a1037a2ecb07",
+      "byte_count": 58,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/journals/caller.jsonl",
+      "artifact_sha256": "608d808923d4466b0234315d4fa6cf3968ebd14cca3f4190477b46452d16c2ca",
+      "byte_count": 50,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/journals/provider.jsonl",
+      "artifact_sha256": "48453b60b22233fb87e1c72514a5f5c4a97a01fcaefcc431727cebc1689c0b3f",
+      "byte_count": 144,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/journals/treatment.jsonl",
+      "artifact_sha256": "24c07fc8da253b6c59865efe40cb4fdee604e41588b760b4f1c890ae1e744a25",
+      "byte_count": 53,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/journals/variant.jsonl",
+      "artifact_sha256": "af826a951db662bb03f23946165b50971a338570e6f4d5725ea22aeff9257dac",
+      "byte_count": 51,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/ledger/snapshot.json",
+      "artifact_sha256": "828abb714ea2dddce7d1067a8bacdfb6bc9b8a7a862736a57a7b9dd9f06daa7c",
+      "byte_count": 28,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/queues/correlated-dlq-snapshot.json",
+      "artifact_sha256": "2e470762100625d8c22faa0d01c7f45ecfa3e3495586948f24f7db415a5be162",
+      "byte_count": 64,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/queues/dlq-observations.json",
+      "artifact_sha256": "9e76eaf27466ebe937ce87eac9c23bf5965d7ab47d5c27ad534a6f318a323f7c",
+      "byte_count": 57,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/queues/source-observations.json",
+      "artifact_sha256": "e856a8d083fdee949057b5c89ad8bbbf918ba86f01fbb9b56995c02eb1716225",
+      "byte_count": 60,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/trial-manifest.json",
+      "artifact_sha256": "0f474730566eec772850466b66e0b4b5bce44ec5c31701b89bc8d1ccec0e23d3",
+      "byte_count": 48,
+      "classification": "primary"
+    }
+  ],
+  "record_type": "evidence_index",
+  "schema_version": 1
+}

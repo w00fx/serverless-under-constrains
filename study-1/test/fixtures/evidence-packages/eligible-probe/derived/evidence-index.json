@@ -1,0 +1,36 @@
+{
+  "entries": [
+    {
+      "artifact_path": "derived/probe-summary.json",
+      "artifact_sha256": "c8f0e878dbae13d9ec1777f77202d84a79602fd96dc89b5df0dea0fdeb4c2029",
+      "byte_count": 37,
+      "classification": "derived"
+    },
+    {
+      "artifact_path": "primary/assembly/inventory.json",
+      "artifact_sha256": "b0501bb581544dc979e7ab9ca11a1178ee1cb6496af2384e4d8f14ea59441aa1",
+      "byte_count": 52,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/coordination/prefix-checkpoint.json",
+      "artifact_sha256": "d39ed55048e1c5f2bfb863c2fbb9e28ab987ad44b989f4499af778a2053401f4",
+      "byte_count": 387,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/execution-manifest.json",
+      "artifact_sha256": "1250dbedd17f7d9bd5e4c5ca0ede489190df104d25131b5a9c15be4b2f9fd62b",
+      "byte_count": 52,
+      "classification": "primary"
+    },
+    {
+      "artifact_path": "primary/provider-events.jsonl",
+      "artifact_sha256": "4133d9290b880854856cfb19ca9924784ec36da1ccdd7d284c098b34c23516d7",
+      "byte_count": 50,
+      "classification": "primary"
+    }
+  ],
+  "record_type": "evidence_index",
+  "schema_version": 1
+}
