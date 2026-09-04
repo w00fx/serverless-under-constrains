@@ -21,9 +21,9 @@ higher authority silently.
 
 ## Canonical Spec Anchored locations
 
-- Skills: `.agents/skills/<name>/SKILL.md`
-- Shared protocol: `.agents/protocols/implementation-protocol.md`
-- Engineering rules: `.agents/rules/*.md`
+- Skills: `~/.agents/skills/<name>/SKILL.md`
+- Shared protocol: `~/.agents/protocols/implementation-protocol.md`
+- Engineering rules: `~/.agents/rules/*.md`
 - Internal agent role contracts: `agents/*.md` and `agents/*.toml`
 - Runtime state and logs: `.agent-runs/<run-id>/` — never under `.claude/`,
   `.codex/`, or `.cursor/`
@@ -36,7 +36,7 @@ surfaces only. They are not shared truth or runtime-state directories.
 ## Mandatory rule loading
 
 Before implementation, hardening, or code review, read the applicable files in
-`.agents/rules/`:
+`~/.agents/rules/`:
 
 - `truth-layer.md` — always for any versioned change;
 - `testing.md` — for production-code, test, contract, parser, validator, or
@@ -44,7 +44,7 @@ Before implementation, hardening, or code review, read the applicable files in
 - `package-by-feature.md` — when creating or moving production files or changing
   capability boundaries.
 
-Do not assume the `.agents/rules/` directory is auto-loaded by the harness. This
+Do not assume the `~/.agents/rules/` directory is auto-loaded by the harness. This
 `AGENTS.md` routes to it, and transactional skills must read the rules explicitly.
 Record the loaded rule paths in the run state.
 
