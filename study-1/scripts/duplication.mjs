@@ -11,6 +11,7 @@ const TARGETS = [
   join(STUDY1, "src/controlled-provider"),
   join(STUDY1, "src/coordination"),
   join(STUDY1, "src/evidence-packages"),
+  join(STUDY1, "src/caller"),
 ];
 const WINDOW = 12;
 const MIN_DUPES = 2;

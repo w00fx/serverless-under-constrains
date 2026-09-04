@@ -13,6 +13,8 @@ Before proposing or implementing work:
 
 `src/controlled-provider/` is the local M0-B provider and ledger surface: accept or reject refund calls, persist an in-memory authoritative ledger and provider journals, and enforce the variant/independent authority boundary. It performs no cloud mutation.
 
+`src/caller/` is the local M0-B caller transport: mint attempt identities, journal dispatch and timeout evidence, arbitrate the application deadline, and project processing and absorbing effect knowledge. It performs no cloud mutation and does not read the provider ledger or treatment state.
+
 `src/coordination/` is the M0-C operator baseline: a separate CDK entry point plus bootstrap, read-only verify, and guarded destroy. Experimental code may only verify and use the frozen identity and schema. Commands require an injected cloud adapter; they do not bind live AWS.
 
 `src/evidence-packages/` is the local M0-C original-package surface: write-once evidence and package indexes, prefix checkpoints, and read-only original-package verification with no selected amendment. It performs no cloud mutation and does not write eligibility into an original package.
@@ -28,8 +30,8 @@ From `study-1/`, Node.js 24:
 - `npm run golden` — locked canonical-byte fixtures
 - `npm run golden-tables` — `specs/tables/` reference rows
 - `npm run fuzz` — seeded invalid-input properties
-- `npm run coverage` — line and branch coverage for `src/protocol-records`, `src/controlled-provider`, `src/coordination`, and `src/evidence-packages`
-- `npm run mutation` — Stryker on `src/protocol-records`, `src/controlled-provider`, `src/coordination`, and `src/evidence-packages`
+- `npm run coverage` — line and branch coverage for `src/protocol-records`, `src/controlled-provider`, `src/coordination`, `src/evidence-packages`, and `src/caller`
+- `npm run mutation` — Stryker on `src/protocol-records`, `src/controlled-provider`, `src/coordination`, `src/evidence-packages`, and `src/caller`
 - `npm run coordination:bootstrap` / `coordination:verify` / `coordination:destroy` — operator baseline commands (injected adapter only)
 
 Root `make check`, `make golden`, `make mutation-study-1`, and `make fuzz-study-1` wrap these. See the repository `AGENTS.md` Commands table.
