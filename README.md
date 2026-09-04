@@ -20,6 +20,7 @@ This branch contains:
 - a Node.js 24 TypeScript project at `study-1/` with a committed lockfile;
 - local M0-A protocol records that create, reject, serialize, hash, and verify deterministic contracts;
 - a local controlled refund provider and in-memory authoritative ledger;
+- a local shared caller that journals dispatch, timeout, and effect knowledge;
 - an operator-managed coordination baseline (separate CDK entry, verify, and guarded destroy);
 - local original evidence-package finalization and independent verification.
 
@@ -35,7 +36,7 @@ From the repository root, after `make bootstrap` (Node.js 24):
 | `make check-study-1` | Same, scoped to Study 1 |
 | `make golden` | Locked fixtures and spec tables |
 | `make golden-mutation` | Sabotage one table row and require the table harness to fail |
-| `make mutation-study-1` | Stryker on protocol records, the controlled provider, coordination, and evidence packages |
+| `make mutation-study-1` | Stryker on protocol records, the controlled provider, coordination, evidence packages, and the caller |
 | `make fuzz-study-1` | Seeded invalid-input properties |
 | `make complexity` | ESLint complexity on the eligible target |
 | `make duplication` | Cross-file token-window duplication |
@@ -57,8 +58,8 @@ From `study-1/`, on Node.js 24:
 | `npm run golden` | locked canonical-byte fixtures |
 | `npm run golden-tables` | `specs/tables/` reference rows |
 | `npm run fuzz` | seeded invalid-input properties |
-| `npm run coverage` | line and branch coverage for protocol records, the controlled provider, coordination, and evidence packages |
-| `npm run mutation` | Stryker on protocol records, the controlled provider, coordination, and evidence packages |
+| `npm run coverage` | line and branch coverage for protocol records, the controlled provider, coordination, evidence packages, and the caller |
+| `npm run mutation` | Stryker on protocol records, the controlled provider, coordination, evidence packages, and the caller |
 | `npm run coordination:bootstrap` | operator bootstrap (injected cloud adapter; no live AWS bind) |
 | `npm run coordination:verify` | read-only frozen-identity verify |
 | `npm run coordination:destroy` | guarded destroy; refuses blocking or unverifiable leases |

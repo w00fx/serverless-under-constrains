@@ -16,7 +16,7 @@
     "golden": "node --experimental-strip-types --test test/fixtures/protocol-records.test.ts test/fixtures/evidence-packages.test.ts",
     "golden-tables": "node --experimental-strip-types --test test/tables-harness.test.ts",
     "fuzz": "node --experimental-strip-types --test test/fuzz/*.fuzz.ts",
-    "coverage": "c8 --src src/protocol-records --src src/controlled-provider --src src/coordination --src src/evidence-packages --lines=100 --branches=100 --functions=100 --statements=100 --check-coverage node --experimental-strip-types --test",
+    "coverage": "c8 --src src/protocol-records --src src/controlled-provider --src src/coordination --src src/evidence-packages --src src/caller --lines=100 --branches=100 --functions=100 --statements=100 --check-coverage node --experimental-strip-types --test",
     "mutation": "stryker run"
   },
   "devDependencies": {

@@ -9,7 +9,8 @@
     "src/protocol-records/**/*.ts",
     "src/controlled-provider/**/*.ts",
     "src/coordination/**/*.ts",
-    "src/evidence-packages/**/*.ts"
+    "src/evidence-packages/**/*.ts",
+    "src/caller/**/*.ts"
   ],
   "coverageAnalysis": "off",
   "timeoutMS": 60000,
