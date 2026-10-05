@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_settled_after_timeout.schema.json",
+  "title": "transport_settled_after_timeout (catalogue group B, row 25)",
+  "description": "Caller journal: the transport settled after the timer had already won the arbiter. Only the settlement kind and the source-local elapsed time are recorded; the payload is never parsed (BR-RUA-015, BR-RUA-023, D-26).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "transport_settled_after_timeout"
+    },
+    "source": {
+      "enum": ["conventional_caller", "durable_caller", "probe_caller"]
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "settlement_kind": {
+      "enum": ["aborted", "resolved", "rejected"]
+    },
+    "observed_after_elapsed_ns": {
+      "$ref": "_defs.schema.json#/$defs/monotonic_ns"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "attempt_id",
+    "provider_request_id",
+    "refund_request_id",
+    "settlement_kind",
+    "observed_after_elapsed_ns"
+  ],
+  "unevaluatedProperties": false
+}

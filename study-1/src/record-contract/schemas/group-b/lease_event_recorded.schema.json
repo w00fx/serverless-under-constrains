@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/lease_event_recorded.schema.json",
+  "title": "lease_event_recorded (catalogue group B, row 55)",
+  "description": "Coordination journal: one lease transition of the Study/account/Region lease for this owner (BR-RUA-045). A foreign holder is named as a pair.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "dependentRequired": {
+        "holder_owner_kind": ["holder_owner_id"],
+        "holder_owner_id": ["holder_owner_kind"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "lease_event_recorded"
+    },
+    "source": {
+      "enum": ["coordination_lease"]
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "lease_event": {
+      "enum": [
+        "ACQUIRED",
+        "ACQUISITION_FAILED",
+        "HEARTBEAT_CONFIRMED",
+        "HEARTBEAT_FAILED",
+        "RECOVERED",
+        "LOST_OWNERSHIP_MISMATCH",
+        "LOST_STALE",
+        "RELEASED",
+        "RELEASE_FAILED",
+        "RECOVERY_REQUIRED",
+        "STATE_UNVERIFIED"
+      ]
+    },
+    "owner_kind": {
+      "enum": ["RUN", "TRANSPORT_PROBE", "VARIANT_VALIDATION"]
+    },
+    "owner_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "owner_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "lease_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "lease_health": {
+      "enum": ["CONFIRMED", "UNCERTAIN", "LOST_OWNERSHIP_MISMATCH", "LOST_STALE"]
+    },
+    "last_confirmed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "holder_owner_kind": {
+      "enum": ["RUN", "TRANSPORT_PROBE", "VARIANT_VALIDATION"]
+    },
+    "holder_owner_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "lease_event",
+    "owner_kind",
+    "owner_id",
+    "owner_manifest_sha256"
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_transaction_committed.schema.json",
+  "title": "provider_transaction_committed (catalogue group B, row 32)",
+  "description": "Provider journal, written inside the commit transaction with the ledger item and, when targeted, the ARMED -> COMMITTED_WAITING treatment update; all three share provider_commit_id (BR-RUA-025, D-23). commit_requested_at is the in-transaction wall time; it never decides BR-RUA-010 (D-24).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provider_transaction_committed"
+    },
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "provider_commit_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_transaction_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "payment_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "amount_minor": {
+      "$ref": "_defs.schema.json#/$defs/amount_minor"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "targeted": {
+      "type": "boolean"
+    },
+    "commit_requested_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "provider_commit_id",
+    "provider_transaction_id",
+    "provider_call_id",
+    "attempt_id",
+    "provider_request_id",
+    "refund_request_id",
+    "payment_id",
+    "amount_minor",
+    "currency",
+    "targeted",
+    "commit_requested_at"
+  ],
+  "unevaluatedProperties": false
+}

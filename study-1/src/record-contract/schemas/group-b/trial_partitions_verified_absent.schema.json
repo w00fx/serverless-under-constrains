@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/trial_partitions_verified_absent.schema.json",
+  "title": "trial_partitions_verified_absent (catalogue group B, row 47)",
+  "description": "Runner journal: a strongly consistent query found the fresh partition absent in every listed table before the trial (BR-RUA-019).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "trial_partitions_verified_absent"
+    },
+    "source": {
+      "enum": ["runner"]
+    },
+    "partition_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "table_roles": {
+      "type": "array",
+      "items": {
+        "enum": ["ledger", "experiment_journal", "caller_journal", "control"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "partition_key", "table_roles"],
+  "unevaluatedProperties": false
+}

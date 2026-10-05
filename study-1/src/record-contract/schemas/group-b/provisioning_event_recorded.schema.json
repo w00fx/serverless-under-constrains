@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provisioning_event_recorded.schema.json",
+  "title": "provisioning_event_recorded (catalogue group B, row 46)",
+  "description": "Provisioning journal: one step of deployment from the verified temporary copy (design §9.8 D1-D4, D-25; BR-RUA-040, BR-RUA-042). Inventory checks carry the inventory digest, the deploy start carries the stack name, the stack-id record carries the stack id, and a failure carries its reasons.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["provisioning_event"],
+        "properties": {
+          "provisioning_event": {
+            "enum": ["DEPLOY_COPY_VERIFIED", "PACKAGE_ASSEMBLY_REVERIFIED"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inventory_sha256": true
+        },
+        "required": ["inventory_sha256"]
+      }
+    },
+    {
+      "if": {
+        "required": ["provisioning_event"],
+        "properties": {
+          "provisioning_event": {
+            "const": "DEPLOY_STARTED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "stack_name": true
+        },
+        "required": ["stack_name"]
+      }
+    },
+    {
+      "if": {
+        "required": ["provisioning_event"],
+        "properties": {
+          "provisioning_event": {
+            "const": "STACK_ID_RECORDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "stack_id": true
+        },
+        "required": ["stack_id"]
+      }
+    },
+    {
+      "if": {
+        "required": ["provisioning_event"],
+        "properties": {
+          "provisioning_event": {
+            "const": "DEPLOY_FAILED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provisioning_event_recorded"
+    },
+    "source": {
+      "enum": ["runner"]
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "provisioning_event": {
+      "enum": [
+        "DEPLOY_COPY_VERIFIED",
+        "DEPLOY_STARTED",
+        "DEPLOY_SUCCEEDED",
+        "DEPLOY_FAILED",
+        "PACKAGE_ASSEMBLY_REVERIFIED",
+        "STACK_ID_RECORDED"
+      ]
+    },
+    "inventory_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "stack_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stack_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "provisioning_event", "reasons"],
+  "unevaluatedProperties": false
+}

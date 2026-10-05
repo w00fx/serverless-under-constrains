@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_call_rejected.schema.json",
+  "title": "provider_call_rejected (catalogue group B, row 30)",
+  "description": "Provider journal: the call failed an acceptance check (design §9.10 order). It creates no transaction and does not consume treatment (BR-RUA-018, AC-RUA-042).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provider_call_rejected"
+    },
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "reason": {
+      "enum": [
+        "AUTHORIZATION_FAILED",
+        "SCHEMA_INVALID",
+        "EXECUTION_IDENTITY_MISMATCH",
+        "IDENTITY_STRUCTURE_INVALID",
+        "PAYMENT_NOT_FOUND",
+        "AMOUNT_INVALID",
+        "CURRENCY_MISMATCH"
+      ]
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "provider_call_id", "reason", "detail"],
+  "unevaluatedProperties": false
+}

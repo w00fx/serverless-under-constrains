@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/treatment_safety_released.schema.json",
+  "title": "treatment_safety_released (catalogue group B, row 37)",
+  "description": "Provider journal: a nonterminal treatment wait was released without an observed signal (SAFETY_RELEASED), which makes treatment fidelity unverified (BR-RUA-025, BR-RUA-014, BR-RUA-048). A release after the commit names the commit; a release of an ARMED wait has none.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["from_state"],
+        "properties": {
+          "from_state": {
+            "const": "ARMED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provider_commit_id": false,
+          "provider_call_id": false,
+          "attempt_id": false,
+          "elapsed_since_commit_ns": false
+        }
+      },
+      "else": {
+        "properties": {
+          "provider_commit_id": true,
+          "provider_call_id": true,
+          "attempt_id": true
+        },
+        "required": ["provider_commit_id", "provider_call_id", "attempt_id"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "treatment_safety_released"
+    },
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "cause": {
+      "enum": ["SAFETY_DEADLINE", "CLEANUP_REQUEST"]
+    },
+    "from_state": {
+      "enum": ["ARMED", "COMMITTED_WAITING", "TIMEOUT_SIGNALLED", "TIMEOUT_OBSERVED"]
+    },
+    "provider_commit_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "elapsed_since_commit_ns": {
+      "$ref": "_defs.schema.json#/$defs/monotonic_ns"
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "cause", "from_state"],
+  "unevaluatedProperties": false
+}
