@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_probe_summary.schema.json",
+  "title": "transport_probe_summary (catalogue group C, row 70)",
+  "description": "summary/transport-probe-summary.json, written after cleanup (CTR-RUA-003): lifecycle, cleanup, audit, lease, safety, late evidence and the probe-result digest. COMPLETED means the probe lifecycle completed; it does not imply the transport passed.",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "$ref": "_defs.schema.json#/$defs/package_relative_path"
+        },
+        "artifact_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_sha256"],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "transport_probe_summary"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "run_id": false,
+    "variant_validation_id": false,
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "probe_terminal_reason": {
+      "enum": [
+        "COMPLETED",
+        "LEASE_ACQUISITION_FAILED",
+        "LEASE_LOST",
+        "PROVISIONING_FAILED",
+        "PROBE_INCOMPLETE",
+        "SAFETY_DEADLINE",
+        "OPERATOR_ABORT",
+        "INTERRUPTED",
+        "CLEANUP_INCOMPLETE",
+        "LEAK_AUDIT_NOT_CLEAN",
+        "EVIDENCE_FINALIZATION_FAILED"
+      ]
+    },
+    "cleanup_status": {
+      "enum": ["not_started", "running", "succeeded", "partial", "failed"]
+    },
+    "leak_audit_status": {
+      "enum": ["clean", "leaks_detected", "inconclusive"]
+    },
+    "lease_status": {
+      "enum": ["released", "recovery_required", "unverified"]
+    },
+    "safety_status": {
+      "enum": ["within_limits", "breached", "unverified"]
+    },
+    "probe_result_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "late_evidence_status": {
+      "enum": ["none", "consistent", "contradictory", "unverified"]
+    },
+    "late_evidence_assessment_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "created_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "transport_probe_id",
+    "execution_manifest_sha256",
+    "probe_terminal_reason",
+    "cleanup_status",
+    "leak_audit_status",
+    "lease_status",
+    "safety_status",
+    "probe_result_sha256",
+    "late_evidence_status",
+    "late_evidence_assessment_ref",
+    "created_at"
+  ],
+  "unevaluatedProperties": false
+}

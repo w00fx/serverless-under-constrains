@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/operational_recovery_record.schema.json",
+  "title": "operational_recovery_record (catalogue group C, row 85)",
+  "description": "The payload of an OPERATIONAL_RECOVERY amendment (BR-RUA-038, CTR-RUA-004; design §10.4): recovery reruns cleanup steps 3-11 against a finalized package and may repair only cleanup, leak-audit and lease closure, so those three values are the only closure it records, before and after.",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "$ref": "_defs.schema.json#/$defs/package_relative_path"
+        },
+        "artifact_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_sha256"],
+      "additionalProperties": false
+    },
+    "closure": {
+      "type": "object",
+      "properties": {
+        "cleanup_status": {
+          "enum": ["succeeded", "partial", "failed"]
+        },
+        "leak_audit_status": {
+          "enum": ["clean", "leaks_detected", "inconclusive"]
+        },
+        "lease_status": {
+          "enum": ["released", "recovery_required", "unverified"]
+        }
+      },
+      "required": ["cleanup_status", "leak_audit_status", "lease_status"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "operational_recovery_record"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "recovery_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "original_package_index_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "original_closure": {
+      "$ref": "#/$defs/closure"
+    },
+    "recovered_closure": {
+      "$ref": "#/$defs/closure"
+    },
+    "steps_run": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 3,
+        "maximum": 11
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "cleanup_result_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "leak_audit_result_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "started_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "completed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "recovery_id",
+    "original_package_index_sha256",
+    "original_closure",
+    "recovered_closure",
+    "steps_run",
+    "cleanup_result_ref",
+    "leak_audit_result_ref",
+    "reasons",
+    "started_at",
+    "completed_at"
+  ],
+  "unevaluatedProperties": false
+}
