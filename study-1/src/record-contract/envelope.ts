@@ -76,16 +76,19 @@ export function causationIds(ids: readonly Uuid4[]): readonly Uuid4[] | undefine
 
 /**
  * Tells whether a causation list is in its serialized form: non-empty, strictly increasing
- * (so sorted and duplicate-free).
+ * (so sorted and duplicate-free) strings. Total over parsed JSON: a non-string item is never
+ * compared with `>=`, whose coercion throws on `{"toString":1,"valueOf":1}` (Owner amendment
+ * A-02 audit), so such a list is simply not canonical.
  *
  * @example
  * isCanonicalCausation(['a', 'b']); // true
  * isCanonicalCausation(['b', 'a']); // false
+ * isCanonicalCausation(['a', { valueOf: 1 }]); // false
  */
-export function isCanonicalCausation(ids: readonly string[]): boolean {
+export function isCanonicalCausation(ids: readonly unknown[]): boolean {
   let previous: string | undefined;
   for (const id of ids) {
-    if (previous !== undefined && previous >= id) {
+    if (typeof id !== 'string' || (previous !== undefined && previous >= id)) {
       return false;
     }
     previous = id;

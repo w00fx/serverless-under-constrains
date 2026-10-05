@@ -50,6 +50,8 @@ const REF_FIELDS: ReadonlySet<string> = new Set([
   'json_pointer',
   'package_index_sha256',
 ]);
+/** The members that order references, in comparison order (BR-RUA-035 canonical sort). */
+const ORDER_KEYS = ['artifact_path', 'artifact_sha256', 'event_id', 'json_pointer', 'package_index_sha256'] as const;
 const JSON_POINTER_PATTERN = /^(\/([^/~]|~[01])*)*$/;
 const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/;
 
@@ -85,14 +87,33 @@ export function classifyArtifactPath(path: string): EvidenceRefViolation | undef
  * refs.toSorted(compareEvidenceRefs);
  */
 export function compareEvidenceRefs(a: EvidenceRef, b: EvidenceRef): number {
-  const keys = ['artifact_path', 'artifact_sha256', 'event_id', 'json_pointer', 'package_index_sha256'] as const;
-  for (const key of keys) {
+  for (const key of ORDER_KEYS) {
     const order = compareOptional(a[key], b[key]);
     if (order !== 0) {
       return order;
     }
   }
   return 0;
+}
+
+/**
+ * Tells whether a value can take part in the canonical order: a JSON object whose ordering
+ * members are each absent or a string. Order is defined only over such values, so callers that
+ * hold unvalidated JSON check this before `compareEvidenceRefs`; a value that fails it is a type
+ * error for the schema's `items` rule (or MALFORMED_FIELD), never an order error. Comparing
+ * unchecked members with `<` coerces them and throws on `{"toString":1,"valueOf":1}` (Owner
+ * amendment A-02; WP-03 seeds -435396834 and 20261005).
+ *
+ * @example
+ * isOrderableEvidenceRef({ artifact_path: 'a.json', artifact_sha256: 'b'.repeat(64) }); // true
+ * isOrderableEvidenceRef({ artifact_path: { toString: 1 } }); // false
+ */
+export function isOrderableEvidenceRef(value: unknown): value is EvidenceRef {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const members = value as Readonly<Record<string, unknown>>;
+  return ORDER_KEYS.every((key) => members[key] === undefined || typeof members[key] === 'string');
 }
 
 /**

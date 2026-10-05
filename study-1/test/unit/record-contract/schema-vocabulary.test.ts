@@ -8,6 +8,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import {
   ASCENDING_UNIQUE_KEYWORD,
   EVIDENCE_REF_ORDER_KEYWORD,
+  UNIQUE_ITEMS_KEYWORD,
   isPackageRelativePath,
   registerRecordVocabulary,
 } from '../../../src/record-contract/schema-vocabulary.ts';
@@ -17,6 +18,9 @@ function strictAjv(): Ajv2020 {
   registerRecordVocabulary(ajv);
   return ajv;
 }
+
+/** WP-03's minimized counterexample (Owner amendment A-02): JSON with no primitive conversion. */
+const hostile = (): unknown => JSON.parse('{"toString":1,"valueOf":1}') as unknown;
 
 const ref = (path: string, digit: string): { artifact_path: string; artifact_sha256: string } => ({
   artifact_path: path,
@@ -70,5 +74,64 @@ describe('schema vocabulary', () => {
     assert.equal(check([ref('a.json', 'a'), null]), true, 'null items are left to `items`');
     const disabled = ajv.compile({ type: 'array', [EVIDENCE_REF_ORDER_KEYWORD]: false });
     assert.equal(disabled([ref('b.json', 'a'), ref('a.json', 'a')]), true);
+  });
+
+  it('leaves a non-string ordering member to `items` instead of throwing (A-02 regression)', () => {
+    const check = strictAjv().compile({ type: 'array', [EVIDENCE_REF_ORDER_KEYWORD]: true });
+    const members = ['artifact_path', 'artifact_sha256', 'event_id', 'json_pointer', 'package_index_sha256'];
+    for (const member of members) {
+      for (const value of [hostile(), Object.create(null) as unknown, 7, null, ['x'], {}]) {
+        const later = { ...ref('b.json', 'a'), [member]: value };
+        assert.equal(check([ref('a.json', 'a'), later]), true, `${member} on the second item`);
+        assert.equal(check([later, ref('a.json', 'a')]), true, `${member} on the first item`);
+      }
+    }
+    assert.equal(check([ref('a.json', 'a'), ['an', 'array']]), true, 'array items are left to `items`');
+    assert.equal(check([{}, {}]), false, 'two references with every member absent are equal, so out of order');
+  });
+
+  it('replaces the built-in uniqueItems with the keyword name and error Ajv reports', () => {
+    const ajv = strictAjv();
+    const check = ajv.compile({ type: 'array', [UNIQUE_ITEMS_KEYWORD]: true });
+    assert.equal(UNIQUE_ITEMS_KEYWORD, 'uniqueItems');
+    assert.equal(check([]), true);
+    assert.equal(check(['a', 'b', 1, '1', [], {}]), true);
+    assert.equal(check(['a', 'b', 'a']), false);
+    assert.deepEqual(check.errors, [
+      {
+        instancePath: '',
+        schemaPath: '#/uniqueItems',
+        keyword: 'uniqueItems',
+        message: 'must NOT have duplicate items (items ## 0 and 2 are identical)',
+        params: { i: 2, j: 0 },
+      },
+    ]);
+    assert.equal(check([{ a: [1] }, { a: [1] }]), false);
+    assert.equal(check.errors[0]?.message, 'must NOT have duplicate items (items ## 0 and 1 are identical)');
+    const disabled = ajv.compile({ type: 'array', [UNIQUE_ITEMS_KEYWORD]: false });
+    assert.equal(disabled(['a', 'a']), true);
+  });
+
+  it('judges uniqueItems totally over hostile and null-prototype items (A-02 audit regression)', () => {
+    const ajv = strictAjv();
+    const objects = ajv.compile({ type: 'array', items: { type: 'object' }, [UNIQUE_ITEMS_KEYWORD]: true });
+    assert.equal(objects([hostile(), hostile()]), false);
+    assert.deepEqual(objects.errors?.[0]?.params, { i: 1, j: 0 });
+    assert.equal(objects([Object.create(null) as unknown, Object.create(null) as unknown]), false);
+    assert.equal(objects([{ inner: hostile() }, { inner: { toString: 1, valueOf: 2 } }]), true);
+    const strings = ajv.compile({ type: 'array', items: { type: 'string' }, [UNIQUE_ITEMS_KEYWORD]: true });
+    assert.equal(strings([hostile(), hostile()]), false, 'the wrong-typed items fail `items` without a crash');
+    assert.deepEqual(
+      strings.errors?.map((error) => `${error.instancePath} ${error.keyword}`),
+      ['/0 type', '/1 type', ' uniqueItems'],
+    );
+  });
+
+  it('checks causation order totally, leaving no hostile item uncompared (A-02 audit regression)', () => {
+    const check = strictAjv().compile({ type: 'array', [ASCENDING_UNIQUE_KEYWORD]: true });
+    assert.equal(check([hostile()]), false);
+    assert.equal(check(['a', hostile()]), false);
+    assert.equal(check([hostile(), 'a']), false);
+    assert.equal(check([Object.create(null) as unknown, 'a']), false);
   });
 });

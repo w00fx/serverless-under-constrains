@@ -1,5 +1,5 @@
 {
-  "$comment": "Design §5.4: a module imports only from strictly lower layers plus the declared same-layer edges. Checked by tools/check-module-boundaries.ts in npm run lint.",
+  "$comment": "Design §5.4: a module imports only from strictly lower layers plus the declared same-layer edges (the event-journal -> durable-store type-only edge is Owner amendment A-01). Checked by tools/check-module-boundaries.ts in npm run lint.",
   "layers": {
     "record-contract": 0,
     "durable-store": 1,
@@ -35,7 +35,8 @@
     { "from": "durable-variant", "to": "conventional-variant", "paths": ["request-state/"] },
     { "from": "transport-qualification", "to": "treatment-fidelity" },
     { "from": "trial-oracle", "to": "treatment-fidelity" },
-    { "from": "admission", "to": "deployment-assembly", "type_only": true }
+    { "from": "admission", "to": "deployment-assembly", "type_only": true },
+    { "from": "event-journal", "to": "durable-store", "type_only": true }
   ],
   "denied_imports": [
     {
