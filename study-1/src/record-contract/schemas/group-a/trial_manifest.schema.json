@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/trial_manifest.schema.json",
+  "title": "trial_manifest (BR-RUA-040, BR-RUA-019)",
+  "description": "The per-trial manifest, frozen before publication. It names the trial within its run or variant validation (a transport probe has no trial, D-06), references the exact parent execution-manifest and resource-manifest digests, declares the trial's position, variant and scenario, and pins the digests of the trial's payment and approved-decision input files.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "trial_manifest" },
+    "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "execution_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "resource_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "trial_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "sequence": { "type": "integer", "minimum": 1, "maximum": 4 },
+    "variant_id": { "enum": ["conventional", "durable"] },
+    "scenario": { "enum": ["CONTROL", "COMMIT_THEN_TIMEOUT"] },
+    "payment_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "approved_decision_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "frozen_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "resource_manifest_sha256",
+    "trial_id",
+    "sequence",
+    "variant_id",
+    "scenario",
+    "payment_sha256",
+    "approved_decision_sha256",
+    "frozen_at"
+  ],
+  "oneOf": [
+    {
+      "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["run_id"]
+    },
+    {
+      "properties": {
+        "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+        "sequence": { "type": "integer", "maximum": 2 }
+      },
+      "required": ["variant_validation_id"]
+    }
+  ],
+  "additionalProperties": false
+}

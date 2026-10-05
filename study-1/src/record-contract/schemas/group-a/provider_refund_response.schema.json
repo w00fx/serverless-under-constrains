@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_refund_response.schema.json",
+  "title": "provider_refund_response (BR-RUA-018)",
+  "description": "The business payload the controlled provider returns to a caller. Every received call has a provider-generated provider_call_id, including a rejected call. SUCCEEDED echoes the caller's attempt_id and provider_request_id and names the committed provider_transaction_id. REJECTED names the first failed acceptance condition of the design §9.10 order and creates no transaction; it echoes the caller identities only when they were structurally valid lowercase UUIDv4 values.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "provider_refund_response" },
+    "outcome": { "enum": ["SUCCEEDED", "REJECTED"] },
+    "provider_call_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "attempt_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "provider_request_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "provider_transaction_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "rejection_reason": {
+      "enum": [
+        "AUTHORIZATION_FAILED",
+        "SCHEMA_INVALID",
+        "EXECUTION_IDENTITY_MISMATCH",
+        "IDENTITY_STRUCTURE_INVALID",
+        "PAYMENT_NOT_FOUND",
+        "AMOUNT_INVALID",
+        "CURRENCY_MISMATCH"
+      ]
+    }
+  },
+  "required": ["schema_version", "record_type", "outcome", "provider_call_id"],
+  "if": {
+    "properties": { "outcome": { "const": "SUCCEEDED" } },
+    "required": ["outcome"]
+  },
+  "then": {
+    "properties": {
+      "attempt_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+      "provider_request_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+      "provider_transaction_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+      "rejection_reason": false
+    },
+    "required": ["attempt_id", "provider_request_id", "provider_transaction_id"]
+  },
+  "else": {
+    "properties": {
+      "rejection_reason": {
+        "enum": [
+          "AUTHORIZATION_FAILED",
+          "SCHEMA_INVALID",
+          "EXECUTION_IDENTITY_MISMATCH",
+          "IDENTITY_STRUCTURE_INVALID",
+          "PAYMENT_NOT_FOUND",
+          "AMOUNT_INVALID",
+          "CURRENCY_MISMATCH"
+        ]
+      },
+      "provider_transaction_id": false
+    },
+    "required": ["rejection_reason"]
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/resource_manifest.schema.json",
+  "title": "resource_manifest (BR-RUA-040, BR-RUA-050)",
+  "description": "The frozen result of provisioning (design §9.8 D4): succeeded, partial or failed, the stack name and unique stack id, every discovered stack resource, the ownership tags, the stack outputs, the immutable provider version, the post-deploy configuration snapshot and the timestamps. Tags and outputs are key/value lists because their keys (suc:run_id, CloudFormation output names) are not snake_case property names. A succeeded manifest has a stack id, a provider version, a configuration snapshot and a completion time, because trials may start only after successful provisioning.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "resource_manifest" },
+    "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "execution_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "provisioning_status": { "enum": ["succeeded", "partial", "failed"] },
+    "stack_name": { "type": "string", "pattern": "^SucRua-(run|probe|validation)-[0-9a-f]{8}$" },
+    "stack_id": {
+      "type": "string",
+      "pattern": "^arn:aws:cloudformation:[a-z]{2}(-[a-z]+)+-[0-9]+:[0-9]{12}:stack/[A-Za-z][A-Za-z0-9-]{0,127}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "logical_id": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+          "resource_type": { "type": "string", "pattern": "^[A-Za-z0-9]+::[A-Za-z0-9]+::[A-Za-z0-9]+$" },
+          "physical_id": { "type": "string", "minLength": 1 },
+          "resource_status": { "$ref": "_defs.schema.json#/$defs/upper_snake" }
+        },
+        "required": ["logical_id", "resource_type", "resource_status"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "ownership_tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string", "pattern": "^suc:[a-z][a-z_]*$" },
+          "value": { "type": "string", "minLength": 1, "pattern": "^[^@]*$" }
+        },
+        "required": ["key", "value"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+          "value": { "type": "string" }
+        },
+        "required": ["key", "value"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "provider_version": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "configuration": { "type": "object" },
+    "deploy_started_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" },
+    "deploy_completed_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" },
+    "frozen_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "provisioning_status",
+    "stack_name",
+    "resources",
+    "ownership_tags",
+    "outputs",
+    "deploy_started_at",
+    "frozen_at"
+  ],
+  "oneOf": [
+    {
+      "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["run_id"]
+    },
+    {
+      "properties": { "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["variant_validation_id"]
+    },
+    {
+      "properties": { "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["transport_probe_id"]
+    }
+  ],
+  "if": {
+    "properties": { "provisioning_status": { "const": "succeeded" } },
+    "required": ["provisioning_status"]
+  },
+  "then": {
+    "properties": {
+      "stack_id": { "type": "string" },
+      "resources": { "type": "array", "minItems": 1 },
+      "provider_version": { "type": "string" },
+      "configuration": { "type": "object" },
+      "deploy_completed_at": { "type": "string" }
+    },
+    "required": ["stack_id", "provider_version", "configuration", "deploy_completed_at"]
+  },
+  "additionalProperties": false
+}

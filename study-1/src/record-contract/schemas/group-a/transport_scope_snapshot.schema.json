@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_scope_snapshot.schema.json",
+  "title": "transport_scope_snapshot (BR-RUA-028)",
+  "description": "The frozen qualification scope: the policy digest, the resolved entry points, every resolved source file with its exact digest, the transitive production dependency closure with resolved versions, the lockfile digest, the normalized configuration projections (provider and controller), the runtime property values, the timing values and the provider warm-up policy (addendum §2). The snapshot carries no execution identity and no timestamp, so a recomputation over unchanged committed source is byte-identical and drift is a structural difference.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "transport_scope_snapshot" },
+    "policy_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "entry_points": {
+      "type": "array",
+      "items": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "source_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+          "sha256": { "$ref": "_defs.schema.json#/$defs/sha256" }
+        },
+        "required": ["path", "sha256"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "dependency_closure": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "pattern": "^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$" },
+          "version": { "$ref": "_defs.schema.json#/$defs/nonempty_trimmed" }
+        },
+        "required": ["name", "version"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "lockfile_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "configuration_projections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "projection_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "values": {}
+        },
+        "required": ["projection_id", "values"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "runtime_properties": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "integer" }, { "type": "boolean" }] }
+    },
+    "timing_values": {
+      "type": "object",
+      "properties": {
+        "provider_client_deadline_ms": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "provider_safety_release_ms": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "provider_execution_timeout_ms": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "treatment_poll_interval_ms": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      },
+      "required": [
+        "provider_client_deadline_ms",
+        "provider_safety_release_ms",
+        "provider_execution_timeout_ms",
+        "treatment_poll_interval_ms"
+      ],
+      "additionalProperties": false
+    },
+    "provider_warmup": {
+      "type": "object",
+      "properties": { "invocations_per_trial": { "const": 1 } },
+      "required": ["invocations_per_trial"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "policy_sha256",
+    "entry_points",
+    "source_files",
+    "dependency_closure",
+    "lockfile_sha256",
+    "configuration_projections",
+    "runtime_properties",
+    "timing_values",
+    "provider_warmup"
+  ],
+  "additionalProperties": false
+}
