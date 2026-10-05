@@ -9,6 +9,7 @@ import {
   EVIDENCE_REF_ALIASES,
   classifyArtifactPath,
   compareEvidenceRefs,
+  isOrderableEvidenceRef,
   sortEvidenceRefs,
   validateEvidenceRefList,
   validateResultReferences,
@@ -295,5 +296,61 @@ describe('cross-package references', () => {
       ),
       [],
     );
+  });
+});
+
+describe('hostile reference members (Owner amendment A-02 regression)', () => {
+  const MEMBERS = ['artifact_path', 'artifact_sha256', 'event_id', 'json_pointer', 'package_index_sha256'] as const;
+  const hostile = (): JsonValue => JSON.parse('{"toString":1,"valueOf":1}') as JsonValue;
+  const nullPrototype = (): JsonValue => Object.create(null) as JsonValue;
+
+  it('orders only objects whose ordering members are absent or strings', () => {
+    const full = ref('a', { event_id: EVENT_1, json_pointer: '/x', package_index_sha256: SHA_B });
+    assert.equal(isOrderableEvidenceRef(full), true);
+    assert.equal(isOrderableEvidenceRef(ref('a')), true);
+    assert.equal(isOrderableEvidenceRef({}), true, 'absent members sort first; `required` reports them');
+    assert.equal(isOrderableEvidenceRef(Object.assign(Object.create(null) as object, ref('a'))), true);
+    for (const value of [null, 'a', 7, [], [ref('a')]]) {
+      assert.equal(isOrderableEvidenceRef(value), false, JSON.stringify(value));
+    }
+    for (const member of MEMBERS) {
+      for (const value of [hostile(), nullPrototype(), 7, null, true, ['x']]) {
+        assert.equal(isOrderableEvidenceRef({ ...full, [member]: value }), false, `${member} ${JSON.stringify(value)}`);
+      }
+    }
+  });
+
+  it('reports a hostile member as MALFORMED_FIELD, never as an order finding or a crash', () => {
+    for (const member of MEMBERS) {
+      for (const value of [hostile(), nullPrototype()]) {
+        const entries = asJson([ref('a', { event_id: EVENT_1 }), ref('b', { event_id: EVENT_2 })]);
+        const second = { ...(entries[1] as Readonly<Record<string, JsonValue>>), [member]: value };
+        const findings = validateEvidenceRefList(
+          container([entries[0] ?? null, second]),
+          'evidence_refs',
+          'inside_package',
+        );
+        assert.deepEqual(violations(findings), ['MALFORMED_FIELD'], member);
+        assert.ok(
+          findings[0]?.detail.startsWith(`evidence_refs[1].${member} is object {`),
+          `${member}: ${JSON.stringify(findings)}`,
+        );
+      }
+    }
+  });
+
+  it('reports a hostile or null-prototype entry without throwing', () => {
+    const findings = validateEvidenceRefList(
+      container([hostile(), Object.assign(Object.create(null) as object, ref('a')) as JsonValue]),
+      'evidence_refs',
+      'inside_package',
+    );
+    assert.deepEqual(violations(findings), [
+      'MALFORMED_FIELD',
+      'MALFORMED_FIELD',
+      'MALFORMED_FIELD',
+      'MALFORMED_FIELD',
+    ]);
+    assert.match(findings[0]?.detail ?? '', /evidence_refs\[0\]\.toString is not a BR-RUA-035 field/);
   });
 });

@@ -55,6 +55,16 @@ describe('causation ids', () => {
     assert.equal(isCanonicalCausation([A, A]), false);
     assert.equal(isCanonicalCausation([A, C, B]), false);
   });
+
+  it('is total over parsed JSON: a non-string id is never canonical (A-02 audit regression)', () => {
+    const hostile: unknown = JSON.parse('{"toString":1,"valueOf":1}');
+    assert.equal(isCanonicalCausation([hostile]), false);
+    assert.equal(isCanonicalCausation([A, hostile]), false);
+    assert.equal(isCanonicalCausation([hostile, A]), false);
+    assert.equal(isCanonicalCausation([Object.create(null) as unknown, A]), false);
+    assert.equal(isCanonicalCausation([A, 1, B]), false);
+    assert.equal(isCanonicalCausation([null]), false);
+  });
 });
 
 describe('closed vocabularies', () => {

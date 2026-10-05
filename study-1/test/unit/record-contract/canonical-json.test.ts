@@ -46,6 +46,14 @@ describe('canonicalJson', () => {
     assert.equal(canonicalJson(value), '{"a":2,"b":1}');
   });
 
+  it('orders hostile member names as plain keys without converting their values (A-02 audit)', () => {
+    const hostile = JSON.parse('{"valueOf":1,"toString":1,"__proto__":{"b":1,"a":2}}') as JsonValue;
+    assert.equal(canonicalJson(hostile), '{"__proto__":{"a":2,"b":1},"toString":1,"valueOf":1}');
+    const reordered = JSON.parse('{"__proto__":{"a":2,"b":1},"toString":1,"valueOf":1}') as JsonValue;
+    assert.equal(structurallyEqual(hostile, reordered), true);
+    assert.equal(structurallyEqual(hostile, JSON.parse('{"toString":1,"valueOf":1}') as JsonValue), false);
+  });
+
   it('rejects values JSON cannot represent, naming the path and the expected shape', () => {
     const cases: readonly [unknown, RegExp][] = [
       [Number.NaN, /number at \$ is NaN; expected a finite JSON number/],
