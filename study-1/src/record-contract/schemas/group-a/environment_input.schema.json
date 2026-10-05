@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/environment_input.schema.json",
+  "title": "environment_input (BR-RUA-041)",
+  "description": "Operator-specific environment admission input: exactly one 12-digit account allowlist, the coordination table ARN, the coordination stack identity and the expected coordination schema version. The object is closed, so no credential, token, password or credential-process field can be carried. Account and Region membership of the coordination identifiers is an admission check, not a schema rule.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "environment_input" },
+    "account_allowlist": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[0-9]{12}$" },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "coordination_table_arn": {
+      "type": "string",
+      "pattern": "^arn:aws:dynamodb:[a-z]{2}(-[a-z]+)+-[0-9]+:[0-9]{12}:table/[A-Za-z0-9_.-]{3,255}$"
+    },
+    "coordination_stack_id": {
+      "type": "string",
+      "pattern": "^arn:aws:cloudformation:[a-z]{2}(-[a-z]+)+-[0-9]+:[0-9]{12}:stack/[A-Za-z][A-Za-z0-9-]{0,127}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "expected_coordination_schema_version": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "account_allowlist",
+    "coordination_table_arn",
+    "coordination_stack_id",
+    "expected_coordination_schema_version"
+  ],
+  "additionalProperties": false
+}

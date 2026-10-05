@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/preflight_check_recorded.schema.json",
+  "title": "preflight_check_recorded (BR-RUA-039, BR-RUA-046, BR-RUA-055)",
+  "description": "One line of an admission attempt's preflight journal (JSONL): one read-only admission step A1..A15 (design §10.1). It records the boundary checked (subject), the declared limit or expected value, the observed value when available (omitted, never null, when unavailable), the result, evidence and check time (BR-RUA-046). sequence is dense from 1 within the attempt. A failed check names its AC-RUA-014 rejection class and at least one reason; a passed check names none.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "preflight_check_recorded" },
+    "admission_attempt_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "check_id": { "type": "string", "pattern": "^A([1-9]|1[0-5])$" },
+    "subject": { "type": "string", "minLength": 1 },
+    "expected": { "not": { "type": "null" } },
+    "observed": { "not": { "type": "null" } },
+    "result": { "enum": ["passed", "failed"] },
+    "rejection_class": {
+      "enum": [
+        "FINANCIAL_INPUT",
+        "IDENTITY",
+        "SOURCE_PROVENANCE",
+        "ACCOUNT",
+        "REGION",
+        "SAFETY",
+        "QUALIFICATION",
+        "COORDINATION_CONFIGURATION"
+      ]
+    },
+    "reasons": { "$ref": "_defs.schema.json#/$defs/structured_reasons" },
+    "evidence_refs": { "$ref": "_defs.schema.json#/$defs/evidence_refs" },
+    "checked_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "admission_attempt_id",
+    "sequence",
+    "check_id",
+    "subject",
+    "expected",
+    "result",
+    "reasons",
+    "evidence_refs",
+    "checked_at"
+  ],
+  "if": {
+    "properties": { "result": { "const": "failed" } },
+    "required": ["result"]
+  },
+  "then": {
+    "properties": {
+      "rejection_class": {
+        "enum": [
+          "FINANCIAL_INPUT",
+          "IDENTITY",
+          "SOURCE_PROVENANCE",
+          "ACCOUNT",
+          "REGION",
+          "SAFETY",
+          "QUALIFICATION",
+          "COORDINATION_CONFIGURATION"
+        ]
+      },
+      "reasons": { "type": "array", "minItems": 1 }
+    },
+    "required": ["rejection_class"]
+  },
+  "else": {
+    "properties": {
+      "rejection_class": false,
+      "reasons": { "type": "array", "maxItems": 0 }
+    }
+  },
+  "additionalProperties": false
+}
