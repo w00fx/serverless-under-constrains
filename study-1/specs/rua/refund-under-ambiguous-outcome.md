@@ -1,7 +1,15 @@
-# Study 1: Evaluate Refund-Invariant Preservation Under Ambiguous Outcomes
+---
+schema_version: 1
+capability_id: CAP-RUA
+status: draft        # draft → ratified when a human merges the spec PR
+owner: <domain-owner>
+approved_by: <human>
+approved_at: <date>
+provenance: Migrated from Study 1 Specification v1.0 to the typed-ID template. Items marked [PROPOSED] need ratification; items marked "Added in this revision" make existing text explicit.
+---
 
-Status: Specification v1.0  
-Capability: **Evaluate refund-invariant preservation under ambiguous outcomes.**  
+# Capability: Study 1 — Evaluate refund-invariant preservation under ambiguous outcomes
+
 Approved vertical PoC scope: two variants, two scenarios, one fixed full-refund decision, controlled provider, independent oracle, immutable evidence, cleanup, and leak audit.
 
 ## Purpose
@@ -34,8 +42,6 @@ The complete vertical PoC includes:
 - normal and emergency cleanup;
 - a leak audit;
 - operational safety checks and later attributable-cost amendments.
-
-The implementation begins with Milestone 0 and proceeds through the milestones defined in this specification.
 
 ## Capability Language
 
@@ -108,6 +114,8 @@ _Avoid_: Preservation success, implementation success, comparison eligibility.
 
 ## Financial Domain
 
+### BR-RUA-016 — Trial financial composition
+
 Each trial contains exactly:
 
 - one payment;
@@ -122,7 +130,7 @@ Partial refunds, multiple logical requests, pending or failed provider transacti
 
 The rules in this section are protocol-defined for Study 1 version 1. They are not derived from an external regulatory source.
 
-### BR-1: One Effect per Request
+### BR-RUA-001 — One Effect per Request
 
 When a valid isolated trial settles, the provider ledger must contain exactly one successful transaction associated with its declared `refund_request_id`.
 
@@ -130,16 +138,19 @@ When a valid isolated trial settles, the provider ledger must contain exactly on
 count(successful_transactions where refund_request_id = R) = 1
 ```
 
-### BR-2: Payment Limit
+### BR-RUA-002 — Payment Limit
 
-While the trial payment exists, the arbitrary-precision sum of successful transactions associated with it must not exceed its captured amount.
+**[PROPOSED — needs ratification]** v1.0 said "while the trial payment exists",
+which the spec never defines. The proposed window is the trial's lifetime.
+
+For the whole trial, from admission until evidence freeze, the arbitrary-precision sum of successful transactions associated with it must not exceed its captured amount.
 
 ```text
 sum(successful_transactions.amount_minor where payment_id = P)
   <= payment.captured_amount_minor
 ```
 
-### BR-3: Stable Logical Identity
+### BR-RUA-003 — Stable Logical Identity
 
 Whenever the architecture retries a logical request, every physical attempt must preserve the original `refund_request_id`.
 
@@ -147,7 +158,7 @@ Whenever the architecture retries a logical request, every physical attempt must
 distinct(attempt.refund_request_id for attempts of logical request R) = {R}
 ```
 
-### BR-4: Unknown Outcome
+### BR-RUA-004 — Unknown Outcome
 
 Whenever an attempt is dispatched and then times out, or fails without authoritative proof that it was not dispatched or was rejected before commit, the request's effect knowledge must become `UNKNOWN`.
 
@@ -160,7 +171,7 @@ UNKNOWN + any later attempt outcome   -> UNKNOWN
 
 `UNKNOWN` is absorbing within this PoC. A later successful response proves only the later effect and does not resolve an earlier ambiguous attempt.
 
-### BR-5: Independent Oracle
+### BR-RUA-005 — Independent Oracle
 
 When the oracle evaluates monetary rules, it must use the complete strongly consistent trial-scoped provider-ledger snapshot. Variant state, logs, metrics, traces, and derived attempt projections may explain an observation but may not replace the ledger.
 
@@ -168,7 +179,7 @@ When the oracle evaluates monetary rules, it must use the complete strongly cons
 monetary_evidence_source = complete_strong_ledger_snapshot
 ```
 
-### BR-6: Trial Classification
+### BR-RUA-006 — Trial Classification
 
 When the oracle evaluates a trial, it must derive the preservation verdict as follows:
 
@@ -185,7 +196,7 @@ else:
 
 The runner must preserve every `indeterminate` result.
 
-### BR-7: Equal Treatment
+### BR-RUA-007 — Equal Treatment
 
 When two variants are compared, both must receive equal declared business inputs and treatment parameters except for differences explicitly declared as part of the variants' execution strategies.
 
@@ -196,21 +207,21 @@ only if every equality projection passes and no undeclared difference exists
 
 A failed invariant does not make a comparison ineligible. Unequal or undeclared protocol conditions do.
 
-### BR-8: Traceability
+### BR-RUA-008 — Traceability
 
 When a result is evaluated, every verdict-critical input, attempt, provider request, provider call, transaction, observation, manifest, and causal predecessor must be correlatable to the active immutable execution identity.
 
-BR-8 delegates physical identity uniqueness to IR-1 rather than duplicating it.
+BR-RUA-008 delegates physical identity uniqueness to INV-RUA-001 rather than duplicating it.
 
 ```text
 all(verdict_critical_records have the applicable execution identity)
 and all(manifest references resolve to the frozen digest)
 and all(required evidence_refs resolve to exact indexed bytes)
 and all(required causation_event_ids resolve)
-and IR-1 is verified
+and INV-RUA-001 is verified
 ```
 
-### BR-9: Exact Authorized Effect
+### BR-RUA-009 — Exact Authorized Effect
 
 When a valid isolated full-refund trial settles, the complete successful transaction set must equal exactly one authorized effect.
 
@@ -229,11 +240,11 @@ successful_transactions =
 ]
 ```
 
-One transaction with an incorrect amount, currency, request identity, or payment identity fails BR-9 even when BR-1's count equals one. Any additional successful transaction associated with the isolated trial also fails BR-9.
+One transaction with an incorrect amount, currency, request identity, or payment identity fails BR-RUA-009 even when BR-RUA-001's count equals one. Any additional successful transaction associated with the isolated trial also fails BR-RUA-009.
 
 ## Integrity Rule
 
-### IR-1: Physical Identity Integrity
+### INV-RUA-001 — Physical Identity Integrity
 
 Every physical variant attempt must have a unique lowercase UUIDv4 `attempt_id`. Every intended outbound provider request must have a unique lowercase UUIDv4 `provider_request_id`. Every received provider call must have a unique provider-generated lowercase UUIDv4 `provider_call_id`. Every committed monetary effect must have a unique provider-generated lowercase UUIDv4 `provider_transaction_id`.
 
@@ -254,11 +265,13 @@ identity_integrity:
 - Proven caller-generated identity reuse makes identity integrity `invalid`.
 - Missing identity evidence makes it `unverified`.
 - A duplicate provider-generated call or transaction identity makes evidence integrity `invalid`.
-- Invalid or unverified IR-1 makes the top-level preservation verdict `indeterminate` while independently proven monetary observations remain reported.
+- Invalid or unverified INV-RUA-001 makes the top-level preservation verdict `indeterminate` while independently proven monetary observations remain reported.
 
-IR-1 is a protocol-validity gate, not a refund business rule.
+INV-RUA-001 is a protocol-validity gate, not a refund business rule.
 
 ## Admission Rules
+
+### BR-RUA-017 — Admission validity
 
 Both `captured_amount_minor` and `approved_amount_minor` must:
 
@@ -272,6 +285,8 @@ Every required identifier must be nonempty after whitespace trimming.
 Admission rejects zero, negative, fractional, unsafe, unequal, non-BRL, mismatched-currency, or empty-identity inputs. A rejected attempt records its rejection and read-only preflight evidence, creates no canonical manifest or oracle result, and performs no cloud mutation.
 
 ## Controlled Provider Contract
+
+### BR-RUA-018 — Controlled provider acceptance
 
 A received call is accepted only when:
 
@@ -293,6 +308,8 @@ Variants may invoke the refund operation but may not read the authoritative ledg
 
 ## Execution Identity and Order
 
+### BR-RUA-019 — Execution order and trial isolation
+
 The canonical run contains exactly four sequential trials:
 
 1. conventional `CONTROL`;
@@ -307,6 +324,8 @@ Seed `1` is recorded for future deterministic scheduling. The PoC order is expli
 The PoC has no batch, repetition index, statistical-sampling dimension, or randomized collection.
 
 ## Message-Source Protocol
+
+### BR-RUA-020 — Message-source protocol
 
 Each variant uses a separate but identically configured FIFO source and event consumer except for the declared variant-specific visibility timeout. Both use:
 
@@ -327,6 +346,8 @@ The Durable path owns retry through one initial step attempt plus one explicit s
 
 ## Attempt, Dispatch, Processing, and Knowledge State
 
+### BR-RUA-021 — Dispatch classification
+
 Attempt outcomes:
 
 ```text
@@ -342,6 +363,8 @@ NOT_DISPATCHED | DISPATCHED | UNKNOWN
 Every physical attempt begins in a durable pre-dispatch state. `NOT_DISPATCHED` requires a conditional durable transition proving the attempt failed before provider-client dispatch began. Absence of a dispatch event, provider call, or ledger effect does not prove `NOT_DISPATCHED`.
 
 Immediately before invoking transport, the caller records `dispatch_started` and sets `DISPATCHED`. A crash after that boundary remains conservatively dispatched. `SUCCEEDED`, `REJECTED`, and `TIMED_OUT` imply `DISPATCHED`; `FAILED` may carry any dispatch state.
+
+### BR-RUA-022 — Processing state and effect knowledge
 
 Request processing state:
 
@@ -378,13 +401,41 @@ processing_terminal_reason = SUCCEEDED
 effect_knowledge_state = UNKNOWN
 ```
 
+**[PROPOSED — needs ratification]** The effect-knowledge aggregate is a state
+model, and v1.0 defines only some of its transitions. The table below follows
+the existing rules — BR-RUA-004 makes any ambiguous outcome absorbing, and a
+rejection establishes no effect only when no earlier success or ambiguity
+exists — and fills the cells v1.0 left open. New decisions are marked ★.
+
+Outcome classes: a **pre-dispatch failure** is `FAILED` with a proven
+`NOT_DISPATCHED`; a **rejection** is an authoritative `REJECTED`; a **success**
+is `SUCCEEDED`; an **ambiguous** outcome is `TIMED_OUT`, `FAILED` with
+`DISPATCHED`, or `FAILED` with `UNKNOWN` dispatch.
+
+| From state | Pre-dispatch failure | Rejection | Success | Ambiguous |
+|---|---|---|---|---|
+| `NOT_ATTEMPTED` | `NOT_ATTEMPTED` | `NO_EFFECT_CONFIRMED` | `ONE_EFFECT_CONFIRMED` | `UNKNOWN` |
+| `NO_EFFECT_CONFIRMED` | `NO_EFFECT_CONFIRMED` | `NO_EFFECT_CONFIRMED` | `ONE_EFFECT_CONFIRMED` ★ | `UNKNOWN` |
+| `ONE_EFFECT_CONFIRMED` | `ONE_EFFECT_CONFIRMED` | `ONE_EFFECT_CONFIRMED` | `MULTIPLE_EFFECTS_CONFIRMED` ★ | `UNKNOWN` |
+| `MULTIPLE_EFFECTS_CONFIRMED` | `MULTIPLE_EFFECTS_CONFIRMED` ★ | `MULTIPLE_EFFECTS_CONFIRMED` ★ | `MULTIPLE_EFFECTS_CONFIRMED` ★ | `UNKNOWN` |
+| `UNKNOWN` | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
+
+Every other transition is refused: nothing leaves `UNKNOWN`, and knowledge
+never moves back toward fewer confirmed effects.
+
+### BR-RUA-023 — Application timeout arbitration
+
 After the durable dispatch transition succeeds, the caller captures a source-local monotonic origin, starts the three-second application timer, and invokes transport immediately. One in-process arbiter permits only the timer or transport settlement to win. The timer produces `TIMED_OUT` only when at least three seconds have elapsed, transport remains unsettled, the timer wins, transport abort is requested, and `caller_timeout_recorded` is durably appended. An abort error alone never proves a timeout.
 
 The timeout event records monotonic elapsed nanoseconds, its monotonic origin event, diagnostic dispatch and deadline timestamps, timer-fire time, abort-request time, timeout-record time, and the dispatch event as a causal predecessor. Abort occurs before the durable timeout write so the provider remains behind the barrier until the controller receives that write.
 
+### BR-RUA-024 — Terminality across retry layers
+
 Terminality applies across every configured retry layer. A failed delivery or exhausted inner execution is not request-level `RETRIES_EXHAUSTED` while an upstream layer can still redeliver.
 
 ## Scenario Integrity and Treatment Fidelity
+
+### BR-RUA-025 — Control integrity and treatment fidelity
 
 Control integrity:
 
@@ -441,13 +492,23 @@ statement: UTC wall-clock timestamps preserve the ordering of the provider
 status: declared_not_service_guaranteed
 ```
 
-CA-1 is a study assumption, not a provider guarantee. Results must describe TQ-1 as empirical ordering under the declared PoC clock-alignment assumption and must not describe it as formal happened-before proof or guaranteed distributed-clock accuracy.
+CA-1 is a study assumption, not a provider guarantee. Results must describe BR-RUA-010 as empirical ordering under the declared PoC clock-alignment assumption and must not describe it as formal happened-before proof or guaranteed distributed-clock accuracy.
 
 ## Transport Qualification Conditions
 
+### BR-RUA-026 — Qualified transport before consumption
+
 The selected transport must pass a distinct real-cloud probe before any study run or variant validation consumes it.
 
-### TQ-1: Commit Before Timer
+*Moved here in this revision from the former Milestone 0, where it defined when
+qualification was complete.* A probe is usable, and may be selected, only when
+every transport condition is `pass`, probe validity and treatment fidelity are
+valid, evidence is verified, late evidence is not contradictory, its effective
+operational closure is clean (cleanup `succeeded`, audit `clean`, lease
+`released`), no safety breach is known, its package is verified, and a reusable
+transport-scope snapshot exists.
+
+### BR-RUA-010 — Commit Before Timer
 
 The provider transaction must be durably committed before the caller timer wins.
 
@@ -459,25 +520,27 @@ clock_assumption_refs = [CA-1]
 
 Reversed timestamps fail. Equal or missing timestamps are indeterminate. The signed observed timestamp difference is reported but is not interpreted as a clock-error bound.
 
-### TQ-2: Application Timeout
+### BR-RUA-011 — Application Timeout
 
 The application-owned timer must win after at least three seconds of source-local monotonic elapsed time while the transport promise remains unsettled, abort transport, and cause the durable `caller_timeout_recorded` event.
 
-### TQ-3: Continued Provider Execution
+### BR-RUA-012 — Continued Provider Execution
 
 The provider must continue executing after the caller aborts.
 
-### TQ-4: Causal Join and Observation
+### BR-RUA-013 — Causal Join and Observation
 
 The controller signal must be immediately caused by both provider commit and caller timeout, and the provider must subsequently observe that signal.
 
-### TQ-5: Controlled Release
+### BR-RUA-014 — Controlled Release
 
 The provider must release only after timeout observation, and no safety release may occur.
 
-### TQ-6: No Caller-Observed Success
+### BR-RUA-015 — No Caller-Observed Success
 
 The caller must never observe a successful provider response for the targeted attempt.
+
+### BR-RUA-027 — Probe verdict derivation
 
 Every condition result is `pass | fail | indeterminate` and includes structured expected and observed values, `evidence_refs`, and `indeterminate_reasons`.
 
@@ -508,6 +571,8 @@ else:
 
 ## Qualification Binding
 
+### BR-RUA-028 — Qualification binding
+
 One explicitly selected immutable probe qualifies only the transport implementation scope it actually exercised. The qualification consists of:
 
 - a committed scope policy declaring critical entry points, conservative source roots, configuration projections, runtime properties, and relevant dependencies;
@@ -520,11 +585,13 @@ Admission recomputes the selected scope against current committed source. Any sc
 
 ## Trial Validity and Verdicts
 
+### BR-RUA-029 — Trial validity and verdict matrix
+
 Applicable validity gates include:
 
-- BR-5 independent oracle;
-- BR-8 traceability;
-- IR-1 identity integrity;
+- BR-RUA-005 independent oracle;
+- BR-RUA-008 traceability;
+- INV-RUA-001 identity integrity;
 - control integrity or treatment fidelity;
 - complete ledger access;
 - environment settlement;
@@ -567,6 +634,8 @@ Verdict matrix:
 | Proven duplicate with optional telemetry missing | `fail` | `false` |
 | Invalid manifest rejected before workload | no oracle result | `null` |
 
+### BR-RUA-030 — Correct completion
+
 Canonical derivation:
 
 ```text
@@ -584,13 +653,15 @@ correct_completion = null
 
 ## Comparison Eligibility
 
+### BR-RUA-031 — Comparison eligibility
+
 A canonical four-cell comparison is `eligible` only when:
 
 - all four declared trials have oracle results;
 - every trial-validity gate is valid;
 - both controls have verified control integrity;
 - both treatment trials have verified treatment fidelity;
-- BR-7 equality passes;
+- BR-RUA-007 equality passes;
 - evidence integrity is verified;
 - late evidence is `none` or `consistent`;
 - no effective contradictory amendment exists.
@@ -598,6 +669,8 @@ A canonical four-cell comparison is `eligible` only when:
 Both `pass` and `fail` are comparable outcomes. Invariant failure does not independently make comparison ineligible. Cleanup failure, leak detection, or safety breach remains a separate operational qualification unless it compromised trial isolation, evidence completeness, settlement, or the observation window.
 
 ## Settlement
+
+### BR-RUA-032 — Settlement
 
 A trial is settled only when all applicable conditions hold:
 
@@ -615,7 +688,7 @@ Approximate queue counters cannot establish settlement alone. Correlated activit
 
 ## PoC Reference Values
 
-### Financial Fixture
+### OR-RUA-001 — Financial fixture
 
 | Field | Value |
 |---|---:|
@@ -631,7 +704,7 @@ Approximate queue counters cannot establish settlement alone. Correlated activit
 
 `10000` minor units means BRL 100.00. BRL 10,000.00 would require `1000000` minor units.
 
-### Timing and Retry Inputs
+### OR-RUA-002 — Timing and retry inputs
 
 | Parameter | PoC value |
 |---|---:|
@@ -652,7 +725,7 @@ Approximate queue counters cannot establish settlement alone. Correlated activit
 | Treatment-state polling interval | 250 milliseconds |
 | Retry jitter | None |
 
-### Canonical Run Safety
+### OR-RUA-003 — Canonical run safety
 
 | Input | Value |
 |---|---:|
@@ -663,7 +736,7 @@ Approximate queue counters cannot establish settlement alone. Correlated activit
 | Estimated attributable-usage ceiling | USD 5.00 |
 | Concurrent owners per Study/account/Region | 1 |
 
-### Transport-Probe Safety
+### OR-RUA-004 — Transport-probe safety
 
 | Input | Value |
 |---|---:|
@@ -674,7 +747,7 @@ Approximate queue counters cannot establish settlement alone. Correlated activit
 | Estimated attributable-usage ceiling | USD 1.00 |
 | Stabilization interval | 120 seconds |
 
-### Variant-Validation Safety
+### OR-RUA-005 — Variant-validation safety
 
 Every conventional or Durable variant validation reuses the canonical run maximums:
 
@@ -704,24 +777,44 @@ At-least-once behavior means these are not absolute physical-call bounds. Every 
 
 ## Acceptance Criteria
 
-### AC-1: Normal Case
+The acceptance criteria are the spec's validations: together they prove the
+capability works, and an implementation run builds and tests against exactly
+this list. Every live business rule is verified by at least one criterion, and
+every criterion declares its **Verification:** method and the cases it owes.
+`spec-anchored check-spec` checks both.
+
+When the implementation counts as done is defined once, by the implementation
+protocol: every criterion green by its declared verification, plus every QA
+area that crosses this capability judged, with its findings resolved.
+
+### AC-RUA-001 — Normal Case
+
+Verifies BR-RUA-001, BR-RUA-002, BR-RUA-006, BR-RUA-009, BR-RUA-016 and BR-RUA-030.
 
 - **Given** the valid reference payment, approved request, and `CONTROL`
 - **When** either variant completes and the trial settles
 - **Then** the ledger contains exactly the authorized successful transaction
-- **And** BR-1, BR-2, and BR-9 pass
+- **And** BR-RUA-001, BR-RUA-002, and BR-RUA-009 pass
 - **And** the oracle returns `pass`
 - **And** successful terminal processing produces `correct_completion = true`.
 
-### AC-2: Commit Followed by Timeout
+**Verification:** golden — frozen synthetic evidence of one settled `CONTROL` trial, evaluated offline by the oracle; cases: conventional variant, Durable variant.
+
+### AC-RUA-002 — Commit Followed by Timeout
+
+Verifies BR-RUA-010, BR-RUA-011, BR-RUA-012, BR-RUA-013, BR-RUA-014, BR-RUA-015, BR-RUA-023 and BR-RUA-025.
 
 - **Given** an admitted treatment trial with the first accepted provider call targeted
 - **When** the provider atomically commits and the application timer wins
-- **Then** TQ-1 through TQ-6 are evaluated from frozen evidence
+- **Then** BR-RUA-010 through BR-RUA-015 are evaluated from frozen evidence
 - **And** verified fidelity identifies CA-1 and `causal_plus_cross_source_clock_assumption`
 - **And** the result does not claim formal happened-before proof or an AWS clock guarantee.
 
-### AC-3: Observed Result After a Retry
+**Verification:** e2e — real-cloud transport probe in `us-east-1`; golden — the condition derivation over the probe's frozen evidence.
+
+### AC-RUA-003 — Observed Result After a Retry
+
+Verifies BR-RUA-003, BR-RUA-004 and BR-RUA-020.
 
 - **Given** a first attempt with `TIMED_OUT` and effect knowledge `UNKNOWN`
 - **When** the architecture executes its configured retry path
@@ -730,29 +823,45 @@ At-least-once behavior means these are not absolute physical-call bounds. Every 
 - **And** every provider call and transaction is preserved
 - **And** the oracle returns the evidence-derived preservation verdict.
 
-### AC-4: Duplicate Detection
+**Verification:** golden — frozen evidence of a treatment trial per variant; cases: conventional redelivery path, Durable step-retry path.
+
+### AC-RUA-004 — Duplicate Detection
+
+Verifies BR-RUA-001, BR-RUA-002, BR-RUA-006 and BR-RUA-009.
 
 - **Given** a complete ledger snapshot with two successful full-refund transactions
 - **When** the oracle evaluates a valid settled trial
-- **Then** BR-1, BR-2, and BR-9 fail
+- **Then** BR-RUA-001, BR-RUA-002, and BR-RUA-009 fail
 - **And** preservation is `fail`
 - **And** the trial remains scientifically valid.
 
-### AC-5: Missing Effect Detection
+**Verification:** golden — cases: two transactions in a verified treatment trial; two transactions in a valid `CONTROL` trial, where multiple calls do not invalidate control integrity.
+
+### AC-RUA-005 — Missing Effect Detection
+
+Verifies BR-RUA-001 and BR-RUA-009.
 
 - **Given** an approved request with zero successful transactions in a complete settled ledger
 - **When** the oracle evaluates the valid trial
-- **Then** BR-1 and BR-9 fail
+- **Then** BR-RUA-001 and BR-RUA-009 fail
 - **And** preservation is `fail`.
 
-### AC-6: Authoritative Source
+**Verification:** golden — a complete settled ledger with zero successful transactions.
+
+### AC-RUA-006 — Authoritative Source
+
+Verifies BR-RUA-005.
 
 - **Given** variant state claims success but the complete ledger lacks the authorized transaction
 - **When** the oracle evaluates the trial
 - **Then** the ledger controls the monetary result
 - **And** variant state cannot override it.
 
-### AC-7: Insufficient Evidence
+**Verification:** golden — variant state reporting success against a complete ledger without the authorized transaction.
+
+### AC-RUA-007 — Insufficient Evidence
+
+Verifies BR-RUA-006, BR-RUA-029 and BR-RUA-032.
 
 - **Given** ledger access is incomplete, settlement is not established, or verdict-critical evidence is missing
 - **When** the oracle evaluates the trial
@@ -760,29 +869,45 @@ At-least-once behavior means these are not absolute physical-call bounds. Every 
 - **And** preservation is `indeterminate`
 - **And** structured reasons identify the missing evidence.
 
-### AC-8: Controlled Repetition
+**Verification:** golden — one case per missing input: incomplete ledger pagination; settlement not established by the observation deadline; a verdict-critical journal absent.
+
+### AC-RUA-008 — Controlled Repetition
+
+Verifies BR-RUA-019, BR-RUA-028, BR-RUA-040 and BR-RUA-042.
 
 - **Given** a valid execution definition
 - **When** admission succeeds
 - **Then** identities, order, inputs, timing, safety, source revision, qualification, schemas, and dependencies freeze before mutation
 - **And** every result references those exact frozen bytes.
 
-### AC-9: Equality Between Variants
+**Verification:** integration — admission against local emulation; cases: every declared field frozen before the first mutation; four trials in the declared order with fresh identities and partitions asserted absent; a changed declared field requires a new execution identity.
+
+### AC-RUA-009 — Equality Between Variants
+
+Verifies BR-RUA-007, BR-RUA-020 and BR-RUA-031.
 
 - **Given** all four canonical trials
-- **When** the runner evaluates BR-7
+- **When** the runner evaluates BR-RUA-007
 - **Then** declared common inputs and treatment parameters compare equal
 - **And** only declared variant differences remain
 - **And** unequal undeclared conditions make comparison ineligible without erasing individual verdicts.
 
-### AC-10: Minimum Evidence Package
+**Verification:** golden — four-trial evidence; cases: every equality projection passes; one undeclared difference makes comparison ineligible while each individual verdict stays intact.
+
+### AC-RUA-010 — Minimum Evidence Package
+
+Verifies BR-RUA-008, BR-RUA-035, BR-RUA-037 and BR-RUA-043.
 
 - **Given** a trial reaches evidence freeze
 - **When** its evidence index is generated
 - **Then** every applicable verdict-critical manifest, input, journal, provider event, ledger snapshot, queue observation, conditional DLQ snapshot, and authoritative execution record is indexed by exact bytes
 - **And** derived artifacts remain distinguishable from primary evidence.
 
-### AC-11: Verifiable Cleanup
+**Verification:** golden — evidence-index generation; cases: each primary artifact class indexed by exact bytes; derived artifacts flagged as derived; the index excludes itself and the late-evidence area.
+
+### AC-RUA-011 — Verifiable Cleanup
+
+Verifies BR-RUA-048, BR-RUA-049, BR-RUA-050 and BR-RUA-051.
 
 - **Given** an execution succeeds, fails, becomes indeterminate, or is interrupted
 - **When** cleanup runs one or more times
@@ -790,61 +915,93 @@ At-least-once behavior means these are not absolute physical-call bounds. Every 
 - **And** already absent owned resources are successful deletions
 - **And** leak-audit results preserve leaks and inconclusive ownership rather than deleting ambiguously owned resources.
 
-### AC-12: Result Does Not Follow the Hypothesis
+**Verification:** integration — cleanup against stubbed discovery surfaces; cases: succeeded, failed, indeterminate and interrupted executions; cleanup run twice; resources already absent; an ambiguously owned resource reported and never deleted.
+
+### AC-RUA-012 — Result Does Not Follow the Hypothesis
+
+Verifies BR-RUA-006 and BR-RUA-043.
 
 - **Given** observed evidence contradicts the initial hypothesis
 - **When** the oracle and summaries are produced
 - **Then** the calculated observations remain unchanged and included
 - **And** no trial is altered or excluded to support the hypothesis.
 
-### AC-13: Exact-Effect Mismatch
+**Verification:** golden — treatment trials whose evidence contradicts the initial hypothesis; cases: the oracle results and the run summary include them unaltered.
+
+### AC-RUA-013 — Exact-Effect Mismatch
+
+Verifies BR-RUA-001 and BR-RUA-009.
 
 - **Given** exactly one successful transaction with an incorrect amount, currency, request identity, or payment identity
 - **When** the oracle evaluates a valid trial
-- **Then** BR-1 may pass its count check
-- **But** BR-9 fails
+- **Then** BR-RUA-001 may pass its count check
+- **But** BR-RUA-009 fails
 - **And** preservation is `fail`.
 
-### AC-14: Pre-Execution Rejection
+**Verification:** golden — one transaction with: a wrong amount; a wrong currency; a wrong request identity; a wrong payment identity.
+
+### AC-RUA-014 — Pre-Execution Rejection
+
+Verifies BR-RUA-017, BR-RUA-039, BR-RUA-041, BR-RUA-042 and BR-RUA-046.
 
 - **Given** invalid financial input, identity, source provenance, account, Region, safety, qualification, or coordination configuration
 - **When** read-only admission runs
 - **Then** a structured rejection and preflight journal are preserved
 - **And** no canonical manifest, trial, oracle result, package index, or cloud mutation is created.
 
-### AC-15: Dispatch Classification
+**Verification:** integration — read-only admission; one case per rejected input class: financial input, identity, source provenance, account, Region, safety, qualification, coordination configuration.
+
+### AC-RUA-015 — Dispatch Classification: Proven Pre-Dispatch Failure
+
+*Split from the former AC-15; its second scenario is AC-RUA-028.*
+
+Verifies BR-RUA-021.
 
 - **Given** an attempt fails before dispatch
 - **When** a conditional durable transition proves it remained pre-dispatch
 - **Then** dispatch state is `NOT_DISPATCHED`
-- **And** a first action retains `NOT_ATTEMPTED`
-- **But Given** the dispatch boundary was crossed or cannot be located
-- **Then** the attempt is `DISPATCHED` or `UNKNOWN` and no absence observation may prove non-dispatch.
+- **And** a first action retains `NOT_ATTEMPTED`.
 
-### AC-16: Unknown Knowledge Is Absorbing
+**Verification:** unit — a durable-transition double; case: a failure before dispatch with the conditional transition recorded.
+
+### AC-RUA-016 — Unknown Knowledge Is Absorbing
+
+Verifies BR-RUA-004 and BR-RUA-022.
 
 - **Given** any attempt establishes `UNKNOWN`
 - **When** a later attempt succeeds, fails, or is rejected
 - **Then** aggregate effect knowledge remains `UNKNOWN`
 - **And** processing may independently finish.
 
-### AC-17: Physical Identity Integrity
+**Verification:** unit — cases: `UNKNOWN` followed by a success, a failure and a rejection.
+
+### AC-RUA-017 — Physical Identity Integrity
+
+Verifies INV-RUA-001 and BR-RUA-029.
 
 - **Given** caller identity reuse, missing physical identity evidence, or provider-generated identity collision
-- **When** IR-1 and evidence integrity are evaluated
+- **When** INV-RUA-001 and evidence integrity are evaluated
 - **Then** the appropriate integrity gate is invalid or unverified
 - **And** preservation is `indeterminate`
 - **And** independently proven monetary observations remain reported.
 
-### AC-18: Control Integrity
+**Verification:** golden — cases: caller identity reuse makes identity integrity `invalid`; missing identity evidence makes it `unverified`; a provider-generated collision makes evidence integrity `invalid`.
+
+### AC-RUA-018 — Control Integrity Verified
+
+*Split from the former AC-18; its second scenario is AC-RUA-029.*
+
+Verifies BR-RUA-025.
 
 - **Given** a `CONTROL` trial
 - **When** treatment is never armed or consumed and every accepted call returns before its deadline
-- **Then** control integrity is `verified`
-- **But When** treatment or an uncontrolled timeout is proven
-- **Then** control integrity is `invalid` and preservation is `indeterminate`.
+- **Then** control integrity is `verified`.
 
-### AC-19: Consumer Manifest Mismatch
+**Verification:** golden — clean `CONTROL` evidence.
+
+### AC-RUA-019 — Consumer Manifest Mismatch
+
+Verifies BR-RUA-036.
 
 - **Given** a published message whose execution identity or trial-manifest digest does not match the active frozen trial
 - **When** a consumer validates it
@@ -853,78 +1010,486 @@ At-least-once behavior means these are not absolute physical-call bounds. Every 
 - **And** effect knowledge remains `NOT_ATTEMPTED`
 - **And** the started trial is `indeterminate`.
 
-### AC-20: Settlement and Late Evidence
+**Verification:** integration — a consumer receiving a mismatched message; cases: wrong execution identity; wrong trial-manifest digest.
+
+### AC-RUA-020 — Settlement Restarts on Activity Before Freeze
+
+*Split from the former AC-20; its second scenario is AC-RUA-030.*
+
+Verifies BR-RUA-032.
 
 - **Given** correlated activity appears before evidence freeze
 - **When** settlement is being observed
-- **Then** stabilization restarts
-- **But Given** correlated activity appears after freeze
-- **Then** it is preserved as late evidence
-- **And** the frozen result and original digests remain unchanged
-- **And** contradictory late evidence blocks qualification or comparison as applicable.
+- **Then** stabilization restarts.
 
-### AC-21: Transport Qualification
+**Verification:** integration — simulated queue observations; cases: a visible message, an in-flight message and a new correlated DLQ message during stabilization.
+
+### AC-RUA-021 — Transport Qualification Passes
+
+*Split from the former AC-21; its other outcomes are AC-RUA-031 and AC-RUA-032.*
+
+Verifies BR-RUA-026 and BR-RUA-027.
 
 - **Given** clean admitted probe inputs and one isolated provider call
 - **When** the real-cloud qualification executes
 - **Then** a `pass` requires every TQ condition to pass, valid probe fidelity, verified evidence, expected cardinality, and no safety release
-- **And** conclusive violation produces `fail`
-- **And** insufficient evidence produces `indeterminate`
 - **And** only a passing usable probe may be selected by later executions.
 
-### AC-22: Immutable Package Verification
+**Verification:** e2e — real-cloud probe in `us-east-1`; golden — the probe verdict derivation over its frozen evidence.
+
+### AC-RUA-022 — Immutable Package Verification
+
+Verifies BR-RUA-043 and BR-RUA-044.
 
 - **Given** an original package index and an explicitly selected amendment head
 - **When** the package verifier runs
 - **Then** it validates every indexed byte, chain parent, sequence, reference, and known descendant
 - **And** returns `eligible` only for a complete noncontradictory selected chain
-- **And** package eligibility does not imply preservation, implementation, comparison, or milestone success.
+- **And** package eligibility does not imply preservation, implementation, comparison, or study-completion success.
 
-### AC-23: Lease Uncertainty and Loss
+**Verification:** unit — package fixtures; cases: an altered byte; a broken chain parent; a sequence gap; a cycle; an unknown descendant; a complete noncontradictory chain is `eligible`.
+
+### AC-RUA-023 — Lease Uncertainty
+
+*Split from the former AC-23; the loss scenario is AC-RUA-033.*
+
+Verifies BR-RUA-045.
 
 - **Given** a failed lease heartbeat
 - **When** ownership remains unconfirmed
 - **Then** new publication stops immediately
-- **And** confirmed ownership may resume only before the stale boundary
-- **And** ownership mismatch or staleness interrupts active work and begins emergency cleanup
-- **And** TTL expiry alone never proves release.
+- **And** confirmed ownership may resume only before the stale boundary.
 
-### AC-24: Attributable-Cost Amendment
+**Verification:** integration — coordination-store emulation with an injected heartbeat failure; cases: recovery before the stale boundary resumes scheduling.
+
+### AC-RUA-024 — Attributable Cost Compared
+
+*Split from the former AC-24; the unverified scenario is AC-RUA-034.*
+
+Verifies BR-RUA-047.
 
 - **Given** a later billing export
 - **When** exact resource, ownership, operation, account, currency, and usage-window correlation is possible
-- **Then** attributable USD usage is compared with the declared ceiling
-- **But When** attribution is incomplete or any attributable line is non-USD
-- **Then** billed-cost safety is `unverified`
-- **And** no proportional allocation or exchange-rate conversion occurs.
+- **Then** attributable USD usage is compared with the declared ceiling.
 
-### AC-25: Variant Validation
+**Verification:** unit — billing-export fixtures; cases: usage within the ceiling; usage above the ceiling.
+
+### AC-RUA-025 — Variant Validation Verified
+
+*Split from the former AC-25; its other outcomes are AC-RUA-035 and AC-RUA-036.*
+
+Verifies BR-RUA-038.
 
 - **Given** one variant's sequential control and treatment validation trials
 - **When** both yield trustworthy conclusive evidence and operational acceptance gates are satisfied
 - **Then** control `pass` plus treatment `pass` or `fail` produces implementation-validation `verified`
-- **And** a trustworthy control `fail` produces implementation-validation `failed`
-- **And** indeterminate scientific or operational acceptance produces implementation-validation `indeterminate`
 - **And** the package makes no cross-variant claim.
 
-### AC-26: Operational Recovery of a Variant Validation
+**Verification:** golden — cases: treatment `pass`; treatment `fail`.
+
+### AC-RUA-026 — Operational Recovery of a Variant Validation
+
+*Split from the former AC-26; its negative scenario is AC-RUA-037.*
+
+Verifies BR-RUA-038 and BR-RUA-044.
 
 - **Given** scientifically valid frozen validation evidence with incomplete cleanup, audit, or lease closure
 - **When** a valid amendment chain repairs only those operational conditions
 - **Then** a verifier may derive effective cleanup `succeeded`, audit `clean`, lease `released`, and implementation status `verified` or `failed`
-- **And** the original summary and scientific results remain unchanged
-- **And** missing or invalid scientific evidence cannot be repaired operationally.
+- **And** the original summary and scientific results remain unchanged.
 
-### AC-27: Canonical Four-Cell Completion
+**Verification:** golden — amendment-chain fixtures; cases: cleanup repaired; audit repaired; lease repaired.
+
+### AC-RUA-027 — Canonical Four-Cell Completion
+
+*Split from the former AC-27; its negative scenario is AC-RUA-038.*
+
+Verifies BR-RUA-007, BR-RUA-031 and BR-RUA-054.
 
 - **Given** a clean-source canonical run with all four settled trial results
-- **When** BR-7 and all validity, integrity, late-evidence, package, cleanup, audit, lease, and safety checks complete
-- **Then** Milestone 4 requires `comparison_eligibility = eligible`
+- **When** BR-RUA-007 and all validity, integrity, late-evidence, package, cleanup, audit, lease, and safety checks complete
+- **Then** study completion requires `comparison_eligibility = eligible`
 - **And** original cleanup is `succeeded`, audit is `clean`, and lease is `released`
-- **And** treatment `fail` results remain admissible observations
-- **And** an operationally recovered but originally unclean run cannot complete Milestone 4.
+- **And** treatment `fail` results remain admissible observations.
+
+**Verification:** e2e — the canonical run in `us-east-1`; golden — the run-summary derivation.
+
+### AC-RUA-028 — Dispatch Boundary Crossed or Not Locatable
+
+*Split from the former AC-15.*
+
+Verifies BR-RUA-021.
+
+- **Given** the dispatch boundary was crossed or cannot be located
+- **When** the attempt is classified
+- **Then** the attempt is `DISPATCHED` or `UNKNOWN`
+- **And** no absence observation may prove non-dispatch.
+
+**Verification:** unit — cases: a crash after `dispatch_started`; a dispatch boundary that cannot be located; an absent provider call and ledger effect that still prove nothing.
+
+### AC-RUA-029 — Control Integrity Invalid
+
+*Split from the former AC-18.*
+
+Verifies BR-RUA-006 and BR-RUA-025.
+
+- **Given** a `CONTROL` trial
+- **When** treatment or an uncontrolled timeout is proven
+- **Then** control integrity is `invalid`
+- **And** preservation is `indeterminate`.
+
+**Verification:** golden — cases: treatment armed; treatment consumed; an uncontrolled timeout.
+
+### AC-RUA-030 — Late Evidence After Freeze
+
+*Split from the former AC-20.*
+
+Verifies BR-RUA-031 and BR-RUA-043.
+
+- **Given** correlated activity appears after evidence freeze
+- **When** late evidence is assessed
+- **Then** it is preserved as late evidence
+- **And** the frozen result and original digests remain unchanged
+- **And** contradictory late evidence blocks qualification or comparison as applicable.
+
+**Verification:** golden — cases: consistent late evidence; contradictory late evidence.
+
+### AC-RUA-031 — Transport Qualification Fails
+
+*Split from the former AC-21.*
+
+Verifies BR-RUA-010, BR-RUA-011, BR-RUA-012, BR-RUA-013, BR-RUA-014, BR-RUA-015 and BR-RUA-027.
+
+- **Given** clean admitted probe inputs and unaffected valid evidence
+- **When** at least one transport condition is conclusively violated
+- **Then** the probe verdict is `fail`
+- **And** the transport is rejected.
+
+**Verification:** golden — one case per transport condition conclusively violated, including reversed commit and timer timestamps (BR-RUA-010) and a caller that observes a successful targeted response (BR-RUA-015).
+
+### AC-RUA-032 — Transport Qualification Is Indeterminate
+
+*Split from the former AC-21.*
+
+Verifies BR-RUA-010, BR-RUA-014 and BR-RUA-027.
+
+- **Given** probe evidence that is insufficient, or a probe that is invalid
+- **When** the probe verdict is derived
+- **Then** the verdict is `indeterminate`
+- **And** the transport stays unqualified, and only a new immutable probe identity may follow.
+
+**Verification:** golden — cases: equal commit and timer timestamps; a missing timestamp; a safety release; an additional accepted provider call, which makes the probe invalid.
+
+### AC-RUA-033 — Lease Loss
+
+*Split from the former AC-23.*
+
+Verifies BR-RUA-045.
+
+- **Given** a failed lease heartbeat
+- **When** ownership mismatch or staleness is established
+- **Then** active work is interrupted and emergency cleanup begins
+- **And** TTL expiry alone never proves release.
+
+**Verification:** integration — coordination-store emulation; cases: ownership mismatch; staleness past the 300-second boundary; TTL expiry without a confirmed release.
+
+### AC-RUA-034 — Attributable Cost Unverified
+
+*Split from the former AC-24.*
+
+Verifies BR-RUA-047.
+
+- **Given** a later billing export
+- **When** attribution is incomplete or any attributable line is non-USD
+- **Then** billed-cost safety is `unverified`
+- **And** no proportional allocation or exchange-rate conversion occurs.
+
+**Verification:** unit — billing-export fixtures; cases: incomplete attribution; one non-USD line; mixed currencies.
+
+### AC-RUA-035 — Variant Validation Failed
+
+*Split from the former AC-25.*
+
+Verifies BR-RUA-038.
+
+- **Given** one variant's validation trials with trustworthy conclusive evidence
+- **When** the control trial's preservation is `fail`
+- **Then** implementation validation is `failed`.
+
+**Verification:** golden — a trustworthy control `fail`.
+
+### AC-RUA-036 — Variant Validation Indeterminate
+
+*Split from the former AC-25.*
+
+Verifies BR-RUA-038.
+
+- **Given** one variant's validation trials
+- **When** scientific or operational acceptance is indeterminate
+- **Then** implementation validation is `indeterminate`.
+
+**Verification:** golden — cases: an indeterminate scientific condition; an indeterminate operational condition.
+
+### AC-RUA-037 — Scientific Evidence Cannot Be Repaired Operationally
+
+*Split from the former AC-26.*
+
+Verifies BR-RUA-038 and BR-RUA-044.
+
+- **Given** frozen validation evidence that is missing or scientifically invalid
+- **When** an amendment chain attempts operational recovery
+- **Then** the effective implementation status remains `indeterminate`.
+
+**Verification:** golden — cases: missing scientific evidence; invalid admission or fidelity; manifest drift.
+
+### AC-RUA-038 — A Recovered Run Cannot Complete the Study
+
+*Split from the former AC-27.*
+
+Verifies BR-RUA-054.
+
+- **Given** a canonical run whose original cleanup, audit or lease closure was not clean
+- **When** an operational recovery amendment repairs it
+- **Then** the run still cannot complete the study.
+
+**Verification:** golden — an original package with non-clean closure plus a valid recovery chain.
+
+### AC-RUA-039 — A Retry Breaks the Logical Identity
+
+*Added in this revision; derived from BR-RUA-003.*
+
+Verifies BR-RUA-003.
+
+- **Given** a retry attempt that carries a `refund_request_id` other than the original
+- **When** the oracle evaluates the valid settled trial
+- **Then** BR-RUA-003 fails
+- **And** preservation is `fail`.
+
+**Verification:** golden — an attempt journal whose second attempt changes the logical identity.
+
+### AC-RUA-040 — One Transaction Exceeds the Payment Limit
+
+*Added in this revision; derived from BR-RUA-002 and BR-RUA-009.*
+
+Verifies BR-RUA-002 and BR-RUA-009.
+
+- **Given** exactly one successful transaction of `20000` minor units against a captured `10000`
+- **When** the oracle evaluates the valid settled trial
+- **Then** BR-RUA-001 passes its count check
+- **But** BR-RUA-002 and BR-RUA-009 fail
+- **And** preservation is `fail`.
+
+**Verification:** golden — a single over-limit transaction.
+
+### AC-RUA-041 — An Untraceable Verdict-Critical Record
+
+**[PROPOSED — needs ratification]** v1.0 lists BR-RUA-008 as a validity gate but
+does not say which gate value an uncorrelatable record yields. Proposal: a
+missing correlation is `unverified`; a correlation naming another execution is
+`invalid`.
+
+Verifies BR-RUA-008 and BR-RUA-029.
+
+- **Given** a verdict-critical record that cannot be correlated to the active execution identity
+- **When** the oracle evaluates the trial
+- **Then** the traceability gate is `unverified` when correlation is missing and `invalid` when it names another execution
+- **And** preservation is `indeterminate`.
+
+**Verification:** golden — cases: a provider call without execution identity; an execution identity from another trial; an unresolved causal predecessor.
+
+### AC-RUA-042 — The Provider Rejects an Invalid Call
+
+*Added in this revision; derived from BR-RUA-016 and BR-RUA-018.*
+
+Verifies BR-RUA-016 and BR-RUA-018.
+
+- **Given** a received call that fails any acceptance condition
+- **When** the controlled provider processes it
+- **Then** it records `provider_call_rejected` with a new provider-generated `provider_call_id`
+- **And** it creates no transaction and does not consume treatment.
+
+**Verification:** unit — one case per acceptance condition: authentication or authorization; schema; execution identity and manifest digest; identity structure; an unknown payment; a non-positive or unsafe amount; a currency mismatch.
+
+### AC-RUA-043 — Effect Knowledge Follows the Transition Table
+
+**[PROPOSED — needs ratification]** Depends on the transition table proposed
+in BR-RUA-022.
+
+Verifies BR-RUA-022.
+
+- **Given** any effect-knowledge state and any attempt outcome
+- **When** the aggregate is updated
+- **Then** the resulting state is the table's cell
+- **And** every transition outside the table is refused.
+
+**Verification:** unit — every cell of the table; every refused transition.
+
+### AC-RUA-044 — An Abort Error Alone Never Proves a Timeout
+
+*Added in this revision; derived from BR-RUA-023.*
+
+Verifies BR-RUA-023.
+
+- **Given** the transport aborts with an error
+- **When** fewer than three seconds have elapsed, the timer did not win, or `caller_timeout_recorded` was not durably appended
+- **Then** the attempt is not `TIMED_OUT`.
+
+**Verification:** unit — a fake clock and transport; cases: abort before three seconds; transport settles first; the durable timeout write fails.
+
+### AC-RUA-045 — Terminality Spans Every Retry Layer
+
+*Added in this revision; derived from BR-RUA-024.*
+
+Verifies BR-RUA-024.
+
+- **Given** a failed delivery or an exhausted inner execution
+- **When** an upstream layer can still redeliver
+- **Then** request-level processing is not `RETRIES_EXHAUSTED`.
+
+**Verification:** unit — cases: a conventional failed delivery before the second receive; a Durable execution exhausted before source redelivery.
+
+### AC-RUA-046 — Records Conform to Their Contracts
+
+*Added in this revision; derived from BR-RUA-033 and the record contracts.*
+
+Verifies BR-RUA-033, CTR-RUA-001, CTR-RUA-002, CTR-RUA-003, CTR-RUA-004, CTR-RUA-005 and CTR-RUA-006.
+
+- **Given** any record the study writes
+- **When** it is validated against its schema
+- **Then** it conforms to the serialization contract and to its record contract.
+
+**Verification:** contract — schema validation of every record type; cases: casing rules, millisecond UTC timestamps, lowercase UUIDv4 identifiers, safe-integer amounts, decimal-string aggregates, omitted versus `null`, `schema_version` and `record_type` present. fuzz — the JSON, JSONL and package parsers never crash on malformed input.
+
+### AC-RUA-047 — Duplicates and Conflicts Are Classified
+
+*Added in this revision; derived from BR-RUA-034.*
+
+Verifies BR-RUA-034.
+
+- **Given** ingested evidence containing a duplicate or a conflict
+- **When** evidence is ingested and indexed
+- **Then** each listed case produces its declared classification.
+
+**Verification:** golden — one case per rule: an equivalent duplicate collapsed; conflicting content under one `event_id`; conflicting events under one source and sequence; a sequence gap; a missing causal predecessor; a duplicate ledger transaction identity; incomplete ledger pagination; a core-file digest mismatch; a ledger larger than expected, never truncated.
+
+### AC-RUA-048 — Evidence References Are Well Formed
+
+*Added in this revision; derived from BR-RUA-035.*
+
+Verifies BR-RUA-035.
+
+- **Given** a result with `evidence_refs`
+- **When** the references are validated
+- **Then** malformed references are rejected
+- **And** a `pass` or `fail` result carries at least one reference.
+
+**Verification:** unit — cases: an absolute path; parent traversal; unsorted entries; a duplicate entry; an alias field name; a `pass` without references; an indeterminate result caused by missing evidence, with an empty array and a structured reason.
+
+### AC-RUA-049 — The Safety Deadline Is Reached
+
+*Added in this revision; derived from BR-RUA-046.*
+
+Verifies BR-RUA-046.
+
+- **Given** an active run
+- **When** the active-time deadline is reached
+- **Then** no new trial starts and active work enters controlled interruption
+- **And** available evidence is preserved and emergency cleanup begins
+- **And** cleanup continues past the total target, recording a duration breach.
+
+**Verification:** integration — a fake clock; cases: the deadline during a trial; the deadline between trials.
+
+### AC-RUA-050 — Operational Failure Never Rewrites a Verdict
+
+*Added in this revision; derived from BR-RUA-052.*
+
+Verifies BR-RUA-031 and BR-RUA-052.
+
+- **Given** a frozen trial verdict
+- **When** cleanup fails or the leak audit is not clean
+- **Then** the frozen verdict is unchanged
+- **And** comparison stays eligible only when isolation, settlement and evidence were not compromised.
+
+**Verification:** golden — cases: a cleanup failure without compromise; a leak capable of later correlated effects.
+
+### AC-RUA-051 — Qualification Drift Is Refused
+
+*Added in this revision; derived from BR-RUA-028.*
+
+Verifies BR-RUA-028.
+
+- **Given** a selected transport probe
+- **When** admission recomputes its scope against current committed source
+- **Then** any scoped drift rejects the attempt before manifest freeze
+- **And** unrelated oracle, reporting or orchestration changes do not require a new probe.
+
+**Verification:** integration — cases: a scoped source change; a scoped dependency change; an unrelated oracle change.
+
+### AC-RUA-052 — Exact Effect With Non-Successful Terminal Processing
+
+*Added in this revision; derived from the verdict matrix.*
+
+Verifies BR-RUA-029 and BR-RUA-030.
+
+- **Given** a valid trial whose ledger holds exactly the authorized effect
+- **When** request processing terminates through the dead-letter queue
+- **Then** preservation is `pass`
+- **And** `correct_completion` is `false`.
+
+**Verification:** golden — an exact effect with terminal DLQ processing.
+
+### AC-RUA-053 — Platform and Transport Constraints Hold
+
+*Added in this revision; derived from BR-RUA-053.*
+
+Verifies BR-RUA-053.
+
+- **Given** the frozen deployment assembly
+- **When** it is inspected before the first mutation
+- **Then** provider-client automatic retries are disabled, the immutable provider version is recorded, lower-level timeouts cannot preempt the application deadline, and the complete Durable execution fits the direct event-source invocation limit.
+
+**Verification:** integration — inspection of the synthesized assembly and the client configuration; one case per constraint.
+
+### AC-RUA-054 — Missing Telemetry Does Not Block a Verdict
+
+*Added in this revision; derived from BR-RUA-037.*
+
+Verifies BR-RUA-037.
+
+- **Given** a trial whose logs, metrics or traces are unavailable
+- **When** the oracle evaluates it with complete primary evidence
+- **Then** the verdict is derived normally
+- **And** the telemetry's unavailability is recorded.
+
+**Verification:** golden — cases: logs missing; metrics missing; traces missing.
+
+### AC-RUA-055 — The Oracle Is Final Before Cloud Evidence
+
+**[PROPOSED — needs ratification]** Depends on BR-RUA-055.
+
+Verifies BR-RUA-055.
+
+- **Given** a canonical run's frozen manifest
+- **When** its recorded source revision is checked out
+- **Then** the oracle's golden cases for every verdict-changing rule pass at that revision.
+
+**Verification:** golden — the oracle golden suite run at the manifest's source revision.
+
+### AC-RUA-056 — A Passing Probe That Is Not Usable Cannot Be Selected
+
+*Added in this revision; derived from BR-RUA-026, which now carries the former Milestone 0 conditions.*
+
+Verifies BR-RUA-026.
+
+- **Given** a probe whose transport conditions all pass
+- **When** any usability condition is unmet
+- **Then** later executions cannot select it.
+
+**Verification:** golden — one case per unmet condition: unclean operational closure; a package not verified; contradictory late evidence; no transport-scope snapshot; a known safety breach.
 
 ## Serialization Contract
+
+### BR-RUA-033 — Serialization contract
 
 - JSON and JSONL use UTF-8.
 - Properties use `snake_case`.
@@ -964,6 +1529,8 @@ Source-local monotonic elapsed nanoseconds are nonnegative canonical base-10 str
 
 ## Duplicate and Conflict Handling
 
+### BR-RUA-034 — Duplicate and conflict handling
+
 - Repeated `event_id` with structurally equivalent parsed JSON is an ingestion duplicate and is collapsed with a diagnostic count.
 - Object order and insignificant whitespace do not affect structural equivalence; array order and JSON types do.
 - Conflicting content under one event identity makes evidence integrity invalid.
@@ -976,6 +1543,8 @@ Source-local monotonic elapsed nanoseconds are nonnegative canonical base-10 str
 - Evidence collection never truncates a ledger because of an expected size.
 
 ## Evidence Reference Contract
+
+### BR-RUA-035 — Evidence references
 
 Every `evidence_refs` entry contains:
 
@@ -993,7 +1562,7 @@ Aliases such as `evidence_references`, `evidence`, and `references` are rejected
 
 ## Input Contracts
 
-### Payment
+### CTR-RUA-005 — Payment
 
 ```json
 {
@@ -1005,7 +1574,7 @@ Aliases such as `evidence_references`, `evidence`, and `references` are rejected
 }
 ```
 
-### Approved Decision
+### CTR-RUA-006 — Approved decision
 
 ```json
 {
@@ -1019,7 +1588,7 @@ Aliases such as `evidence_references`, `evidence`, and `references` are rejected
 }
 ```
 
-### Published Trial Message
+### BR-RUA-036 — Published trial message
 
 Every canonical message contains:
 
@@ -1036,6 +1605,8 @@ refund_request_id
 A pre-publication mismatch rejects setup and starts no trial. A post-publication consumer mismatch records `MESSAGE_REJECTED`, calls no provider, and makes the trial indeterminate.
 
 ## Primary and Derived Evidence
+
+### BR-RUA-037 — Primary and derived evidence
 
 Primary frozen evidence includes:
 
@@ -1063,6 +1634,8 @@ The PoC does not create a second ledger-transaction JSONL representation unless 
 Logs, metrics, and traces are diagnostic. Their availability and references are recorded, but their absence alone does not block a verdict.
 
 ## Oracle Result Contract
+
+### CTR-RUA-001 — Oracle result
 
 Every oracle result contains:
 
@@ -1092,6 +1665,8 @@ Every applicable business and integrity rule appears in `rule_results`, includin
 `ledger_snapshot_ref` contains the package-relative path and exact digest. `processing_terminal_reason` may be `null` only when no terminal state was established.
 
 ## Run Summary Contract
+
+### CTR-RUA-002 — Run summary
 
 A canonical run summary contains exactly four trial-result entries corresponding to the four declared trial identities. Each entry contains execution status, optional oracle-result reference, and rejection or incompletion reasons where no oracle exists.
 
@@ -1132,6 +1707,8 @@ EVIDENCE_FINALIZATION_FAILED
 The first specific causal condition that prevents clean completion remains primary. Later failures remain visible through their separate status fields and journals.
 
 ## Transport-Probe Result Contract
+
+### CTR-RUA-003 — Transport-probe result
 
 The probe result freezes before cleanup and contains:
 
@@ -1180,12 +1757,14 @@ EVIDENCE_FINALIZATION_FAILED
 
 ## Variant-Validation Result Contract
 
+### BR-RUA-038 — Variant-validation status
+
 One variant validation declares exactly one variant and two sequential trials:
 
 1. `CONTROL`;
 2. `COMMIT_THEN_TIMEOUT`.
 
-It uses no fabricated `run_id` and makes no BR-7 or cross-variant conclusion.
+It uses no fabricated `run_id` and makes no BR-RUA-007 or cross-variant conclusion.
 
 Validation summary values:
 
@@ -1221,6 +1800,8 @@ EVIDENCE_FINALIZATION_FAILED
 
 Operational recovery may repair only cleanup, leak-audit, and lease closure. A verifier may derive an effective implementation status from the unchanged original scientific evidence and a valid selected amendment chain. It cannot repair missing scientific evidence, invalid admission or fidelity, manifest drift, original verdicts, a known safety breach, or a missing cryptographic anchor.
 
+### CTR-RUA-004 — Variant-validation verification
+
 The verifier returns at least:
 
 ```text
@@ -1248,11 +1829,11 @@ When every scientific and effective operational gate is satisfied, a trustworthy
 
 ## Manifest Lifecycle
 
-### Rejected Attempts
+### BR-RUA-039 — Rejected admission attempts
 
 Generating an attempt UUID begins admission. If validation, read-only preflight, or synthesis validation fails, the attempt records a structured rejection and preflight journal. It creates no canonical manifest, resource manifest, result, summary, evidence index, or package index, and performs no cloud mutation.
 
-### Canonical Admission
+### BR-RUA-040 — Manifest freeze before mutation
 
 Admission resolves and validates:
 
@@ -1275,11 +1856,15 @@ Before publication, each trial manifest freezes and references the exact parent 
 
 ## Environment Admission Input
 
+### BR-RUA-041 — Environment admission input
+
 The operator-specific environment input is schema-validated and contains exactly one 12-digit account allowlist together with the coordination resource ARN, coordination stack identity, and expected coordination schema version. It contains no credentials, tokens, passwords, or credential-process commands.
 
 Read-only admission resolves the active caller account, requires an exact account match, verifies that coordination identifiers belong to that account and the committed Region, and records the input digest and resolved noncredential values. After manifest freeze, execution uses the frozen values and never reinterprets modified environment input.
 
 ## Source and Deployment Provenance
+
+### BR-RUA-042 — Source and deployment provenance
 
 An evidence-bearing execution requires:
 
@@ -1299,6 +1884,8 @@ The implementation builds and synthesizes once into staging, copies the complete
 
 ## Evidence Freeze and Amendments
 
+### BR-RUA-043 — Evidence freeze, late evidence and amendments
+
 A trial freezes after settlement, ledger and conditional DLQ capture, oracle evaluation, and evidence indexing, but before DLQ deletion or infrastructure cleanup.
 
 Late evidence never modifies frozen results or original digests. It receives a separate assessment:
@@ -1310,6 +1897,8 @@ none | consistent | contradictory | unverified
 Normal late monitoring continues for at least 120 seconds after the final trial freeze while the declared consumers remain active. Emergency cleanup may shorten or skip it and records `unverified`.
 
 Post-finalization evidence creates an immutable amendment that references the original package and any preceding amendment. Chains must be linear, digest-valid, cycle-free, and explicitly selected. A contradictory amendment blocks qualification or comparison until another immutable reassessment is explicitly selected; nothing rewrites an earlier package.
+
+### BR-RUA-044 — Package eligibility
 
 Package eligibility is computed only after the original package index exists. It is never frozen inside an original summary.
 
@@ -1326,6 +1915,8 @@ evaluated_at
 An evidence index excludes itself and the late-evidence area. The final package index hashes every finalized package file except itself and is written last. A probe whose coordination journal remains open through cleanup creates a prefix checkpoint at transport freeze containing the path, prefix byte count, prefix digest, last included event and sequence, and checkpoint time. The evidence index hashes that checkpoint; the final package index hashes the complete coordination journal.
 
 ## Coordination Lease
+
+### BR-RUA-045 — Coordination lease
 
 Exactly one owner may hold the Study/account/Region lease:
 
@@ -1346,6 +1937,8 @@ released | recovery_required | unverified
 TTL expiry never establishes release. Clean original closure conditionally releases the lease before summary and package finalization. Incomplete cleanup or non-clean audit transitions to recovery where possible.
 
 ## Safety Contract
+
+### BR-RUA-046 — Safety limits
 
 Admission rejects an account outside the exact allowlist, a Region other than `us-east-1`, unavailable required capabilities, missing ownership strategy, an estimated cost above its ceiling, or an active conflicting lease.
 
@@ -1369,6 +1962,8 @@ The estimated spending ceiling is an admission boundary, not a billing guarantee
 
 ## Attributable Usage Cost
 
+### BR-RUA-047 — Attributable usage cost
+
 The safety boundary covers identifiable run-owned compute, durable execution, messaging, data-store, endpoint, telemetry, artifact-storage, and cleanup usage from first run mutation until cleanup becomes terminal.
 
 It excludes baseline coordination, bootstrap infrastructure, pre-run baseline resources, unrelated account activity, tax, support, credits, refunds, and unassignable shared charges.
@@ -1384,7 +1979,7 @@ Non-USD or mixed-currency attributable lines, incomplete periods, missing identi
 
 ## Cleanup and Leak Audit
 
-### Normal Cleanup
+### BR-RUA-048 — Normal cleanup
 
 Normal cleanup:
 
@@ -1401,11 +1996,11 @@ Normal cleanup:
 11. requires stable absence observations;
 12. freezes cleanup, summary, and package results.
 
-### Emergency Cleanup
+### BR-RUA-049 — Emergency cleanup
 
 Emergency cleanup stops publishers and consumers immediately, preserves available evidence before mutation when possible, marks unsettled results appropriately, releases barriers, captures DLQ evidence, deletes owned infrastructure, audits leaks, and finalizes when possible.
 
-### Ownership Rules
+### BR-RUA-050 — Cleanup ownership
 
 - Every taggable experimental resource carries `suc:project`, `suc:study_id`, `suc:run_id`, `suc:managed_by`, and `suc:expires_at`. Variant-specific resources additionally carry `suc:variant_id`; shared resources omit it. Trial identity remains a data partition and is never a resource tag.
 - Direct deletion of a taggable resource requires resource-manifest membership and matching run-specific ownership tags.
@@ -1415,7 +2010,7 @@ Emergency cleanup stops publishers and consumers immediately, preserves availabl
 - A generic project tag alone never authorizes deletion.
 - Baseline and bootstrap resources are excluded.
 
-### Leak Audit
+### BR-RUA-051 — Leak audit
 
 Cleanup status:
 
@@ -1437,6 +2032,8 @@ Cleanup or leak failure never rewrites a frozen trial verdict. It may leave a sc
 
 ## Operational Versus Scientific Outcomes
 
+### BR-RUA-052 — Operational and scientific independence
+
 Run execution, preservation, comparison, cleanup, leak audit, lease, evidence integrity, package eligibility, and safety are independent dimensions.
 
 A run may complete its scientific lifecycle when a treatment fails its invariants. A finalized package may faithfully preserve an incomplete or operationally failed execution. Package eligibility proves faithful structure and integrity, not operational or scientific success.
@@ -1444,6 +2041,13 @@ A run may complete its scientific lifecycle when a treatment fails its invariant
 A leak capable of producing later correlated processing or monetary effects compromises settlement and comparison eligibility.
 
 ## Implementation Baseline and External Dependencies
+
+### BR-RUA-053 — Platform and transport constraints
+
+*Added in this revision.* These choices are normative for this study rather than
+incidental: the serverless execution strategies are the object under test, and
+the transport qualification binds to the exact source, dependencies and
+configuration it exercised.
 
 The initial implementation baseline is strict TypeScript on Node.js 24, one root npm project with a committed lockfile, AWS CDK v2, AWS SDK for JavaScript v3, the built-in Node test runner, and a local CLI runner.
 
@@ -1455,42 +2059,13 @@ Direct synchronous function invocation is provisional until the blocking transpo
 
 The complete Durable execution must remain within the direct event-source invocation limit. Inner durable step retries have at-least-once semantics, and an outer source redelivery may start another durable execution. The protocol therefore treats configured attempts as an envelope rather than an absolute physical-call cap.
 
-## Delivery Milestones
+## Study Completion
 
-### Milestone 0: Establish the Protocol Foundation and Qualify the Treatment Transport
+### BR-RUA-054 — Canonical study completion
 
-Objective: demonstrate that the selected transport produces the declared ambiguous outcome in real AWS and preserves a complete, valid, immutable, safely closed qualification package.
-
-Internal checkpoints:
-
-- **M0-A — Repository and deterministic local contracts:** repository, toolchain, probe schemas, canonical serialization, identities, time, sequencing, causality, hashing, validation, and golden tests; no cloud mutation.
-- **M0-B — Treatment mechanism:** shared provider client, deadline arbiter, provider, ledger, journals, treatment state, controller, and TQ derivation; no evidence-bearing probe yet.
-- **M0-C — Safe cloud lifecycle:** baseline coordination entry point, lease, probe admission, infrastructure, exact assembly, cleanup, leak audit, and package lifecycle; coordination bootstrap remains deliberate operator action.
-- **M0-D — Real-cloud qualification:** clean committed source, admitted probe, real execution, evidence freeze, cleanup, clean audit, released lease, package verification, and frozen transport scope.
-
-Milestone 0 completes only when one selected probe has every TQ condition `pass`, valid probe and treatment fidelity, verified evidence, noncontradictory late evidence, clean effective operational closure, no known safety breach, a verified package, and a reusable transport-scope snapshot.
-
-SQS variant sources, complete study contracts, the preservation oracle, and four study trials remain outside Milestone 0.
-
-### Milestone 1: Offline Oracle and Canonical Study Contracts
-
-Given immutable synthetic evidence, one local command validates the package, evaluates every applicable BR and IR-1 check, derives trial and run results, and verifies the resulting package. Golden cases cover exact effect, duplicates, missing effect, wrong effect, identity conflict, unknown outcome, incomplete ledger, invalid fidelity, missing causality, digest failure, and unsettled environment.
-
-Every verdict-changing rule must be implemented before cloud study evidence is collected.
-
-### Milestone 2: Conventional Variant Vertical Validation
-
-One immutable non-comparative validation executes conventional `CONTROL` followed by conventional treatment using the frozen oracle contract. A matching transport qualification is mandatory. Effective implementation validation may rely on an amendment that repairs only cleanup, audit, or lease closure.
-
-### Milestone 3: Durable Variant Vertical Validation
-
-One separate immutable non-comparative validation executes Durable `CONTROL` followed by Durable treatment, proves the declared durable retry and execution evidence, and regression-checks the conventional path. It uses the same provider client, fixture, provider, treatment point, oracle, and evidence contracts.
-
-### Milestone 4: Canonical Four-Cell Study Run
-
-The first comparison-eligible run executes all four cells in exact order from clean committed final source and a matching transport qualification.
-
-Milestone 4 requires, in the original immutable package:
+The study is complete when a canonical run, executed in exact order from clean
+committed final source and a matching transport qualification, satisfies in its
+original immutable package:
 
 ```text
 comparison_eligibility = eligible
@@ -1501,7 +2076,19 @@ lease_status = released
 run_terminal_reason = COMPLETED
 ```
 
-It also requires all four oracle results, completed BR-7 evaluation, verified evidence integrity, no contradictory amendment, no known safety breach, and no remaining owned resource. Operational recovery may make another run safe but cannot make an originally unclean run complete Milestone 4.
+It also requires all four oracle results, completed BR-RUA-007 evaluation,
+verified evidence integrity, no contradictory amendment, no known safety breach,
+and no remaining owned resource. Operational recovery may make another run safe
+but cannot make an originally unclean run complete the study.
+
+### BR-RUA-055 — The oracle is final before cloud evidence
+
+**[PROPOSED — needs ratification]** v1.0 stated this inside the Milestone 1 plan.
+It is a rule of scientific integrity, not an ordering note: evidence judged by an
+oracle changed after seeing it is compromised.
+
+Every verdict-changing rule must be implemented before cloud study evidence is
+collected.
 
 ## Threats to Validity and Limitations
 
@@ -1535,23 +2122,54 @@ It also requires all four oracle results, completed BR-7 evaluation, verified ev
 
 ## Open Questions
 
-None. Direct synchronous invocation remains provisional by design and is resolved empirically through the blocking transport-qualification gate rather than by an open specification decision.
+Direct synchronous invocation remains provisional by design and is resolved empirically through the blocking transport-qualification gate (BR-RUA-026) rather than by an open specification decision.
+
+### OQ-RUA-001 — Retrieval date of each external source
+
+The sources below carry no retrieval date. The behavior relied upon can change, and Lambda Durable Functions is recent; record the date each source was read.
+
+### OQ-RUA-002 — Source for the SQS event-source mapping
+
+The message-source protocol (BR-RUA-020) relies on FIFO ordering, visibility timeout and redrive with `maxReceiveCount`, but no source for the SQS event-source mapping is cited.
+
+### OQ-RUA-003 — Operator CLI contract
+
+The spec names "a local CLI runner" but declares no commands, inputs, outputs
+or exit codes, and the study operator's QA contract (`specs/qa/study-operator/`)
+points to this interface. Proposal: declare it as CTR-RUA-007, with each
+command's inputs, its structured JSON output and its exit codes.
 
 ## External Sources
 
-These sources constrain the implementation protocol; they do not define the refund business invariants.
+These sources constrain the implementation protocol; they do not define the refund business invariants. *The second column was added in this revision, derived from how this spec uses each source.*
 
-- [AWS Lambda Invoke API](https://docs.aws.amazon.com/lambda/latest/api/API_Invoke.html)
-- [Lambda examples using AWS SDK for JavaScript v3](https://docs.aws.amazon.com/lambda/latest/dg/example_lambda_Invoke_section.html)
-- [Lambda with DynamoDB Streams](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html)
-- [DynamoDB read consistency](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html)
-- [Lambda Durable Functions getting started](https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started.html)
-- [Lambda Durable Functions retries](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-sdk-retries.html)
-- [Durable execution idempotency and event-source mappings](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-idempotency.html)
-- [AWS CDK CLI](https://docs.aws.amazon.com/cdk/v2/guide/cli.html)
-- [AWS account identifiers](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html)
-- [STS GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)
-- [AWS Cost Explorer](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-what-is.html)
-- [AWS CUR line-item details](https://docs.aws.amazon.com/cur/latest/userguide/Lineitem-columns.html)
-- [Lambda execution environment](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html)
-- [Amazon Time Sync Service for EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html)
+| Source | Behavior this study relies on |
+|---|---|
+| [AWS Lambda Invoke API](https://docs.aws.amazon.com/lambda/latest/api/API_Invoke.html) | Synchronous direct invocation and its transport-level and function-level error surfaces |
+| [Lambda examples using AWS SDK for JavaScript v3](https://docs.aws.amazon.com/lambda/latest/dg/example_lambda_Invoke_section.html) | Invoking through the SDK client, whose automatic retries can be disabled |
+| [Lambda with DynamoDB Streams](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html) | At-least-once consumption of inserted records, from the earliest available position |
+| [DynamoDB read consistency](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html) | Strongly consistent reads for the complete ledger snapshot |
+| [Lambda Durable Functions getting started](https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started.html) | The durable execution model of the Durable variant |
+| [Lambda Durable Functions retries](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-sdk-retries.html) | Step retries with at-least-once semantics |
+| [Durable execution idempotency and event-source mappings](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-idempotency.html) | An outer source redelivery may start a new durable execution |
+| [AWS CDK CLI](https://docs.aws.amazon.com/cdk/v2/guide/cli.html) | Synthesizing and deploying the frozen assembly |
+| [AWS account identifiers](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html) | The 12-digit account format of the allowlist |
+| [STS GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html) | Read-only resolution of the active caller account at admission |
+| [AWS Cost Explorer](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-what-is.html) | Usage data behind attributable-cost amendments |
+| [AWS CUR line-item details](https://docs.aws.amazon.com/cur/latest/userguide/Lineitem-columns.html) | Authoritative usage lines and their correlation fields |
+| [Lambda execution environment](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html) | Execution-environment behavior relevant to CA-1 |
+| [Amazon Time Sync Service for EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html) | Background for CA-1; not a guarantee for Lambda |
+
+## Former identifiers
+
+This revision replaces the unprefixed identifiers of Specification v1.0. Code,
+golden fixtures and serialized `rule_results` or `condition_results` that still
+use a former identifier migrate in the same change.
+
+| Former | Now |
+|---|---|
+| BR-1 … BR-9 | BR-RUA-001 … BR-RUA-009 |
+| IR-1 | INV-RUA-001 |
+| TQ-1 … TQ-6 | BR-RUA-010 … BR-RUA-015 |
+| AC-1 … AC-27 | AC-RUA-001 … AC-RUA-027; compound criteria were split, and their second scenarios are AC-RUA-028 … AC-RUA-038 |
+| CA-1 | Unchanged: it is a serialized assumption identifier, not a rule |
