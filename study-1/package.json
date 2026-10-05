@@ -1,0 +1,78 @@
+{
+  "name": "rua-study-1",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Study 1 (CAP-RUA): refund under ambiguous outcome, conventional versus Durable Lambda callers.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.12.0 <25"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24.12.0 <25",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config --max-warnings 0 . && prettier --check . && node tools/check-module-boundaries.ts && node tools/generate-quality-config.ts --check",
+    "format": "prettier --write .",
+    "test:unit": "node tools/run-suite.ts unit \"test/unit/**/*.test.ts\"",
+    "test:contract": "node tools/run-suite.ts contract \"test/contract/**/*.contract.test.ts\"",
+    "test:golden": "node tools/golden/generate-fixtures.ts --check && node tools/run-suite.ts golden \"test/golden/**/*.golden.test.ts\"",
+    "test:integration": "CDK_DOCKER=\"$PWD/tools/docker-forbidden.sh\" node tools/run-suite.ts integration \"test/integration/**/*.integration.test.ts\"",
+    "test": "npm run test:unit && npm run test:contract && npm run test:golden && npm run test:integration",
+    "test:fuzz": "FC_RUNS=${FC_RUNS:-10000} node tools/run-suite.ts fuzz \"test/fuzz/**/*.fuzz.test.ts\"",
+    "fuzz:campaign": "node tools/fuzz-campaign.ts --runs 20000 --campaigns 3 \"test/fuzz/**/*.fuzz.test.ts\"",
+    "coverage": "CDK_DOCKER=\"$PWD/tools/docker-forbidden.sh\" c8 node tools/run-suite.ts all \"test/{unit,contract,golden,integration}/**/*.test.ts\"",
+    "mutation": "stryker run && node tools/mutation-gate.ts reports/mutation/mutation.json",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:fuzz && npm run coverage && npm run mutation",
+    "test:e2e": "node tools/run-suite.ts e2e \"test/e2e/**/*.e2e.test.ts\"",
+    "rua": "node src/operator-cli/main.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudformation": "3.1146.0",
+    "@aws-sdk/client-cloudwatch": "3.1146.0",
+    "@aws-sdk/client-cloudwatch-logs": "3.1146.0",
+    "@aws-sdk/client-cost-explorer": "3.1146.0",
+    "@aws-sdk/client-dynamodb": "3.1146.0",
+    "@aws-sdk/client-iam": "3.1146.0",
+    "@aws-sdk/client-lambda": "3.1146.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "3.1146.0",
+    "@aws-sdk/client-sqs": "3.1146.0",
+    "@aws-sdk/client-sts": "3.1146.0",
+    "@aws-sdk/client-xray": "3.1146.0",
+    "@aws-sdk/lib-dynamodb": "3.1146.0",
+    "@aws-sdk/util-dynamodb": "3.996.9",
+    "@aws/durable-execution-sdk-js": "2.6.0",
+    "@smithy/node-http-handler": "4.12.1",
+    "@smithy/types": "4.19.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "aws-cdk-lib": "2.272.0",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@aws/durable-execution-sdk-js-testing": "1.3.0",
+    "@eslint/js": "10.0.1",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/tap-runner": "10.0.0",
+    "@stryker-mutator/typescript-checker": "10.0.0",
+    "@types/aws-lambda": "8.10.164",
+    "@types/node": "24.19.1",
+    "aws-cdk": "2.1144.0",
+    "c8": "12.0.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.12.0",
+    "fast-check": "4.10.2",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0"
+  }
+}

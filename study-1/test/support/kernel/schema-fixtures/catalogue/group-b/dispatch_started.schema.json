@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/dispatch_started.schema.json",
+  "$comment": "Kernel test fixture composing the event envelope; not the WP-02 catalogue schema.",
+  "type": "object",
+  "allOf": [{ "$ref": "_defs.schema.json#/$defs/event_envelope" }],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "dispatch_started" },
+    "attempt_id": { "$ref": "_defs.schema.json#/$defs/uuid4" }
+  },
+  "required": ["schema_version", "record_type", "attempt_id"],
+  "unevaluatedProperties": false
+}
