@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "record_type": "transport_scope_policy",
+  "entry_points": [
+    "src/refund-provider/refund-provider.handler.ts",
+    "src/transport-probe-caller/transport-probe-caller.handler.ts",
+    "src/treatment-controller/treatment-controller.handler.ts"
+  ],
+  "source_roots": [
+    "infra/constructs/experiment-core.ts",
+    "infra/constructs/observable-function.ts",
+    "infra/constructs/probe-caller.ts",
+    "src/attempt-lifecycle",
+    "src/durable-store",
+    "src/event-journal",
+    "src/provider-client",
+    "src/refund-provider",
+    "src/transport-probe-caller",
+    "src/treatment-controller"
+  ],
+  "configuration_projections": [
+    {
+      "projection_id": "experiment_core__functions",
+      "resource_type": "AWS::Lambda::Function",
+      "property_paths": [
+        "Properties.Architectures",
+        "Properties.Handler",
+        "Properties.MemorySize",
+        "Properties.ReservedConcurrentExecutions",
+        "Properties.Runtime",
+        "Properties.Timeout"
+      ]
+    },
+    {
+      "projection_id": "experiment_core__versions",
+      "resource_type": "AWS::Lambda::Version",
+      "property_paths": ["Properties.ProvisionedConcurrencyConfig"]
+    },
+    {
+      "projection_id": "experiment_core__stream_mappings",
+      "resource_type": "AWS::Lambda::EventSourceMapping",
+      "property_paths": [
+        "Properties.BatchSize",
+        "Properties.BisectBatchOnFunctionError",
+        "Properties.DestinationConfig",
+        "Properties.EventSourceArn",
+        "Properties.FilterCriteria",
+        "Properties.FunctionResponseTypes",
+        "Properties.MaximumBatchingWindowInSeconds",
+        "Properties.MaximumRecordAgeInSeconds",
+        "Properties.MaximumRetryAttempts",
+        "Properties.ParallelizationFactor",
+        "Properties.StartingPosition"
+      ]
+    },
+    {
+      "projection_id": "experiment_core__tables",
+      "resource_type": "AWS::DynamoDB::Table",
+      "property_paths": [
+        "Properties.AttributeDefinitions",
+        "Properties.BillingMode",
+        "Properties.KeySchema",
+        "Properties.StreamSpecification",
+        "Properties.TimeToLiveSpecification"
+      ]
+    },
+    {
+      "projection_id": "experiment_core__policies",
+      "resource_type": "AWS::IAM::Policy",
+      "property_paths": ["Properties.PolicyDocument", "Properties.Roles"]
+    }
+  ],
+  "runtime_properties": ["bundle_aws_sdk", "bundle_format", "bundle_main_fields", "bundle_platform", "bundle_target"],
+  "dependencies": [
+    "@aws-sdk/client-dynamodb",
+    "@aws-sdk/client-lambda",
+    "@smithy/node-http-handler",
+    "aws-cdk-lib",
+    "esbuild"
+  ]
+}
