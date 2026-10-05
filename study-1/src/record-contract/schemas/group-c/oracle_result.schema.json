@@ -1,0 +1,887 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/oracle_result.schema.json",
+  "title": "oracle_result (catalogue group C, row 67)",
+  "description": "trials/<t>/derived/oracle-result.json: the oracle result of one trial of a run or variant validation (CTR-RUA-001 plus the D-04 transparency fields validity_gates, monetary_observations and treatment_condition_results). validity_gates lists the nine gates in G1-G8 order (G4a and G4b both listed); rule_results lists the ten rules in fixed order. A non-valid trial is indeterminate (BR-RUA-006); correct_completion follows the verdict and a pass always has a terminal reason (BR-RUA-030, D-17). A control trial has no fidelity basis and no conditions; a treatment trial has six conditions (D-05).",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "$ref": "_defs.schema.json#/$defs/package_relative_path"
+        },
+        "artifact_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_sha256"],
+      "additionalProperties": false
+    },
+    "validity_gate": {
+      "type": "object",
+      "properties": {
+        "gate": {
+          "enum": [
+            "independent_oracle",
+            "traceability",
+            "identity_integrity",
+            "control_integrity",
+            "treatment_fidelity",
+            "ledger_access",
+            "settlement",
+            "rule_evidence",
+            "evidence_integrity"
+          ]
+        },
+        "value": {
+          "enum": ["verified", "invalid", "unverified", "not_applicable"]
+        },
+        "reasons": {
+          "$ref": "_defs.schema.json#/$defs/structured_reasons"
+        },
+        "evidence_refs": {
+          "$ref": "_defs.schema.json#/$defs/evidence_refs"
+        }
+      },
+      "required": ["gate", "value", "reasons", "evidence_refs"],
+      "additionalProperties": false
+    },
+    "rule_result": {
+      "type": "object",
+      "properties": {
+        "rule_id": {
+          "enum": [
+            "BR-RUA-001",
+            "BR-RUA-002",
+            "BR-RUA-003",
+            "BR-RUA-004",
+            "BR-RUA-005",
+            "BR-RUA-007",
+            "BR-RUA-008",
+            "BR-RUA-009",
+            "INV-RUA-001",
+            "BR-RUA-025"
+          ]
+        },
+        "result": {
+          "enum": ["pass", "fail", "indeterminate", "not_applicable"]
+        },
+        "expected": {
+          "not": {
+            "type": "null"
+          }
+        },
+        "observed": {
+          "not": {
+            "type": "null"
+          }
+        },
+        "evidence_refs": {
+          "$ref": "_defs.schema.json#/$defs/evidence_refs"
+        },
+        "indeterminate_reasons": {
+          "$ref": "_defs.schema.json#/$defs/structured_reasons"
+        }
+      },
+      "required": ["rule_id", "result", "expected", "observed", "evidence_refs", "indeterminate_reasons"],
+      "additionalProperties": false
+    },
+    "condition_result": {
+      "type": "object",
+      "properties": {
+        "condition_id": {
+          "enum": ["BR-RUA-010", "BR-RUA-011", "BR-RUA-012", "BR-RUA-013", "BR-RUA-014", "BR-RUA-015"]
+        },
+        "result": {
+          "enum": ["pass", "fail", "indeterminate"]
+        },
+        "expected": {
+          "not": {
+            "type": "null"
+          }
+        },
+        "observed": {
+          "not": {
+            "type": "null"
+          }
+        },
+        "evidence_refs": {
+          "$ref": "_defs.schema.json#/$defs/evidence_refs"
+        },
+        "indeterminate_reasons": {
+          "$ref": "_defs.schema.json#/$defs/structured_reasons"
+        },
+        "affected_by": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "EQUIVALENT_DUPLICATE_COLLAPSED",
+              "CONFLICTING_EVENT_CONTENT",
+              "CONFLICTING_SOURCE_SEQUENCE",
+              "SOURCE_SEQUENCE_GAP",
+              "CAUSAL_PREDECESSOR_MISSING",
+              "DUPLICATE_LEDGER_TRANSACTION_ID",
+              "LEDGER_PAGINATION_INCOMPLETE",
+              "CORE_FILE_DIGEST_MISMATCH",
+              "ARTIFACT_MISSING",
+              "ARTIFACT_UNPARSEABLE",
+              "RECORD_SCHEMA_INVALID",
+              "CORRELATION_MISSING",
+              "LEDGER_LARGER_THAN_EXPECTED"
+            ]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "condition_id",
+        "result",
+        "expected",
+        "observed",
+        "evidence_refs",
+        "indeterminate_reasons",
+        "affected_by"
+      ],
+      "additionalProperties": false
+    },
+    "monetary_observations": {
+      "type": "object",
+      "properties": {
+        "successful_transaction_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "refunded_total_minor": {
+          "$ref": "_defs.schema.json#/$defs/decimal_aggregate"
+        },
+        "provider_transaction_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "_defs.schema.json#/$defs/uuid4"
+          }
+        },
+        "ledger_complete": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "successful_transaction_count",
+        "refunded_total_minor",
+        "provider_transaction_ids",
+        "ledger_complete"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "run_id": true
+          },
+          "required": ["run_id"]
+        },
+        {
+          "properties": {
+            "variant_validation_id": true
+          },
+          "required": ["variant_validation_id"]
+        }
+      ]
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "CONTROL"
+          }
+        },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": {
+          "control_integrity": {
+            "enum": ["verified", "invalid", "unverified"]
+          },
+          "treatment_fidelity": {
+            "const": "not_applicable"
+          },
+          "fidelity_basis": {
+            "const": "not_applicable"
+          },
+          "clock_assumption_refs": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "treatment_condition_results": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "control_integrity": {
+            "const": "not_applicable"
+          },
+          "treatment_fidelity": {
+            "enum": ["verified", "invalid", "unverified"]
+          },
+          "fidelity_basis": {
+            "enum": ["causal_plus_cross_source_clock_assumption", "causal"]
+          },
+          "treatment_condition_results": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/condition_result"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "condition_id": {
+                        "const": "BR-RUA-010"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/condition_result"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "condition_id": {
+                        "const": "BR-RUA-011"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/condition_result"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "condition_id": {
+                        "const": "BR-RUA-012"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/condition_result"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "condition_id": {
+                        "const": "BR-RUA-013"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/condition_result"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "condition_id": {
+                        "const": "BR-RUA-014"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/condition_result"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "condition_id": {
+                        "const": "BR-RUA-015"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "minItems": 6,
+            "maxItems": 6,
+            "items": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "fidelity_basis": {
+            "const": "causal_plus_cross_source_clock_assumption"
+          }
+        },
+        "required": ["fidelity_basis"]
+      },
+      "then": {
+        "properties": {
+          "clock_assumption_refs": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preservation_verdict": {
+            "enum": ["pass", "fail"]
+          }
+        },
+        "required": ["preservation_verdict"]
+      },
+      "then": {
+        "properties": {
+          "trial_validity": {
+            "const": "valid"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preservation_verdict": {
+            "const": "pass"
+          }
+        },
+        "required": ["preservation_verdict"]
+      },
+      "then": {
+        "properties": {
+          "processing_terminal_reason": {
+            "enum": [
+              "SUCCEEDED",
+              "RETRIES_EXHAUSTED",
+              "MESSAGE_REJECTED",
+              "PROVIDER_REJECTED",
+              "INTERRUPTED",
+              "SAFETY_DEADLINE"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preservation_verdict": {
+            "const": "pass"
+          },
+          "processing_terminal_reason": {
+            "const": "SUCCEEDED"
+          }
+        },
+        "required": ["preservation_verdict", "processing_terminal_reason"]
+      },
+      "then": {
+        "properties": {
+          "correct_completion": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preservation_verdict": {
+            "const": "pass"
+          },
+          "processing_terminal_reason": {
+            "not": {
+              "const": "SUCCEEDED"
+            }
+          }
+        },
+        "required": ["preservation_verdict", "processing_terminal_reason"]
+      },
+      "then": {
+        "properties": {
+          "correct_completion": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preservation_verdict": {
+            "const": "fail"
+          }
+        },
+        "required": ["preservation_verdict"]
+      },
+      "then": {
+        "properties": {
+          "correct_completion": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "preservation_verdict": {
+            "const": "indeterminate"
+          }
+        },
+        "required": ["preservation_verdict"]
+      },
+      "then": {
+        "properties": {
+          "correct_completion": {
+            "const": null
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "oracle_result"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "trial_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "variant_id": {
+      "enum": ["conventional", "durable"]
+    },
+    "scenario": {
+      "enum": ["CONTROL", "COMMIT_THEN_TIMEOUT"]
+    },
+    "preservation_verdict": {
+      "enum": ["pass", "fail", "indeterminate"]
+    },
+    "correct_completion": {
+      "enum": [true, false, null]
+    },
+    "processing_terminal_reason": {
+      "enum": [
+        "SUCCEEDED",
+        "RETRIES_EXHAUSTED",
+        "MESSAGE_REJECTED",
+        "PROVIDER_REJECTED",
+        "INTERRUPTED",
+        "SAFETY_DEADLINE",
+        null
+      ]
+    },
+    "trial_validity": {
+      "enum": ["valid", "invalid", "indeterminate"]
+    },
+    "validity_gates": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "independent_oracle"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "traceability"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "identity_integrity"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "control_integrity"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "treatment_fidelity"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "ledger_access"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "settlement"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "rule_evidence"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/validity_gate"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "const": "evidence_integrity"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "minItems": 9,
+      "maxItems": 9,
+      "items": false
+    },
+    "identity_integrity": {
+      "enum": ["verified", "invalid", "unverified", "not_applicable"]
+    },
+    "control_integrity": {
+      "enum": ["verified", "invalid", "unverified", "not_applicable"]
+    },
+    "treatment_fidelity": {
+      "enum": ["verified", "invalid", "unverified", "not_applicable"]
+    },
+    "fidelity_basis": {
+      "enum": ["causal_plus_cross_source_clock_assumption", "causal", "not_applicable"]
+    },
+    "clock_assumption_refs": {
+      "type": "array",
+      "items": {
+        "enum": ["CA-1"]
+      },
+      "uniqueItems": true
+    },
+    "rule_results": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-001"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-002"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-003"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-004"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-005"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-007"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-008"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-009"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "INV-RUA-001"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rule_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rule_id": {
+                  "const": "BR-RUA-025"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "minItems": 10,
+      "maxItems": 10,
+      "items": false
+    },
+    "treatment_condition_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/condition_result"
+      }
+    },
+    "indeterminate_reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "ledger_snapshot_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "monetary_observations": {
+      "$ref": "#/$defs/monetary_observations"
+    },
+    "checked_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "trial_id",
+    "trial_manifest_sha256",
+    "variant_id",
+    "scenario",
+    "preservation_verdict",
+    "correct_completion",
+    "processing_terminal_reason",
+    "trial_validity",
+    "validity_gates",
+    "identity_integrity",
+    "control_integrity",
+    "treatment_fidelity",
+    "fidelity_basis",
+    "clock_assumption_refs",
+    "rule_results",
+    "treatment_condition_results",
+    "indeterminate_reasons",
+    "ledger_snapshot_ref",
+    "monetary_observations",
+    "checked_at"
+  ],
+  "unevaluatedProperties": false
+}

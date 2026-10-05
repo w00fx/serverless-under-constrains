@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/safety_assessment.schema.json",
+  "title": "safety_assessment (catalogue group C, row 74)",
+  "description": "summary/safety-assessment.json (BR-RUA-046; design §8.17): every safety check of the execution and the derived status with precedence breached > unverified > within_limits. A within_limits or breached check states the observed value; an unverified check may lack it.",
+  "type": "object",
+  "$defs": {
+    "safety_check": {
+      "type": "object",
+      "properties": {
+        "boundary": {
+          "enum": [
+            "ACCOUNT_ALLOWLIST",
+            "REGION",
+            "REQUIRED_CAPABILITIES",
+            "OWNERSHIP_STRATEGY",
+            "ESTIMATED_COST",
+            "CONFLICTING_LEASE",
+            "ACTIVE_TIME",
+            "TOTAL_TIME",
+            "CLEANUP_TERMINAL",
+            "BILLED_COST"
+          ]
+        },
+        "declared_limit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "enum": ["within_limits", "breached", "unverified"]
+        },
+        "evidence_refs": {
+          "$ref": "_defs.schema.json#/$defs/evidence_refs"
+        },
+        "checked_at": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        }
+      },
+      "required": ["boundary", "declared_limit", "result", "evidence_refs", "checked_at"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": ["within_limits", "breached"]
+              }
+            },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "observed": true
+            },
+            "required": ["observed"]
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    },
+    {
+      "if": {
+        "properties": {
+          "safety_status": {
+            "const": "within_limits"
+          }
+        },
+        "required": ["safety_status"]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "const": "within_limits"
+                }
+              }
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "safety_status": {
+            "const": "breached"
+          }
+        },
+        "required": ["safety_status"]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "const": "breached"
+                }
+              },
+              "required": ["result"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "safety_status": {
+            "const": "unverified"
+          }
+        },
+        "required": ["safety_status"]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "const": "unverified"
+                }
+              },
+              "required": ["result"]
+            },
+            "items": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "enum": ["within_limits", "unverified"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "safety_assessment"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "safety_status": {
+      "enum": ["within_limits", "breached", "unverified"]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/safety_check"
+      },
+      "minItems": 1
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "assessed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "safety_status",
+    "checks",
+    "reasons",
+    "assessed_at"
+  ],
+  "unevaluatedProperties": false
+}
