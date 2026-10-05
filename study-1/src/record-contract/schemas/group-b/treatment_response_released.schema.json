@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/treatment_response_released.schema.json",
+  "title": "treatment_response_released (catalogue group B, row 36)",
+  "description": "Provider journal: the targeted response was released (RESPONSE_RELEASED) immediately before returning; causation names treatment_timeout_observed (BR-RUA-014).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "treatment_response_released"
+    },
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "causation_event_ids": {
+      "$ref": "_defs.schema.json#/$defs/causation_ids"
+    },
+    "provider_commit_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "causation_event_ids",
+    "provider_commit_id",
+    "provider_call_id",
+    "attempt_id"
+  ],
+  "unevaluatedProperties": false
+}

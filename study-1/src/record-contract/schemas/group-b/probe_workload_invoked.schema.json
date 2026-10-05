@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/probe_workload_invoked.schema.json",
+  "title": "probe_workload_invoked (catalogue group B, row 50)",
+  "description": "Runner journal: the single synchronous Invoke of the probe caller version returned; the Lambda RequestId cross-checks caller_invocation_started (BR-RUA-027).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "probe_workload_invoked"
+    },
+    "source": {
+      "enum": ["runner"]
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "lambda_request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status_code": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "executed_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "function_error": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "lambda_request_id", "status_code"],
+  "unevaluatedProperties": false
+}

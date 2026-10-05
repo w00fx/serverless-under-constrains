@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/phase_transition_recorded.schema.json",
+  "title": "phase_transition_recorded (catalogue group B, row 45)",
+  "description": "Runner journal: an execution phase P1-P9 of design §10.2 changed status (BR-RUA-040).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "phase_transition_recorded"
+    },
+    "source": {
+      "enum": ["runner"]
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "phase": {
+      "enum": [
+        "LEASE_ACQUISITION",
+        "PROVISIONING",
+        "READINESS",
+        "TRIALS",
+        "PROBE_FREEZE",
+        "LATE_MONITORING",
+        "CLEANUP",
+        "LEASE_FINALIZATION",
+        "SUMMARY"
+      ]
+    },
+    "status": {
+      "enum": ["STARTED", "SUCCEEDED", "FAILED", "SKIPPED"]
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "phase", "status", "reasons"],
+  "unevaluatedProperties": false
+}

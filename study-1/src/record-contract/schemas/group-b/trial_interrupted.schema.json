@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/trial_interrupted.schema.json",
+  "title": "trial_interrupted (catalogue group B, row 53)",
+  "description": "Runner journal: the active trial entered controlled interruption (BR-RUA-045, BR-RUA-046; design §10.2).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "trial_interrupted"
+    },
+    "source": {
+      "enum": ["runner"]
+    },
+    "cause": {
+      "enum": ["LEASE_LOST", "OPERATOR_ABORT", "SAFETY_DEADLINE", "INTERRUPTED"]
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "cause", "detail"],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_response_returned.schema.json",
+  "title": "provider_response_returned (catalogue group B, row 38)",
+  "description": "Provider journal: an untargeted accepted call committed and its SUCCEEDED response was returned; a terminal provider event for settlement (BR-RUA-025, BR-RUA-032).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provider_response_returned"
+    },
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "provider_commit_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_transaction_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "provider_commit_id",
+    "provider_transaction_id",
+    "provider_call_id",
+    "attempt_id",
+    "provider_request_id"
+  ],
+  "unevaluatedProperties": false
+}

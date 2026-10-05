@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/cleanup_action_recorded.schema.json",
+  "title": "cleanup_action_recorded (catalogue group B, row 56)",
+  "description": "Cleanup journal: one action of cleanup step 1-12, normal or emergency (BR-RUA-048, BR-RUA-049). cleanup_induced marks transitions the cleanup itself caused; a resource is named as a type and identifier pair with its ownership basis (BR-RUA-050).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "dependentRequired": {
+        "resource_type": ["resource_identifier"],
+        "resource_identifier": ["resource_type"],
+        "ownership_basis": ["resource_identifier"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "cleanup_action_recorded"
+    },
+    "source": {
+      "enum": ["cleanup"]
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "step": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    },
+    "step_status": {
+      "enum": ["STARTED", "SUCCEEDED", "FAILED", "SKIPPED"]
+    },
+    "cleanup_mode": {
+      "enum": ["NORMAL", "EMERGENCY"]
+    },
+    "cleanup_induced": {
+      "type": "boolean"
+    },
+    "action": {
+      "$ref": "_defs.schema.json#/$defs/upper_snake"
+    },
+    "resource_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resource_identifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ownership_basis": {
+      "enum": [
+        "recorded_stack",
+        "resource_manifest_and_tags",
+        "tags_name_type_created_after_freeze",
+        "ambiguous",
+        "excluded_baseline"
+      ]
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "step",
+    "step_status",
+    "cleanup_mode",
+    "cleanup_induced",
+    "action",
+    "reasons"
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/timeout_signal_recorded.schema.json",
+  "title": "timeout_signal_recorded (catalogue group B, row 39)",
+  "description": "Controller journal, written in one transaction with COMMITTED_WAITING -> TIMEOUT_SIGNALLED: the signal is immediately caused by both the provider commit event and the caller timeout event, sorted (BR-RUA-013, BR-RUA-025).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "timeout_signal_recorded"
+    },
+    "source": {
+      "enum": ["treatment_controller"]
+    },
+    "causation_event_ids": {
+      "$ref": "_defs.schema.json#/$defs/causation_ids"
+    },
+    "provider_commit_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "caller_timeout_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_commit_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "causation_event_ids",
+    "provider_commit_id",
+    "attempt_id",
+    "caller_timeout_event_id",
+    "provider_commit_event_id"
+  ],
+  "unevaluatedProperties": false
+}
