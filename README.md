@@ -10,7 +10,7 @@ Study 1 examines refund processing when a controlled provider commits a monetary
 
 The oracle will use frozen provider-ledger evidence to check whether one approved refund request caused one authorized monetary effect without exceeding the captured payment amount.
 
-Protocol rules, fixtures, acceptance criteria, and delivery gates live in the [Study 1 specification](study-1/specs/refund-under-ambiguous-outcome.md). The [project charter](PROJECT.md) defines the lab boundary and delivery sequence.
+Protocol rules, fixtures, acceptance criteria, and delivery gates live in the [Study 1 specification](study-1/specs/rua/refund-under-ambiguous-outcome.md). The [project charter](PROJECT.md) defines the lab boundary and delivery sequence.
 
 ## Repository status
 
@@ -26,9 +26,9 @@ No application code, package manifest, lockfile, test suite, infrastructure defi
 | Document | Purpose |
 | --- | --- |
 | [Project charter](PROJECT.md) | Lab purpose, vocabulary, safety posture, and Study 1 delivery sequence. |
-| [Study 1 specification](study-1/specs/refund-under-ambiguous-outcome.md) | Refund domain, protocol, evidence model, oracle rules, and acceptance criteria. |
+| [Study 1 specification](study-1/specs/rua/refund-under-ambiguous-outcome.md) | Refund domain, protocol, evidence model, oracle rules, and acceptance criteria. |
 | [Architecture decisions](study-1/architecture/decisions/) | Design constraints adopted for Study 1. |
-| [Study 1 guidance](study-1/AGENTS.md) | Scope and sequencing rules for Study 1 work. |
+| [Study 1 guidance](study-1/CLAUDE.md) | Scope and sequencing rules for Study 1 work. |
 
 ## Safety boundary
 

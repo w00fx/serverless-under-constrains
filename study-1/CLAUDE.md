@@ -5,10 +5,10 @@ to this capability's code; what must be true lives in its spec.
 
 ## Truth for this capability
 
-- Spec: `specs/study-1/specs/rua/refund-under-ambiguous-outcome.md` (CAP-RUA). Only `ratified` text is authority;
+- Spec: `specs/rua/refund-under-ambiguous-outcome.md` (CAP-RUA). Only `ratified` text is authority;
   `[PROPOSED]` text is not.
 - QA: the areas under `specs/qa/study-operator/` whose `crosses` includes CAP-RUA.
-- To implement it whole: `/implement-feature specs/study-1/specs/rua/refund-under-ambiguous-outcome.md`.
+- To implement it whole: `/implement-feature study-1/specs/rua/refund-under-ambiguous-outcome.md`.
 
 ## Working here
 

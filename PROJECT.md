@@ -4,7 +4,7 @@ Status: Project charter v0.2
 Date: August 27, 2026
 First deliverable: Study 1, refunds under ambiguous outcomes
 
-Primary specification: [Study 1: Evaluate Refund-Invariant Preservation Under Ambiguous Outcomes](study-1/specs/refund-under-ambiguous-outcome.md)
+Primary specification: [Study 1: Evaluate Refund-Invariant Preservation Under Ambiguous Outcomes](study-1/specs/rua/refund-under-ambiguous-outcome.md)
 
 This charter states the lab's purpose, vocabulary, safety posture, and Study 1 delivery sequence. Protocol rules, acceptance criteria, numeric fixtures, and milestone gates live only in the specification and the Study 1 architecture decisions.
 
