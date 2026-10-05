@@ -1,0 +1,7 @@
+evidence/
+cdk.out/
+.deploy-staging/
+reports/
+.stryker-tmp/
+node_modules/
+coverage/

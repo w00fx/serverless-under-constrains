@@ -1,0 +1,22 @@
+{
+  "all": true,
+  "include": ["src/**/*.ts", "tools/lib/**/*.ts"],
+  "exclude": [
+    "src/**/aws/**",
+    "src/**/node/**",
+    "src/**/*.handler.ts",
+    "src/operator-cli/main.ts",
+    "src/operator-cli/composition-root.ts",
+    "infra/**"
+  ],
+  "extension": [".ts"],
+  "reporter": ["text", "json-summary"],
+  "reports-dir": "reports/coverage",
+  "temp-directory": "reports/coverage/tmp",
+  "check-coverage": true,
+  "per-file": true,
+  "lines": 100,
+  "branches": 100,
+  "functions": 100,
+  "statements": 100
+}

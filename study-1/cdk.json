@@ -1,0 +1,4 @@
+{
+  "app": "node infra/bin/study-app.ts",
+  "output": "cdk.out"
+}

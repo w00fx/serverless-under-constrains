@@ -1,0 +1,15 @@
+# Truth-layer and human-authored prose: never reformatted by tooling.
+specs/
+architecture/
+**/*.md
+# Generated, byte-exact or third-party material.
+package-lock.json
+node_modules/
+cdk.out/
+reports/
+coverage/
+evidence/
+.deploy-staging/
+.stryker-tmp/
+test/golden/**/fixtures/
+test/fuzz/**/corpus/
