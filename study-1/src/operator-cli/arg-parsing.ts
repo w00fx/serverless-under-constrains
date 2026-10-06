@@ -199,3 +199,14 @@ export function usageReason(problem: string, expected: string): StructuredReason
 export function operandOf(args: ParsedArgs, name: string): string {
   return args.positionals.get(name) ?? '';
 }
+
+/**
+ * The value of a named flag, or the empty string when it was not given, so a parser of the value
+ * refuses an absent flag with the same quoted shape as an empty one.
+ *
+ * @example
+ * flagValue(args.flags, 'probe-index'); // 'a3f…' or ''
+ */
+export function flagValue(flags: ReadonlyMap<string, string>, name: string): string {
+  return flags.get(name) ?? '';
+}

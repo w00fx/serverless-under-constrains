@@ -28,5 +28,6 @@ process.exitCode = await main(
     env: process.env,
     tempRoot: tmpdir(),
     nodeVersion: process.version,
+    nodeExecutable: process.execPath,
   }),
 );

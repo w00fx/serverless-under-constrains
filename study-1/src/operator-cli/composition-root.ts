@@ -7,8 +7,11 @@ import { resolve } from 'node:path';
 import { ChildProcessCommandRunner } from '../deployment-assembly/node/child-process-command-runner.ts';
 import { NodePackageFileSystem } from '../evidence-package/node/node-package-file-system.ts';
 import { createRecordValidator } from '../record-contract/schema-registry.ts';
+import { AdmitCommand } from './admit-commands.ts';
+import { createAwsExecutionAdmitter } from './aws/aws-execution-admitter.ts';
 import type { CliCommand, CompositionRoot } from './cli-types.ts';
 import { GitRevisionWorkspace } from './node/git-revision-workspace.ts';
+import { NodeInputFileReader } from './node/node-input-file-reader.ts';
 import { OracleEvaluateCommand } from './oracle-evaluate-command.ts';
 import { OracleRevisionCheckCommand } from './oracle-revision-check.ts';
 import { StoredQualificationReader } from './run-completion-inputs.ts';
@@ -24,13 +27,15 @@ export interface CompositionSettings {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly tempRoot: string;
   readonly nodeVersion: string;
+  /** The Node executable synthesis runs the CDK app with (`process.execPath`). */
+  readonly nodeExecutable: string;
 }
 
 /**
  * The production composition of every operator command.
  *
  * @example
- * const root = createCompositionRoot({ studyRoot, cwd: process.cwd(), env: process.env, tempRoot: tmpdir(), nodeVersion: process.version });
+ * const root = createCompositionRoot({ studyRoot, cwd: process.cwd(), env: process.env, tempRoot: tmpdir(), nodeVersion: process.version, nodeExecutable: process.execPath });
  */
 export function createCompositionRoot(settings: CompositionSettings): CompositionRoot {
   const validator = createRecordValidator();
@@ -38,7 +43,21 @@ export function createCompositionRoot(settings: CompositionSettings): Compositio
   const env = definedEnvironment(settings.env);
   const runner = new ChildProcessCommandRunner();
   const files = (evidenceRoot: string): NodePackageFileSystem => new NodePackageFileSystem(evidenceRoot);
+  const inputs = new NodeInputFileReader();
+  const admit = createAwsExecutionAdmitter({
+    studyRoot: settings.studyRoot,
+    tempRoot: settings.tempRoot,
+    nodeVersion: settings.nodeVersion,
+    nodeExecutable: settings.nodeExecutable,
+    env,
+    inputs,
+    clock,
+    validator,
+  });
   const commands: readonly CliCommand[] = [
+    new AdmitCommand('TRANSPORT_PROBE', { admit, inputs }),
+    new AdmitCommand('VARIANT_VALIDATION', { admit, inputs }),
+    new AdmitCommand('RUN', { admit, inputs }),
     new OracleRevisionCheckCommand({
       workspace: new GitRevisionWorkspace({
         runner,

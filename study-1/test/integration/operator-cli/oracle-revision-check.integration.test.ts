@@ -82,6 +82,7 @@ describe('AC-RUA-055 oracle revision check', () => {
       env: process.env,
       tempRoot: scratch,
       nodeVersion: process.version,
+      nodeExecutable: process.execPath,
     });
     const exitCode = await main(
       ['oracle', 'revision-check', ...args],

@@ -27,7 +27,7 @@ import type { PackageVerification } from '../record-contract/records/group-c/pac
 import type { BilledCostCheck } from '../record-contract/records/group-c/vocabulary.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
 import type { SelectedRunQualification } from '../study-comparison/study-provenance.ts';
-import { usageReason } from './arg-parsing.ts';
+import { flagValue, usageReason } from './arg-parsing.ts';
 import { parseDigest, parseDigestFlag } from './package-reading.ts';
 
 /** The flags that name the selected qualification (design §11 `run admit`). */
@@ -80,11 +80,11 @@ const NO_BYTES = new Uint8Array();
  * parseSelection(new Map([['probe', id], ['probe-index', sha]])); // { ok: true, value: { …, amendment_head_sha256: null } }
  */
 export function parseSelection(flags: ReadonlyMap<string, string>): Result<QualificationSelection, StructuredReason> {
-  const probe = flags.get(SELECTION_FLAGS.probe) ?? '';
+  const probe = flagValue(flags, SELECTION_FLAGS.probe);
   if (!isUuid4(probe)) {
     return err(usageReason(`--probe ${boundedJsonText(probe)} is not a probe id`, 'a lowercase UUIDv4'));
   }
-  const index = parseDigest(SELECTION_FLAGS.index, flags.get(SELECTION_FLAGS.index) ?? '');
+  const index = parseDigest(SELECTION_FLAGS.index, flagValue(flags, SELECTION_FLAGS.index));
   if (!index.ok) {
     return index;
   }
