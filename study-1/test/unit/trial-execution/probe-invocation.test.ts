@@ -108,6 +108,24 @@ describe('lambdaInvokeResponseOf', () => {
       payload: new Uint8Array(),
     });
   });
+
+  // Regression (A-05 fuzz target probe-invocation.fuzz.test.ts): an own Payload that is a proxy
+  // whose getPrototypeOf trap throws made the `instanceof Uint8Array` check throw.
+  it('never throws on a payload whose prototype cannot be read', () => {
+    const payload = new Proxy(
+      {},
+      {
+        getPrototypeOf: (): never => {
+          throw new Error('hostile proxy trap');
+        },
+      },
+    );
+    assert.deepEqual(lambdaInvokeResponseOf({ StatusCode: 200, Payload: payload }), {
+      kind: 'response',
+      status_code: 200,
+      payload: new Uint8Array(),
+    });
+  });
 });
 
 describe('probeInvokeFailureOf', () => {
@@ -146,6 +164,8 @@ describe('judgeProbeInvocation', () => {
   it('starts the probe unrecorded but returned when the response has no request id or no HTTP status', () => {
     for (const unrecordable of [
       withoutRequestId(),
+      // The journal refuses an empty lambda_request_id, so an empty id is no id.
+      response({ request_id: '' }),
       response({ status_code: 99 }),
       response({ status_code: 600 }),
       response({ status_code: 200.5 }),

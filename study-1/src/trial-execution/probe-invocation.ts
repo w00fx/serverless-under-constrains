@@ -63,7 +63,7 @@ export function lambdaInvokeResponseOf(output: unknown): LambdaInvokeResponse {
     status_code: typeof status === 'number' ? status : 0,
     ...(executedVersion === undefined ? {} : { executed_version: executedVersion }),
     ...(functionError === undefined ? {} : { function_error: functionError }),
-    payload: payload instanceof Uint8Array ? Uint8Array.from(payload) : new Uint8Array(),
+    payload: copiedBytes(payload),
     ...(requestId === undefined ? {} : { request_id: requestId }),
   };
 }
@@ -104,12 +104,14 @@ export function judgeProbeInvocation(
   }
   const status = result.status_code;
   const recordable = Number.isInteger(status) && status >= MIN_HTTP_STATUS && status <= MAX_HTTP_STATUS;
-  if (result.request_id === undefined || !recordable) {
-    const requestId = result.request_id === undefined ? 'no request id' : 'a request id';
-    return unrecorded(true, `the Invoke returned status ${String(status)} with ${requestId}`);
+  // The journal's lambda_request_id has at least one character; an empty id is no id.
+  const requestId = nonEmptyString(result.request_id);
+  if (requestId === undefined || !recordable) {
+    const described = requestId === undefined ? 'no request id' : 'a request id';
+    return unrecorded(true, `the Invoke returned status ${String(status)} with ${described}`);
   }
   const invoked: EventBody<'probe_workload_invoked'> = {
-    lambda_request_id: result.request_id,
+    lambda_request_id: requestId,
     status_code: status,
     ...(result.executed_version === undefined ? {} : { executed_version: result.executed_version }),
     ...(result.function_error === undefined ? {} : { function_error: result.function_error }),
@@ -170,6 +172,16 @@ function unrecorded(returned: boolean, problem: string): ProbeInvocationJudgemen
     invocation_returned: returned,
     failures: [invocationReason('PROBE_WORKLOAD_INVOKE_AMBIGUOUS', problem)],
   };
+}
+
+// A copy of a byte payload; anything else, including a value whose prototype cannot be read (a
+// proxy whose trap throws, found by the A-05 fuzz target), reads as an empty payload.
+function copiedBytes(value: unknown): Uint8Array {
+  try {
+    return value instanceof Uint8Array ? Uint8Array.from(value) : new Uint8Array();
+  } catch {
+    return new Uint8Array();
+  }
 }
 
 // A member that cannot be read (a throwing getter or proxy trap) reads as absent.
