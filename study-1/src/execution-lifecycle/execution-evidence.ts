@@ -1,8 +1,10 @@
 // The execution-level evidence no trial owns (design §7 `readiness/`, `provider/`; D-10, addendum
 // §2.2, A-09): the readiness canary's two journals, the provider warm-up journal and the provider's
 // unattributed calls, exported once after the last trial and monitoring, before cleanup changes
-// anything. They are supplementary evidence. The A-09 configuration item has no package path in the
-// layout (design §7), so it stays in the control table's export only (evidence/WP-27/decisions.md).
+// anything. They are supplementary evidence. The A-09 configuration item is collected too, but the
+// layout (design §7) has no package path for it, so it is not packaged: no table export keeps it,
+// and stack deletion removes it with the control table. Its identity and manifest digest are
+// already in the package; only its `written_at` is lost (evidence/WP-27/decisions.md, residual).
 
 import { collectExecutionEvidence } from '../evidence-collection/readiness-collection.ts';
 import type { CollectorStoreReader } from '../evidence-collection/collected-records.ts';
