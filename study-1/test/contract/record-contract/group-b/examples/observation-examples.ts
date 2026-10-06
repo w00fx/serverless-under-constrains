@@ -36,7 +36,12 @@ const RUN_CORRELATION: ExecutionCorrelation = { run_id: RUN_ID, execution_manife
 const SOURCE_QUEUE = 'rua-run-0100-source.fifo';
 const DLQ = 'rua-run-0100-dlq.fifo';
 
-/** Source-queue counters read successfully. */
+/**
+ * Source-queue counters read successfully.
+ *
+ * @example
+ * toJson(queueCountersObserved());
+ */
 export function queueCountersObserved(): ExecutionCorrelation & QueueCountersObserved {
   return {
     schema_version: 1,
@@ -51,7 +56,12 @@ export function queueCountersObserved(): ExecutionCorrelation & QueueCountersObs
   };
 }
 
-/** A DLQ read that failed. */
+/**
+ * A DLQ read that failed.
+ *
+ * @example
+ * toJson(queueCountersUnavailable());
+ */
 export function queueCountersUnavailable(): ExecutionCorrelation & QueueCountersUnavailable {
   return {
     schema_version: 1,
@@ -66,7 +76,12 @@ export function queueCountersUnavailable(): ExecutionCorrelation & QueueCounters
   };
 }
 
-/** One settlement-loop sample of a trial. */
+/**
+ * One settlement-loop sample of a trial.
+ *
+ * @example
+ * toJson(settlementSample());
+ */
 export function settlementSample(): SettlementSample {
   return {
     schema_version: 1,
@@ -92,7 +107,12 @@ export function settlementSample(): SettlementSample {
   };
 }
 
-/** The trial's DLQ contents, captured in full. */
+/**
+ * The trial's DLQ contents, captured in full.
+ *
+ * @example
+ * toJson(dlqSnapshot());
+ */
 export function dlqSnapshot(): DlqSnapshot {
   return {
     schema_version: 1,
@@ -119,7 +139,12 @@ export function dlqSnapshot(): DlqSnapshot {
   };
 }
 
-/** The trial's ledger partition, read consistently in one page. */
+/**
+ * The trial's ledger partition, read consistently in one page.
+ *
+ * @example
+ * toJson(ledgerSnapshot());
+ */
 export function ledgerSnapshot(): LedgerSnapshot {
   return {
     schema_version: 1,
@@ -148,7 +173,12 @@ export function ledgerSnapshot(): LedgerSnapshot {
   };
 }
 
-/** The trial's treatment item after its response was released. */
+/**
+ * The trial's treatment item after its response was released.
+ *
+ * @example
+ * toJson(treatmentItemPresent());
+ */
 export function treatmentItemPresent(): TreatmentStateSnapshot {
   return {
     schema_version: 1,
@@ -180,6 +210,9 @@ export function treatmentItemPresent(): TreatmentStateSnapshot {
  * A treatment item the provider released at its safety deadline while it waited after commit:
  * the barrier writes `safety_release_cause` only on the transition to SAFETY_RELEASED
  * (refund-provider treatment-barrier), so only this state carries it.
+ *
+ * @example
+ * toJson(treatmentItemSafetyReleased());
  */
 export function treatmentItemSafetyReleased(): TreatmentStateSnapshot {
   return {
@@ -205,7 +238,12 @@ export function treatmentItemSafetyReleased(): TreatmentStateSnapshot {
   };
 }
 
-/** A treatment partition with no item (a CONTROL trial). */
+/**
+ * A treatment partition with no item (a CONTROL trial).
+ *
+ * @example
+ * toJson(treatmentItemAbsent());
+ */
 export function treatmentItemAbsent(): TreatmentStateSnapshot {
   return {
     schema_version: 1,
@@ -219,7 +257,12 @@ export function treatmentItemAbsent(): TreatmentStateSnapshot {
   };
 }
 
-/** The trial's Durable executions and their history. */
+/**
+ * The trial's Durable executions and their history.
+ *
+ * @example
+ * toJson(durableExecutionMetadata());
+ */
 export function durableExecutionMetadata(): DurableExecutionMetadata {
   return {
     schema_version: 1,
@@ -257,7 +300,12 @@ export function durableExecutionMetadata(): DurableExecutionMetadata {
   };
 }
 
-/** Telemetry availability of the run (execution level). */
+/**
+ * Telemetry availability of the run (execution level).
+ *
+ * @example
+ * toJson(telemetryAvailability());
+ */
 export function telemetryAvailability(): TelemetryAvailabilityRecord {
   return {
     schema_version: 1,
@@ -270,7 +318,12 @@ export function telemetryAvailability(): TelemetryAvailabilityRecord {
   };
 }
 
-/** The operational state before an emergency cleanup. */
+/**
+ * The operational state before an emergency cleanup.
+ *
+ * @example
+ * toJson(preCleanupSnapshot());
+ */
 export function preCleanupSnapshot(): PreCleanupSnapshot {
   return {
     schema_version: 1,
@@ -292,7 +345,12 @@ export function preCleanupSnapshot(): PreCleanupSnapshot {
   };
 }
 
-/** A checkpoint of the probe's coordination journal prefix. */
+/**
+ * A checkpoint of the probe's coordination journal prefix.
+ *
+ * @example
+ * toJson(coordinationPrefixCheckpoint());
+ */
 export function coordinationPrefixCheckpoint(): CoordinationPrefixCheckpoint {
   return {
     schema_version: 1,

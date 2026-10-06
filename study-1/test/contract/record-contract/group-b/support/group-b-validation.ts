@@ -9,7 +9,12 @@ import type { RecordValidation } from '../../../../../src/record-contract/schema
 
 export const groupBValidator = createRecordValidator();
 
-/** Each violation as `<instance_path> <keyword> <detail>`, empty when the value is valid. */
+/**
+ * Each violation as `<instance_path> <keyword> <detail>`, empty when the value is valid.
+ *
+ * @example
+ * violationsOf(withMember(json, 'phase', 'settled')); // ['/phase enum must be equal to ...']
+ */
 export function violationsOf(value: JsonValue): readonly string[] {
   const result: RecordValidation = groupBValidator.validate(value);
   if (result.valid) {

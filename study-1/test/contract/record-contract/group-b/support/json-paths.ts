@@ -97,7 +97,12 @@ export function textOf(value: JsonValue): string {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-/** Renders a path as a JSON Pointer for assertion labels and violation matching. */
+/**
+ * Renders a path as a JSON Pointer for assertion labels and violation matching.
+ *
+ * @example
+ * pointerOf(['messages', 0, 'body']); // '/messages/0/body'
+ */
 export function pointerOf(path: JsonPath): string {
   return path.map((segment) => `/${String(segment)}`).join('');
 }

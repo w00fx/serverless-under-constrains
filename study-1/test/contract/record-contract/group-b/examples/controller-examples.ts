@@ -26,7 +26,12 @@ const CALLER_TIMEOUT_EVENT_ID = uuid(6);
 const COMMIT_EVENT_ID = uuid(14);
 const ATTEMPT_ID = ATTEMPT_CORRELATION.attempt_id;
 
-/** The signal for the held commit, caused by the caller timeout and the commit (sorted). */
+/**
+ * The signal for the held commit, caused by the caller timeout and the commit (sorted).
+ *
+ * @example
+ * toJson(timeoutSignalRecorded());
+ */
 export function timeoutSignalRecorded(): TimeoutSignalRecorded {
   return {
     ...trialEnvelope('timeout_signal_recorded', 23, 1),
@@ -39,7 +44,12 @@ export function timeoutSignalRecorded(): TimeoutSignalRecorded {
   };
 }
 
-/** A redelivery of the same caller timeout after the signal. */
+/**
+ * A redelivery of the same caller timeout after the signal.
+ *
+ * @example
+ * toJson(timeoutSignalDuplicateObserved());
+ */
 export function timeoutSignalDuplicateObserved(): TimeoutSignalDuplicateObserved {
   return {
     ...trialEnvelope('timeout_signal_duplicate_observed', 24, 2),
@@ -50,7 +60,12 @@ export function timeoutSignalDuplicateObserved(): TimeoutSignalDuplicateObserved
   };
 }
 
-/** A different caller timeout for an already signalled treatment. */
+/**
+ * A different caller timeout for an already signalled treatment.
+ *
+ * @example
+ * toJson(timeoutSignalConflictRecorded());
+ */
 export function timeoutSignalConflictRecorded(): TimeoutSignalConflictRecorded {
   return {
     ...trialEnvelope('timeout_signal_conflict_recorded', 25, 3),
@@ -62,7 +77,12 @@ export function timeoutSignalConflictRecorded(): TimeoutSignalConflictRecorded {
   };
 }
 
-/** A caller timeout arriving after the safety release. */
+/**
+ * A caller timeout arriving after the safety release.
+ *
+ * @example
+ * toJson(lateTimeoutSignalRejected());
+ */
 export function lateTimeoutSignalRejected(): LateTimeoutSignalRejected {
   return {
     ...trialEnvelope('late_timeout_signal_rejected', 26, 4),
@@ -73,7 +93,12 @@ export function lateTimeoutSignalRejected(): LateTimeoutSignalRejected {
   };
 }
 
-/** A caller timeout for an attempt other than the committed target. */
+/**
+ * A caller timeout for an attempt other than the committed target.
+ *
+ * @example
+ * toJson(notTargetedCallerTimeout());
+ */
 export function notTargetedCallerTimeout(): NotTargetedCallerTimeout {
   return {
     ...trialEnvelope('caller_timeout_rejected', 27, 5),
@@ -86,7 +111,12 @@ export function notTargetedCallerTimeout(): NotTargetedCallerTimeout {
   };
 }
 
-/** A caller timeout that arrived before any commit. */
+/**
+ * A caller timeout that arrived before any commit.
+ *
+ * @example
+ * toJson(beforeCommitCallerTimeout());
+ */
 export function beforeCommitCallerTimeout(): BeforeCommitCallerTimeout {
   return {
     ...trialEnvelope('caller_timeout_rejected', 27, 5),
@@ -99,7 +129,12 @@ export function beforeCommitCallerTimeout(): BeforeCommitCallerTimeout {
   };
 }
 
-/** A caller timeout in a CONTROL trial, which has no treatment. */
+/**
+ * A caller timeout in a CONTROL trial, which has no treatment.
+ *
+ * @example
+ * toJson(controlTrialCallerTimeout());
+ */
 export function controlTrialCallerTimeout(): ControlTrialCallerTimeout {
   return {
     ...trialEnvelope('caller_timeout_rejected', 27, 5),
@@ -111,7 +146,12 @@ export function controlTrialCallerTimeout(): ControlTrialCallerTimeout {
   };
 }
 
-/** A stream record the controller could not read as a caller timeout. */
+/**
+ * A stream record the controller could not read as a caller timeout.
+ *
+ * @example
+ * toJson(invalidCallerTimeout());
+ */
 export function invalidCallerTimeout(): InvalidCallerTimeout {
   return {
     ...trialEnvelope('caller_timeout_rejected', 27, 5),
@@ -124,7 +164,12 @@ export function invalidCallerTimeout(): InvalidCallerTimeout {
   };
 }
 
-/** The controller's acknowledgement of a readiness canary (execution level). */
+/**
+ * The controller's acknowledgement of a readiness canary (execution level).
+ *
+ * @example
+ * toJson(controllerCanaryAcknowledged());
+ */
 export function controllerCanaryAcknowledged(): ControllerCanaryAcknowledged {
   return {
     ...executionEnvelope('controller_canary_acknowledged', 'run', 28, 6),
