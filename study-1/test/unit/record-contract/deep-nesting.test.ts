@@ -2,7 +2,7 @@
 // JSON value"): every kernel function that takes parsed JSON is total over nesting deeper than
 // the call stack. The former recursive code threw RangeError near 2,500 levels (about 10 KB):
 // sameJsonValue behind the kernel's uniqueItems, JSON.stringify in describeJson and in the
-// registry's details, and canonicalJson / structurallyEqual. Each case parses a 50,000-level
+// registry's details, and canonicalJson / structurallyEqual. Each case parses a 100,000-level
 // tower from bytes, as ingestion would, and places it where the probes crashed.
 
 import assert from 'node:assert/strict';
