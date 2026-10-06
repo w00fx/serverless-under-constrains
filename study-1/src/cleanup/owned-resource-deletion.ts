@@ -135,13 +135,15 @@ async function deleteStackAndWait(stackId: string, ports: DeletionPorts): Promis
   if (request.kind === 'failed') {
     return { action: 'DELETE_FAILED', reason: request.reason };
   }
-  for (let poll = 1; ; poll += 1) {
-    await ports.sleeper.sleep(STACK_DELETE_POLL_INTERVAL_MS);
-    const settled = stackPollOutcome(stackId, await ports.stacks.describe(stackId), poll);
-    if (settled !== undefined) {
-      return settled;
-    }
-  }
+  return awaitStackDeletion(stackId, ports, 1);
+}
+
+// Sleeps, then reads the stack once (the `poll`-th read) and, while it is still deleting, does so
+// again: at most STACK_DELETE_MAX_POLLS reads deep.
+async function awaitStackDeletion(stackId: string, ports: DeletionPorts, poll: number): Promise<StackDeletion> {
+  await ports.sleeper.sleep(STACK_DELETE_POLL_INTERVAL_MS);
+  const settled = stackPollOutcome(stackId, await ports.stacks.describe(stackId), poll);
+  return settled ?? awaitStackDeletion(stackId, ports, poll + 1);
 }
 
 // What one read after the deletion request shows: how the deletion ended, or undefined while the

@@ -48,18 +48,20 @@ export class ControlTableBarrierRelease implements BarrierReleasePort {
   }
 
   /** Moves the partition's treatment item to SAFETY_RELEASED when it is in a nonterminal state. */
-  async requestSafetyRelease(partitionKey: string): Promise<BarrierReleaseOutcome> {
-    for (let attempt = 1; ; attempt += 1) {
-      const decision = await this.#decide(partitionKey);
-      if (decision.kind === 'done') {
-        return decision.outcome;
-      }
-      const written = await this.#store.write(releaseAction(partitionKey, decision.from, decision.version));
-      const outcome = releaseOutcome(partitionKey, decision.from, written, attempt);
-      if (outcome !== undefined) {
-        return outcome;
-      }
+  requestSafetyRelease(partitionKey: string): Promise<BarrierReleaseOutcome> {
+    return this.#attemptRelease(partitionKey, 1);
+  }
+
+  // One read-and-release attempt; a lost race tries again, at most MAX_RELEASE_ATTEMPTS deep.
+  async #attemptRelease(partitionKey: string, attempt: number): Promise<BarrierReleaseOutcome> {
+    const decision = await this.#decide(partitionKey);
+    if (decision.kind === 'done') {
+      return decision.outcome;
     }
+    const written = await this.#store.write(releaseAction(partitionKey, decision.from, decision.version));
+    return (
+      releaseOutcome(partitionKey, decision.from, written, attempt) ?? this.#attemptRelease(partitionKey, attempt + 1)
+    );
   }
 
   async #decide(partitionKey: string): Promise<ReleaseDecision> {

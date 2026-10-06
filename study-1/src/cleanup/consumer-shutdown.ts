@@ -54,13 +54,23 @@ async function disableOne(mappingId: string, port: ConsumerControlPort, sleeper:
   if (request.kind !== 'requested') {
     return request;
   }
-  for (let poll = 1; ; poll += 1) {
-    const settled = consumerPollOutcome(mappingId, await port.readState(mappingId), poll);
-    if (settled !== undefined) {
-      return settled;
-    }
-    await sleeper.sleep(CONSUMER_POLL_INTERVAL_MS);
+  return awaitDisabled(mappingId, port, sleeper, 1);
+}
+
+// Reads `State` once (the `poll`-th read) and, while the mapping is still disabling, sleeps and
+// reads again: at most CONSUMER_MAX_POLLS reads deep.
+async function awaitDisabled(
+  mappingId: string,
+  port: ConsumerControlPort,
+  sleeper: Sleeper,
+  poll: number,
+): Promise<DisableResult> {
+  const settled = consumerPollOutcome(mappingId, await port.readState(mappingId), poll);
+  if (settled !== undefined) {
+    return settled;
   }
+  await sleeper.sleep(CONSUMER_POLL_INTERVAL_MS);
+  return awaitDisabled(mappingId, port, sleeper, poll + 1);
 }
 
 // What one `State` read shows: how the disable ended, or undefined while the mapping is still
