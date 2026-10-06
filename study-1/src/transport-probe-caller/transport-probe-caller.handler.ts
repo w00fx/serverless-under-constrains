@@ -37,6 +37,12 @@ function callerInstance(): ProbeCaller {
   return caller;
 }
 
+/**
+ * The Lambda entry: the runner's single synchronous probe invocation (BR-RUA-027).
+ *
+ * @example
+ * const report = await handler(probeWorkloadRequest, { awsRequestId: 'req-1' }); // report.attempt.outcome
+ */
 export async function handler(
   event: JsonValue,
   context: { readonly awsRequestId: string },

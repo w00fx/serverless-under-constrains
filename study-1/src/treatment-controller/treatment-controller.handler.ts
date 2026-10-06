@@ -35,6 +35,23 @@ function writeLog(line: ControllerLogLine): void {
   process.stdout.write(`${JSON.stringify(line)}\n`);
 }
 
+// A composition failure (for example a missing environment variable) happens before the
+// consumer runs, so it is logged here as one JSON line before it fails the invocation.
+function loggedControllerInstance(): TreatmentController {
+  try {
+    return controllerInstance();
+  } catch (error) {
+    writeLog({ level: 'error', event: 'controller_error', detail: String(error) });
+    throw error;
+  }
+}
+
+/**
+ * The Lambda entry: consumes one DynamoDB stream event of the caller journal.
+ *
+ * @example
+ * await handler({ Records: [streamRecord] }); // one JSON log line per record on stdout
+ */
 export async function handler(event: unknown): Promise<void> {
-  await consumeStreamEvent(event, controllerInstance(), writeLog);
+  await consumeStreamEvent(event, loggedControllerInstance(), writeLog);
 }
