@@ -1,7 +1,7 @@
 // The trial-execution suite minimums (design §12.1, §14, D-33, Owner amendments A-03 and A-11):
 // the file exists and holds at least the count of every suite this feature has, and at least the
 // six AC-RUA-019 and AC-RUA-020 integration cases design §14 lists. Values only ratchet upward
-// (A-03), so the test pins the counts at the WP-26 review as a floor: a downward edit of the
+// (A-03), so the test pins the counts after CMP-04 (the probe workload) as a floor: a downward edit of the
 // committed file fails here. Raise both together.
 
 import assert from 'node:assert/strict';
@@ -12,8 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { parseSuiteMinimums } from '../../../tools/lib/suite-accounting.ts';
 
 const MINIMUMS_PATH = fileURLToPath(new URL('../../../quality/suite-minimums/trial-execution.json', import.meta.url));
-/** The WP-26 counts after its single-pass review. */
-const RATIFIED_FLOOR = { unit: 24, integration: 72, fuzz: 2 } as const;
+/** The CMP-04 counts (WP-26 ratified 24, 72 and 2 after its single-pass review). */
+const RATIFIED_FLOOR = { unit: 57, integration: 122, fuzz: 7 } as const;
 /** Design §14: AC-RUA-019 has two integration cases and AC-RUA-020 four. */
 const AC_INTEGRATION_CASES = 6;
 

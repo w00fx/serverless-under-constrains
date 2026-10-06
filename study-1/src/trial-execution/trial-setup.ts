@@ -1,36 +1,52 @@
-// Phases T2-T4 of one trial (design §10.2, §9.3; BR-RUA-019, BR-RUA-036, D-21):
-//   T2 every trial table holds nothing under the trial partition (one consistent Query each)
+// Phases T2-T5 of one capture unit, a trial or the transport probe (design §10.2, §9.3;
+// BR-RUA-019, BR-RUA-036, D-21):
+//   T2 every trial table holds nothing under the unit's partition (one consistent Query each)
 //      -> trial_partitions_verified_absent
-//   T3 the provider's trial configuration and the payment in `control`, then the variant's
-//      registry item names this trial (conditional on the version the runner last read)
-//   T4 a treatment trial arms its `treatment` item -> treatment_armed
-// Every write is conditional, so a leftover item from another trial is refused instead of
+//   T3 the provider's configuration and the payment in `control`, then, for a trial, the
+//      variant's registry item names this trial (conditional on the version the runner last
+//      read); the probe has no variant and no registry item (D-06)
+//   T4 a treatment unit arms its `treatment` item -> treatment_armed
+//   T5 the publication gate is open
+// Every write is conditional, so a leftover item from another unit is refused instead of
 // overwritten; any refusal, read failure or unwritten runner event rejects the setup before
-// publication, and no trial starts.
+// publication (or, for the probe, before its Invoke), and nothing starts. The probe runs the same
+// steps in `<execution_id>#probe` (evidence/CMP-04/decisions.md: generalized, not copied).
 
 import type { Condition, DurableItemStore, StoredItem, WriteAction } from '../durable-store/item-store-port.ts';
-import { executionIdentityFields } from '../record-contract/envelope.ts';
+import { capturePartitionKey, correlationFields } from '../evidence-collection/capture-scope.ts';
+import type { CaptureScope } from '../evidence-collection/capture-scope.ts';
 import type { JournalEvent } from '../event-journal/journal-event.ts';
-import type { Result, Sha256Hex, StructuredReason, WallClock } from '../record-contract/primitives.ts';
+import type { Result, Scenario, StructuredReason, VariantId, WallClock } from '../record-contract/primitives.ts';
+import type { Payment } from '../record-contract/records/group-a/payment.ts';
+import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
 import type { TrialRegistration } from '../record-contract/records/group-a/trial_registration.ts';
 import { TRIAL_PARTITION_TABLE_ROLES } from '../record-contract/records/group-b/vocabulary.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { CONFIG_SORT_KEY, TREATMENT_SORT_KEY, paymentSortKey } from '../refund-provider/control-items.ts';
 import { parseTrialRegistration, toTrialRegistryItem, trialRegistryItemKey } from '../trial-message/trial-registry.ts';
-import type { RunnerTrialJournal } from './runner-trial-journal.ts';
-import type { TrialPlan } from './trial-execution-ports.ts';
+import type { RunnerUnitJournal } from './runner-trial-journal.ts';
+import type { ProviderTiming, PublicationGate } from './trial-execution-ports.ts';
 
 const SUBJECT = 'BR-RUA-019';
 
+/** The provider configuration of the unit (OR-RUA-002; the probe's caller is `probe`). */
+export interface UnitConfiguration {
+  readonly registered_caller_id: ProviderCallerId;
+  readonly scenario: Scenario;
+  readonly payment: Payment;
+  readonly timing: ProviderTiming;
+}
+
 /** What T2-T4 act on. */
-export interface TrialSetupContext {
+export interface UnitSetupContext {
   readonly store: DurableItemStore;
-  readonly journal: RunnerTrialJournal;
+  readonly journal: RunnerUnitJournal;
   readonly clock: WallClock;
-  readonly plan: TrialPlan;
-  readonly manifest_sha256: Sha256Hex;
-  /** `<execution_id>#<trial_id>`. */
-  readonly partition_key: string;
+  /** The execution and the trial or probe; its partition is `<execution_id>#<trial_id|probe>`. */
+  readonly scope: CaptureScope;
+  readonly configuration: UnitConfiguration;
+  /** The variant whose registry item a trial takes; absent for the probe, which registers nothing. */
+  readonly registry_variant?: VariantId;
 }
 
 /**
@@ -40,21 +56,19 @@ export interface TrialSetupContext {
  * @example
  * const reasons = await verifyPartitionsAbsent(context); // [] for a fresh trial
  */
-export async function verifyPartitionsAbsent(context: TrialSetupContext): Promise<readonly StructuredReason[]> {
+export async function verifyPartitionsAbsent(context: UnitSetupContext): Promise<readonly StructuredReason[]> {
+  const partitionKey = capturePartitionKey(context.scope);
   const reasons: StructuredReason[] = [];
   for (const role of TRIAL_PARTITION_TABLE_ROLES) {
-    const page = await context.store.queryPartitionPage(role, context.partition_key);
+    const page = await context.store.queryPartitionPage(role, partitionKey);
     if (!page.ok) {
       reasons.push(
-        setupReason(
-          'PARTITION_UNREADABLE',
-          `${role} partition ${context.partition_key} read failed with ${page.error.code}`,
-        ),
+        setupReason('PARTITION_UNREADABLE', `${role} partition ${partitionKey} read failed with ${page.error.code}`),
       );
       continue;
     }
     if (page.value.items.length > 0 || page.value.next_cursor !== undefined) {
-      reasons.push(setupReason('PARTITION_NOT_EMPTY', `${role} partition ${context.partition_key} holds items`));
+      reasons.push(setupReason('PARTITION_NOT_EMPTY', `${role} partition ${partitionKey} holds items`));
     }
   }
   if (reasons.length > 0) {
@@ -62,74 +76,110 @@ export async function verifyPartitionsAbsent(context: TrialSetupContext): Promis
   }
   return recorded(
     await context.journal.record('trial_partitions_verified_absent', {
-      partition_key: context.partition_key,
+      partition_key: partitionKey,
       table_roles: [...TRIAL_PARTITION_TABLE_ROLES],
     }),
   );
 }
 
 /**
- * T3: writes the trial configuration, the payment and the variant's registration.
+ * T3: writes the provider configuration, the payment and, for a trial, the variant's registration.
  *
  * @example
- * const reasons = await writeTrialControlItems(context);
+ * const reasons = await writeControlItems(context);
  */
-export async function writeTrialControlItems(context: TrialSetupContext): Promise<readonly StructuredReason[]> {
-  const { plan, partition_key: pk } = context;
-  const writtenAt = formatUtcMillis(context.clock.now());
+export async function writeControlItems(context: UnitSetupContext): Promise<readonly StructuredReason[]> {
+  const { configuration: unit } = context;
+  const pk = capturePartitionKey(context.scope);
   const configuration: StoredItem = {
     pk,
     sk: CONFIG_SORT_KEY,
     schema_version: 1,
     record_type: 'provider_trial_configuration',
-    ...trialCorrelation(context),
-    registered_caller_id: plan.trial.variant_id,
-    scenario: plan.trial.scenario,
-    payment_id: plan.payment.payment_id,
-    safety_release_ms: plan.provider_timing.safety_release_ms,
-    treatment_poll_interval_ms: plan.provider_timing.treatment_poll_interval_ms,
-    written_at: writtenAt,
+    ...correlationFields(context.scope),
+    registered_caller_id: unit.registered_caller_id,
+    scenario: unit.scenario,
+    payment_id: unit.payment.payment_id,
+    safety_release_ms: unit.timing.safety_release_ms,
+    treatment_poll_interval_ms: unit.timing.treatment_poll_interval_ms,
+    written_at: formatUtcMillis(context.clock.now()),
   };
-  const payment: StoredItem = { ...plan.payment, pk, sk: paymentSortKey(plan.payment.payment_id) };
+  const payment: StoredItem = { ...unit.payment, pk, sk: paymentSortKey(unit.payment.payment_id) };
   for (const item of [configuration, payment]) {
     const refused = await writeOnce(context.store, { kind: 'put', table: 'control', item, condition: ABSENT });
     if (refused !== undefined) {
       return [refused];
     }
   }
-  return registerTrial(context);
+  return context.registry_variant === undefined ? [] : registerTrial(context, context.registry_variant);
 }
 
 /**
- * T4: arms the treatment of a COMMIT_THEN_TIMEOUT trial; a CONTROL trial has no treatment item.
+ * T4: arms the treatment of a COMMIT_THEN_TIMEOUT unit; a CONTROL trial has no treatment item.
  *
  * @example
  * const reasons = await armTreatment(context); // [] and `treatment_armed` journaled
  */
-export async function armTreatment(context: TrialSetupContext): Promise<readonly StructuredReason[]> {
-  if (context.plan.trial.scenario === 'CONTROL') {
+export async function armTreatment(context: UnitSetupContext): Promise<readonly StructuredReason[]> {
+  if (context.configuration.scenario === 'CONTROL') {
     return [];
   }
-  const item: StoredItem = { pk: context.partition_key, sk: TREATMENT_SORT_KEY, state: 'ARMED', version: 1 };
+  const pk = capturePartitionKey(context.scope);
+  const item: StoredItem = { pk, sk: TREATMENT_SORT_KEY, state: 'ARMED', version: 1 };
   const refused = await writeOnce(context.store, { kind: 'put', table: 'control', item, condition: ABSENT });
   if (refused !== undefined) {
     return [refused];
   }
   return recorded(
     await context.journal.record('treatment_armed', {
-      partition_key: context.partition_key,
+      partition_key: pk,
       treatment_state: 'ARMED',
       treatment_version: 1,
     }),
   );
 }
 
+/**
+ * T5: lease CONFIRMED ∧ safety.mayStartTrial() ∧ no interruption (design §10.2); the reason the
+ * gate is closed, or `undefined` when it is open.
+ *
+ * @example
+ * const closed = gateClosed(gate);
+ * if (closed !== undefined) return notStarted([closed]);
+ */
+export function gateClosed(gate: PublicationGate): StructuredReason | undefined {
+  const interruption = gate.interruption();
+  const open = gate.publicationAllowed() && gate.mayStartTrial() && interruption === undefined;
+  if (open) {
+    return undefined;
+  }
+  const why =
+    interruption === undefined
+      ? 'publication is not allowed or no trial may start'
+      : `${interruption.cause}: ${interruption.detail}`;
+  return {
+    code: 'PUBLICATION_GATE_CLOSED',
+    subject: 'BR-RUA-045',
+    detail: `the publication gate is closed (${why}); expected a confirmed lease, safety headroom and no interruption`,
+  };
+}
+
+/**
+ * Structured reasons as one diagnostic log detail: `CODE: detail` joined by `; `.
+ *
+ * @example
+ * describeReasons([{ code: 'PUBLICATION_GATE_CLOSED', subject, detail: 'closed' }]); // 'PUBLICATION_GATE_CLOSED: closed'
+ */
+export function describeReasons(reasons: readonly StructuredReason[]): string {
+  return reasons.map((reason) => `${reason.code}: ${reason.detail}`).join('; ');
+}
+
 const ABSENT: Condition = { kind: 'item_absent' };
 
 // D-21: the registry item is written conditionally on the version the runner read, so two
 // runners can never both believe they registered; the version increases with every write.
-async function registerTrial(context: TrialSetupContext): Promise<readonly StructuredReason[]> {
-  const key = trialRegistryItemKey(context.plan.trial.variant_id);
+async function registerTrial(context: UnitSetupContext, variant: VariantId): Promise<readonly StructuredReason[]> {
+  const key = trialRegistryItemKey(variant);
   const read = await context.store.getConsistent('trial_registry', key);
   if (!read.ok) {
     return [setupReason('REGISTRY_UNREADABLE', `registry item ${key.pk} read failed with ${read.error.code}`)];
@@ -141,8 +191,8 @@ async function registerTrial(context: TrialSetupContext): Promise<readonly Struc
   const registration = {
     schema_version: 1,
     record_type: 'trial_registration',
-    ...trialCorrelation(context),
-    variant_id: context.plan.trial.variant_id,
+    ...correlationFields(context.scope),
+    variant_id: variant,
     registry_version: previous + 1,
     registered_at: formatUtcMillis(context.clock.now()),
   } as TrialRegistration;
@@ -181,19 +231,10 @@ async function writeOnce(
   );
 }
 
-function trialCorrelation(context: TrialSetupContext): Readonly<Record<string, string>> {
-  return {
-    ...executionIdentityFields(context.plan.execution),
-    execution_manifest_sha256: context.plan.execution_manifest_sha256,
-    trial_id: context.plan.trial.trial_id,
-    trial_manifest_sha256: context.manifest_sha256,
-  };
-}
-
 function recorded(written: Result<JournalEvent, StructuredReason>): readonly StructuredReason[] {
   return written.ok ? [] : [written.error];
 }
 
 function setupReason(code: string, problem: string): StructuredReason {
-  return { code, subject: SUBJECT, detail: `${problem}; expected a clean trial setup before publication` };
+  return { code, subject: SUBJECT, detail: `${problem}; expected a clean setup before publication` };
 }

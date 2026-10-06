@@ -11,24 +11,23 @@
 
 import { collectTrialEvidence } from '../evidence-collection/trial-collection.ts';
 import type { TrialCollection } from '../evidence-collection/trial-collection.ts';
-import { capturePartitionKey } from '../evidence-collection/capture-scope.ts';
 import type { TrialCaptureScope } from '../evidence-collection/capture-scope.ts';
 import { PACKAGE_LAYOUT } from '../evidence-package/package-layout.ts';
 import type { StructuredReason, UtcMillis } from '../record-contract/primitives.ts';
 import { TRIAL_SETTLEMENT_POLICY } from '../settlement/settlement-policy.ts';
-import type { SettlementAssessment } from '../settlement/settlement-policy.ts';
 import { confirmExecutionConfiguration } from './execution-configuration.ts';
-import { RunnerTrialJournal } from './runner-trial-journal.ts';
+import { RunnerUnitJournal } from './runner-trial-journal.ts';
 import { warmUpProvider } from './runner-warmup.ts';
 import { SettlementObserver } from './settlement-observer.ts';
-import type { Observation, ObservationPlan } from './settlement-observer.ts';
-import type { SettlementReading } from './settlement-reading.ts';
+import type { SettledCapture } from './settlement-observer.ts';
+import { readSettlementRound } from './settlement-reading.ts';
+import type { SettlementReadingPorts, SettlementReadingTarget } from './settlement-reading.ts';
 import { freezeTrialEvidence } from './trial-freeze.ts';
 import { freezeTrialInputs } from './trial-inputs.ts';
 import type { FrozenTrialInputs, TrialFileTarget } from './trial-inputs.ts';
 import { publishTrialMessage } from './trial-publication.ts';
-import { armTreatment, verifyPartitionsAbsent, writeTrialControlItems } from './trial-setup.ts';
-import type { TrialSetupContext } from './trial-setup.ts';
+import { armTreatment, describeReasons, gateClosed, verifyPartitionsAbsent, writeControlItems } from './trial-setup.ts';
+import type { UnitSetupContext } from './trial-setup.ts';
 import type {
   PublicationGate,
   TrialExecutionReport,
@@ -38,11 +37,7 @@ import type {
 } from './trial-execution-ports.ts';
 
 /** A started trial's settled (or not) evidence, ready to freeze. */
-interface ObservedTrial {
-  readonly collection: TrialCollection;
-  readonly rounds: readonly SettlementReading[];
-  readonly assessment: SettlementAssessment;
-  readonly interruption?: TrialInterruption;
+interface ObservedTrial extends SettledCapture<TrialCollection> {
   readonly failures: readonly StructuredReason[];
 }
 
@@ -51,22 +46,26 @@ interface StartedTrial {
   readonly plan: TrialPlan;
   readonly gate: PublicationGate;
   readonly frozen: FrozenTrialInputs;
-  readonly journal: RunnerTrialJournal;
+  readonly journal: RunnerUnitJournal;
   readonly scope: TrialCaptureScope;
   readonly target: TrialFileTarget;
 }
 
 export class TrialExecutor {
   readonly #deps: TrialExecutorDeps;
+  readonly #readings: SettlementReadingPorts;
   readonly #observer: SettlementObserver;
 
   constructor(deps: TrialExecutorDeps) {
     this.#deps = deps;
-    this.#observer = new SettlementObserver({
-      readings: { store: deps.store, queues: deps.queues, dlq: deps.dlq, durable: deps.durable, clock: deps.clock },
+    this.#readings = {
+      store: deps.store,
+      queues: deps.queues,
+      dlq: deps.dlq,
+      durable: deps.durable,
       clock: deps.clock,
-      sleeper: deps.sleeper,
-    });
+    };
+    this.#observer = new SettlementObserver({ clock: deps.clock, sleeper: deps.sleeper });
   }
 
   /**
@@ -124,19 +123,17 @@ export class TrialExecutor {
       trial_id: plan.trial.trial_id,
       trial_manifest_sha256: frozen.manifest_sha256,
     } as const;
+    const scope = { execution: plan.execution, execution_manifest_sha256: plan.execution_manifest_sha256, unit };
     return {
       plan,
       gate,
       frozen,
       target,
-      scope: { execution: plan.execution, execution_manifest_sha256: plan.execution_manifest_sha256, unit },
-      journal: new RunnerTrialJournal({
+      scope,
+      journal: new RunnerUnitJournal({
         file: this.#deps.runner_journal,
         package_directory: target.package_directory,
-        execution: plan.execution,
-        execution_manifest_sha256: plan.execution_manifest_sha256,
-        trial_id: plan.trial.trial_id,
-        trial_manifest_sha256: frozen.manifest_sha256,
+        scope,
         clock: this.#deps.clock,
         ids: this.#deps.ids,
       }),
@@ -145,17 +142,23 @@ export class TrialExecutor {
 
   // T2-T4, the warm-up and the T5 gate, in order; the first refusal stops the setup.
   async #setUp(trial: StartedTrial): Promise<readonly StructuredReason[]> {
-    const context: TrialSetupContext = {
+    const { plan } = trial;
+    const context: UnitSetupContext = {
       store: this.#deps.store,
       journal: trial.journal,
       clock: this.#deps.clock,
-      plan: trial.plan,
-      manifest_sha256: trial.frozen.manifest_sha256,
-      partition_key: capturePartitionKey(trial.scope),
+      scope: trial.scope,
+      configuration: {
+        registered_caller_id: plan.trial.variant_id,
+        scenario: plan.trial.scenario,
+        payment: plan.payment,
+        timing: plan.provider_timing,
+      },
+      registry_variant: plan.trial.variant_id,
     };
     const steps: readonly (() => Promise<readonly StructuredReason[]>)[] = [
       (): Promise<readonly StructuredReason[]> => verifyPartitionsAbsent(context),
-      (): Promise<readonly StructuredReason[]> => writeTrialControlItems(context),
+      (): Promise<readonly StructuredReason[]> => writeControlItems(context),
       (): Promise<readonly StructuredReason[]> => armTreatment(context),
       async (): Promise<readonly StructuredReason[]> => {
         const failed = await warmUpProvider(this.#deps.warmup, trial.plan, this.#deps.ids, this.#deps.validator);
@@ -176,62 +179,37 @@ export class TrialExecutor {
   }
 
   // T7-T9: observe until the window completes, collect, recheck; activity sends it back to T7.
+  // An interruption that stops it is journaled as `trial_interrupted` (design §10.2).
   async #observeAndCollect(trial: StartedTrial, publishedAt: UtcMillis): Promise<ObservedTrial> {
     const { plan } = trial;
     const durable =
       plan.durable_caller === undefined ? undefined : { ...plan.durable_caller, started_after: publishedAt };
-    const observation: Omit<ObservationPlan, 'prior'> = {
-      target: {
-        scope: trial.scope,
-        scenario: plan.trial.scenario,
-        source: plan.queues.source,
-        dlq: plan.queues.dlq,
-        ...(durable === undefined ? {} : { durable }),
-      },
-      published_at: publishedAt,
-      policy: TRIAL_SETTLEMENT_POLICY,
-      interruption: () => trial.gate.interruption(),
+    const target: SettlementReadingTarget = {
+      scope: trial.scope,
+      scenario: plan.trial.scenario,
+      source: plan.queues.source,
+      dlq: plan.queues.dlq,
+      ...(durable === undefined ? {} : { durable }),
     };
-    const collect = (): Promise<TrialCollection> =>
-      collectTrialEvidence(this.#deps, {
-        scope: trial.scope,
-        variant: plan.trial.variant_id,
-        dlq: plan.queues.dlq,
-        ...(durable === undefined ? {} : { durable }),
-      });
-    let rounds: readonly SettlementReading[] = [];
-    for (;;) {
-      const observed = await this.#observer.observe({ ...observation, prior: rounds });
-      if (observed.stop !== 'window_complete') {
-        return this.#unsettled(trial, observed, await collect());
-      }
-      const collection = await collect();
-      // Design §10.2: a trial collecting its evidence is still active, so an interruption seen
-      // now freezes it without the recheck, unsettled (evidence/WP-26/decisions.md).
-      const interruption = trial.gate.interruption();
-      if (interruption !== undefined) {
-        return this.#unsettled(trial, { ...observed, interruption }, collection);
-      }
-      const recheck = await this.#observer.recheckBeforeFreeze(
-        { ...observation, prior: observed.rounds },
-        observed.rounds,
-      );
-      rounds = recheck.rounds;
-      if (recheck.kind === 'established') {
-        return { collection, rounds, assessment: recheck.assessment, failures: [] };
-      }
+    const settled = await this.#observer.settle(
+      {
+        read: (phase, previous) => readSettlementRound(this.#readings, target, phase, previous),
+        published_at: publishedAt,
+        policy: TRIAL_SETTLEMENT_POLICY,
+        interruption: () => trial.gate.interruption(),
+      },
+      () =>
+        collectTrialEvidence(this.#deps, {
+          scope: trial.scope,
+          variant: plan.trial.variant_id,
+          dlq: plan.queues.dlq,
+          ...(durable === undefined ? {} : { durable }),
+        }),
+    );
+    if (settled.interruption === undefined) {
+      return { ...settled, failures: [] };
     }
-  }
-
-  // An observation that ends without a quiet recheck: the deadline passed, or the execution was
-  // interrupted, which the trial journals as `trial_interrupted` (design §10.2).
-  async #unsettled(trial: StartedTrial, observed: Observation, collection: TrialCollection): Promise<ObservedTrial> {
-    const { rounds, assessment, interruption } = observed;
-    if (interruption === undefined) {
-      return { collection, rounds, assessment, failures: [] };
-    }
-    const failures = await this.#recordInterruption(trial, interruption);
-    return { collection, rounds, assessment, interruption, failures };
+    return { ...settled, failures: await this.#recordInterruption(trial, settled.interruption) };
   }
 
   async #recordInterruption(
@@ -271,7 +249,7 @@ export class TrialExecutor {
         level: 'error',
         event: 'trial_freeze_failed',
         trial_id: trialId,
-        detail: describe(frozen.error),
+        detail: describeReasons(frozen.error),
       });
       return { kind: 'freeze_failed', trial_id: trialId, reasons: frozen.error };
     }
@@ -294,29 +272,7 @@ export class TrialExecutor {
 
   #notStarted(plan: TrialPlan, reasons: readonly StructuredReason[]): TrialExecutionReport {
     const trialId = plan.trial.trial_id;
-    this.#deps.log({ level: 'warn', event: 'trial_not_started', trial_id: trialId, detail: describe(reasons) });
+    this.#deps.log({ level: 'warn', event: 'trial_not_started', trial_id: trialId, detail: describeReasons(reasons) });
     return { kind: 'not_started', trial_id: trialId, reasons };
   }
-}
-
-// T5: lease CONFIRMED ∧ safety.mayStartTrial() ∧ no interruption (design §10.2).
-function gateClosed(gate: PublicationGate): StructuredReason | undefined {
-  const interruption = gate.interruption();
-  const open = gate.publicationAllowed() && gate.mayStartTrial() && interruption === undefined;
-  if (open) {
-    return undefined;
-  }
-  const why =
-    interruption === undefined
-      ? 'publication is not allowed or no trial may start'
-      : `${interruption.cause}: ${interruption.detail}`;
-  return {
-    code: 'PUBLICATION_GATE_CLOSED',
-    subject: 'BR-RUA-045',
-    detail: `the publication gate is closed (${why}); expected a confirmed lease, safety headroom and no interruption`,
-  };
-}
-
-function describe(reasons: readonly StructuredReason[]): string {
-  return reasons.map((reason) => `${reason.code}: ${reason.detail}`).join('; ');
 }

@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 
 import type { CollectedFile } from '../../../src/evidence-collection/collection-buffer.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
-import { RunnerTrialJournal } from '../../../src/trial-execution/runner-trial-journal.ts';
+import { RunnerUnitJournal } from '../../../src/trial-execution/runner-trial-journal.ts';
 import type { SettlementReading } from '../../../src/trial-execution/settlement-reading.ts';
 import { freezeTrialEvidence } from '../../../src/trial-execution/trial-freeze.ts';
 import { freezeTrialInputs, trialFilePath } from '../../../src/trial-execution/trial-inputs.ts';
@@ -33,13 +33,15 @@ describe('freezeTrialEvidence', () => {
     const samplesPath = trialFilePath(execution.package_directory, trialId, 'settlementSamples');
     assert.equal((await storage.writeOnce(samplesPath, Uint8Array.of(1))).ok, true);
     const ids = new SequentialUuidSource('12121212');
-    const journal = new RunnerTrialJournal({
-      file: storage,
-      package_directory: execution.package_directory,
+    const scope = {
       execution: plan.execution,
       execution_manifest_sha256: plan.execution_manifest_sha256,
-      trial_id: trialId,
-      trial_manifest_sha256: manifest_sha256,
+      unit: { kind: 'trial', trial_id: trialId, trial_manifest_sha256: manifest_sha256 },
+    } as const;
+    const journal = new RunnerUnitJournal({
+      file: storage,
+      package_directory: execution.package_directory,
+      scope,
       clock,
       ids,
     });
@@ -61,11 +63,7 @@ describe('freezeTrialEvidence', () => {
         clock,
         validator: createRecordValidator(),
         execution: plan.execution,
-        scope: {
-          execution: plan.execution,
-          execution_manifest_sha256: plan.execution_manifest_sha256,
-          unit: { kind: 'trial', trial_id: trialId, trial_manifest_sha256: manifest_sha256 },
-        },
+        scope,
         manifest,
       },
       {

@@ -8,7 +8,12 @@ import { describe, it } from 'node:test';
 import type { ProviderTransportResult } from '../../../src/provider-client/provider-invocation-port.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
-import { warmupRequestOf, warmupSettlementProblem } from '../../../src/trial-execution/runner-warmup.ts';
+import {
+  warmupRequestOf,
+  warmupResponseOf,
+  warmupSettlementProblem,
+  warmupTransportErrorOf,
+} from '../../../src/trial-execution/runner-warmup.ts';
 import { SequentialUuidSource } from '../../support/kernel/sequential-uuid-source.ts';
 import { MANIFEST_SHA, RUN_ID, TRIAL_ID, warmupCompleted, warmupRequest } from './support/trial-execution-fixtures.ts';
 
@@ -54,6 +59,79 @@ describe('warmupRequestOf', () => {
       trial_id: TRIAL_ID,
     });
     assert.equal(validator.validate(request as unknown as JsonValue).valid, true);
+  });
+});
+
+describe('warmupRequestOf for the transport probe', () => {
+  it('names the probe and no trial (addendum §2.1, D-06)', () => {
+    const probeId = '2559d5f6-ec95-4777-a74e-452fcfde7526';
+    const request = warmupRequestOf(
+      {
+        execution: { execution_kind: 'TRANSPORT_PROBE', transport_probe_id: probeId },
+        execution_manifest_sha256: MANIFEST_SHA,
+        provider_version: '1',
+      } as Parameters<typeof warmupRequestOf>[0],
+      new SequentialUuidSource('cdcdcdcd'),
+    );
+    assert.deepEqual(request, {
+      schema_version: 1,
+      record_type: 'provider_warmup_request',
+      transport_probe_id: probeId,
+      execution_manifest_sha256: MANIFEST_SHA,
+      warmup_id: 'cdcdcdcd-0000-4000-8000-000000000001',
+    });
+    assert.equal(validator.validate(request as unknown as JsonValue).valid, true);
+  });
+});
+
+describe('warmupResponseOf', () => {
+  it('settles a returned Invoke with its status, version, function error and payload', () => {
+    const payload = Uint8Array.of(7);
+    assert.deepEqual(
+      warmupResponseOf({ StatusCode: 200, ExecutedVersion: '3', FunctionError: 'Unhandled', Payload: payload }),
+      { kind: 'response', status_code: 200, executed_version: '3', function_error: 'Unhandled', payload },
+    );
+    assert.deepEqual(warmupResponseOf({}), {
+      kind: 'response',
+      status_code: 0,
+      executed_version: undefined,
+      function_error: undefined,
+      payload: new Uint8Array(),
+    });
+  });
+});
+
+describe('warmupTransportErrorOf', () => {
+  it('names what was thrown and carries a service exception’s HTTP status', () => {
+    const throttled = Object.assign(new Error('slow down'), {
+      name: 'TooManyRequestsException',
+      $metadata: { httpStatusCode: 429 },
+    });
+    assert.deepEqual(warmupTransportErrorOf(throttled), {
+      kind: 'transport_error',
+      error_name: 'TooManyRequestsException',
+      message: 'slow down',
+      http_status: 429,
+    });
+    assert.deepEqual(warmupTransportErrorOf(Object.assign(new Error('x'), { $metadata: { httpStatusCode: '429' } })), {
+      kind: 'transport_error',
+      error_name: 'Error',
+      message: 'x',
+    });
+  });
+
+  it('never throws on a throwing $metadata getter', () => {
+    const hostile = new Error('hostile');
+    Object.defineProperty(hostile, '$metadata', {
+      get: (): never => {
+        throw new Error('boom');
+      },
+    });
+    assert.deepEqual(warmupTransportErrorOf(hostile), {
+      kind: 'transport_error',
+      error_name: 'Error',
+      message: 'hostile',
+    });
   });
 });
 
