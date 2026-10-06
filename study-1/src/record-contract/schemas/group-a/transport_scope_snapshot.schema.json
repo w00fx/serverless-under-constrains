@@ -124,7 +124,7 @@
   "additionalProperties": false,
   "$defs": {
     "projected_property": {
-      "description": "One policy property path of one resource. canonical_json is the canonical JSON text (BR-RUA-034 canonical form) of the normalized CloudFormation value, kept as text because CloudFormation member names (PascalCase, Fn::GetAtt) are not BR-RUA-033 property names. It is omitted when the resource does not set the property: absence is configuration too, so setting it later is drift.",
+      "description": "One policy property path of one resource. canonical_json is the canonical JSON text (BR-RUA-034 canonical form) of the normalized CloudFormation value, kept as text because CloudFormation member names (PascalCase, Fn::GetAtt) are not BR-RUA-033 property names. It is omitted when the resource does not set the property: absence is configuration too, so setting it later is drift. The schema checks only that the text is non-empty: that it parses and equals canonicalJson of its parse, and that each policy path appears once per resource, are code-level checks of the snapshot builder (WP-11 normalizeConfigurationProjection, which writes canonicalJson output for each path of a policy whose property_paths are unique).",
       "type": "object",
       "properties": {
         "property_path": { "type": "string", "pattern": "^[A-Za-z0-9]+(\\.[A-Za-z0-9]+)*$" },

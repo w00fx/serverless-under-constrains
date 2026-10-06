@@ -11,17 +11,32 @@ import type { RecordValidation } from '../../../../../src/record-contract/schema
 
 export const catalogueValidator = createRecordValidator();
 
-/** Views a typed record as the parsed JSON the validator receives. */
+/**
+ * Views a typed record as the parsed JSON the validator receives.
+ *
+ * @example
+ * catalogueValidator.validate(asJson(payment()));
+ */
 export function asJson(record: object): JsonObject {
   return record as unknown as JsonObject;
 }
 
-/** The "<instance_path> <keyword>" pairs of a validation; empty when the record is valid. */
+/**
+ * The "<instance_path> <keyword>" pairs of a validation; empty when the record is valid.
+ *
+ * @example
+ * violationsOf(catalogueValidator.validate(asJson(payment()))); // []
+ */
 export function violationsOf(result: RecordValidation): readonly string[] {
   return result.valid ? [] : result.violations.map((violation) => `${violation.instance_path} ${violation.keyword}`);
 }
 
-/** Asserts that a record validates as its declared record type. */
+/**
+ * Asserts that a record validates as its declared record type.
+ *
+ * @example
+ * assertAccepted(payment(), 'canonical payment');
+ */
 export function assertAccepted(record: object, label: string): void {
   const json = asJson(record);
   const declared = json['record_type'];
@@ -29,7 +44,12 @@ export function assertAccepted(record: object, label: string): void {
   assert.deepEqual(violationsOf(catalogueValidator.validateAs(declared as RecordType, json)), [], label);
 }
 
-/** Asserts that a record is rejected and that one of its violations is `expected`. */
+/**
+ * Asserts that a record is rejected and that one of its violations is `expected`.
+ *
+ * @example
+ * assertRejected(withField(payment(), 'currency', 'USD'), '/currency const', 'non-BRL');
+ */
 export function assertRejected(record: JsonValue | object, expected: string, label: string): void {
   const violations = violationsOf(catalogueValidator.validate(record as JsonValue));
   assert.ok(violations.length > 0, `${label}: expected a rejection with "${expected}", but the record is valid`);
@@ -50,7 +70,12 @@ export function withField(record: object, field: string, value: JsonFragment): J
   return { ...asJson(record), [field]: value as JsonValue };
 }
 
-/** Returns a copy of a record without one top-level property. */
+/**
+ * Returns a copy of a record without one top-level property.
+ *
+ * @example
+ * withoutField(payment(), 'currency'); // { schema_version: 1, record_type: 'payment', ... }
+ */
 export function withoutField(record: object, field: string): JsonObject {
   return Object.fromEntries(Object.entries(asJson(record)).filter(([name]) => name !== field));
 }

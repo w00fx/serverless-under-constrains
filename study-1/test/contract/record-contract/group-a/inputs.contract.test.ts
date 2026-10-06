@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 
 import { parseJsonDocument } from '../../../../src/record-contract/parsing.ts';
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
+import { inVariantValidation } from './support/branch-examples.ts';
 import { approvedDecision, environmentInput, payment, trialMessage } from './support/input-examples.ts';
 import { IDS } from './support/sample-values.ts';
 import { assertAccepted, assertRejected, withField, withPath, withoutField } from './support/validation-assertions.ts';
@@ -133,10 +134,7 @@ describe('approved_decision (CTR-RUA-006)', () => {
 describe('trial_message (BR-RUA-036)', () => {
   it('accepts a run message and a variant-validation message', () => {
     assertAccepted(trialMessage(), 'run message');
-    assertAccepted(
-      { ...withoutField(trialMessage(), 'run_id'), variant_validation_id: IDS.variantValidation },
-      'validation',
-    );
+    assertAccepted(inVariantValidation(trialMessage()), 'validation');
   });
 
   it('names exactly one of run_id or variant_validation_id', () => {

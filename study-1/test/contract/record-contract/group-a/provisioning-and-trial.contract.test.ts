@@ -13,6 +13,11 @@ import {
   STUDY_TAG,
   VARIANT_TAG_KEY,
 } from '../../../../infra/ownership/ownership-tags.ts';
+import { stackName } from '../../../../infra/ownership/resource-naming.ts';
+import {
+  RUN_TRIAL_ORDER,
+  VALIDATION_SCENARIO_ORDER,
+} from '../../../../src/record-contract/records/group-a/execution_manifest.ts';
 import {
   OWNERSHIP_TAG_KEYS,
   PROVISIONING_STATUSES,
@@ -26,6 +31,12 @@ import {
   trialProviderConfiguration,
   trialRegistration,
 } from './support/manifest-examples.ts';
+import {
+  inVariantValidation,
+  probeResourceManifest,
+  validationResourceManifest,
+  validationTrialManifest,
+} from './support/branch-examples.ts';
 import { FIXTURE, IDS } from './support/sample-values.ts';
 import {
   assertAccepted,
@@ -101,6 +112,19 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
     );
   });
 
+  it('leaves the canonical form of canonical_json and one entry per attribute to the manifest builder', () => {
+    // The schema checks only non-empty text (see its description): WP-24 buildResourceManifest
+    // writes canonicalJson output once per (logical_id, attribute_path).
+    for (const text of ['not json', '{"b":1, "a":2}', 'null']) {
+      assertAccepted(withPath(succeededResourceManifest(), ['configuration', 0, 'canonical_json'], text), text);
+    }
+    const [batchSize] = succeededResourceManifest().configuration ?? [];
+    assertAccepted(
+      withField(succeededResourceManifest(), 'configuration', [batchSize, { ...batchSize, canonical_json: '10' }]),
+      'one attribute read twice with different values',
+    );
+  });
+
   it('records the immutable provider version, never $LATEST or an alias (BR-RUA-053)', () => {
     for (const version of ['$LATEST', 'live', '0', '01', '']) {
       assertRejected(
@@ -147,17 +171,6 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       '/ownership_tags contains',
       'two run ids',
     );
-    const variantTag = { key: 'suc:variant_id', value: 'durable' };
-    assertAccepted(withField(succeededResourceManifest(), 'ownership_tags', [...tags, variantTag]), 'variant tag');
-    assertRejected(
-      withField(succeededResourceManifest(), 'ownership_tags', [
-        ...tags,
-        variantTag,
-        { key: 'suc:variant_id', value: 'conventional' },
-      ]),
-      '/ownership_tags contains',
-      'two variant tags',
-    );
     assertAccepted(
       withField(succeededResourceManifest(), 'ownership_tags', tags.toReversed()),
       'tag order has no meaning',
@@ -182,6 +195,45 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       '/ownership_tags minItems',
       'untagged',
     );
+    const validationStack = validationResourceManifest();
+    assertAccepted(validationStack, 'variant tag on a variant-specific stack');
+    const validationTags = validationStack['ownership_tags'] as readonly object[];
+    assertRejected(
+      withField(validationStack, 'ownership_tags', [
+        ...validationTags,
+        { key: 'suc:variant_id', value: 'conventional' },
+      ]),
+      '/ownership_tags contains',
+      'two variant tags',
+    );
+  });
+
+  it('values suc:variant_id with a variant id, and only on a variant-specific stack (BR-RUA-050)', () => {
+    const variantTagValue = ['ownership_tags', 5, 'value'];
+    assertAccepted(withPath(validationResourceManifest(), variantTagValue, 'conventional'), 'conventional');
+    for (const value of ['anything', 'Durable', 'probe', 'shared']) {
+      assertRejected(
+        withPath(validationResourceManifest(), variantTagValue, value),
+        '/ownership_tags/5/value enum',
+        value,
+      );
+    }
+    // Only the variant tag's value is a variant id; the other values stay free text.
+    assertAccepted(withPath(succeededResourceManifest(), ['ownership_tags', 1, 'value'], 'anything'), 'study tag');
+    const variantTag = { key: 'suc:variant_id', value: 'durable' };
+    const runTags = runOwnershipTags();
+    assertRejected(
+      withField(succeededResourceManifest(), 'ownership_tags', [...runTags, variantTag]),
+      '/ownership_tags not',
+      'the run stack is shared by both variants',
+    );
+    const probeStack = probeResourceManifest();
+    assertAccepted(probeStack, 'probe stack without a variant tag');
+    assertRejected(
+      withField(probeStack, 'ownership_tags', [...runTags, variantTag]),
+      '/ownership_tags not',
+      'the probe stack belongs to no variant',
+    );
   });
 
   it('names the stack deterministically and records CloudFormation statuses', () => {
@@ -190,6 +242,22 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       '/stack_name pattern',
       'stack name',
     );
+    // design §9.7: the name's kind follows the execution identity, as the WP-00 infrastructure names it.
+    const stacks = [
+      ['RUN', IDS.run, succeededResourceManifest()],
+      ['VARIANT_VALIDATION', IDS.variantValidation, validationResourceManifest()],
+      ['TRANSPORT_PROBE', IDS.transportProbe, probeResourceManifest()],
+    ] as const;
+    for (const [kind, id, manifest] of stacks) {
+      assertAccepted(withField(manifest, 'stack_name', stackName(kind, id)), `${kind} stack name`);
+      for (const [otherKind, otherId] of stacks.filter(([other]) => other !== kind)) {
+        assertRejected(
+          withField(manifest, 'stack_name', stackName(otherKind, otherId)),
+          '/stack_name pattern',
+          `${kind} manifest named like a ${otherKind} stack`,
+        );
+      }
+    }
     assertRejected(
       withPath(succeededResourceManifest(), ['resources', 0, 'resource_status'], 'create_complete'),
       '/resources/0/resource_status pattern',
@@ -201,13 +269,46 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
 describe('trial_manifest (BR-RUA-040)', () => {
   it('accepts a run trial and a variant-validation trial', () => {
     assertAccepted(trialManifest(), 'run trial');
-    const validationTrial = {
-      ...withoutField(trialManifest(), 'run_id'),
-      variant_validation_id: IDS.variantValidation,
-      sequence: 2,
-    };
+    const validationTrial = validationTrialManifest();
     assertAccepted(validationTrial, 'validation trial');
     assertRejected({ ...validationTrial, sequence: 3 }, '/sequence maximum', 'third validation trial');
+  });
+
+  it('declares the position, variant and scenario of the fixed run order (BR-RUA-019)', () => {
+    for (const position of RUN_TRIAL_ORDER) {
+      assertAccepted({ ...trialManifest(), ...position }, `run position ${String(position.sequence)}`);
+    }
+    for (const [sequence, variant_id, scenario] of [
+      [1, 'durable', 'COMMIT_THEN_TIMEOUT'],
+      [1, 'conventional', 'COMMIT_THEN_TIMEOUT'],
+      [1, 'durable', 'CONTROL'],
+      [2, 'conventional', 'CONTROL'],
+      [3, 'durable', 'COMMIT_THEN_TIMEOUT'],
+      [4, 'durable', 'CONTROL'],
+    ] as const) {
+      assertRejected(
+        { ...trialManifest(), sequence, variant_id, scenario },
+        ' oneOf',
+        `run position ${String(sequence)} as ${variant_id} ${scenario}`,
+      );
+    }
+  });
+
+  it('declares the control first and the treatment second in a variant validation (BR-RUA-038)', () => {
+    VALIDATION_SCENARIO_ORDER.forEach((scenario, index) => {
+      for (const variant_id of ['conventional', 'durable'] as const) {
+        assertAccepted(
+          { ...validationTrialManifest(), sequence: index + 1, scenario, variant_id },
+          `validation position ${String(index + 1)} ${variant_id}`,
+        );
+      }
+    });
+    assertRejected(
+      { ...validationTrialManifest(), sequence: 1, scenario: 'COMMIT_THEN_TIMEOUT' },
+      ' oneOf',
+      'treatment first',
+    );
+    assertRejected({ ...validationTrialManifest(), sequence: 2, scenario: 'CONTROL' }, ' oneOf', 'control second');
   });
 
   it('references its parent, resource manifest and input digests', () => {
@@ -281,10 +382,7 @@ describe('provider_trial_configuration (BR-RUA-025, BR-RUA-018)', () => {
 describe('trial_registration (BR-RUA-036, D-21)', () => {
   it('accepts a run and a variant-validation registration', () => {
     assertAccepted(trialRegistration(), 'run');
-    assertAccepted(
-      { ...withoutField(trialRegistration(), 'run_id'), variant_validation_id: IDS.variantValidation },
-      'validation',
-    );
+    assertAccepted(inVariantValidation(trialRegistration()), 'validation');
   });
 
   it('names the active trial that a consumer validates messages against', () => {

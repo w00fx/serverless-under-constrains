@@ -46,7 +46,7 @@ const GROUP_A = RECORD_TYPE_GROUPS['group-a'];
 const RUNTIME_EXPORTS: Partial<Readonly<Record<(typeof GROUP_A)[number], readonly string[]>>> = {
   admission_rejection: ['ADMISSION_CHECK_IDS', 'ADMISSION_REJECTION_CLASSES'],
   execution_manifest: ['CA_1_SCOPE', 'CA_1_STATEMENT', 'RUN_TRIAL_ORDER', 'VALIDATION_SCENARIO_ORDER'],
-  preflight_check_recorded: ['PREFLIGHT_CHECK_RESULTS'],
+  preflight_check_recorded: ['PREFLIGHT_CHECK_RESULTS', 'PREFLIGHT_VALUE_MAX_DEPTH'],
   provider_refund_call: ['PROVIDER_CALLER_IDS'],
   provider_refund_response: ['PROVIDER_REFUND_OUTCOMES', 'PROVIDER_REJECTION_REASONS'],
   resource_manifest: ['OWNERSHIP_TAG_KEYS', 'PROVISIONING_STATUSES'],
@@ -59,6 +59,7 @@ const VOCABULARY_SITES: readonly (readonly [readonly string[], (typeof GROUP_A)[
   [ADMISSION_REJECTION_CLASSES, 'preflight_check_recorded', '/then/properties/rejection_class/enum'],
   [PREFLIGHT_CHECK_RESULTS, 'preflight_check_recorded', '/properties/result/enum'],
   [PROVIDER_CALLER_IDS, 'provider_refund_call', '/properties/caller_id/enum'],
+  [PROVIDER_CALLER_IDS, 'provider_trial_configuration', '/properties/registered_caller_id/enum'],
   [PROVIDER_REFUND_OUTCOMES, 'provider_refund_response', '/properties/outcome/enum'],
   [PROVIDER_REJECTION_REASONS, 'provider_refund_response', '/properties/rejection_reason/enum'],
   [PROVIDER_REJECTION_REASONS, 'provider_refund_response', '/else/properties/rejection_reason/enum'],
@@ -113,6 +114,15 @@ describe('AC-RUA-046 group A catalogue', () => {
     for (const [values, type, pointer] of VOCABULARY_SITES) {
       assert.deepEqual(resolvePointer(schemaOf(type), pointer), [...values], `${type}${pointer}`);
     }
+    // The probe-or-trial split of the registered caller partitions the same caller vocabulary.
+    const configuration = schemaOf('provider_trial_configuration');
+    assert.deepEqual(
+      [
+        ...((resolvePointer(configuration, '/else/properties/registered_caller_id/enum') ?? []) as string[]),
+        resolvePointer(configuration, '/then/properties/registered_caller_id/const'),
+      ],
+      [...PROVIDER_CALLER_IDS],
+    );
     // One provider rejection vocabulary: the group B event copy must not drift from the wire.
     assert.deepEqual(groupBVocabulary.PROVIDER_REJECTION_REASONS, PROVIDER_REJECTION_REASONS);
     for (const id of ADMISSION_CHECK_IDS) {
@@ -125,22 +135,29 @@ describe('AC-RUA-046 group A catalogue', () => {
     const execution = schemaOf('execution_manifest');
     assert.equal(resolvePointer(execution, '/$defs/clock_assumption_ca_1/properties/scope/const'), CA_1_SCOPE);
     assert.equal(resolvePointer(execution, '/$defs/clock_assumption_ca_1/properties/statement/const'), CA_1_STATEMENT);
-    RUN_TRIAL_ORDER.forEach((trial, index) => {
-      const entry = `/$defs/run_trial_${String(index + 1)}/properties`;
-      assert.deepEqual(
-        {
-          sequence: resolvePointer(execution, `${entry}/sequence/const`),
-          variant_id: resolvePointer(execution, `${entry}/variant_id/const`),
-          scenario: resolvePointer(execution, `${entry}/scenario/const`),
-        },
-        trial,
-      );
-    });
-    VALIDATION_SCENARIO_ORDER.forEach((scenario, index) => {
-      const entry = `/$defs/validation_trial_${String(index + 1)}/properties`;
-      assert.equal(resolvePointer(execution, `${entry}/scenario/const`), scenario);
-      assert.equal(resolvePointer(execution, `${entry}/sequence/const`), index + 1);
-    });
+  });
+
+  it('declares the BR-RUA-019 and BR-RUA-038 trial orders identically in both manifests', () => {
+    for (const type of ['execution_manifest', 'trial_manifest'] as const) {
+      const schema = schemaOf(type);
+      RUN_TRIAL_ORDER.forEach((trial, index) => {
+        const entry = `/$defs/run_trial_${String(index + 1)}/properties`;
+        assert.deepEqual(
+          {
+            sequence: resolvePointer(schema, `${entry}/sequence/const`),
+            variant_id: resolvePointer(schema, `${entry}/variant_id/const`),
+            scenario: resolvePointer(schema, `${entry}/scenario/const`),
+          },
+          trial,
+          `${type} run position ${String(index + 1)}`,
+        );
+      });
+      VALIDATION_SCENARIO_ORDER.forEach((scenario, index) => {
+        const entry = `/$defs/validation_trial_${String(index + 1)}/properties`;
+        assert.equal(resolvePointer(schema, `${entry}/scenario/const`), scenario, `${type} validation scenario`);
+        assert.equal(resolvePointer(schema, `${entry}/sequence/const`), index + 1, `${type} validation sequence`);
+      });
+    }
   });
 
   it('has one canonical example per record type that validates as its own type', () => {

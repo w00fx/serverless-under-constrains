@@ -10,8 +10,18 @@ export const PREFLIGHT_CHECK_RESULTS = ['passed', 'failed'] as const;
 export type PreflightCheckResult = (typeof PREFLIGHT_CHECK_RESULTS)[number];
 
 /**
- * A declared limit or observed value as record JSON (BR-RUA-033): never null at any depth, and
- * every object member name is snake_case (the schema checks the names).
+ * The deepest nesting of arrays and objects a check value may have; the outermost container is
+ * level 1. The schema unrolls its check value to this many levels instead of referring to
+ * itself, so the record validator rejects a deeper value (even 100,000 levels) instead of
+ * throwing RangeError (Owner amendments A-02, A-05). Admission records scalars and shallow
+ * objects, so the bound never binds a real check.
+ */
+export const PREFLIGHT_VALUE_MAX_DEPTH = 8;
+
+/**
+ * A declared limit or observed value as record JSON (BR-RUA-033): never null at any depth, every
+ * object member name is snake_case, and containers nest at most `PREFLIGHT_VALUE_MAX_DEPTH`
+ * levels (the schema checks the names and the depth).
  */
 export type CheckValue = string | number | boolean | readonly CheckValue[] | { readonly [member: string]: CheckValue };
 

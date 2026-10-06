@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/trial_manifest.schema.json",
   "title": "trial_manifest (BR-RUA-040, BR-RUA-019)",
-  "description": "The per-trial manifest, frozen before publication. It names the trial within its run or variant validation (a transport probe has no trial, D-06), references the exact parent execution-manifest and resource-manifest digests, declares the trial's position, variant and scenario, and pins the digests of the trial's payment and approved-decision input files.",
+  "description": "The per-trial manifest, frozen before publication. It names the trial within its run or variant validation (a transport probe has no trial, D-06), references the exact parent execution-manifest and resource-manifest digests, declares the trial's position, variant and scenario (which must match the BR-RUA-019 run order or the BR-RUA-038 validation order, as in the execution manifest), and pins the digests of the trial's payment and approved-decision input files.",
   "type": "object",
   "properties": {
     "schema_version": { "const": 1 },
@@ -35,15 +35,76 @@
   "oneOf": [
     {
       "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
-      "required": ["run_id"]
+      "required": ["run_id"],
+      "anyOf": [
+        { "$ref": "#/$defs/run_trial_1" },
+        { "$ref": "#/$defs/run_trial_2" },
+        { "$ref": "#/$defs/run_trial_3" },
+        { "$ref": "#/$defs/run_trial_4" }
+      ]
     },
     {
       "properties": {
         "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
         "sequence": { "type": "integer", "maximum": 2 }
       },
-      "required": ["variant_validation_id"]
+      "required": ["variant_validation_id"],
+      "anyOf": [{ "$ref": "#/$defs/validation_trial_1" }, { "$ref": "#/$defs/validation_trial_2" }]
     }
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "run_trial_1": {
+      "description": "BR-RUA-019 run order, position 1 (the same fixed order the execution manifest declares).",
+      "type": "object",
+      "properties": {
+        "sequence": { "const": 1 },
+        "variant_id": { "const": "conventional" },
+        "scenario": { "const": "CONTROL" }
+      }
+    },
+    "run_trial_2": {
+      "description": "BR-RUA-019 run order, position 2.",
+      "type": "object",
+      "properties": {
+        "sequence": { "const": 2 },
+        "variant_id": { "const": "durable" },
+        "scenario": { "const": "CONTROL" }
+      }
+    },
+    "run_trial_3": {
+      "description": "BR-RUA-019 run order, position 3.",
+      "type": "object",
+      "properties": {
+        "sequence": { "const": 3 },
+        "variant_id": { "const": "conventional" },
+        "scenario": { "const": "COMMIT_THEN_TIMEOUT" }
+      }
+    },
+    "run_trial_4": {
+      "description": "BR-RUA-019 run order, position 4.",
+      "type": "object",
+      "properties": {
+        "sequence": { "const": 4 },
+        "variant_id": { "const": "durable" },
+        "scenario": { "const": "COMMIT_THEN_TIMEOUT" }
+      }
+    },
+    "validation_trial_1": {
+      "description": "BR-RUA-038 validation order, position 1: the declared variant's control.",
+      "type": "object",
+      "properties": {
+        "sequence": { "const": 1 },
+        "scenario": { "const": "CONTROL" }
+      }
+    },
+    "validation_trial_2": {
+      "description": "BR-RUA-038 validation order, position 2: the declared variant's treatment.",
+      "type": "object",
+      "properties": {
+        "sequence": { "const": 2 },
+        "scenario": { "const": "COMMIT_THEN_TIMEOUT" }
+      }
+    }
+  }
 }

@@ -35,6 +35,7 @@ import {
   trialRegistration,
   validationExecutionManifest,
 } from './manifest-examples.ts';
+import { branchExamples } from './branch-examples.ts';
 import { asJson } from './validation-assertions.ts';
 
 export type GroupARecordType = (typeof RECORD_TYPE_GROUPS)['group-a'][number];
@@ -66,7 +67,12 @@ export const CANONICAL_EXAMPLES: Readonly<Record<GroupARecordType, () => JsonObj
   trial_registration: () => asJson(trialRegistration()),
 };
 
-/** Every valid example: the canonical ones plus the other branch of each conditional rule. */
+/**
+ * Every valid example: the canonical ones plus the other branch of each conditional rule.
+ *
+ * @example
+ * allValidExamples().map((example) => example.name); // ['environment_input', ..., 'source_provenance (detached HEAD)']
+ */
 export function allValidExamples(): readonly NamedExample[] {
   const canonical = RECORD_TYPE_GROUPS['group-a'].map((type) => ({ name: type, record: CANONICAL_EXAMPLES[type]() }));
   return [
@@ -78,5 +84,6 @@ export function allValidExamples(): readonly NamedExample[] {
     { name: 'execution_manifest (transport probe)', record: asJson(probeExecutionManifest()) },
     { name: 'resource_manifest (failed)', record: asJson(failedResourceManifest()) },
     { name: 'provider_trial_configuration (probe)', record: asJson(probeProviderConfiguration()) },
+    ...branchExamples(),
   ];
 }

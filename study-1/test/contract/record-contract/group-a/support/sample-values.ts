@@ -70,3 +70,22 @@ export const COORDINATION_TABLE_ARN = `arn:aws:dynamodb:us-east-1:${ACCOUNT_ID}:
 export const COORDINATION_STACK_ID = `arn:aws:cloudformation:us-east-1:${ACCOUNT_ID}:stack/suc-study-1-coordination/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d`;
 export const COMMIT_SHA = '0123456789abcdef0123456789abcdef01234567';
 export const TREE_SHA = '89abcdef0123456789abcdef0123456789abcdef';
+
+/**
+ * BR-RUA-025: the controller's stream mapping consumes only newly inserted lowercase
+ * `caller_timeout_recorded` records, so its `FilterCriteria` holds one INSERT pattern on the record
+ * type. This is the canonical JSON text of that CloudFormation value.
+ *
+ * @example
+ * JSON.parse(CONTROLLER_FILTER_CRITERIA_JSON).Filters.length; // 1
+ */
+export const CONTROLLER_FILTER_CRITERIA_JSON = JSON.stringify({
+  Filters: [
+    {
+      Pattern: JSON.stringify({
+        eventName: ['INSERT'],
+        dynamodb: { NewImage: { record_type: { S: ['caller_timeout_recorded'] } } },
+      }),
+    },
+  ],
+});

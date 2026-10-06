@@ -7,19 +7,34 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { parseJsonDocument } from '../../../../src/record-contract/parsing.ts';
-import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
+import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { RECORD_TYPE_GROUPS } from '../../../../src/record-contract/record-types.ts';
 import { failedPreflightCheck, passedPreflightCheck, sourceProvenance } from './support/admission-examples.ts';
+import {
+  detachedSourceProvenance,
+  inVariantValidation,
+  validationResourceManifest,
+  validationTrialManifest,
+} from './support/branch-examples.ts';
 import { CANONICAL_EXAMPLES, allValidExamples } from './support/canonical-examples.ts';
-import { payment, probeProviderRefundCall, rejectedResponse } from './support/input-examples.ts';
+import {
+  payment,
+  probeProviderRefundCall,
+  rejectedResponse,
+  trialMessage,
+  trialProviderRefundCall,
+} from './support/input-examples.ts';
 import {
   failedResourceManifest,
   probeExecutionManifest,
   runExecutionManifest,
   succeededResourceManifest,
+  trialProviderConfiguration,
+  trialRegistration,
   validationExecutionManifest,
 } from './support/manifest-examples.ts';
 import {
+  asJson,
   assertAccepted,
   assertRejected,
   catalogueValidator,
@@ -34,6 +49,8 @@ type Path = readonly (string | number)[];
 interface FieldSite {
   readonly type: (typeof GROUP_A)[number];
   readonly path: Path;
+  /** The example that carries the site, when the canonical one takes another branch. */
+  readonly example?: () => JsonObject;
 }
 
 // Every object member name at any depth, with its JSON Pointer for the assertion label. No
@@ -70,6 +87,25 @@ const TIMESTAMP_SITES: readonly FieldSite[] = [
   { type: 'trial_registration', path: ['registered_at'] },
 ];
 
+const VARIANT_VALIDATION_ID: Path = ['variant_validation_id'];
+const VARIANT_VALIDATION_SITES: readonly FieldSite[] = [
+  { type: 'trial_message', path: VARIANT_VALIDATION_ID, example: () => inVariantValidation(trialMessage()) },
+  {
+    type: 'provider_refund_call',
+    path: VARIANT_VALIDATION_ID,
+    example: () => inVariantValidation(trialProviderRefundCall()),
+  },
+  { type: 'execution_manifest', path: VARIANT_VALIDATION_ID, example: () => asJson(validationExecutionManifest()) },
+  { type: 'resource_manifest', path: VARIANT_VALIDATION_ID, example: validationResourceManifest },
+  { type: 'trial_manifest', path: VARIANT_VALIDATION_ID, example: validationTrialManifest },
+  {
+    type: 'provider_trial_configuration',
+    path: VARIANT_VALIDATION_ID,
+    example: () => inVariantValidation(trialProviderConfiguration()),
+  },
+  { type: 'trial_registration', path: VARIANT_VALIDATION_ID, example: () => inVariantValidation(trialRegistration()) },
+];
+
 const UUID_SITES: readonly FieldSite[] = [
   { type: 'trial_message', path: ['run_id'] },
   { type: 'trial_message', path: ['trial_id'] },
@@ -88,6 +124,8 @@ const UUID_SITES: readonly FieldSite[] = [
   { type: 'trial_manifest', path: ['trial_id'] },
   { type: 'provider_trial_configuration', path: ['trial_id'] },
   { type: 'trial_registration', path: ['trial_id'] },
+  // BR-RUA-033 names the variant-validation identity too: every record that can carry it.
+  ...VARIANT_VALIDATION_SITES,
 ];
 
 // Fixed lowercase v4 identifiers, one per RFC 9562 variant nibble (8, 9, a, b), so the case is
@@ -204,8 +242,9 @@ describe('AC-RUA-046 serialization rules (group A)', () => {
   });
 
   it('lowercase UUIDv4', () => {
-    for (const { type, path } of UUID_SITES) {
-      const example = CANONICAL_EXAMPLES[type]();
+    assert.equal(VARIANT_VALIDATION_SITES.length, 7);
+    for (const { type, path, example: branchExample } of UUID_SITES) {
+      const example = (branchExample ?? CANONICAL_EXAMPLES[type])();
       for (const value of VALID_UUID4S) {
         assertAccepted(withPath(example, path, value), `${type} ${pointer(path)} ${value}`);
       }
@@ -264,7 +303,7 @@ describe('AC-RUA-046 serialization rules (group A)', () => {
   });
 
   it('omitted versus null', () => {
-    const detached = { ...withoutField(sourceProvenance(), 'branch'), detached_head: true };
+    const detached = detachedSourceProvenance();
     assertAccepted(detached, 'branch omitted on a detached HEAD');
     assertRejected(withField(sourceProvenance(), 'branch', null), '/branch type', 'branch as null');
     assertAccepted(withoutField(failedPreflightCheck(), 'observed'), 'observed omitted when unavailable');
