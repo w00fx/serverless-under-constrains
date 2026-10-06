@@ -12,6 +12,7 @@ export const DEFS_SCHEMA_ID = `${SCHEMA_ID_BASE}_defs.schema.json`;
 export const EVENT_ENVELOPE_REF = '_defs.schema.json#/$defs/event_envelope';
 
 const PROPERTY_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
+const FORBIDDEN_CLOSURE_KEYWORD = 'unevaluatedProperties';
 
 /**
  * The `$id` a record schema must declare, so `_defs.schema.json#/...` resolves relatively.
@@ -36,6 +37,7 @@ export function findSchemaConventionViolations(recordType: RecordType, schema: J
   return [
     ...headerViolations(recordType, schema),
     ...closureViolations(schema),
+    ...findUnevaluatedPropertiesViolations(schema),
     ...envelopeViolations(recordType, schema),
     ...findNonSnakeCaseProperties(schema, ''),
   ];
@@ -85,11 +87,48 @@ function headerViolations(recordType: RecordType, schema: JsonObject): readonly 
   return violations;
 }
 
+/**
+ * Reports every `unevaluatedProperties` keyword in a schema, at any depth, by JSON pointer. Ajv
+ * tracks evaluated names in a plain object, so an inherited name such as `__proto__` or
+ * `toString` counts as evaluated and passes `unevaluatedProperties: false`; record schemas close
+ * every object with `additionalProperties: false` instead (design §6, Owner amendment A-07).
+ * The walk is iterative, so a deep schema cannot exhaust the stack.
+ *
+ * @example
+ * findUnevaluatedPropertiesViolations({ allOf: [{ unevaluatedProperties: false }] });
+ * // ['unevaluatedProperties at /allOf/0; expected additionalProperties: false (A-07: ...)']
+ */
+export function findUnevaluatedPropertiesViolations(schema: JsonValue): readonly string[] {
+  const violations: string[] = [];
+  const pending: [JsonValue, string][] = [[schema, '']];
+  // for-of over an array visits the entries pushed during the walk, so this is a breadth-first queue.
+  for (const [node, pointer] of pending) {
+    const children = childEntriesOf(node);
+    // Array keys are indices, so only an object member can carry the keyword name.
+    if (children.some(([key]) => key === FORBIDDEN_CLOSURE_KEYWORD)) {
+      violations.push(
+        `${FORBIDDEN_CLOSURE_KEYWORD} at ${pointer === '' ? 'the root' : pointer}; expected additionalProperties: false (A-07: Ajv counts inherited names such as __proto__ as evaluated)`,
+      );
+    }
+    for (const [key, child] of children) {
+      pending.push([child, `${pointer}/${key}`]);
+    }
+  }
+  return violations;
+}
+
+function childEntriesOf(node: JsonValue): readonly (readonly [string, JsonValue])[] {
+  if (isJsonArray(node)) {
+    return node.map((child, index) => [String(index), child] as const);
+  }
+  return isObject(node) ? Object.entries(node) : [];
+}
+
 function closureViolations(schema: JsonObject): readonly string[] {
-  if (schema['additionalProperties'] === false || schema['unevaluatedProperties'] === false) {
+  if (schema['additionalProperties'] === false) {
     return [];
   }
-  return ['schema is open; expected additionalProperties: false or unevaluatedProperties: false at the root'];
+  return ['schema is open; expected additionalProperties: false at the root'];
 }
 
 function envelopeViolations(recordType: RecordType, schema: JsonObject): readonly string[] {

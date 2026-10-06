@@ -31,6 +31,8 @@ import { CANONICAL_EXAMPLES as GROUP_C_EXAMPLES } from './group-c/examples/group
 
 const RECORD_MODULE_ROOT = fileURLToPath(new URL('../../../src/record-contract/records/', import.meta.url));
 const SCHEMA_SUFFIX = '.schema.json';
+/** Member names every JSON object inherits; JSON.parse makes each one an own member (A-05, A-07). */
+const INHERITED_NAMES = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf'] as const;
 const SHARED_MODULES: Readonly<Record<string, readonly string[]>> = {
   'group-a': [],
   'group-b': ['record-map.ts', 'shared-shapes.ts', 'vocabulary.ts'],
@@ -69,6 +71,11 @@ const CANONICAL_EXAMPLES: ReadonlyMap<RecordType, () => JsonObject> = new Map<Re
     (recordType) => [recordType, (): JsonObject => toJson(GROUP_C_EXAMPLES[recordType]())] as const,
   ),
 ]);
+
+/** `record` with `name` added as an own member, built the way a reader parses untrusted bytes. */
+function withParsedMember(record: JsonObject, name: string): JsonObject {
+  return JSON.parse(`{${JSON.stringify(name)}:1,${JSON.stringify(record).slice(1)}`) as JsonObject;
+}
 
 /** The canonical example of any catalogued type, as the JSON a reader would parse. */
 function canonicalExampleOf(recordType: RecordType): JsonObject {
@@ -148,5 +155,27 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
       }
     }
     assert.equal(checked, 90 * 89);
+  });
+
+  it('every type rejects each inherited member name added to its canonical example (A-07)', () => {
+    // Ajv's unevaluatedProperties counts inherited names as evaluated; additionalProperties: false
+    // at every root refuses them. The root rejection is the only finding.
+    const validator = createRecordValidator();
+    let checked = 0;
+    for (const recordType of RECORD_TYPES) {
+      const example = canonicalExampleOf(recordType);
+      for (const name of INHERITED_NAMES) {
+        const hostile = withParsedMember(example, name);
+        assert.ok(Object.hasOwn(hostile, name), `${recordType}: ${name} is an own member`);
+        const outcome = validator.validate(hostile);
+        assert.deepEqual(
+          outcome.valid ? [] : outcome.violations.map((violation) => [violation.instance_path, violation.keyword]),
+          [['', 'additionalProperties']],
+          `${recordType} with ${name}`,
+        );
+        checked += 1;
+      }
+    }
+    assert.equal(checked, 90 * INHERITED_NAMES.length);
   });
 });

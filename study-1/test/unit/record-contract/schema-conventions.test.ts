@@ -11,8 +11,12 @@ import {
   SCHEMA_ID_BASE,
   findNonSnakeCaseProperties,
   findSchemaConventionViolations,
+  findUnevaluatedPropertiesViolations,
   recordSchemaId,
 } from '../../../src/record-contract/schema-conventions.ts';
+
+const UNEVALUATED_EXPECTATION =
+  'expected additionalProperties: false (A-07: Ajv counts inherited names such as __proto__ as evaluated)';
 
 function conformingSchema(recordType: string, extra: JsonObject = {}): JsonObject {
   return {
@@ -43,13 +47,19 @@ describe('findSchemaConventionViolations', () => {
     assert.deepEqual(findSchemaConventionViolations('payment', conformingSchema('payment')), []);
   });
 
-  it('accepts a conforming event schema closed with unevaluatedProperties', () => {
+  it('refuses a schema closed with unevaluatedProperties instead of additionalProperties (A-07)', () => {
     const schema = conformingSchema('dispatch_started', {
       allOf: [{ $ref: EVENT_ENVELOPE_REF }],
       unevaluatedProperties: false,
     });
     const { additionalProperties: _ignored, ...withoutAdditional } = schema;
-    assert.deepEqual(findSchemaConventionViolations('dispatch_started', withoutAdditional), []);
+    assert.deepEqual(findSchemaConventionViolations('dispatch_started', withoutAdditional), [
+      'schema is open; expected additionalProperties: false at the root',
+      `unevaluatedProperties at the root; ${UNEVALUATED_EXPECTATION}`,
+    ]);
+    assert.deepEqual(findSchemaConventionViolations('dispatch_started', schema), [
+      `unevaluatedProperties at the root; ${UNEVALUATED_EXPECTATION}`,
+    ]);
   });
 
   it('refuses a schema that is not an object', () => {
@@ -93,7 +103,7 @@ describe('findSchemaConventionViolations', () => {
   it('refuses an open root', () => {
     const open = conformingSchema('payment', { additionalProperties: true });
     assert.deepEqual(findSchemaConventionViolations('payment', open), [
-      'schema is open; expected additionalProperties: false or unevaluatedProperties: false at the root',
+      'schema is open; expected additionalProperties: false at the root',
     ]);
     const { additionalProperties: _a, ...absent } = conformingSchema('payment');
     assert.equal(findSchemaConventionViolations('payment', absent).length, 1);
@@ -145,5 +155,42 @@ describe('findNonSnakeCaseProperties', () => {
   it('ignores a non-object properties value and scalars', () => {
     assert.deepEqual(findNonSnakeCaseProperties({ properties: ['NotAName'] }, '/x'), []);
     assert.deepEqual(findNonSnakeCaseProperties('Bad', ''), []);
+  });
+});
+
+describe('findUnevaluatedPropertiesViolations', () => {
+  it('reports the keyword at any depth, through arrays, $defs and compositions', () => {
+    const schema: JsonObject = {
+      additionalProperties: false,
+      properties: { nested: { type: 'object', unevaluatedProperties: false } },
+      allOf: [{ if: { unevaluatedProperties: true } }],
+      $defs: { shape: { unevaluatedProperties: { type: 'string' } } },
+    };
+    assert.deepEqual(findUnevaluatedPropertiesViolations(schema), [
+      `unevaluatedProperties at /properties/nested; ${UNEVALUATED_EXPECTATION}`,
+      `unevaluatedProperties at /$defs/shape; ${UNEVALUATED_EXPECTATION}`,
+      `unevaluatedProperties at /allOf/0/if; ${UNEVALUATED_EXPECTATION}`,
+    ]);
+  });
+
+  it('ignores the word in values, descriptions and scalars', () => {
+    const schema: JsonObject = {
+      description: 'never unevaluatedProperties',
+      enum: ['unevaluatedProperties'],
+      additionalProperties: false,
+    };
+    assert.deepEqual(findUnevaluatedPropertiesViolations(schema), []);
+    assert.deepEqual(findUnevaluatedPropertiesViolations('unevaluatedProperties'), []);
+    assert.deepEqual(findUnevaluatedPropertiesViolations(null), []);
+  });
+
+  it('walks a 100,000-level schema without exhausting the stack', () => {
+    let schema: JsonObject = { unevaluatedProperties: false };
+    for (let level = 0; level < 100_000; level += 1) {
+      schema = { items: schema };
+    }
+    const found = findUnevaluatedPropertiesViolations(schema);
+    assert.equal(found.length, 1);
+    assert.match(found[0] ?? '', /^unevaluatedProperties at (\/items){100000}; expected additionalProperties: false/);
   });
 });

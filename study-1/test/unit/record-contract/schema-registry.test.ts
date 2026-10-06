@@ -341,6 +341,29 @@ describe('createRecordValidator', () => {
     );
   });
 
+  it('refuses at load a record schema or the shared definitions that use unevaluatedProperties (A-07)', () => {
+    const payment = samplePayment();
+    const expectation =
+      'expected additionalProperties: false (A-07: Ajv counts inherited names such as __proto__ as evaluated)';
+    const parsed = JSON.parse(PAYMENT_SCHEMA) as JsonObject;
+    const nested = JSON.stringify({ ...parsed, $defs: { loose: { type: 'object', unevaluatedProperties: false } } });
+    assert.throws(
+      () => createRecordValidator({ schemaRoot: ROOT, fileSystem: catalogueWithPayment(nested) }).validate(payment),
+      {
+        message: `schema /catalogue/group-a/payment.schema.json breaks the catalogue conventions: unevaluatedProperties at /$defs/loose; ${expectation}`,
+      },
+    );
+    const defs = JSON.parse(DEFS_BYTES.toString('utf8')) as JsonObject;
+    const looseDefs = JSON.stringify({
+      ...defs,
+      $defs: { ...(defs['$defs'] as JsonObject), loose: { unevaluatedProperties: false } },
+    });
+    const fileSystem = catalogueWithPayment().writeFile(`${ROOT}/_defs.schema.json`, looseDefs);
+    assert.throws(() => createRecordValidator({ schemaRoot: ROOT, fileSystem }).validate(payment), {
+      message: `shared definitions /catalogue/_defs.schema.json break the catalogue conventions: unevaluatedProperties at /$defs/loose; ${expectation}`,
+    });
+  });
+
   it('validates against a requested type, refusing a different declared type', () => {
     const validator = createRecordValidator({ schemaRoot: ROOT, fileSystem: catalogueWithPayment() });
     assert.equal(validator.validateAs('payment', samplePayment()).valid, true);
