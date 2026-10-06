@@ -32,7 +32,9 @@ import {
   SHARED_PRIMITIVES,
   cdkTemplate,
   digestsOf,
+  installedAsLocked,
   loadedPolicy,
+  sampleLock,
   sampleSnapshotInput,
 } from './support/scope-fixtures.ts';
 
@@ -272,8 +274,10 @@ describe('computeScopeSnapshot refusals', () => {
       },
       SAMPLE_BUNDLES[1],
     ].filter((bundle) => bundle !== undefined);
+    // Everything locked is installed as locked, so only the lock and dev checks speak.
+    const installed_versions = installedAsLocked(sampleLock());
     assert.deepEqual(
-      reasonsOf(sampleSnapshotInput({ bundles })).map((reason) => reason.code),
+      reasonsOf(sampleSnapshotInput({ bundles, installed_versions })).map((reason) => reason.code),
       ['BUNDLED_PACKAGE_NOT_PRODUCTION', 'DEPENDENCY_NOT_LOCKED'],
     );
   });

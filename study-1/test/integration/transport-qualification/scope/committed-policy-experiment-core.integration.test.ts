@@ -32,6 +32,7 @@ import { createRecordValidator } from '../../../../src/record-contract/schema-re
 import { CDK_PATH_METADATA_CONTEXT_KEY } from '../../../../src/transport-qualification/scope/cfn-template.ts';
 import { EsbuildBundleInputResolver } from '../../../../src/transport-qualification/scope/node/esbuild-bundle-input-resolver.ts';
 import { GitCommittedSourceReader } from '../../../../src/transport-qualification/scope/node/git-committed-source-reader.ts';
+import { NodeModulesPackageReader } from '../../../../src/transport-qualification/scope/node/node-modules-package-reader.ts';
 import { compareScopeSnapshots } from '../../../../src/transport-qualification/scope/scope-drift.ts';
 import { recomputeScopeSnapshot } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
 import type { ScopeEnvironment } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
@@ -81,6 +82,7 @@ const validator = createRecordValidator();
 const ports = {
   sources: new GitCommittedSourceReader({ projectRoot: STUDY_ROOT }),
   bundles: new EsbuildBundleInputResolver({ projectRoot: STUDY_ROOT }),
+  installed: new NodeModulesPackageReader({ projectRoot: STUDY_ROOT }),
   validator,
 };
 

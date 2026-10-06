@@ -68,5 +68,6 @@ export const PROJECT_FILES: Readonly<Record<string, string>> = {
 /** Installs the packages the lockfile of `projectLock(transportVersion)` records. */
 export function installProjectPackages(project: TemporaryScopeProject, transportVersion = '1.0.0'): void {
   project.installPackage('transport-dep', transportVersion, `export const transportDep = '${transportVersion}';\n`);
+  project.installPackage('@scope/declared-dep', '4.1.0', "export const declaredDep = 'declared';\n");
   project.installPackage('reporting-dep', '7.0.0', "export const reportingDep = 'reporting';\n");
 }

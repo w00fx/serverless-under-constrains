@@ -4,8 +4,12 @@
 // unrelated oracle, reporting or orchestration changes do not require a new probe.
 //
 // Boundary (spec Verification: integration): a real temporary git repository, real esbuild
-// metafile closures and the production adapters; the selected snapshot is the one computed
-// at the probe's commit, the recomputed one at the later commit.
+// metafile closures, a real installed `node_modules` and the production adapters; the selected
+// snapshot is the one computed at the probe's commit, the recomputed one at the later commit.
+//
+// Traceability: these cases prove the drift decision admission rejects on. The admission-level
+// "rejects the attempt before manifest freeze" (step A10, an admission_rejection with no
+// manifest) is WP-23's; WP-11 feeds AC-RUA-051 rather than closing it alone.
 
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -16,10 +20,14 @@ import { createRecordValidator } from '../../../../src/record-contract/schema-re
 import { SCOPE_BUNDLE_RUNTIME_PROPERTIES } from '../../../../src/transport-qualification/scope/bundle-inputs.ts';
 import { EsbuildBundleInputResolver } from '../../../../src/transport-qualification/scope/node/esbuild-bundle-input-resolver.ts';
 import { GitCommittedSourceReader } from '../../../../src/transport-qualification/scope/node/git-committed-source-reader.ts';
+import { NodeModulesPackageReader } from '../../../../src/transport-qualification/scope/node/node-modules-package-reader.ts';
 import { PACKAGE_LOCK_PATH } from '../../../../src/transport-qualification/scope/package-lock.ts';
 import { compareScopeSnapshots } from '../../../../src/transport-qualification/scope/scope-drift.ts';
 import { recomputeScopeSnapshot } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
-import type { ScopeEnvironment } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
+import type {
+  ScopeEnvironment,
+  ScopeRecomputationPorts,
+} from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
 import { TRANSPORT_SCOPE_POLICY_PATH } from '../../../../src/transport-qualification/scope/scope-policy.ts';
 import { scopeSnapshotSha256 } from '../../../../src/transport-qualification/scope/scope-snapshot.ts';
 import {
@@ -40,12 +48,17 @@ const ENVIRONMENT: ScopeEnvironment = {
   provider_warmup: { invocations_per_trial: 1 },
 };
 
-async function recompute(project: TemporaryScopeProject): Promise<TransportScopeSnapshot> {
-  const result = await recomputeScopeSnapshot(ENVIRONMENT, {
+function productionPorts(project: TemporaryScopeProject): ScopeRecomputationPorts {
+  return {
     sources: new GitCommittedSourceReader({ projectRoot: project.projectRoot }),
     bundles: new EsbuildBundleInputResolver({ projectRoot: project.projectRoot }),
+    installed: new NodeModulesPackageReader({ projectRoot: project.projectRoot }),
     validator,
-  });
+  };
+}
+
+async function recompute(project: TemporaryScopeProject): Promise<TransportScopeSnapshot> {
+  const result = await recomputeScopeSnapshot(ENVIRONMENT, productionPorts(project));
   assert.ok(result.ok, `expected a snapshot, got ${JSON.stringify(result)}`);
   return result.value;
 }
@@ -181,11 +194,34 @@ describe('AC-RUA-051 supplementary: what the recomputed scope binds', () => {
   it('refuses to compute a scope when a transport import cannot be resolved', async () => {
     project.write(CLIENT_SOURCE, "import { gone } from './missing.ts';\nexport const client = gone;\n");
     project.commit('break the provider client');
-    const result = await recomputeScopeSnapshot(ENVIRONMENT, {
-      sources: new GitCommittedSourceReader({ projectRoot: project.projectRoot }),
-      bundles: new EsbuildBundleInputResolver({ projectRoot: project.projectRoot }),
-      validator,
-    });
+    const result = await recomputeScopeSnapshot(ENVIRONMENT, productionPorts(project));
     assert.deepEqual(result.ok ? [] : result.error.map((reason) => reason.code), ['BUNDLE_RESOLUTION_FAILED']);
+  });
+
+  it('refuses a stale install the probe would exercise instead of the locked version (regression: verify/spec-r1-stale-install.log)', async () => {
+    // The lockfile moves to 1.1.0 while node_modules still holds the 1.0.0 the bundler resolves.
+    project.write(PACKAGE_LOCK_PATH, projectLock('1.1.0'));
+    project.commit('bump the transport dependency without reinstalling');
+    assert.deepEqual(await recomputeScopeSnapshot(ENVIRONMENT, productionPorts(project)), {
+      ok: false,
+      error: [
+        {
+          code: 'DEPENDENCY_INSTALL_MISMATCH',
+          subject: 'BR-RUA-028',
+          detail:
+            'node_modules/transport-dep is installed at 1.0.0 but package-lock.json locks 1.1.0; expected the locked ' +
+            'version installed (npm ci at the admitted revision)',
+        },
+      ],
+    });
+  });
+
+  it('refuses a declared dependency that is not installed', async () => {
+    project.uninstallPackage('@scope/declared-dep');
+    const result = await recomputeScopeSnapshot(ENVIRONMENT, productionPorts(project));
+    assert.deepEqual(result.ok ? [] : result.error.map((reason) => reason.detail), [
+      'node_modules/@scope/declared-dep is not installed but package-lock.json locks 4.1.0; expected the locked ' +
+        'version installed (npm ci at the admitted revision)',
+    ]);
   });
 });

@@ -1,6 +1,6 @@
 // Recomputing the scope from committed source (BR-RUA-028): the policy and lockfile come from
 // the committed tree, every scoped file is digested from committed bytes, and every failure is
-// a structured qualification reason. Runs over the named fakes of both read ports.
+// a structured qualification reason. Runs over the named fakes of the three read ports.
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -14,12 +14,14 @@ import { TRANSPORT_SCOPE_POLICY_PATH } from '../../../../src/transport-qualifica
 import { computeScopeSnapshot } from '../../../../src/transport-qualification/scope/scope-snapshot.ts';
 import { FixedBundleInputResolver } from './support/fixed-bundle-input-resolver.ts';
 import { MemoryCommittedSourceReader } from './support/memory-committed-source-reader.ts';
+import { MemoryInstalledPackageReader } from './support/memory-installed-package-reader.ts';
 import {
   CLIENT_SOURCE,
   ORACLE_SOURCE,
   PROBE_HANDLER,
   SAMPLE_BUNDLES,
   SAMPLE_COMMITTED_FILES,
+  SAMPLE_INSTALLED_VERSIONS,
   SAMPLE_LOCK_BYTES,
   SAMPLE_POLICY,
   SAMPLE_RUNTIME,
@@ -45,11 +47,20 @@ function committedProject(): MemoryCommittedSourceReader {
   });
 }
 
+function installedProject(): MemoryInstalledPackageReader {
+  return new MemoryInstalledPackageReader(SAMPLE_INSTALLED_VERSIONS);
+}
+
 describe('recomputeScopeSnapshot', () => {
   it('computes the same snapshot as the pure computation over the committed inputs', async () => {
     const sources = committedProject();
     const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES);
-    const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, { sources, bundles, validator });
+    const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources,
+      bundles,
+      installed: installedProject(),
+      validator,
+    });
     assert.deepEqual(recomputed, computeScopeSnapshot(sampleSnapshotInput()));
     assert.deepEqual(bundles.requests(), [SAMPLE_POLICY.entry_points]);
   });
@@ -59,6 +70,7 @@ describe('recomputeScopeSnapshot', () => {
     await recomputeScopeSnapshot(ENVIRONMENT, {
       sources,
       bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      installed: installedProject(),
       validator,
     });
     const reads = sources.reads();
@@ -66,6 +78,55 @@ describe('recomputeScopeSnapshot', () => {
     assert.equal(new Set(reads).size, reads.length);
     assert.equal(reads.includes(ORACLE_SOURCE), false);
     assert.equal(reads.includes(CLIENT_SOURCE), true);
+  });
+
+  it('reads the installed version of every closure package once, never an unrelated package', async () => {
+    const installed = installedProject();
+    await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources: committedProject(),
+      bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      installed,
+      validator,
+    });
+    assert.deepEqual(installed.reads(), [
+      'node_modules/@scope/declared-dep',
+      'node_modules/transport-dep',
+      'node_modules/transport-dep/node_modules/@inner/helper',
+    ]);
+  });
+
+  it('refuses a stale install of a bundled package (regression: verify/spec-r1-stale-install.log)', async () => {
+    const installed = installedProject();
+    installed.install('node_modules/transport-dep', '0.9.0');
+    const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources: committedProject(),
+      bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      installed,
+      validator,
+    });
+    assert.deepEqual(recomputed.ok ? [] : recomputed.error.map((reason) => reason.code), [
+      'DEPENDENCY_INSTALL_MISMATCH',
+    ]);
+  });
+
+  it('never reads an installed package outside the project and reports it as unlocked', async () => {
+    const installed = installedProject();
+    const bundles = [
+      {
+        ...SAMPLE_BUNDLES[0],
+        entry_point: PROBE_HANDLER,
+        local_sources: [PROBE_HANDLER],
+        packages: ['../node_modules/x'],
+      },
+    ];
+    const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources: committedProject(),
+      bundles: new FixedBundleInputResolver([...bundles, ...SAMPLE_BUNDLES.slice(1)]),
+      installed,
+      validator,
+    });
+    assert.equal(installed.reads().includes('../node_modules/x'), false);
+    assert.deepEqual(recomputed.ok ? [] : recomputed.error.map((reason) => reason.code), ['DEPENDENCY_NOT_LOCKED']);
   });
 
   it('never reads a bundled path outside the project and reports it', async () => {
@@ -82,6 +143,7 @@ describe('recomputeScopeSnapshot', () => {
     const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
       sources,
       bundles: new FixedBundleInputResolver(escaping.filter((bundle) => bundle !== undefined)),
+      installed: installedProject(),
       validator,
     });
     assert.equal(sources.reads().includes('../escape.ts'), false);
@@ -96,6 +158,7 @@ describe('recomputeScopeSnapshot', () => {
     const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
       sources,
       bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      installed: installedProject(),
       validator,
     });
     assert.deepEqual(recomputed, {
@@ -117,6 +180,7 @@ describe('recomputeScopeSnapshot', () => {
       await recomputeScopeSnapshot(ENVIRONMENT, {
         sources: missing,
         bundles: new FixedBundleInputResolver(),
+        installed: installedProject(),
         validator,
       }),
       {
@@ -133,7 +197,12 @@ describe('recomputeScopeSnapshot', () => {
     const invalid = committedProject();
     invalid.commit(TRANSPORT_SCOPE_POLICY_PATH, '{"schema_version":1}');
     const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES);
-    const result = await recomputeScopeSnapshot(ENVIRONMENT, { sources: invalid, bundles, validator });
+    const result = await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources: invalid,
+      bundles,
+      installed: installedProject(),
+      validator,
+    });
     assert.ok(!result.ok);
     assert.deepEqual(new Set(result.error.map((reason) => reason.code)), new Set(['SCOPE_POLICY_INVALID']));
     assert.deepEqual(bundles.requests(), []);
@@ -146,6 +215,7 @@ describe('recomputeScopeSnapshot', () => {
       await recomputeScopeSnapshot(ENVIRONMENT, {
         sources: missing,
         bundles: new FixedBundleInputResolver(),
+        installed: installedProject(),
         validator,
       }),
       {
@@ -165,6 +235,7 @@ describe('recomputeScopeSnapshot', () => {
       await recomputeScopeSnapshot(ENVIRONMENT, {
         sources: invalid,
         bundles: new FixedBundleInputResolver(),
+        installed: installedProject(),
         validator,
       }),
       {
@@ -183,24 +254,37 @@ describe('recomputeScopeSnapshot', () => {
   it('turns a bundler rejection into a structured reason', async () => {
     const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES);
     bundles.failWith('Could not resolve "../provider-client/missing.ts"');
-    assert.deepEqual(await recomputeScopeSnapshot(ENVIRONMENT, { sources: committedProject(), bundles, validator }), {
-      ok: false,
-      error: [
-        {
-          code: 'BUNDLE_RESOLUTION_FAILED',
-          subject: 'BR-RUA-028',
-          detail:
-            `bundling ${JSON.stringify(SAMPLE_POLICY.entry_points)} failed: Could not resolve "../provider-client/missing.ts"; ` +
-            'expected every entry point and import to resolve',
-        },
-      ],
-    });
+    assert.deepEqual(
+      await recomputeScopeSnapshot(ENVIRONMENT, {
+        sources: committedProject(),
+        bundles,
+        installed: installedProject(),
+        validator,
+      }),
+      {
+        ok: false,
+        error: [
+          {
+            code: 'BUNDLE_RESOLUTION_FAILED',
+            subject: 'BR-RUA-028',
+            detail:
+              `bundling ${JSON.stringify(SAMPLE_POLICY.entry_points)} failed: Could not resolve "../provider-client/missing.ts"; ` +
+              'expected every entry point and import to resolve',
+          },
+        ],
+      },
+    );
   });
 
   it('reports a thrown non-Error value by its string form', async () => {
     const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES);
     bundles.failWithNonError('plain failure');
-    const result = await recomputeScopeSnapshot(ENVIRONMENT, { sources: committedProject(), bundles, validator });
+    const result = await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources: committedProject(),
+      bundles,
+      installed: installedProject(),
+      validator,
+    });
     assert.ok(!result.ok);
     assert.match(result.error[0]?.detail ?? '', /failed: plain failure; expected every entry point/);
   });
@@ -212,6 +296,7 @@ describe('recomputeScopeSnapshot', () => {
     const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
       sources,
       bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      installed: installedProject(),
       validator,
     });
     assert.ok(recomputed.ok);
@@ -226,6 +311,7 @@ describe('recomputeScopeSnapshot port failures (regression: verify/eng-git-reade
     return recomputeScopeSnapshot(ENVIRONMENT, {
       sources,
       bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      installed: installedProject(),
       validator,
     });
   }
@@ -277,6 +363,34 @@ describe('recomputeScopeSnapshot port failures (regression: verify/eng-git-reade
     });
   });
 
+  it('reports an unreadable installed manifest as its own reason, not as a missing package', async () => {
+    const installed = installedProject();
+    installed.failWith(
+      'node_modules/transport-dep/package.json is not one JSON document (invalid_json)',
+      'node_modules/transport-dep',
+    );
+    assert.deepEqual(
+      await recomputeScopeSnapshot(ENVIRONMENT, {
+        sources: committedProject(),
+        bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+        installed,
+        validator,
+      }),
+      {
+        ok: false,
+        error: [
+          {
+            code: 'INSTALLED_PACKAGE_UNREADABLE',
+            subject: 'BR-RUA-028',
+            detail:
+              'reading the installed node_modules/transport-dep/package.json failed: node_modules/transport-dep/package.json ' +
+              'is not one JSON document (invalid_json); expected the installed package manifest to be readable',
+          },
+        ],
+      },
+    );
+  });
+
   it('resolves a listing failure to a reason instead of rejecting', async () => {
     const sources = committedProject();
     sources.failWith('listFiles', 'git ls-tree HEAD exited 128: fatal: not a git repository');
@@ -300,7 +414,7 @@ describe('recomputeScopeSnapshot runtime properties', () => {
     const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES, { bundle_format: 'cjs', bundle_target: 'node22' });
     const recomputed = await recomputeScopeSnapshot(
       { ...ENVIRONMENT, runtime: { unrelated_property: 'ignored' } },
-      { sources: committedProject(), bundles, validator },
+      { sources: committedProject(), bundles, installed: installedProject(), validator },
     );
     assert.ok(recomputed.ok);
     assert.deepEqual(recomputed.value.runtime_properties, { bundle_format: 'cjs', bundle_target: 'node22' });
@@ -308,18 +422,26 @@ describe('recomputeScopeSnapshot runtime properties', () => {
 
   it('refuses an environment value that contradicts the bundler, before bundling', async () => {
     const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES, { bundle_format: 'cjs', bundle_target: 'node24' });
-    assert.deepEqual(await recomputeScopeSnapshot(ENVIRONMENT, { sources: committedProject(), bundles, validator }), {
-      ok: false,
-      error: [
-        {
-          code: 'RUNTIME_PROPERTY_INVALID',
-          subject: 'BR-RUA-028',
-          detail:
-            'runtime property bundle_format is "esm" in the admission environment but the bundler resolved with "cjs"; ' +
-            "expected the bundler's value",
-        },
-      ],
-    });
+    assert.deepEqual(
+      await recomputeScopeSnapshot(ENVIRONMENT, {
+        sources: committedProject(),
+        bundles,
+        installed: installedProject(),
+        validator,
+      }),
+      {
+        ok: false,
+        error: [
+          {
+            code: 'RUNTIME_PROPERTY_INVALID',
+            subject: 'BR-RUA-028',
+            detail:
+              'runtime property bundle_format is "esm" in the admission environment but the bundler resolved with "cjs"; ' +
+              "expected the bundler's value",
+          },
+        ],
+      },
+    );
     assert.deepEqual(bundles.requests(), []);
   });
 });

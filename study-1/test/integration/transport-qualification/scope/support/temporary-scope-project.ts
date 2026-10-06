@@ -4,7 +4,7 @@
 // file system and git, not a fake: the scope adapters run against it unchanged.
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -54,6 +54,18 @@ export class TemporaryScopeProject {
       JSON.stringify({ name, version, type: 'module', main: 'index.js' }),
     );
     this.write(`node_modules/${name}/index.js`, source);
+  }
+
+  /** Removes an installed package from `node_modules/`. */
+  uninstallPackage(name: string): void {
+    rmSync(join(this.projectRoot, 'node_modules', name), { recursive: true, force: true });
+  }
+
+  /** Copies directories or files of another project (paths relative to both roots) below the project root (not committed). */
+  copyFrom(sourceRoot: string, paths: readonly string[]): void {
+    for (const path of paths) {
+      cpSync(join(sourceRoot, path), join(this.projectRoot, path), { recursive: true });
+    }
   }
 
   /** Stages every change in the work tree and commits it. */

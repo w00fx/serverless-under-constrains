@@ -13,6 +13,7 @@
 
 import { serializeRecordFile } from '../../record-contract/canonical-json.ts';
 import { sha256Hex } from '../../record-contract/digests.ts';
+import { boundedJsonText } from '../../record-contract/json-value.ts';
 import type { Result, Sha256Hex, StructuredReason } from '../../record-contract/primitives.ts';
 import type {
   NormalizedConfigurationProjection,
@@ -44,6 +45,8 @@ export interface ScopeSnapshotInput {
   /** SHA-256 of the committed bytes of each scoped path; a path absent here is not committed. */
   readonly source_digests: ReadonlyMap<string, Sha256Hex>;
   readonly lock: PackageLock;
+  /** The installed `package.json` version of each closure install path; an absent path is not installed. */
+  readonly installed_versions: ReadonlyMap<string, string>;
   readonly template: CfnTemplate;
   /** Runtime property values; only the names the policy declares enter the snapshot. */
   readonly runtime: Readonly<Record<string, RuntimePropertyValue>>;
@@ -65,8 +68,8 @@ export const SCOPE_TIMING_KEYS = [
  * Computes the snapshot, or every reason it cannot be computed.
  *
  * @example
- * const snapshot = computeScopeSnapshot({ policy, bundles, committed_files, source_digests, lock, template,
- *   runtime, timing, provider_warmup: { invocations_per_trial: 1 } });
+ * const snapshot = computeScopeSnapshot({ policy, bundles, committed_files, source_digests, lock, installed_versions,
+ *   template, runtime, timing, provider_warmup: { invocations_per_trial: 1 } });
  * if (snapshot.ok) writeOnce('admission/transport-scope-snapshot.json', serializeRecordFile(snapshot.value));
  */
 export function computeScopeSnapshot(
@@ -79,6 +82,7 @@ export function computeScopeSnapshot(
     bundled_packages: bundles.value.flatMap((bundle) => bundle.packages),
     declared_dependencies: policy.dependencies,
     lock: input.lock,
+    installed_versions: input.installed_versions,
   });
   const projections = configurationProjections(policy, input.template);
   const runtime = runtimeProperties(policy, input.runtime);
@@ -178,18 +182,15 @@ function scopedSourceFiles(
   bundles: readonly BundleInputs[],
   input: ScopeSnapshotInput,
 ): Collected<readonly ScopedSourceFile[]> {
-  const reasons: StructuredReason[] = [];
   const closure = new Set(bundles.flatMap((bundle) => bundle.local_sources));
-  for (const path of closure) {
-    if (!isPackageRelativePath(path)) {
-      reasons.push(
-        scopeViolation(
-          'BUNDLE_INPUT_OUTSIDE_PROJECT',
-          `bundled input ${JSON.stringify(path)}; expected a normalized path inside the project`,
-        ),
-      );
-    }
-  }
+  const reasons: StructuredReason[] = [...closure]
+    .filter((path) => !isPackageRelativePath(path))
+    .map((path) =>
+      scopeViolation(
+        'BUNDLE_INPUT_OUTSIDE_PROJECT',
+        `bundled input ${boundedJsonText(path)}; expected a normalized path inside the project`,
+      ),
+    );
   const rooted = new Set<string>();
   for (const root of policy.source_roots) {
     const files = input.committed_files.filter((path) => isUnderSourceRoot(path, root));

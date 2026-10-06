@@ -7,8 +7,11 @@ import { describe, it } from 'node:test';
 
 import { canonicalJson } from '../../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../../src/record-contract/digests.ts';
-import { resolveDependencyClosure } from '../../../../src/transport-qualification/scope/dependency-closure.ts';
-import { SAMPLE_LOCK_ENTRIES, lockEntry, sampleLock } from './support/scope-fixtures.ts';
+import {
+  closureInstallPaths,
+  resolveDependencyClosure,
+} from '../../../../src/transport-qualification/scope/dependency-closure.ts';
+import { SAMPLE_LOCK_ENTRIES, installedAsLocked, lockEntry, sampleLock } from './support/scope-fixtures.ts';
 
 const TRANSPORT = 'node_modules/transport-dep';
 const HELPER = 'node_modules/transport-dep/node_modules/@inner/helper';
@@ -17,8 +20,14 @@ function closureOf(
   bundled: readonly string[],
   declared: readonly string[],
   lock = sampleLock(),
+  installed: ReadonlyMap<string, string> = installedAsLocked(lock),
 ): ReturnType<typeof resolveDependencyClosure> {
-  return resolveDependencyClosure({ bundled_packages: bundled, declared_dependencies: declared, lock });
+  return resolveDependencyClosure({
+    bundled_packages: bundled,
+    declared_dependencies: declared,
+    lock,
+    installed_versions: installed,
+  });
 }
 
 describe('resolveDependencyClosure', () => {
@@ -126,5 +135,43 @@ describe('resolveDependencyClosure', () => {
     const declaredDev = closureOf([], ['dev-only']);
     assert.ok(declaredDev.ok);
     assert.deepEqual(declaredDev.value.dependencies, [{ name: 'dev-only', version: '0.1.0' }]);
+  });
+
+  it('refuses a closure package installed at another version or not installed (regression: verify/spec-r1-stale-install.log)', () => {
+    // The lockfile says 1.0.0 for transport-dep; node_modules still holds a stale 0.9.0, and the
+    // declared package is missing, so the bundler would not run what the snapshot names.
+    const installed = new Map([
+      [TRANSPORT, '0.9.0'],
+      [HELPER, '2.0.0'],
+    ]);
+    assert.deepEqual(closureOf([TRANSPORT, HELPER], ['@scope/declared-dep'], sampleLock(), installed), {
+      ok: false,
+      error: [
+        {
+          code: 'DEPENDENCY_INSTALL_MISMATCH',
+          subject: 'BR-RUA-028',
+          detail:
+            'node_modules/@scope/declared-dep is not installed but package-lock.json locks 4.1.0; expected the locked ' +
+            'version installed (npm ci at the admitted revision)',
+        },
+        {
+          code: 'DEPENDENCY_INSTALL_MISMATCH',
+          subject: 'BR-RUA-028',
+          detail:
+            'node_modules/transport-dep is installed at 0.9.0 but package-lock.json locks 1.0.0; expected the locked ' +
+            'version installed (npm ci at the admitted revision)',
+        },
+      ],
+    });
+  });
+});
+
+describe('closureInstallPaths', () => {
+  it('unites bundled install paths and declared names under node_modules, sorted and unique', () => {
+    assert.deepEqual(closureInstallPaths([TRANSPORT, 'node_modules/esbuild'], ['esbuild', '@scope/declared-dep']), [
+      'node_modules/@scope/declared-dep',
+      'node_modules/esbuild',
+      TRANSPORT,
+    ]);
   });
 });
