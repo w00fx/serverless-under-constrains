@@ -140,7 +140,9 @@ export function dlqSnapshot(): DlqSnapshot {
 }
 
 /**
- * The trial's ledger partition, read consistently in one page.
+ * The trial's ledger partition, read consistently and completely in one page: the only page has
+ * no cursor, as the collector writes a `Query` that returned no `LastEvaluatedKey` (design §8.2
+ * I7, §12.3 fixture-shape parity).
  *
  * @example
  * toJson(ledgerSnapshot());
@@ -156,7 +158,7 @@ export function ledgerSnapshot(): LedgerSnapshot {
     consistent_read: true,
     captured_at: at(62_000),
     complete: true,
-    pages: [{ page_number: 1, item_count: 1, start_cursor: 'cursor-0', next_cursor: 'cursor-1' }],
+    pages: [{ page_number: 1, item_count: 1 }],
     transactions: [
       {
         ...COMMIT_TRIPLE,
@@ -169,6 +171,23 @@ export function ledgerSnapshot(): LedgerSnapshot {
         status: 'SUCCEEDED',
         commit_requested_at: at(20),
       },
+    ],
+  };
+}
+
+/**
+ * The same complete read over two pages: the first returned a cursor, the second started from it
+ * and returned none, and the page counts sum to the one transaction (design §8.2 I7).
+ *
+ * @example
+ * toJson(ledgerSnapshotTwoPages()).pages; // [{ page_number: 1, ... next_cursor }, { page_number: 2, start_cursor, ... }]
+ */
+export function ledgerSnapshotTwoPages(): LedgerSnapshot {
+  return {
+    ...ledgerSnapshot(),
+    pages: [
+      { page_number: 1, item_count: 1, next_cursor: 'cursor-1' },
+      { page_number: 2, item_count: 0, start_cursor: 'cursor-1' },
     ],
   };
 }
@@ -398,7 +417,10 @@ export const OBSERVATION_EXAMPLES: readonly RecordExample[] = [
   example('queue_observation unavailable', queueCountersUnavailable()),
   example('settlement_sample', settlementSample()),
   example('dlq_snapshot', dlqSnapshot()),
-  example('ledger_snapshot', ledgerSnapshot(), { nested_optional: ['/pages/*/start_cursor', '/pages/*/next_cursor'] }),
+  example('ledger_snapshot', ledgerSnapshot()),
+  example('ledger_snapshot two pages', ledgerSnapshotTwoPages(), {
+    nested_optional: ['/pages/*/start_cursor', '/pages/*/next_cursor'],
+  }),
   example('treatment_state_snapshot present', treatmentItemPresent(), {
     nested_optional: TREATMENT_IDENTITIES.map((member) => `/treatment/${member}`),
   }),
