@@ -12,7 +12,8 @@ import {
   sumMinorUnits,
 } from '../../../src/record-contract/decimal.ts';
 import { isSha256Hex, sha256Hex } from '../../../src/record-contract/digests.ts';
-import { isUuid4, parseUuid4 } from '../../../src/record-contract/identifiers.ts';
+import { UUID4_PATTERN, isUuid4, parseUuid4 } from '../../../src/record-contract/identifiers.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
 import type { DecimalString, UtcMillis } from '../../../src/record-contract/primitives.ts';
 import { formatUtcMillis, isUtcMillis, parseUtcMillis } from '../../../src/record-contract/timestamps.ts';
 
@@ -56,6 +57,15 @@ describe('UUIDv4 identifiers', () => {
     const defaulted = parseUuid4('x');
     assert.equal(defaulted.ok, false);
     assert.equal(defaulted.error.subject, 'uuid4');
+  });
+
+  it('quotes a multi-megabyte value bounded (WP-00 review round 2, A-05)', () => {
+    const parsed = parseUuid4('u'.repeat(5_000_000));
+    assert.equal(parsed.ok, false);
+    assert.equal(
+      parsed.error.detail,
+      `got "${'u'.repeat(QUOTED_JSON_LIMIT - 1)}…[truncated]; expected a lowercase RFC 4122 version-4 UUID matching ${UUID4_PATTERN.source}`,
+    );
   });
 });
 
@@ -106,6 +116,12 @@ describe('UTC millisecond timestamps', () => {
     const defaulted = parseUtcMillis('x');
     assert.equal(defaulted.ok, false);
     assert.equal(defaulted.error.subject, 'utc_millis');
+    const huge = parseUtcMillis('t'.repeat(5_000_000));
+    assert.equal(huge.ok, false);
+    assert.equal(
+      huge.error.detail,
+      `got "${'t'.repeat(QUOTED_JSON_LIMIT - 1)}…[truncated]; expected an existing UTC instant formatted YYYY-MM-DDTHH:mm:ss.SSSZ`,
+    );
   });
 });
 

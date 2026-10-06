@@ -15,6 +15,7 @@ import {
   validateResultReferences,
 } from '../../../src/record-contract/evidence-refs.ts';
 import type { EvidenceRef, EvidenceRefFinding } from '../../../src/record-contract/evidence-refs.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue, Sha256Hex, Uuid4 } from '../../../src/record-contract/primitives.ts';
 
 const SHA_A = 'a'.repeat(64) as Sha256Hex;
@@ -78,7 +79,10 @@ describe('AC-RUA-048 evidence references are well formed', () => {
       'inside_package',
     );
     assert.deepEqual(violations(findings), ['DUPLICATE']);
-    assert.match(findings[0]?.detail ?? '', /evidence_refs\[1\] repeats an earlier reference/);
+    assert.equal(
+      findings[0]?.detail,
+      'evidence_refs[1] repeats an earlier reference evidence_refs[0] (artifact_path "ledger/a.json"); expected each reference once',
+    );
   });
 
   it('alias-field', () => {
@@ -251,7 +255,46 @@ describe('malformed reference lists', () => {
     );
     assert.deepEqual(violations(findings), ['MALFORMED_FIELD', 'MALFORMED_FIELD']);
     assert.match(findings[0]?.detail ?? '', /evidence_refs\[0\] is number 7; expected a JSON object/);
-    assert.match(findings[1]?.detail ?? '', /evidence_refs\[1\]\.note is not a BR-RUA-035 field/);
+    assert.match(findings[1]?.detail ?? '', /evidence_refs\[1\]\["note"\] is not a BR-RUA-035 field/);
+  });
+
+  it('reads only an own field, so an inherited name is absent rather than a prototype member', () => {
+    for (const field of ['constructor', 'toString', '__proto__']) {
+      const findings = validateEvidenceRefList({ result: 'pass' }, field, 'inside_package');
+      assert.deepEqual(violations(findings), ['MALFORMED_FIELD'], field);
+      assert.match(findings[0]?.detail ?? '', /is absent; expected an array/, field);
+    }
+    const own = JSON.parse('{"constructor":[]}') as JsonValue;
+    assert.deepEqual(validateEvidenceRefList(own, 'constructor', 'inside_package'), []);
+  });
+
+  // WP-00 review round 2 (A-05 policy 1): an unknown member name and a duplicate's identity were
+  // copied whole into the detail, so a 5 MB name or path made a 5 MB finding.
+  it('keeps every detail bounded however long the untrusted name or path is', () => {
+    const huge = 'p'.repeat(5_000_000);
+    const unknown = validateEvidenceRefList(container([{ ...ref('a'), [huge]: 1 }]), 'evidence_refs', 'inside_package');
+    assert.deepEqual(violations(unknown), ['MALFORMED_FIELD']);
+    assert.equal(
+      unknown[0]?.detail,
+      `evidence_refs[0]["${'p'.repeat(QUOTED_JSON_LIMIT - 1)}…[truncated]] is not a BR-RUA-035 field; expected only artifact_path, artifact_sha256, event_id, json_pointer, package_index_sha256`,
+    );
+    const longPath = `${'d/'.repeat(2_500_000)}x.json`;
+    const duplicate = validateEvidenceRefList(
+      container(asJson([ref(longPath), ref(longPath)])),
+      'evidence_refs',
+      'inside_package',
+    );
+    assert.deepEqual(violations(duplicate), ['DUPLICATE']);
+    assert.equal(
+      duplicate[0]?.detail,
+      `evidence_refs[1] repeats an earlier reference evidence_refs[0] (artifact_path "${longPath.slice(0, QUOTED_JSON_LIMIT - 1)}…[truncated]); expected each reference once`,
+    );
+    const pathFinding = validateEvidenceRefList(
+      container(asJson([ref(`/${huge}`)])),
+      'evidence_refs',
+      'inside_package',
+    );
+    assert.ok((pathFinding[0]?.detail.length ?? Infinity) < 2 * QUOTED_JSON_LIMIT, pathFinding[0]?.detail.slice(0, 80));
   });
 
   it('rejects malformed field values one by one', () => {
@@ -363,6 +406,6 @@ describe('hostile reference members (Owner amendment A-02 regression)', () => {
       'MALFORMED_FIELD',
       'MALFORMED_FIELD',
     ]);
-    assert.match(findings[0]?.detail ?? '', /evidence_refs\[0\]\.toString is not a BR-RUA-035 field/);
+    assert.match(findings[0]?.detail ?? '', /evidence_refs\[0\]\["toString"\] is not a BR-RUA-035 field/);
   });
 });

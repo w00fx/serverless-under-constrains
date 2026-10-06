@@ -2,6 +2,7 @@
 // The JSON Schema `uuid` format accepts any version and uppercase, so the pattern is explicit
 // (toolchain research §5).
 
+import { boundedJsonText } from './json-value.ts';
 import type { Result, StructuredReason, Uuid4 } from './primitives.ts';
 
 export const UUID4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -18,7 +19,8 @@ export function isUuid4(value: unknown): value is Uuid4 {
 }
 
 /**
- * Parses an identifier, returning a structured reason that names the offending value.
+ * Parses an identifier, returning a structured reason that names the offending value, quoted
+ * bounded because it is untrusted text of any length (A-05 policy 1).
  *
  * @example
  * const parsed = parseUuid4(input, 'trial_id');
@@ -33,7 +35,7 @@ export function parseUuid4(value: string, subject = 'uuid4'): Result<Uuid4, Stru
     error: {
       code: 'INVALID_UUID4',
       subject,
-      detail: `got ${JSON.stringify(value)}; expected a lowercase RFC 4122 version-4 UUID matching ${UUID4_PATTERN.source}`,
+      detail: `got ${boundedJsonText(value)}; expected a lowercase RFC 4122 version-4 UUID matching ${UUID4_PATTERN.source}`,
     },
   };
 }

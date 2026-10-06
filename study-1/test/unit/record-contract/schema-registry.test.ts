@@ -11,6 +11,7 @@ import type { JsonObject } from '../../../src/record-contract/primitives.ts';
 import {
   DEFAULT_SCHEMA_ROOT,
   NODE_SCHEMA_FILE_SYSTEM,
+  VIOLATION_TEXT_LIMIT,
   createRecordValidator,
   listSchemaFiles,
 } from '../../../src/record-contract/schema-registry.ts';
@@ -146,6 +147,54 @@ describe('createRecordValidator', () => {
       ],
     );
     assert.match(violations[1]?.detail ?? '', /^must be >= 1 \(params \{"comparison":">=","limit":1\}\)$/);
+  });
+
+  // WP-00 review round 2 (A-05 policy 1): Ajv copies an additional or open-map member name into
+  // params and the instance path, so a 5 MB name made a 5 MB violation.
+  it('bounds the instance path and params that a hostile member name reaches', () => {
+    const name = 'k'.repeat(5_000_000);
+    const openMap = JSON.stringify({
+      ...(JSON.parse(minimalSchema('source_provenance')) as JsonObject),
+      properties: {
+        schema_version: { const: 1 },
+        record_type: { const: 'source_provenance' },
+        tool_versions: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    });
+    const fileSystem = catalogueWithPayment().writeFile(`${ROOT}/group-a/source_provenance.schema.json`, openMap);
+    const validator = createRecordValidator({ schemaRoot: ROOT, fileSystem });
+    const paramsPrefix = '{"additionalProperty":"';
+    assert.deepEqual(validator.validate({ ...samplePayment(), [name]: 1 }), {
+      valid: false,
+      record_type: 'payment',
+      violations: [
+        {
+          instance_path: '',
+          keyword: 'additionalProperties',
+          detail: `must NOT have additional properties (params ${paramsPrefix}${'k'.repeat(VIOLATION_TEXT_LIMIT - paramsPrefix.length)}…[truncated])`,
+        },
+      ],
+    });
+    const inMap = { schema_version: 1, record_type: 'source_provenance', tool_versions: { [name]: 7 } };
+    assert.deepEqual(validator.validate(inMap), {
+      valid: false,
+      record_type: 'source_provenance',
+      violations: [
+        {
+          instance_path: `/tool_versions/${'k'.repeat(VIOLATION_TEXT_LIMIT - '/tool_versions/'.length)}…[truncated]`,
+          keyword: 'type',
+          detail: 'must be string (params {"type":"string"})',
+        },
+      ],
+    });
+  });
+
+  it('names a non-finite top-level value as itself, never as null', () => {
+    const validator = createRecordValidator({ schemaRoot: ROOT, fileSystem: catalogueWithPayment() });
+    assert.deepEqual(validator.validate(JSON.parse('-1e400') as number), {
+      valid: false,
+      violations: [{ instance_path: '', keyword: 'type', detail: 'got -Infinity; expected a JSON object record' }],
+    });
   });
 
   it('rejects a value that is not a JSON object without loading any schema', () => {

@@ -8,6 +8,7 @@ import { describe, it } from 'node:test';
 import {
   QUOTED_JSON_LIMIT,
   boundedJsonText,
+  boundedText,
   describeJson,
   findDuplicateItems,
   sameJsonValue,
@@ -170,5 +171,23 @@ describe('boundedJsonText and describeJson', () => {
     assert.equal(describeJson(['a']), 'array ["a"]');
     assert.equal(describeJson({ a: 'b' }), 'object {"a":"b"}');
     assert.equal(describeJson('y'.repeat(500)), `string "${'y'.repeat(QUOTED_JSON_LIMIT - 1)}…[truncated]`);
+  });
+
+  // WP-00 review round 2 (A-05): JSON.parse('1e400') is Infinity and JSON.stringify writes it as
+  // null, so a detail claimed the offending value was null.
+  it('spells non-finite numbers as themselves, never as null', () => {
+    assert.equal(describeJson(JSON.parse('1e400') as JsonValue), 'number Infinity');
+    assert.equal(describeJson(-Infinity), 'number -Infinity');
+    assert.equal(describeJson(Number.NaN), 'number NaN');
+    assert.equal(boundedJsonText({ a: [Infinity, -Infinity, Number.NaN, 1] }), '{"a":[Infinity,-Infinity,NaN,1]}');
+  });
+});
+
+describe('boundedText', () => {
+  it('keeps text of at most the limit and cuts longer text with the marker', () => {
+    assert.equal(boundedText('/a/b'), '/a/b');
+    assert.equal(boundedText('abc', 3), 'abc');
+    assert.equal(boundedText('abcd', 3), 'abc…[truncated]');
+    assert.equal(boundedText('k'.repeat(5_000_000)), `${'k'.repeat(QUOTED_JSON_LIMIT)}…[truncated]`);
   });
 });

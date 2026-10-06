@@ -150,7 +150,8 @@ export function validateEvidenceRefList(
     violation: 'ALIAS_FIELD' as const,
     detail: `field ${JSON.stringify(alias)} is an alias; BR-RUA-035 requires the field name ${JSON.stringify(field)}`,
   }));
-  const list = container[field];
+  // Own members only: an inherited name such as `constructor` is not a field of the container.
+  const list = Object.hasOwn(container, field) ? container[field] : undefined;
   if (!Array.isArray(list)) {
     const detail = `field ${JSON.stringify(field)} is ${describeJson(list)}; expected an array of evidence references`;
     return [...aliasFindings, { violation: 'MALFORMED_FIELD', detail }];
@@ -195,9 +196,14 @@ function validateEntry(entry: JsonValue, index: number, location: ReferenceLocat
   if (!isJsonObject(entry)) {
     return [{ violation: 'MALFORMED_FIELD', detail: `${at} is ${describeJson(entry)}; expected a JSON object` }];
   }
+  // The member name is untrusted text of any length, so the detail quotes it bounded (A-05).
   const unknownFields = Object.keys(entry)
     .filter((key) => !REF_FIELDS.has(key))
-    .map((key) => malformed(`${at}.${key} is not a BR-RUA-035 field; expected only ${[...REF_FIELDS].join(', ')}`));
+    .map((key) =>
+      malformed(
+        `${at}[${boundedJsonText(key)}] is not a BR-RUA-035 field; expected only ${[...REF_FIELDS].join(', ')}`,
+      ),
+    );
   return [
     ...unknownFields,
     ...pathFindings(entry, at),
@@ -265,22 +271,19 @@ function locationFindings(
 
 function orderFindings(refs: readonly EvidenceRef[]): readonly EvidenceRefFinding[] {
   const findings: EvidenceRefFinding[] = [];
-  const seen = new Set<string>();
+  const firstIndexOf = new Map<string, number>();
   refs.forEach((ref, index) => {
-    const identity = JSON.stringify([
-      ref.artifact_path,
-      ref.artifact_sha256,
-      ref.event_id,
-      ref.json_pointer,
-      ref.package_index_sha256,
-    ]);
-    if (seen.has(identity)) {
+    const identity = JSON.stringify(ORDER_KEYS.map((key) => ref[key] ?? null));
+    const earlier = firstIndexOf.get(identity);
+    if (earlier !== undefined) {
+      // The detail names both positions and quotes the path bounded; the identity itself may be
+      // megabytes of untrusted text (WP-00 review round 2, A-05 policy 1).
       findings.push({
         violation: 'DUPLICATE',
-        detail: `evidence_refs[${String(index)}] repeats an earlier reference ${identity}`,
+        detail: `evidence_refs[${String(index)}] repeats an earlier reference evidence_refs[${String(earlier)}] (artifact_path ${boundedJsonText(ref.artifact_path)}); expected each reference once`,
       });
     }
-    seen.add(identity);
+    firstIndexOf.set(identity, earlier ?? index);
     const previous = refs[index - 1];
     if (previous !== undefined && compareEvidenceRefs(previous, ref) > 0) {
       findings.push({

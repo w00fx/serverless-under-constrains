@@ -49,21 +49,41 @@ export function describeJson(value: JsonValue | undefined): string {
 /**
  * The JSON text of a value exactly as `JSON.stringify` writes it when that text has at most
  * `limit` characters; otherwise its first `limit` characters followed by `…[truncated]`. Built
- * iteratively and stopped at the limit, so it is total and bounded over hostile input.
+ * iteratively and stopped at the limit, so it is total and bounded over hostile input. A
+ * non-finite number is spelled `Infinity`, `-Infinity` or `NaN`: `JSON.parse('1e400')` yields
+ * `Infinity`, and writing it as JSON's `null` would misreport the offending value (A-05).
  *
  * @example
  * boundedJsonText({ a: [1] }); // '{"a":[1]}'
  * boundedJsonText('x'.repeat(500), 4); // '"xxx…[truncated]'
+ * boundedJsonText([Infinity]); // '[Infinity]'
  */
 export function boundedJsonText(value: JsonValue, limit: number = QUOTED_JSON_LIMIT): string {
   let text = '';
   for (const piece of jsonTextPieces(value, boundedStyle(limit))) {
     text += piece;
     if (text.length > limit) {
-      return `${text.slice(0, limit)}…[truncated]`;
+      return truncatedText(text, limit);
     }
   }
   return text;
+}
+
+/**
+ * Plain text cut to at most `limit` characters plus the `…[truncated]` marker, for detail parts
+ * that are already text rather than JSON values, such as an instance path built from untrusted
+ * member names.
+ *
+ * @example
+ * boundedText('/a/b'); // '/a/b'
+ * boundedText('abcdef', 3); // 'abc…[truncated]'
+ */
+export function boundedText(text: string, limit: number = QUOTED_JSON_LIMIT): string {
+  return text.length > limit ? truncatedText(text, limit) : text;
+}
+
+function truncatedText(text: string, limit: number): string {
+  return `${text.slice(0, limit)}…[truncated]`;
 }
 
 // Strings are cut before quoting: a cut string still overflows the limit (its quotes add two
@@ -73,10 +93,14 @@ function boundedStyle(limit: number): JsonTextStyle {
   const quote = (text: string): string => JSON.stringify(text.length > limit ? text.slice(0, limit + 1) : text);
   return {
     sortKeys: false,
-    leafText: (leaf) => (typeof leaf === 'string' ? quote(leaf) : JSON.stringify(leaf)),
+    leafText: (leaf) => (typeof leaf === 'string' ? quote(leaf) : nonStringLeafText(leaf)),
     keyText: quote,
     isWalkedObject: () => true,
   };
+}
+
+function nonStringLeafText(leaf: unknown): string | undefined {
+  return typeof leaf === 'number' && !Number.isFinite(leaf) ? String(leaf) : JSON.stringify(leaf);
 }
 
 function jsonTypeName(value: JsonValue): string {

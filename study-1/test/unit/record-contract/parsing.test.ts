@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
 import {
   decodeUtf8Strict,
   firstInvalidUtf8Offset,
@@ -104,10 +105,23 @@ describe('parseJsonDocument', () => {
     const depth = 200_000;
     assert.equal(parseJsonDocument(encoder.encode(`${'['.repeat(depth)}1${']'.repeat(depth)}`)).ok, true);
     const overflow = parseJsonDocument(encoder.encode(`${'['.repeat(depth)}1e999${']'.repeat(depth)}`));
+    // The pointer is cut in the detail (WP-00 review round 2: a 200,000-level pointer was copied
+    // whole, 400 KB of detail).
     assert.equal(
       !overflow.ok && overflow.error.kind === 'invalid_json' && overflow.error.detail,
-      `number at JSON pointer "${'/0'.repeat(depth)}" overflows a finite double`,
+      `number at JSON pointer "${'/0'.repeat(depth).slice(0, QUOTED_JSON_LIMIT - 1)}…[truncated] overflows a finite double`,
     );
+  });
+
+  it('quotes a pointer through a multi-megabyte member name bounded', () => {
+    const name = 'n'.repeat(5_000_000);
+    assert.deepEqual(parseJsonDocument(encoder.encode(`{"${name}":[1e400]}`)), {
+      ok: false,
+      error: {
+        kind: 'invalid_json',
+        detail: `number at JSON pointer "/${name.slice(0, QUOTED_JSON_LIMIT - 2)}…[truncated] overflows a finite double`,
+      },
+    });
   });
 });
 
