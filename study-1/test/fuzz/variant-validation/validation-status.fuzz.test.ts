@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 
 import fc from 'fast-check';
 
+import { VALIDATION_TERMINAL_REASONS } from '../../../src/record-contract/records/group-c/vocabulary.ts';
 import type { PreservationVerdict } from '../../../src/record-contract/records/group-c/vocabulary.ts';
 import type { SafetyStanding } from '../../../src/variant-validation/safety-standing.ts';
 import { deriveValidationStatus } from '../../../src/variant-validation/validation-status.ts';
@@ -22,17 +23,6 @@ import { validationReason } from '../../../src/variant-validation/validation-rea
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
 const VERDICTS: readonly (PreservationVerdict | undefined)[] = ['pass', 'fail', 'indeterminate', undefined];
-const TERMINAL_REASONS = [
-  'COMPLETED',
-  'CLEANUP_INCOMPLETE',
-  'LEAK_AUDIT_NOT_CLEAN',
-  'LEASE_RELEASE_FAILED',
-  'LEASE_STATE_UNVERIFIED',
-  'VALIDATION_INCOMPLETE',
-  'LEASE_LOST',
-  'SAFETY_DEADLINE',
-  'EVIDENCE_FINALIZATION_FAILED',
-] as const;
 const CLOSURE_ONLY = new Set([
   'CLEANUP_INCOMPLETE',
   'LEAK_AUDIT_NOT_CLEAN',
@@ -56,7 +46,7 @@ const inputArbitrary: fc.Arbitrary<ValidationStatusInput> = fc.record({
     control_verdict: fc.constantFrom(...VERDICTS),
     treatment_verdict: fc.constantFrom(...VERDICTS),
   }),
-  terminal_reason: fc.constantFrom(...TERMINAL_REASONS),
+  terminal_reason: fc.constantFrom(...VALIDATION_TERMINAL_REASONS),
   closure: fc.record({
     cleanup_status: fc.constantFrom('succeeded', 'partial', 'failed', 'unverified'),
     leak_audit_status: fc.constantFrom('clean', 'leaks_detected', 'inconclusive', 'unverified'),
