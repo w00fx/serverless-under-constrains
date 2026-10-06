@@ -175,13 +175,19 @@ describe('deployment_assembly_inventory (BR-RUA-042)', () => {
     assertAccepted(deploymentAssemblyInventory(), 'canonical');
   });
 
-  it('lists at least one regular file, each once', () => {
+  it('lists at least one regular file and refuses a byte-identical duplicate entry', () => {
     assertRejected(withField(deploymentAssemblyInventory(), 'files', []), '/files minItems', 'empty assembly');
     const [first] = deploymentAssemblyInventory().files;
     assertRejected(
       withField(deploymentAssemblyInventory(), 'files', [first, first]),
       '/files uniqueItems',
       'duplicate',
+    );
+    // One entry per path is a code-level check of the inventory builder (see the schema
+    // description): the schema cannot compare one member across items.
+    assertAccepted(
+      withField(deploymentAssemblyInventory(), 'files', [first, { ...first, sha256: 'e'.repeat(64) }]),
+      'same path, other digest: left to the builder',
     );
   });
 

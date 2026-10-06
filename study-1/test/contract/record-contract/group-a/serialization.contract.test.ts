@@ -90,6 +90,15 @@ const UUID_SITES: readonly FieldSite[] = [
   { type: 'trial_registration', path: ['trial_id'] },
 ];
 
+// Fixed lowercase v4 identifiers, one per RFC 9562 variant nibble (8, 9, a, b), so the case is
+// repeatable instead of drawing crypto.randomUUID() on every run.
+const VALID_UUID4S: readonly string[] = [
+  '00000000-0000-4000-8000-000000000000',
+  'ffffffff-ffff-4fff-9fff-ffffffffffff',
+  '3f1c2a9e-8b4d-4c1e-af00-1a2b3c4d5e6f',
+  '0a1b2c3d-4e5f-4a7b-bc9d-0e1f2a3b4c5d',
+];
+
 const AMOUNT_SITES: readonly FieldSite[] = [
   { type: 'payment', path: ['captured_amount_minor'] },
   { type: 'approved_decision', path: ['approved_amount_minor'] },
@@ -197,7 +206,9 @@ describe('AC-RUA-046 serialization rules (group A)', () => {
   it('lowercase UUIDv4', () => {
     for (const { type, path } of UUID_SITES) {
       const example = CANONICAL_EXAMPLES[type]();
-      assertAccepted(withPath(example, path, crypto.randomUUID()), `${type} ${pointer(path)} random v4`);
+      for (const value of VALID_UUID4S) {
+        assertAccepted(withPath(example, path, value), `${type} ${pointer(path)} ${value}`);
+      }
       for (const value of [
         '3F1C2A9E-8B4D-4C1E-9F00-1A2B3C4D5E6F',
         '3f1c2a9e-8b4d-1c1e-9f00-1a2b3c4d5e6f',
