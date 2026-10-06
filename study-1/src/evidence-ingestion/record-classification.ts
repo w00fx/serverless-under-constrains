@@ -5,7 +5,7 @@
 // 1): traceability becomes unverified instead of invalid. Every other fault is
 // RECORD_SCHEMA_INVALID. Findings are aggregated per artifact (Owner amendment A-12).
 
-import { isJsonObject } from '../record-contract/json-value.ts';
+import { boundedJsonText, isJsonObject } from '../record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../record-contract/primitives.ts';
 import { isEventRecordType } from '../record-contract/record-types.ts';
 import type { RecordValidation, RecordValidator, SchemaViolation } from '../record-contract/schema-registry.ts';
@@ -121,10 +121,12 @@ function classifyValue(value: JsonValue, judge: Judge): ValueOutcome {
       ? { validity: 'correlation_missing', problems: ['trial_id absent'] }
       : { validity: 'valid', problems: [] };
   }
-  const absent = absentCorrelation(value, judge);
-  if (absent.length > 0 && someFillValidates(value, absent, judge)) {
-    const names = absent.flatMap((unit) => Object.keys(unit));
-    return { validity: 'correlation_missing', problems: [`${names.join(', ')} absent`] };
+  if (isJsonObject(value)) {
+    const absent = absentCorrelation(value, judge);
+    if (absent.length > 0 && someFillValidates(value, absent, judge)) {
+      const names = absent.flatMap((unit) => Object.keys(unit));
+      return { validity: 'correlation_missing', problems: [`${names.join(', ')} absent`] };
+    }
   }
   return { validity: 'schema_invalid', problems: checked.violations.map(describeViolation) };
 }
@@ -140,7 +142,7 @@ function checkShape(value: JsonValue, judge: Judge): RecordValidation {
   if (!checked.valid || isEventRecordType(checked.record.record_type)) {
     return checked;
   }
-  const detail = `record_type ${JSON.stringify(checked.record.record_type)} is not a journal event; expected an event record type`;
+  const detail = `record_type ${boundedJsonText(checked.record.record_type)} is not a journal event; expected an event record type`;
   return { valid: false, violations: [{ instance_path: '/record_type', keyword: 'record_type', detail }] };
 }
 
@@ -155,10 +157,7 @@ function lacksTrialIdentity(value: JsonValue, judge: Judge): boolean {
 
 // Each absent correlation unit, as the members that would fill it. The trial pair is one unit:
 // the schemas require both members or neither.
-function absentCorrelation(value: JsonValue, judge: Judge): readonly JsonObject[] {
-  if (!isJsonObject(value)) {
-    return [];
-  }
+function absentCorrelation(value: JsonObject, judge: Judge): readonly JsonObject[] {
   const execution = judge.scope.execution;
   const executionField = execution === undefined ? 'run_id' : executionIdField(execution);
   const units: JsonObject[] = [];
@@ -185,16 +184,23 @@ function absentTrialMembers(value: JsonObject): JsonObject {
 // A record is correlation-missing when filling some of its absent correlation units makes it
 // valid: not every record type carries every unit (the published message has no execution
 // manifest digest), so every non-empty combination is tried (at most seven).
-function someFillValidates(value: JsonValue, absent: readonly JsonObject[], judge: Judge): boolean {
+function someFillValidates(value: JsonObject, absent: readonly JsonObject[], judge: Judge): boolean {
   const combinations = 2 ** absent.length;
   for (let mask = 1; mask < combinations; mask += 1) {
     const fill = absent.filter((_, index) => (mask & (2 ** index)) !== 0);
-    const filled: JsonObject = Object.assign({}, value, ...fill) as JsonObject;
-    if (checkShape(filled, judge).valid) {
+    if (checkShape(withMembers(value, fill), judge).valid) {
       return true;
     }
   }
   return false;
+}
+
+// Spread defines own data properties, so a parsed own `__proto__` member stays a member the
+// closed root refuses (A-07). `Object.assign` would run the `__proto__` setter instead: the member
+// would vanish into the prototype and a record carrying it could pass as correlation-missing
+// (A-05, review finding WP-12 R1).
+function withMembers(value: JsonObject, units: readonly JsonObject[]): JsonObject {
+  return units.reduce<JsonObject>((filled, unit) => ({ ...filled, ...unit }), { ...value });
 }
 
 function describeViolation(violation: SchemaViolation): string {
