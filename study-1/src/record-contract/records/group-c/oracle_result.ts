@@ -15,8 +15,8 @@ import type {
   VariantId,
 } from '../../primitives.ts';
 import type { ProcessingTerminalReason } from '../group-b/vocabulary.ts';
-import type { ArtifactRef, SixConditionResults } from './shared-shapes.ts';
-import type { ClockAssumptionId, GateId, OracleRuleId, TrialValidity } from './vocabulary.ts';
+import type { ArtifactRef, SixConditionResults, TrialExecutionIdentity } from './shared-shapes.ts';
+import type { ApplicableGateValue, ClockAssumptionId, GateId, OracleRuleId, TrialValidity } from './vocabulary.ts';
 
 /** One validity gate of BR-RUA-029 (design §8.3). */
 export interface ValidityGate {
@@ -69,8 +69,9 @@ type TenRules = readonly [
 ];
 
 /**
- * BR-RUA-030 and D-17: `correct_completion` follows the verdict, and a `pass` always has a
- * terminal reason, so only `pass` with `SUCCEEDED` completes correctly (AC-RUA-052).
+ * BR-RUA-030 and D-17: `correct_completion` follows the verdict, and a `pass` or `fail` always
+ * has a terminal reason (either needs a valid trial, so a verified G6, which needs a terminal
+ * reason), so only `pass` with `SUCCEEDED` completes correctly (AC-RUA-052).
  */
 export type VerdictOutcome =
   | {
@@ -86,7 +87,7 @@ export type VerdictOutcome =
   | {
       readonly preservation_verdict: 'fail';
       readonly correct_completion: false;
-      readonly processing_terminal_reason: ProcessingTerminalReason | null;
+      readonly processing_terminal_reason: ProcessingTerminalReason;
     }
   | {
       readonly preservation_verdict: 'indeterminate';
@@ -122,7 +123,8 @@ interface OracleResultFields {
   readonly variant_id: VariantId;
   readonly trial_validity: TrialValidity;
   readonly validity_gates: NineGates;
-  readonly identity_integrity: GateValue;
+  /** INV-RUA-001: identity integrity is always applicable (design §8.3 G3). */
+  readonly identity_integrity: ApplicableGateValue;
   readonly rule_results: TenRules;
   readonly indeterminate_reasons: readonly StructuredReason[];
   readonly ledger_snapshot_ref: ArtifactRef;
@@ -130,8 +132,8 @@ interface OracleResultFields {
   readonly checked_at: UtcMillis;
 }
 
-/** A trial belongs to a run or a variant validation, never to a probe (D-06). */
-export type OracleExecutionIdentity = { readonly run_id: Uuid4 } | { readonly variant_validation_id: Uuid4 };
+/** A trial belongs to a run or a variant validation, never to both and never to a probe (D-06). */
+export type OracleExecutionIdentity = TrialExecutionIdentity;
 
 /** Schema: `schemas/group-c/oracle_result.schema.json`. */
 export type OracleResult = OracleResultFields & OracleExecutionIdentity & VerdictOutcome & ScenarioAssessment;

@@ -43,6 +43,8 @@
             "provisioning_journal",
             "resource_manifest",
             "runner_journal",
+            "provider_warmup_journal",
+            "controller_canary_journal",
             "trial_manifest",
             "payment",
             "approved_decision",

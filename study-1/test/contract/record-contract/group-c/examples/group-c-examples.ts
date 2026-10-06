@@ -9,6 +9,7 @@ import type {
 import type { GroupCExample } from '../support/record-example.ts';
 import * as closure from './closure-examples.ts';
 import * as operator from './operator-examples.ts';
+import * as oracle from './oracle-examples.ts';
 import * as packages from './package-examples.ts';
 import * as probe from './probe-examples.ts';
 import * as summary from './summary-examples.ts';
@@ -18,7 +19,7 @@ type CanonicalExamples = { readonly [K in GroupCRecordType]: () => GroupCRecordB
 
 export const CANONICAL_EXAMPLES: CanonicalExamples = {
   attempt_projection: trialEvidence.attemptProjection,
-  oracle_result: trialEvidence.controlPassOracleResult,
+  oracle_result: oracle.controlPassOracleResult,
   evidence_index: trialEvidence.trialEvidenceIndex,
   transport_probe_result: probe.passingTransportProbeResult,
   transport_probe_summary: probe.transportProbeSummary,
@@ -44,6 +45,7 @@ export const CANONICAL_EXAMPLES: CanonicalExamples = {
 
 export const GROUP_C_EXAMPLES: readonly GroupCExample[] = [
   ...trialEvidence.TRIAL_EVIDENCE_EXAMPLES,
+  ...oracle.ORACLE_EXAMPLES,
   ...probe.PROBE_EXAMPLES,
   ...summary.SUMMARY_EXAMPLES,
   ...closure.CLOSURE_EXAMPLES,

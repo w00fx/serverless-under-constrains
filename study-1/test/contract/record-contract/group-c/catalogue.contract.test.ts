@@ -16,6 +16,7 @@ import type { GroupCRecordType } from '../../../../src/record-contract/records/g
 import { findSchemaConventionViolations } from '../../../../src/record-contract/schema-conventions.ts';
 import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
 import { groupBValidator } from '../group-b/support/group-b-validation.ts';
+import { withValueAt } from '../group-b/support/json-paths.ts';
 import { toJson } from '../group-b/support/record-builders.ts';
 import { CANONICAL_EXAMPLES, GROUP_C_EXAMPLES } from './examples/group-c-examples.ts';
 import { ORDER_SITES, VOCABULARY_SITES } from './support/vocabulary-sites.ts';
@@ -25,6 +26,12 @@ const RECORD_MODULE_DIRECTORY = fileURLToPath(
   new URL('../../../../src/record-contract/records/group-c/', import.meta.url),
 );
 const SHARED_MODULES = ['record-map.ts', 'shared-shapes.ts', 'vocabulary.ts'];
+/** Each `$defs` shape that several group-C schemas restate, with the number of schemas carrying it. */
+const RESTATED_DEFINITIONS: readonly (readonly [string, number])[] = [
+  ['artifact_ref', 7],
+  ['condition_result', 2],
+  ['trial_result', 2],
+];
 
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
@@ -84,7 +91,7 @@ describe('AC-RUA-046 group C catalogue', () => {
   });
 
   it('every closed vocabulary is the enum its schema enforces', () => {
-    assert.equal(VOCABULARY_SITES.length, 134);
+    assert.equal(VOCABULARY_SITES.length, 150);
     for (const [values, recordType, pointer] of VOCABULARY_SITES) {
       assert.deepEqual(resolvePointer(schemaOf(recordType), pointer), [...values], `${recordType}#${pointer}`);
     }
@@ -106,6 +113,35 @@ describe('AC-RUA-046 group C catalogue', () => {
         resolvePointer(schema, `${pointer}/prefixItems/${String(index)}/allOf/1/properties/${member}/const`),
       );
       assert.deepEqual(pinned, [...values], `${recordType}${pointer} ${member}`);
+    }
+  });
+
+  it('restates each shared $defs shape identically in every schema that carries it', () => {
+    // The schemas may reference only `_defs.schema.json` and their own `$defs`, so shared shapes
+    // are restated per file; a hand edit to one copy must fail here instead of drifting.
+    const copiesOf = (definition: string): readonly JsonValue[] =>
+      GROUP_C.map((recordType) => resolvePointer(schemaOf(recordType), `/$defs/${definition}`)).filter(
+        (copy): copy is JsonValue => copy !== undefined,
+      );
+    for (const [definition, count] of RESTATED_DEFINITIONS) {
+      const copies = copiesOf(definition);
+      assert.equal(copies.length, count, `${definition} copies`);
+      for (const copy of copies) {
+        assert.deepEqual(copy, copies[0], `${definition} copies are identical`);
+      }
+    }
+    // Index entries differ only in their self-exclusion clauses after the shared path rule.
+    const entries = copiesOf('index_entry').map((copy) =>
+      withValueAt(copy, ['properties', 'artifact_path', 'allOf'], undefined),
+    );
+    assert.equal(entries.length, 3);
+    for (const entry of entries) {
+      assert.deepEqual(entry, entries[0], 'index_entry copies are identical but for their exclusions');
+    }
+    for (const copy of copiesOf('index_entry')) {
+      assert.deepEqual(resolvePointer(copy, '/properties/artifact_path/allOf/0'), {
+        $ref: '_defs.schema.json#/$defs/package_relative_path',
+      });
     }
   });
 

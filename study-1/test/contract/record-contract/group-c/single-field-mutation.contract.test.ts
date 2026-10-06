@@ -77,8 +77,8 @@ const extraMember = fc.record({
 describe('AC-RUA-046 single-field mutation property over group C', () => {
   it('generates over every governed leaf and object of the 23 record types', () => {
     assert.equal(new Set(EXAMPLE_JSON.map(({ json }) => json['record_type'])).size, 23);
-    assert.equal(LEAF_SITES.length, 1730);
-    assert.equal(OBJECT_SITES.length, 500);
+    assert.equal(LEAF_SITES.length, 2125);
+    assert.equal(OBJECT_SITES.length, 660);
   });
 
   it('a leaf replaced by a value of another JSON kind is rejected', () => {

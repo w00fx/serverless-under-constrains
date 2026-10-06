@@ -304,7 +304,15 @@
                 },
                 "required": ["preservation_verdict"]
               },
-              {}
+              {
+                "type": "object",
+                "properties": {
+                  "preservation_verdict": {
+                    "enum": ["pass", "fail"]
+                  }
+                },
+                "required": ["preservation_verdict"]
+              }
             ],
             "minItems": 2,
             "maxItems": 2,

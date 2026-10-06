@@ -81,6 +81,16 @@ describe('AC-RUA-046 validation_summary rules', () => {
       'failed after control pass',
       '/trial_results/0/preservation_verdict enum',
     );
+    // Design §8.15: an indeterminate treatment verdict makes the status indeterminate, not failed.
+    assertRejected(
+      trialAt(trialAt(failed, 1, 'preservation_verdict', 'indeterminate'), 1, 'correct_completion', null),
+      'failed with an indeterminate treatment',
+      '/trial_results/1/preservation_verdict enum',
+    );
+    assertAccepted(
+      trialAt(trialAt(failed, 1, 'preservation_verdict', 'pass'), 1, 'correct_completion', true),
+      'failed with a passing treatment',
+    );
   });
 
   it('indeterminate states its reasons and may have any closure', () => {
@@ -344,6 +354,22 @@ describe('AC-RUA-046 transport_probe_summary rules', () => {
     assertAccepted(
       edited(summary, { probe_terminal_reason: 'PROBE_INCOMPLETE', cleanup_status: 'failed' }),
       'incomplete probe',
+    );
+  });
+
+  it('carries the probe-result digest when COMPLETED; a probe that froze no result omits it', () => {
+    assertRejected(edited(summary, { probe_result_sha256: undefined }), 'COMPLETED without digest', ' required');
+    for (const reason of ['LEASE_ACQUISITION_FAILED', 'PROVISIONING_FAILED', 'PROBE_INCOMPLETE']) {
+      assertAccepted(
+        edited(summary, { probe_terminal_reason: reason, probe_result_sha256: undefined }),
+        `${reason} without digest`,
+      );
+    }
+    assertAccepted(edited(summary, { probe_terminal_reason: 'CLEANUP_INCOMPLETE' }), 'frozen result, failed cleanup');
+    assertRejected(
+      edited(summary, { probe_terminal_reason: 'LEASE_ACQUISITION_FAILED', probe_result_sha256: 'A'.repeat(64) }),
+      'malformed digest',
+      '/probe_result_sha256',
     );
   });
 });

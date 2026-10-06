@@ -15,6 +15,18 @@ import type {
 
 export type { ExecutionCorrelation, ExecutionScoped, TrialScoped } from '../group-b/shared-shapes.ts';
 
+/**
+ * The execution of a trial: a run or a variant validation, never both and never a probe (D-06).
+ * The `?: never` members make a record that names both identities a compile error, the same
+ * exclusion the schemas' `oneOf` enforces at runtime.
+ *
+ * @example
+ * const identity: TrialExecutionIdentity = { run_id: RUN_ID };
+ */
+export type TrialExecutionIdentity =
+  | { readonly run_id: Uuid4; readonly variant_validation_id?: never; readonly transport_probe_id?: never }
+  | { readonly variant_validation_id: Uuid4; readonly run_id?: never; readonly transport_probe_id?: never };
+
 /** A package-relative path plus the exact digest of the stored bytes (CTR-RUA-001 `ledger_snapshot_ref`). */
 export interface ArtifactRef {
   readonly artifact_path: string;

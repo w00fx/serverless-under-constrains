@@ -234,6 +234,11 @@ export const ARTIFACT_CLASSES = [
   'provisioning_journal',
   'resource_manifest',
   'runner_journal',
+  // Addendum §2.2 and D-10 readiness evidence: the execution-level `<execution_id>#warmup`
+  // provider partition and `<execution_id>#canary` controller partition. Included in the
+  // package, never an input to a monetary rule, gate or treatment condition.
+  'provider_warmup_journal',
+  'controller_canary_journal',
   'trial_manifest',
   'payment',
   'approved_decision',

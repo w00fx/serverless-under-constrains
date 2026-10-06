@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/late_evidence_record.schema.json",
   "title": "late_evidence_record (catalogue group C, row 77)",
-  "description": "One line of late-evidence/late-evidence-stream.jsonl (BR-RUA-043): a record observed after the final freeze, where it was observed, and whether it correlates with a frozen trial or the probe. The late record is carried as parsed JSON and validated against its own schema by ingestion; frozen evidence is never modified. A trial pair names the correlated trial, so it implies correlated = true; a probe stream names no trial.",
+  "description": "One line of late-evidence/late-evidence-stream.jsonl (BR-RUA-043): a record observed after the final freeze, where it was observed, and whether it correlates with a frozen trial or the probe. The late record is carried as parsed JSON and validated against its own schema by ingestion; frozen evidence is never modified. A trial pair names the correlated trial, so it implies correlated = true; a probe stream names no trial. late_record.record_type must equal late_record_type; JSON Schema 2020-12 cannot compare two members, so the reader checks it when it validates late_record against its own schema.",
   "type": "object",
   "allOf": [
     {

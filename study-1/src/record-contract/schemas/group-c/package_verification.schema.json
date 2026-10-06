@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/package_verification.schema.json",
   "title": "package_verification (catalogue group C, row 80)",
-  "description": "evidence/verifications/<execution_id>/<evaluated_at>-<kind>.json, never inside a package (BR-RUA-044, AC-RUA-022; design §8.16, D-12): eligibility of the original package and the selected amendment chain. eligible exactly when there is no reason, each reason carrying a package-ineligibility code; no selected head means no selected chain. Eligibility proves faithful structure and integrity, never scientific or operational success.",
+  "description": "evidence/verifications/<execution_id>/<evaluated_at>-<kind>.json, never inside a package (BR-RUA-044, AC-RUA-022; design §8.16, D-12): eligibility of the original package and the selected amendment chain. eligible exactly when there is no reason, each reason carrying a package-ineligibility code; no selected head means no selected chain; an eligible verification with a selected head lists the chain from sequence 1 to that head, while an ineligible one (for example UNKNOWN_HEAD, design §8.16 step 6) may carry the requested head with an empty or partial chain. Eligibility proves faithful structure and integrity, never scientific or operational success.",
   "type": "object",
   "$defs": {
     "amendment_link": {
@@ -73,8 +73,21 @@
             "maxItems": 0
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "package_eligibility": {
+            "const": "eligible"
+          },
+          "selected_amendment_head_sha256": {
+            "type": "string"
+          }
+        },
+        "required": ["package_eligibility", "selected_amendment_head_sha256"]
       },
-      "else": {
+      "then": {
         "properties": {
           "selected_chain": {
             "type": "array",

@@ -20,12 +20,18 @@ import {
   digest,
   uuid,
 } from '../../group-b/support/record-builders.ts';
-import { codedReason, indexEntry } from '../support/group-c-builders.ts';
+import { EXECUTION_MANIFEST_PATH, codedReason, indexEntry } from '../support/group-c-builders.ts';
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';
 
 const RUN_PACKAGE_INDEX_SHA256 = digest('run-package-index');
 
+/**
+ * The final index of a run package, sorted by path, excluding itself (BR-RUA-044).
+ *
+ * @example
+ * runPackageIndex().execution_kind; // 'RUN'
+ */
 export function runPackageIndex(): PackageIndex {
   return {
     schema_version: 1,
@@ -34,9 +40,9 @@ export function runPackageIndex(): PackageIndex {
     run_id: RUN_ID,
     execution_manifest_sha256: EXECUTION_MANIFEST_SHA256,
     entries: [
+      indexEntry(EXECUTION_MANIFEST_PATH, 'execution_manifest'),
       indexEntry('cleanup/cleanup-result.json', 'cleanup_result', 'derived'),
-      indexEntry('coordination-journal.jsonl', 'coordination_journal'),
-      indexEntry('execution-manifest.json', 'execution_manifest'),
+      indexEntry('coordination/coordination-journal.jsonl', 'coordination_journal'),
       indexEntry('late-evidence/late-evidence-assessment.json', 'late_evidence_assessment', 'derived'),
       indexEntry('summary/run-summary.json', 'run_summary', 'derived'),
       indexEntry(`trials/${uuid(0x601)}/evidence-index.json`, 'evidence_index', 'derived'),
@@ -45,6 +51,12 @@ export function runPackageIndex(): PackageIndex {
   };
 }
 
+/**
+ * The final index of a probe package.
+ *
+ * @example
+ * probePackageIndex().execution_kind; // 'TRANSPORT_PROBE'
+ */
 export function probePackageIndex(): PackageIndex {
   return {
     schema_version: 1,
@@ -66,7 +78,12 @@ function amendmentLink(sequence: number, kind: AmendmentLink['amendment_kind']):
   };
 }
 
-/** An eligible original package with no amendment selected (BR-RUA-044). */
+/**
+ * An eligible original package with no amendment selected (BR-RUA-044).
+ *
+ * @example
+ * eligiblePackage().package_eligibility; // 'eligible'
+ */
 export function eligiblePackage(): PackageVerification {
   return {
     schema_version: 1,
@@ -82,7 +99,12 @@ export function eligiblePackage(): PackageVerification {
   };
 }
 
-/** A selected chain whose descendant was left unselected makes the package ineligible (D-12). */
+/**
+ * A selected chain whose descendant was left unselected makes the package ineligible (D-12).
+ *
+ * @example
+ * ineligiblePackage().package_eligibility; // 'ineligible'
+ */
 export function ineligiblePackage(): PackageVerification {
   return {
     ...eligiblePackage(),
@@ -97,6 +119,29 @@ export function ineligiblePackage(): PackageVerification {
   };
 }
 
+/**
+ * The operator selected a head that resolves to no known amendment (design §8.16 step 6): the
+ * verifier records the requested head with an empty chain and the UNKNOWN_HEAD reason.
+ *
+ * @example
+ * unknownHeadPackage().selected_chain; // []
+ */
+export function unknownHeadPackage(): PackageVerification {
+  return {
+    ...eligiblePackage(),
+    package_eligibility: 'ineligible',
+    package_ineligibility_reasons: [codedReason('UNKNOWN_HEAD', 'selected amendment head')],
+    selected_amendment_head_sha256: digest('amendment-index-unknown'),
+    selected_chain: [],
+  };
+}
+
+/**
+ * The first amendment of a run package: its parent is the original index (BR-RUA-043).
+ *
+ * @example
+ * firstAmendmentIndex().parent_amendment_index_sha256; // null
+ */
 export function firstAmendmentIndex(): AmendmentIndex {
   return {
     schema_version: 1,
@@ -109,13 +154,19 @@ export function firstAmendmentIndex(): AmendmentIndex {
     original_package_index_sha256: RUN_PACKAGE_INDEX_SHA256,
     parent_amendment_index_sha256: null,
     entries: [
-      indexEntry('billing/billing-export.csv', 'billing_export_file'),
-      indexEntry('billing/billing-import.json', 'billing_import', 'derived'),
+      indexEntry('payload/billing-export.csv', 'billing_export_file'),
+      indexEntry('payload/billing-import.json', 'billing_import', 'derived'),
     ],
     created_at: at(9200),
   };
 }
 
+/**
+ * The second amendment, chained to the first by its index digest.
+ *
+ * @example
+ * chainedAmendmentIndex().sequence; // 2
+ */
 export function chainedAmendmentIndex(): AmendmentIndex {
   return {
     ...firstAmendmentIndex(),
@@ -123,7 +174,7 @@ export function chainedAmendmentIndex(): AmendmentIndex {
     amendment_kind: 'OPERATIONAL_RECOVERY',
     sequence: 2,
     parent_amendment_index_sha256: digest('amendment-index-1'),
-    entries: [indexEntry('recovery/operational-recovery-record.json', 'operational_recovery_record', 'derived')],
+    entries: [indexEntry('payload/operational-recovery-record.json', 'operational_recovery_record', 'derived')],
     created_at: at(9300),
   };
 }
@@ -156,7 +207,12 @@ function billingLine(lineId: string, currency: string, cost: string): Attributed
   };
 }
 
-/** Exact USD attribution within the ceiling (BR-RUA-047). */
+/**
+ * Exact USD attribution within the ceiling (BR-RUA-047).
+ *
+ * @example
+ * withinLimitBilling().billed_cost_check; // 'within_limit'
+ */
 export function withinLimitBilling(): BillingImport {
   return {
     schema_version: 1,
@@ -181,7 +237,12 @@ export function withinLimitBilling(): BillingImport {
   };
 }
 
-/** A period that is not final, with a line in another currency: unverified, no total. */
+/**
+ * A period that is not final, with a line in another currency: unverified, no total.
+ *
+ * @example
+ * unverifiedBilling().billed_cost_check; // 'unverified'
+ */
 export function unverifiedBilling(): BillingImport {
   return {
     schema_version: 1,
@@ -205,6 +266,7 @@ export const PACKAGE_EXAMPLES: readonly GroupCExample[] = [
   groupCExample('package_index (probe)', probePackageIndex()),
   groupCExample('package_verification', eligiblePackage()),
   groupCExample('package_verification (ineligible)', ineligiblePackage()),
+  groupCExample('package_verification (unknown head)', unknownHeadPackage()),
   groupCExample('amendment_index', firstAmendmentIndex()),
   groupCExample('amendment_index (chained)', chainedAmendmentIndex()),
   groupCExample('billing_import', withinLimitBilling()),

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/attempt_projection.schema.json",
   "title": "attempt_projection (catalogue group C, row 66)",
-  "description": "trials/<t>/derived/attempt-projection.json (a probe projection carries no trial identity): the derived per-attempt view of one trial, never fed back into a verdict (BR-RUA-037, BR-RUA-021, BR-RUA-022; design §8.9). Provider transaction ids are joined through the provider commit event, never through the caller; transactions reference the ledger snapshot and never copy it.",
+  "description": "trials/<t>/derived/attempt-projection.json (a probe projection carries no trial identity): the derived per-attempt view of one trial, never fed back into a verdict (BR-RUA-037, BR-RUA-021, BR-RUA-022; design §8.9). Provider transaction ids are joined through the provider commit event, never through the caller; transactions reference the ledger snapshot and never copy it. Each attempt follows BR-RUA-021 (SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED) and the BR-RUA-022 outcome classes: SUCCEEDED is SUCCESS, REJECTED is REJECTION, TIMED_OUT and a FAILED that is DISPATCHED or UNKNOWN are AMBIGUOUS, a FAILED proven NOT_DISPATCHED is PRE_DISPATCH_FAILURE, and a DISPATCHED attempt with no recorded outcome counts as AMBIGUOUS (design §8.5).",
   "type": "object",
   "$defs": {
     "invocation": {
@@ -114,7 +114,154 @@
         "outcome_class",
         "knowledge_after_derived"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["SUCCEEDED", "REJECTED", "TIMED_OUT"]
+              }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "dispatch_state": {
+                "const": "DISPATCHED"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "SUCCEEDED"
+              }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "const": "SUCCESS"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "REJECTED"
+              }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "const": "REJECTION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "TIMED_OUT"
+              }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "const": "AMBIGUOUS"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "FAILED"
+              },
+              "dispatch_state": {
+                "const": "NOT_DISPATCHED"
+              }
+            },
+            "required": ["outcome", "dispatch_state"]
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "const": "PRE_DISPATCH_FAILURE"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "FAILED"
+              },
+              "dispatch_state": {
+                "enum": ["DISPATCHED", "UNKNOWN"]
+              }
+            },
+            "required": ["outcome", "dispatch_state"]
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "const": "AMBIGUOUS"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "dispatch_state": {
+                "const": "DISPATCHED"
+              }
+            },
+            "required": ["dispatch_state"],
+            "not": {
+              "required": ["outcome"]
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "const": "AMBIGUOUS"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome_class": {
+                "const": "PRE_DISPATCH_FAILURE"
+              }
+            },
+            "required": ["outcome_class"]
+          },
+          "then": {
+            "properties": {
+              "dispatch_state": {
+                "const": "NOT_DISPATCHED"
+              }
+            }
+          }
+        }
+      ]
     },
     "provider_call": {
       "type": "object",

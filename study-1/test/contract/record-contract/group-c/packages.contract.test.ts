@@ -15,6 +15,7 @@ import {
   ineligiblePackage,
   probePackageIndex,
   runPackageIndex,
+  unknownHeadPackage,
   unverifiedBilling,
   withinLimitBilling,
 } from './examples/package-examples.ts';
@@ -103,13 +104,38 @@ describe('AC-RUA-046 package_verification rules (BR-RUA-044, AC-RUA-022, D-12)',
     );
   });
 
-  it('no selected head means no selected chain; a head selects at least one amendment', () => {
+  it('no selected head means no selected chain; an eligible head selects at least one amendment', () => {
     assertRejected(
       edited(eligible, { selected_chain: arrayAt(ineligible, 'selected_chain') }),
       'chain without head',
       '/selected_chain maxItems',
     );
-    assertRejected(edited(ineligible, { selected_chain: [] }), 'head without chain', '/selected_chain minItems');
+    assertRejected(
+      edited(eligible, {
+        selected_amendment_head_sha256: digest('amendment-index-1'),
+        known_descendants: arrayAt(ineligible, 'selected_chain'),
+      }),
+      'eligible head without chain',
+      '/selected_chain minItems',
+    );
+    assertAccepted(
+      edited(eligible, {
+        selected_amendment_head_sha256: digest('amendment-index-1'),
+        selected_chain: arrayAt(ineligible, 'selected_chain'),
+      }),
+      'eligible head with its chain',
+    );
+    // Design §8.16 step 6: a head that resolves to nothing is recorded as requested, chain empty.
+    assertAccepted(toJson(unknownHeadPackage()), 'UNKNOWN_HEAD with an empty chain');
+    assertAccepted(edited(ineligible, { selected_chain: [] }), 'ineligible head without chain');
+    assertRejected(
+      edited(toJson(unknownHeadPackage()), {
+        selected_amendment_head_sha256: null,
+        selected_chain: arrayAt(ineligible, 'selected_chain'),
+      }),
+      'null head with chain',
+      '/selected_chain maxItems',
+    );
     assertAccepted(
       edited(eligible, { known_descendants: arrayAt(ineligible, 'known_descendants') }),
       'unselected descendants of an original',
@@ -167,7 +193,7 @@ describe('AC-RUA-046 amendment_index rules (BR-RUA-043, D-12)', () => {
     assertRejected(edited(first, { entries: [] }), 'empty', '/entries minItems');
     assertRejected(edited(first, { entries: entries.toReversed() }), 'unsorted', '/entries x-rua-evidence-ref-order');
     assertRejected(
-      withValueAt(first, ['entries', 1, 'artifact_path'], 'billing/amendment-index.json'),
+      withValueAt(first, ['entries', 1, 'artifact_path'], 'payload/z/amendment-index.json'),
       'itself',
       '/entries/1/artifact_path not',
     );

@@ -22,6 +22,54 @@ import { TRIAL_ID, digest, reason } from '../../group-b/support/record-builders.
 /** The trial directory of the shared trial (design §7 package layout). */
 export const TRIAL_DIRECTORY = `trials/${TRIAL_ID}`;
 
+/** The probe directory of a probe package (design §7: `probe/` replaces `trials/`). */
+export const PROBE_DIRECTORY = 'probe';
+
+/** `admission/execution-manifest.json`, frozen before lease acquisition (design §7). */
+export const EXECUTION_MANIFEST_PATH = 'admission/execution-manifest.json';
+
+/** `runner/runner-journal.jsonl` (design §7). */
+export const RUNNER_JOURNAL_PATH = 'runner/runner-journal.jsonl';
+
+/** The files of one trial or probe directory that the group-C examples cite (design §7 layout). */
+export interface EvidenceDirectoryPaths {
+  readonly payment: string;
+  readonly approvedDecision: string;
+  readonly callerJournal: string;
+  readonly providerJournal: string;
+  readonly controllerJournal: string;
+  readonly ledgerSnapshot: string;
+  readonly settlementSamples: string;
+  readonly oracleResult: string;
+  readonly evidenceIndex: string;
+}
+
+/**
+ * The design §7 paths of the files inside one trial (`trials/<t>`) or probe (`probe`) directory.
+ *
+ * @example
+ * evidencePaths(TRIAL_DIRECTORY).ledgerSnapshot; // 'trials/<t>/ledger/ledger-snapshot.json'
+ */
+export function evidencePaths(directory: string): EvidenceDirectoryPaths {
+  return {
+    payment: `${directory}/inputs/payment.json`,
+    approvedDecision: `${directory}/inputs/approved-decision.json`,
+    callerJournal: `${directory}/journals/caller-journal.jsonl`,
+    providerJournal: `${directory}/journals/provider-journal.jsonl`,
+    controllerJournal: `${directory}/journals/controller-journal.jsonl`,
+    ledgerSnapshot: `${directory}/ledger/ledger-snapshot.json`,
+    settlementSamples: `${directory}/settlement/settlement-samples.jsonl`,
+    oracleResult: `${directory}/derived/oracle-result.json`,
+    evidenceIndex: `${directory}/evidence-index.json`,
+  };
+}
+
+/** The design §7 paths of the shared trial. */
+export const TRIAL_PATHS = evidencePaths(TRIAL_DIRECTORY);
+
+/** The design §7 paths of the probe directory. */
+export const PROBE_PATHS = evidencePaths(PROBE_DIRECTORY);
+
 /**
  * A reference to a package file whose digest is derived from its path.
  *
@@ -37,7 +85,7 @@ export function artifactRef(path: string): ArtifactRef {
  * (outside a package) with the package-index digest.
  *
  * @example
- * evidenceRef(`${TRIAL_DIRECTORY}/ledger-snapshot.json`);
+ * evidenceRef(TRIAL_PATHS.ledgerSnapshot, { json_pointer: '/transactions/0' });
  */
 export function evidenceRef(
   path: string,
@@ -50,7 +98,7 @@ export function evidenceRef(
  * One index entry whose size and digest are derived from its path.
  *
  * @example
- * indexEntry('execution-manifest.json', 'execution_manifest');
+ * indexEntry(EXECUTION_MANIFEST_PATH, 'execution_manifest');
  */
 export function indexEntry(
   path: string,
@@ -77,12 +125,17 @@ export function codedReason<Code extends string>(code: Code, subject: string): S
 }
 
 /**
- * One treatment condition result (BR-RUA-010..015). An indeterminate one states its reason.
+ * One treatment condition result (BR-RUA-010..015). A pass or fail cites the provider journal of
+ * `directory` (BR-RUA-035); an indeterminate one states its reason and may cite nothing.
  *
  * @example
  * conditionResult('BR-RUA-012', 'pass');
  */
-export function conditionResult(conditionId: ConditionId, result: PreservationVerdict): ConditionResult {
+export function conditionResult(
+  conditionId: ConditionId,
+  result: PreservationVerdict,
+  directory: string = TRIAL_DIRECTORY,
+): ConditionResult {
   const expected: JsonValue = { condition: conditionId, holds: true };
   return {
     condition_id: conditionId,
@@ -90,30 +143,33 @@ export function conditionResult(conditionId: ConditionId, result: PreservationVe
     expected,
     // Free-form values are any non-null JSON (BR-RUA-033): missing evidence is stated, not null.
     observed: result === 'pass' ? expected : { condition: conditionId, holds: result === 'fail' ? false : 'unknown' },
-    evidence_refs: result === 'indeterminate' ? [] : [evidenceRef(`${TRIAL_DIRECTORY}/provider-journal.jsonl`)],
+    evidence_refs: result === 'indeterminate' ? [] : [evidenceRef(evidencePaths(directory).providerJournal)],
     indeterminate_reasons: result === 'indeterminate' ? [reason('CONDITION_EVIDENCE_MISSING', conditionId)] : [],
     affected_by: result === 'indeterminate' ? ['SOURCE_SEQUENCE_GAP'] : [],
   };
 }
 
 /**
- * The six conditions in their fixed order; `exception` gives one condition another result.
+ * The six conditions in their fixed order; `exception` gives one condition another result, and
+ * `directory` is the trial or probe directory the conditions cite.
  *
  * @example
  * sixConditions('pass', ['BR-RUA-013', 'indeterminate']);
+ * sixConditions('pass', undefined, PROBE_DIRECTORY);
  */
 export function sixConditions(
   result: PreservationVerdict,
   exception?: readonly [ConditionId, PreservationVerdict],
+  directory: string = TRIAL_DIRECTORY,
 ): SixConditionResults {
   const resultOf = (id: ConditionId): PreservationVerdict => (exception?.[0] === id ? exception[1] : result);
   const [c10, c11, c12, c13, c14, c15] = CONDITION_IDS;
   return [
-    conditionResult(c10, resultOf(c10)),
-    conditionResult(c11, resultOf(c11)),
-    conditionResult(c12, resultOf(c12)),
-    conditionResult(c13, resultOf(c13)),
-    conditionResult(c14, resultOf(c14)),
-    conditionResult(c15, resultOf(c15)),
+    conditionResult(c10, resultOf(c10), directory),
+    conditionResult(c11, resultOf(c11), directory),
+    conditionResult(c12, resultOf(c12), directory),
+    conditionResult(c13, resultOf(c13), directory),
+    conditionResult(c14, resultOf(c14), directory),
+    conditionResult(c15, resultOf(c15), directory),
   ];
 }

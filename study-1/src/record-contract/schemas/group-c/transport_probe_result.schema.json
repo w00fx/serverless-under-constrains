@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_probe_result.schema.json",
   "title": "transport_probe_result (catalogue group C, row 69)",
-  "description": "probe/derived/transport-probe-result.json, frozen before cleanup (CTR-RUA-003, BR-RUA-027). Ordering is cross-source wall clock under the declared clock assumption; the schema has no property that could claim formal happened-before proof (AC-RUA-002). Precedence: an invalid probe is indeterminate; a pass needs a valid probe, verified evidence and six passing conditions.",
+  "description": "probe/derived/transport-probe-result.json, frozen before cleanup (CTR-RUA-003, BR-RUA-027). Ordering is cross-source wall clock under the declared clock assumption; the schema has no property that could claim formal happened-before proof (AC-RUA-002). Precedence: an invalid probe is indeterminate; a pass needs a probe that is not invalid (valid or indeterminate), verified evidence and six passing conditions, exactly as BR-RUA-027 states; BR-RUA-026 usability, not this record, requires a valid probe. A pass or fail condition cites at least one evidence reference (BR-RUA-035).",
   "type": "object",
   "$defs": {
     "condition_result": {
@@ -61,7 +61,27 @@
         "indeterminate_reasons",
         "affected_by"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": ["pass", "fail"]
+              }
+            },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "probe_cardinality": {
       "type": "object",
@@ -134,7 +154,7 @@
       "then": {
         "properties": {
           "probe_validity": {
-            "const": "valid"
+            "enum": ["valid", "indeterminate"]
           },
           "evidence_integrity": {
             "const": "verified"
