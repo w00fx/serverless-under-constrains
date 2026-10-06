@@ -11,6 +11,7 @@ import {
   ADMISSION_REJECTION_CLASSES,
 } from '../../../../src/record-contract/records/group-a/admission_rejection.ts';
 import { PREFLIGHT_CHECK_RESULTS } from '../../../../src/record-contract/records/group-a/preflight_check_recorded.ts';
+import { detachedSourceProvenance } from './support/branch-examples.ts';
 import {
   admissionRejection,
   deploymentAssemblyInventory,
@@ -129,7 +130,7 @@ describe('preflight_check_recorded (BR-RUA-039, BR-RUA-046)', () => {
 describe('source_provenance (BR-RUA-042)', () => {
   it('accepts an attached HEAD with its branch and a detached HEAD without one', () => {
     assertAccepted(sourceProvenance(), 'attached');
-    assertAccepted({ ...withoutField(sourceProvenance(), 'branch'), detached_head: true }, 'detached');
+    assertAccepted(detachedSourceProvenance(), 'detached');
     assertRejected(
       withField(sourceProvenance(), 'detached_head', true),
       '/branch false schema',

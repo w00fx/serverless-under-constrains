@@ -1,6 +1,7 @@
 // AC-RUA-046 (group A) property of design §12.5, "record validators (each group): a valid
 // generated record mutated in one field is rejected". The valid records are the canonical
-// examples and the other branch of each conditional rule (support/canonical-examples.ts). A
+// examples and the other branch of each conditional rule (support/canonical-examples.ts and
+// support/branch-examples.ts). A
 // mutation site is any governed leaf, at any depth, replaced by a value of another JSON kind;
 // any governed object, given an unknown member; or any top-level required member, removed.
 // The open members the schemas deliberately accept are listed once, in support/json-scope.ts.
@@ -130,14 +131,19 @@ function assertRejectedMutation(mutated: JsonValue, describeMutation: () => stri
 describe('record validators (group A)', () => {
   it('generates over every governed leaf and object of the 18 record types', () => {
     assert.equal(new Set(EXAMPLES.map(({ record }) => record['record_type'])).size, 18);
-    assert.equal(EXAMPLES.length, 25);
-    assert.equal(LEAF_SITES.length, 526);
-    assert.equal(OBJECT_SITES.length, 105);
-    assert.equal(REMOVAL_SITES.length, 242);
+    assert.equal(EXAMPLES.length, 32);
+    assert.equal(LEAF_SITES.length, 700);
+    assert.equal(OBJECT_SITES.length, 137);
+    assert.equal(REMOVAL_SITES.length, 318);
     // Nested sites are generated, not only top-level members.
     assert.ok(LEAF_SITES.some((site) => pointerOf(site.path) === '/timing/provider_client_deadline_ms'));
     assert.ok(LEAF_SITES.some((site) => pointerOf(site.path) === '/files/1/sha256'));
     assert.ok(OBJECT_SITES.some((site) => pointerOf(site.path) === '/configuration_projections/0/resources/0'));
+    // The branch examples are swept too: the validation stack's variant tag and a validation identity.
+    const labelled = (label: string, pointer: string): boolean =>
+      LEAF_SITES.some((site) => site.label === label && pointerOf(site.path) === pointer);
+    assert.ok(labelled('resource_manifest (variant validation stack)', '/ownership_tags/5/value'));
+    assert.ok(labelled('trial_registration (variant validation)', '/variant_validation_id'));
     for (const valid of EXAMPLES) {
       assert.equal(catalogueValidator.validate(valid.record).valid, true, valid.name);
     }

@@ -9,6 +9,7 @@ import {
   PROVIDER_REFUND_OUTCOMES,
   PROVIDER_REJECTION_REASONS,
 } from '../../../../src/record-contract/records/group-a/provider_refund_response.ts';
+import { inVariantValidation } from './support/branch-examples.ts';
 import {
   probeProviderRefundCall,
   probeWorkloadRequest,
@@ -23,10 +24,7 @@ describe('provider_refund_call (BR-RUA-018)', () => {
   it('accepts trial calls from either variant and the probe call', () => {
     assertAccepted(trialProviderRefundCall(), 'conventional run call');
     assertAccepted(withField(trialProviderRefundCall(), 'caller_id', 'durable'), 'durable run call');
-    assertAccepted(
-      { ...withoutField(trialProviderRefundCall(), 'run_id'), variant_validation_id: IDS.variantValidation },
-      'variant-validation call',
-    );
+    assertAccepted(inVariantValidation(trialProviderRefundCall()), 'variant-validation call');
     assertAccepted(probeProviderRefundCall(), 'probe call');
   });
 

@@ -33,7 +33,7 @@
       "uniqueItems": true
     },
     "ownership_tags": {
-      "description": "The BR-RUA-050 ownership tags of the execution stack: each of suc:project, suc:study_id, suc:run_id, suc:managed_by and suc:expires_at exactly once, and suc:variant_id at most once (variant-specific resources only). A generic project tag alone never authorizes deletion.",
+      "description": "The BR-RUA-050 ownership tags of the execution stack: each of suc:project, suc:study_id, suc:run_id, suc:managed_by and suc:expires_at exactly once, and suc:variant_id at most once, valued conventional or durable. The tag marks a variant-specific stack, so only a variant validation's stack may carry it: the run stack is shared by both variants and the transport-probe stack belongs to no variant, so both omit it. A generic project tag alone never authorizes deletion.",
       "type": "array",
       "items": {
         "type": "object",
@@ -44,7 +44,9 @@
           "value": { "type": "string", "minLength": 1, "pattern": "^[^@]*$" }
         },
         "required": ["key", "value"],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "if": { "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] },
+        "then": { "properties": { "value": { "enum": ["conventional", "durable"] } } }
       },
       "allOf": [
         {
@@ -131,6 +133,16 @@
       "required": ["transport_probe_id"]
     }
   ],
+  "allOf": [
+    {
+      "if": { "required": ["run_id"] },
+      "then": { "properties": { "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } } } }
+    },
+    {
+      "if": { "required": ["transport_probe_id"] },
+      "then": { "properties": { "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } } } }
+    }
+  ],
   "if": {
     "properties": { "provisioning_status": { "const": "succeeded" } },
     "required": ["provisioning_status"]
@@ -147,6 +159,11 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "tags_with_variant": {
+      "description": "An ownership tag list that carries suc:variant_id (BR-RUA-050: shared resources omit it).",
+      "type": "array",
+      "contains": { "type": "object", "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] }
+    },
     "configuration_attribute": {
       "type": "object",
       "properties": {
