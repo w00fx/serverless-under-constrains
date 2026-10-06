@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { logGroupName } from '../../../infra/ownership/resource-naming.ts';
 import { leakCompromisesIsolation } from '../../../src/cleanup/leak-capability.ts';
 import { resourceKey } from '../../../src/cleanup/resource-names.ts';
 import {
@@ -22,6 +23,7 @@ import {
 import { assertConsistentOutcome, resourceActions, stepStatuses } from '../../support/cleanup/cleanup-assertions.ts';
 import {
   discovered,
+  EXECUTION_ID,
   NAMES,
   ownershipContext,
   resourceManifest,
@@ -89,12 +91,15 @@ describe('AC-RUA-011 verifiable cleanup', () => {
 
   it('failed', async () => {
     // Provisioning failed midway: the partial manifest recorded three members, the account holds
-    // all seven plus a function log group the runtime created outside the stack.
+    // all seven plus a run-tagged log group with the run's deterministic name that no stack lists
+    // any more (retained by the rollback, [R-aws] §6.3 DELETE_SKIPPED). Lambda's own
+    // `/aws/lambda/<function>` group would be untagged ([R-aws] §6.2), so it could not stand here:
+    // nothing would prove it owned, and it would be ambiguous instead.
     const world = cleanupWorld();
-    const runtimeLogGroup = `/aws/lambda/${NAMES.providerFunction}`;
+    const retainedLogGroup = logGroupName(EXECUTION_ID, 'durable-caller');
     world.surfaces.place(
-      discovered(LOG_GROUP_RESOURCE_TYPE, runtimeLogGroup, 'log_groups'),
-      discovered(LOG_GROUP_RESOURCE_TYPE, runtimeLogGroup, 'tag_index'),
+      discovered(LOG_GROUP_RESOURCE_TYPE, retainedLogGroup, 'log_groups'),
+      discovered(LOG_GROUP_RESOURCE_TYPE, retainedLogGroup, 'tag_index'),
     );
     const ownership = ownershipContext(resourceManifest('partial', { members: STACK_MEMBERS.slice(0, 3) }));
 
@@ -104,11 +109,11 @@ describe('AC-RUA-011 verifiable cleanup', () => {
     assert.equal(outcome.cleanup_result.cleanup_status, 'succeeded');
     assert.deepEqual(resourceActions(outcome.cleanup_result), {
       [STACK_ENTRY]: 'DELETED/recorded_stack',
-      [`${LOG_GROUP_RESOURCE_TYPE} ${runtimeLogGroup}`]: 'DELETED/tags_name_type_created_after_freeze',
+      [`${LOG_GROUP_RESOURCE_TYPE} ${retainedLogGroup}`]: 'DELETED/tags_name_type_created_after_freeze',
     });
     assert.deepEqual(
       world.deleter.requests().map((resource) => resource.identifier),
-      [runtimeLogGroup],
+      [retainedLogGroup],
     );
     assert.equal(outcome.leak_audit_result.leak_audit_status, 'clean');
   });

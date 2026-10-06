@@ -15,7 +15,9 @@ import type { OwnershipContext } from '../../../src/cleanup/ownership-context.ts
 import { ownershipContextFromManifest, STUDY_BASELINE_EXCLUSIONS } from '../../../src/cleanup/ownership-context.ts';
 import {
   EVENT_SOURCE_MAPPING_RESOURCE_TYPE,
+  FUNCTION_ALIAS_RESOURCE_TYPE,
   FUNCTION_RESOURCE_TYPE,
+  FUNCTION_VERSION_RESOURCE_TYPE,
   LOG_GROUP_RESOURCE_TYPE,
   QUEUE_RESOURCE_TYPE,
   ROLE_RESOURCE_TYPE,
@@ -212,8 +214,20 @@ export function discovered(
 }
 
 /**
+ * Resource types the Resource Groups Tagging API never returns, so a tag-index sighting of one
+ * would be a fixture fiction: IAM roles, Lambda versions and aliases are not in tag-based groups
+ * ([R-aws] §6.2, https://docs.aws.amazon.com/ARG/latest/userguide/supported-resources.html).
+ */
+export const NOT_ON_TAG_INDEX: readonly string[] = [
+  ROLE_RESOURCE_TYPE,
+  FUNCTION_VERSION_RESOURCE_TYPE,
+  FUNCTION_ALIAS_RESOURCE_TYPE,
+];
+
+/**
  * Every sighting of the run's infrastructure as the surfaces report it while it exists: the
- * stack, its resource listing, each member on its native surface and on the tag index.
+ * stack, its resource listing, each member on its native surface and, when the Tagging API
+ * returns its type, on the tag index.
  *
  * @example
  * surfaces.place(...runInfrastructure());
@@ -224,7 +238,9 @@ export function runInfrastructure(members: readonly MemberSpec[] = STACK_MEMBERS
     stack,
     ...members.flatMap((member) => [
       discovered(member.resource_type, member.identifier, member.surface),
-      discovered(member.resource_type, member.identifier, 'tag_index'),
+      ...(NOT_ON_TAG_INDEX.includes(member.resource_type)
+        ? []
+        : [discovered(member.resource_type, member.identifier, 'tag_index')]),
       discovered(member.resource_type, member.identifier, 'stack_resources', {
         tags: STACK_LISTING_TAGS,
         managed_by_stack_id: STACK_ID,
