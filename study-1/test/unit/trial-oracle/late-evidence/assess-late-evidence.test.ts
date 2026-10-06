@@ -171,6 +171,31 @@ describe('assessLateEvidence', () => {
     );
   });
 
+  it('treats a corrupt carried record as unverifiable late evidence, never as a contradiction', () => {
+    const { attempt_id: attemptId, ...withoutAttempt } = duplicateSignal(treatment);
+    assert.ok(attemptId !== undefined);
+    const line = lateRecord(treatment, {
+      sequence: 1,
+      late_source: 'CONTROLLER_JOURNAL',
+      late_record: withoutAttempt,
+    });
+    const assessment = assessed(lateInput([control, treatment], lateStream([line])));
+    assert.deepEqual(
+      [
+        assessment.monitoring,
+        assessment.late_evidence_status,
+        assessment.correlated_record_count,
+        assessment.reasons.map((reason) => reason.code),
+        statuses(assessment),
+      ],
+      ['failed', 'unverified', 0, ['LATE_RECORD_SCHEMA_INVALID'], ['unverified', 'unverified']],
+    );
+    assert.match(
+      firstOf(assessment.reasons).detail,
+      /^line 1: late_record " must have required property 'attempt_id'.*"; expected a valid timeout_signal_duplicate_observed$/,
+    );
+  });
+
   it('refuses rather than reports a contradiction when frozen evidence does not reproduce its result', () => {
     const payment = `trials/${control.result.trial_id}/inputs/payment.json`;
     const evidence = {
