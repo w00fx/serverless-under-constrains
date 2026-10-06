@@ -33,11 +33,16 @@ describe('journal scope', () => {
     assert.equal(executionIdOf(VALIDATION), VALIDATION_ID);
   });
 
-  it('partition keys follow design §9.3 for every partition kind', () => {
+  it('table partition keys follow design §9.3 (trial, probe, canary) and addendum §2 (warmup)', () => {
     assert.equal(journalPartitionKey(TRIAL_SCOPE), `${RUN_ID}#${TRIAL_ID}`);
     assert.equal(journalPartitionKey(executionLevelScope(PROBE, 'probe')), `${PROBE_ID}#probe`);
     assert.equal(journalPartitionKey(executionLevelScope(RUN, 'canary')), `${RUN_ID}#canary`);
     assert.equal(journalPartitionKey(executionLevelScope(VALIDATION, 'warmup')), `${VALIDATION_ID}#warmup`);
+  });
+
+  it('the execution partition has an in-memory key only, outside design §9.3', () => {
+    // Not a table partition: the execution-level journals are JSONL files (WP-05 deviation note).
+    // The writer still orders their events by item key, so the key only has to be unique.
     assert.equal(journalPartitionKey(executionLevelScope(RUN, 'execution')), `${RUN_ID}#execution`);
   });
 

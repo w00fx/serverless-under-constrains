@@ -3,7 +3,9 @@
 // `<execution_id>#probe` for the transport probe, `<execution_id>#canary` for the controller
 // readiness canary (D-10) and `<execution_id>#warmup` for the provider warm-up (addendum §2).
 // The `execution` partition names the execution-level file journals (runner, coordination,
-// provisioning, cleanup), which have no table partition.
+// provisioning, cleanup), which have no table partition. Its key `<execution_id>#execution` is
+// a WP-05 addition, not part of design §9.3: the writer orders file-journal events by item key
+// too, but no journal table holds items under it.
 //
 // The sort key `<source>#<source_instance_id>#<source_sequence:12>` keeps one instance's events
 // contiguous and in sequence order under a byte-wise sort-key query.
