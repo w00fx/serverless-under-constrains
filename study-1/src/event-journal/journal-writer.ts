@@ -7,8 +7,10 @@
 //
 // Events written inside a caller-owned transaction (for example `dispatch_started` with the
 // `PRE_DISPATCH -> DISPATCHED` transition, design §5.3 C3) use `prepare` and `confirm`. A
-// transaction that was definitively not applied leaves no event, so its sequence is reused by
-// the next event and the persisted sequence stays dense.
+// transaction that was definitively not applied leaves no event. The caller then either
+// resubmits the identical put (`prepareRetry`, BR-RUA-033 identical retry) or re-plans
+// (D-23): the next `prepare` or `append` reuses the sequence, so the persisted sequence stays
+// dense.
 
 import type { WriteOutcome } from '../durable-store/item-store-port.ts';
 import type { EventSource } from '../record-contract/envelope.ts';
@@ -46,6 +48,15 @@ export interface JournalWriterDeps {
 /** A put reserved by `prepare` for a caller-owned transaction; `confirm` settles it. */
 export type PreparedJournalPut = JournalEntry;
 
+// A standalone append is one conditional put, so a failed condition is always its own (index 0).
+const STANDALONE_PUT_INDEX = 0;
+
+interface WriteVerdict {
+  readonly verdict: JournalOutcomeClass;
+  /** The outcome or the thrown error, for the stop detail. */
+  readonly observed: string;
+}
+
 /**
  * The writer of one source instance.
  *
@@ -58,8 +69,9 @@ export type PreparedJournalPut = JournalEntry;
 export class JournalWriter {
   readonly #deps: JournalWriterDeps;
   #nextSequence = 1;
-  #stopReason: JournalStopReason | undefined;
+  #stopped: JournalStopped | undefined;
   #reservation: PreparedJournalPut | undefined;
+  #retryable: PreparedJournalPut | undefined;
   #appendsInFlight = 0;
   #tail: Promise<unknown> = Promise.resolve();
 
@@ -101,41 +113,72 @@ export class JournalWriter {
    * if (prepared.kind === 'prepared') journal.confirm(prepared.put, await attempts.transitionToDispatched(id, prepared.put));
    */
   prepare<T extends EventRecordType>(type: T, body: EventBody<T>, causation: readonly Uuid4[] = []): PrepareResult {
-    if (this.#stopReason !== undefined) {
-      return stopped('INSTANCE_ALREADY_STOPPED');
+    if (this.#stopped !== undefined) {
+      return this.#alreadyStopped(this.#stopped);
     }
     this.#assertIdle(`prepare(${type})`);
-    const put = this.#nextEntry(type, body, causation);
-    this.#reservation = put;
-    return { kind: 'prepared', put };
+    return this.#reserve(this.#nextEntry(type, body, causation));
+  }
+
+  /**
+   * Reserves again a put whose transaction was definitively not applied, so the caller can
+   * resubmit it unchanged: identical event identity, content and sequence (BR-RUA-033). Only
+   * the last not-applied put qualifies, and only until another event is prepared or appended
+   * (a caller that re-plans, D-23, simply prepares its new event, which reuses the sequence).
+   * Throws an Error for any other put, or while the writer is not idle.
+   *
+   * @example
+   * const confirmed = journal.confirm(prepared.put, outcome); // { kind: 'not_applied', … }
+   * const again = journal.prepareRetry(prepared.put); // { kind: 'prepared', put: prepared.put }
+   */
+  prepareRetry(put: PreparedJournalPut): PrepareResult {
+    if (this.#stopped !== undefined) {
+      return this.#alreadyStopped(this.#stopped);
+    }
+    this.#assertIdle(`prepareRetry(${put.key.sk})`);
+    if (put !== this.#retryable) {
+      throw new Error(
+        `prepareRetry() for ${put.key.sk} (retryable: ${this.#retryable?.key.sk ?? 'none'}); expected the last put that confirm() reported not_applied, before any other event`,
+      );
+    }
+    return this.#reserve(put);
   }
 
   /**
    * Settles the reserved put with the outcome of the transaction that carried it: `applied`
    * advances the sequence, an ambiguous outcome or a sequence conflict stops the instance, and
-   * a transaction that was definitively not applied frees the sequence. Throws an Error when
-   * `prepared` is not the outstanding reservation.
+   * a transaction that was definitively not applied frees the sequence (or `prepareRetry`
+   * resubmits the same put). `journalActionIndex` is the put's index in the transaction; with
+   * it, a failed condition on the put itself is never mistaken for a failed business condition.
+   * Throws an Error when `prepared` is not the outstanding reservation.
    *
    * @example
-   * const confirmed = journal.confirm(prepared.put, outcome); // { kind: 'appended', event }
+   * const confirmed = journal.confirm(prepared.put, outcome, 1); // { kind: 'appended', event }
    */
-  confirm(prepared: PreparedJournalPut, outcome: WriteOutcome): ConfirmResult {
+  confirm(prepared: PreparedJournalPut, outcome: WriteOutcome, journalActionIndex?: number): ConfirmResult {
     if (prepared !== this.#reservation) {
       throw new Error(
         `confirm() for ${prepared.key.sk} without its reservation (outstanding: ${this.#reservation?.key.sk ?? 'none'}); expected the put returned by the last prepare()`,
       );
     }
     this.#reservation = undefined;
-    const verdict = classifyJournalOutcome(outcome, prepared);
+    const verdict = classifyJournalOutcome(outcome, prepared, journalActionIndex);
     if (verdict === 'not_applied') {
+      this.#retryable = prepared;
       return { kind: 'not_applied', event: prepared.event, outcome };
     }
-    return this.#settle(verdict, prepared);
+    return this.#settle({ verdict, observed: describeOutcome(outcome) }, prepared);
   }
 
-  /** Whether the instance has stopped emitting events. */
+  /**
+   * Whether the instance has stopped emitting events; a restart needs a new writer with a new
+   * instance id.
+   *
+   * @example
+   * if (journal.isStopped()) journal = new JournalWriter({ ...deps, instanceId: uuids.next() });
+   */
   isStopped(): boolean {
-    return this.#stopReason !== undefined;
+    return this.#stopped !== undefined;
   }
 
   async #appendInOrder<T extends EventRecordType>(
@@ -143,8 +186,8 @@ export class JournalWriter {
     body: EventBody<T>,
     causation: readonly Uuid4[],
   ): Promise<AppendResult> {
-    if (this.#stopReason !== undefined) {
-      return stopped('INSTANCE_ALREADY_STOPPED');
+    if (this.#stopped !== undefined) {
+      return this.#alreadyStopped(this.#stopped);
     }
     if (this.#reservation !== undefined) {
       throw new Error(
@@ -152,38 +195,63 @@ export class JournalWriter {
       );
     }
     const entry = this.#nextEntry(type, body, causation);
-    for (let attempt = 0; attempt <= this.#deps.maxDefinitiveRetries; attempt += 1) {
-      const verdict = await this.#write(entry);
-      if (verdict !== 'not_applied') {
-        return this.#settle(verdict, entry);
-      }
+    let last = await this.#write(entry);
+    for (let retry = 0; last.verdict === 'not_applied' && retry < this.#deps.maxDefinitiveRetries; retry += 1) {
+      last = await this.#write(entry);
     }
-    return this.#stop('DEFINITIVE_RETRIES_EXHAUSTED');
+    if (last.verdict !== 'not_applied') {
+      return this.#settle(last, entry);
+    }
+    return this.#stop(
+      'DEFINITIVE_RETRIES_EXHAUSTED',
+      `${entry.key.sk}: ${String(this.#deps.maxDefinitiveRetries + 1)} identical attempt(s) failed definitively; last outcome ${last.observed}`,
+    );
   }
 
-  async #write(entry: JournalEntry): Promise<JournalOutcomeClass> {
+  async #write(entry: JournalEntry): Promise<WriteVerdict> {
     try {
-      return classifyJournalOutcome(await this.#deps.port.append(entry), entry);
-    } catch {
+      const outcome = await this.#deps.port.append(entry);
+      return {
+        verdict: classifyJournalOutcome(outcome, entry, STANDALONE_PUT_INDEX),
+        observed: describeOutcome(outcome),
+      };
+    } catch (error: unknown) {
       // A port that throws gives no proof either way, so the write counts as ambiguous.
-      return 'ambiguous';
+      return { verdict: 'ambiguous', observed: `port threw ${describeError(error)}` };
     }
   }
 
-  #settle(verdict: 'applied' | 'ambiguous' | 'sequence_conflict', entry: JournalEntry): AppendResult {
-    if (verdict === 'ambiguous') {
-      return this.#stop('AMBIGUOUS_APPEND');
+  #settle(result: WriteVerdict, entry: JournalEntry): AppendResult {
+    if (result.verdict === 'ambiguous') {
+      return this.#stop('AMBIGUOUS_APPEND', `${entry.key.sk}: ${result.observed}; the event may or may not be stored`);
     }
-    if (verdict === 'sequence_conflict') {
-      return this.#stop('SEQUENCE_CONFLICT');
+    if (result.verdict === 'sequence_conflict') {
+      return this.#stop(
+        'SEQUENCE_CONFLICT',
+        `${entry.key.sk}: ${result.observed}; other content occupies this sequence`,
+      );
     }
     this.#nextSequence += 1;
     return { kind: 'appended', event: entry.event };
   }
 
-  #stop(reason: JournalStopReason): JournalStopped {
-    this.#stopReason = reason;
-    return stopped(reason);
+  #stop(reason: JournalStopReason, detail: string): JournalStopped {
+    this.#stopped = { kind: 'stopped', reason, detail };
+    return this.#stopped;
+  }
+
+  #alreadyStopped(first: JournalStopped): JournalStopped {
+    return {
+      kind: 'stopped',
+      reason: 'INSTANCE_ALREADY_STOPPED',
+      detail: `stopped earlier by ${first.reason}: ${first.detail}`,
+    };
+  }
+
+  #reserve(put: PreparedJournalPut): PrepareResult {
+    this.#reservation = put;
+    this.#retryable = undefined;
+    return { kind: 'prepared', put };
   }
 
   #assertIdle(operation: string): void {
@@ -197,6 +265,7 @@ export class JournalWriter {
   #nextEntry<T extends EventRecordType>(type: T, body: EventBody<T>, causation: readonly Uuid4[]): JournalEntry {
     const { scope, source, instanceId, clock, ids } = this.#deps;
     const sequence = this.#nextSequence;
+    this.#retryable = undefined;
     const event = buildJournalEvent(type, body, {
       scope,
       source,
@@ -210,6 +279,18 @@ export class JournalWriter {
   }
 }
 
-function stopped(reason: JournalStopReason): JournalStopped {
-  return { kind: 'stopped', reason };
+function describeOutcome(outcome: WriteOutcome): string {
+  switch (outcome.kind) {
+    case 'applied':
+      return 'applied';
+    case 'condition_failed':
+      return `condition_failed at action ${String(outcome.failed_action_index)}${outcome.existing === undefined ? ' without a decodable existing item' : ''}`;
+    case 'definitive_failure':
+    case 'ambiguous':
+      return `${outcome.kind} ${outcome.code}`;
+  }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : `a non-Error ${typeof error}`;
 }

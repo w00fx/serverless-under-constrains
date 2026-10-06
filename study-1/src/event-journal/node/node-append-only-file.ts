@@ -8,7 +8,8 @@
 // - `filehandle.sync()` is fsync(2): data and metadata reach stable storage. A newly created
 //   file's directory entry needs an fsync of the directory as well.
 // Appends to one path are serialized inside this instance, so the tail check and the write
-// cannot interleave with another append from the same process.
+// cannot interleave with another append from the same process. A torn last line is closed
+// with a newline in the same write as the new record (see the port contract).
 
 import type { FileHandle } from 'node:fs/promises';
 import { chmod, open, stat } from 'node:fs/promises';
@@ -26,13 +27,33 @@ type FileProbe =
   | { readonly kind: 'present'; readonly writable: boolean }
   | { readonly kind: 'error'; readonly code: string };
 
+/**
+ * The local file-system binding of the `AppendOnlyFile` port, used by the JSONL journals.
+ *
+ * @example
+ * const port = createJsonlJournalPort(join(executionDir, 'runner', 'runner-journal.jsonl'), new NodeAppendOnlyFile());
+ */
 export class NodeAppendOnlyFile implements AppendOnlyFile {
   readonly #pathTails = new Map<string, Promise<unknown>>();
 
+  /**
+   * Appends `bytes` (one or more whole lines) and fsyncs before reporting `appended`. A torn
+   * last line is first closed with a lone newline in the same write (port contract).
+   *
+   * @example
+   * await file.append(path, new TextEncoder().encode('{"schema_version":1}\n')); // { kind: 'appended' }
+   */
   append(path: string, bytes: Uint8Array): Promise<FileAppendOutcome> {
     return this.#serialized(path, () => appendDurably(path, bytes));
   }
 
+  /**
+   * Makes `path` read-only (mode 0444) after an fsync, creating it empty when absent;
+   * idempotent. Every later append is refused with `FILE_FINALIZED`.
+   *
+   * @example
+   * await file.finalize(path); // { kind: 'finalized' }
+   */
   finalize(path: string): Promise<FileFinalizeOutcome> {
     return this.#serialized(path, () => finalizeDurably(path));
   }
@@ -77,11 +98,15 @@ async function appendThroughHandle(
   createdIn: string | undefined,
 ): Promise<FileAppendOutcome> {
   const tail = await endsAtLineBoundary(handle);
-  if (tail !== true) {
-    return { kind: 'not_written', code: tail === false ? APPEND_FILE_CODES.tornTail : tail };
+  if (typeof tail === 'string') {
+    return { kind: 'not_written', code: tail };
   }
+  // A torn last line belongs to a stopped source instance (its write was ambiguous). Closing it
+  // with its own newline keeps one entry per line, so a restarted instance can keep journaling
+  // without merging its record into the fragment (BR-RUA-033 restart semantics).
+  const payload = tail ? bytes : withLeadingNewline(bytes);
   try {
-    await handle.appendFile(bytes);
+    await handle.appendFile(payload);
     await handle.sync();
     if (createdIn !== undefined) {
       await syncDirectory(createdIn);
@@ -105,6 +130,13 @@ async function endsAtLineBoundary(handle: FileHandle): Promise<boolean | string>
   } catch (error: unknown) {
     return errorCode(error);
   }
+}
+
+function withLeadingNewline(bytes: Uint8Array): Uint8Array {
+  const joined = new Uint8Array(bytes.length + 1);
+  joined[0] = NEWLINE;
+  joined.set(bytes, 1);
+  return joined;
 }
 
 async function finalizeDurably(path: string): Promise<FileFinalizeOutcome> {

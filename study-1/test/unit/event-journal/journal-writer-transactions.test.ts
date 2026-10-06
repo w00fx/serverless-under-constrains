@@ -1,7 +1,8 @@
 // JournalWriter.prepare / confirm: an event written inside a caller-owned transaction (design
 // §5.3 C1-C3, D-23). An applied transaction advances the sequence; an ambiguous one stops the
 // instance (BR-RUA-033); a transaction that was definitively not applied leaves no event, so
-// the next event reuses the sequence and the persisted sequence stays dense.
+// the next event reuses the sequence and the persisted sequence stays dense, unless the caller
+// resubmits the identical put through prepareRetry (BR-RUA-033 identical retry).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -87,18 +88,20 @@ describe('JournalWriter.prepare and confirm', () => {
   it('an ambiguous transaction stops the instance; prepare and append then report the stop', async () => {
     const harness = writerHarness();
     const put = prepared(harness);
+    const ambiguous = `${put.key.sk}: ambiguous TimeoutError; the event may or may not be stored`;
+    const already = {
+      kind: 'stopped',
+      reason: 'INSTANCE_ALREADY_STOPPED',
+      detail: `stopped earlier by AMBIGUOUS_APPEND: ${ambiguous}`,
+    };
     assert.deepEqual(harness.writer.confirm(put, { kind: 'ambiguous', code: 'TimeoutError' }), {
       kind: 'stopped',
       reason: 'AMBIGUOUS_APPEND',
+      detail: ambiguous,
     });
-    assert.deepEqual(harness.writer.prepare('dispatch_started', dispatchStartedBody(2)), {
-      kind: 'stopped',
-      reason: 'INSTANCE_ALREADY_STOPPED',
-    });
-    assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody(2)), {
-      kind: 'stopped',
-      reason: 'INSTANCE_ALREADY_STOPPED',
-    });
+    assert.deepEqual(harness.writer.prepare('dispatch_started', dispatchStartedBody(2)), already);
+    assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody(2)), already);
+    assert.deepEqual(harness.writer.prepareRetry(put), already);
     assert.equal(harness.port.entries().length, 0);
   });
 
@@ -117,9 +120,81 @@ describe('JournalWriter.prepare and confirm', () => {
         failed_action_index: 0,
         existing: { ...other.item, refund_request_id: 'ref-poc-999' },
       }),
-      { kind: 'stopped', reason: 'SEQUENCE_CONFLICT' },
+      {
+        kind: 'stopped',
+        reason: 'SEQUENCE_CONFLICT',
+        detail: `${other.key.sk}: condition_failed at action 0; other content occupies this sequence`,
+      },
     );
     assert.equal(conflicting.writer.isStopped(), true);
+  });
+
+  it('with the put index, a failed condition on the put itself is a sequence conflict even without an existing item', () => {
+    const harness = writerHarness();
+    const put = prepared(harness);
+    assert.deepEqual(harness.writer.confirm(put, { kind: 'condition_failed', failed_action_index: 0 }, 0), {
+      kind: 'stopped',
+      reason: 'SEQUENCE_CONFLICT',
+      detail: `${put.key.sk}: condition_failed at action 0 without a decodable existing item; other content occupies this sequence`,
+    });
+  });
+
+  it('with the put index, a failed condition on another action is not applied', () => {
+    const harness = writerHarness();
+    const put = prepared(harness);
+    const outcome = { kind: 'condition_failed', failed_action_index: 1 } as const;
+    assert.deepEqual(harness.writer.confirm(put, outcome, 0), { kind: 'not_applied', event: put.event, outcome });
+    assert.equal(harness.writer.isStopped(), false);
+  });
+
+  it('prepareRetry resubmits a not-applied put with identical identity, content and sequence', async () => {
+    const harness = writerHarness();
+    harness.store.seed('caller_journal', { ...ATTEMPT_KEY, phase: 'PRE_DISPATCH' });
+    harness.store.scriptWriteFault({ kind: 'definitive_failure', code: 'ThrottlingException' });
+    const put = prepared(harness);
+    const failed = await harness.store.transact(dispatchTransaction(put), TOKEN);
+    assert.equal(harness.writer.confirm(put, failed).kind, 'not_applied');
+    assert.deepEqual(harness.writer.prepareRetry(put), { kind: 'prepared', put });
+    const outcome = await harness.store.transact(dispatchTransaction(put), TOKEN);
+    assert.deepEqual(harness.writer.confirm(put, outcome), { kind: 'appended', event: put.event });
+    assert.deepEqual(harness.store.peek('caller_journal', put.key), put.item);
+    assert.equal(harness.ids.issuedCount(), 1);
+    assert.equal(
+      appendedEvent(await harness.writer.append('dispatch_started', dispatchStartedBody(2))).source_sequence,
+      2,
+    );
+  });
+
+  it('prepareRetry refuses any put but the last not-applied one, and after another event was prepared', () => {
+    const harness = writerHarness();
+    const put = prepared(harness);
+    assert.throws(() => harness.writer.prepareRetry(put), {
+      name: 'Error',
+      message: `prepareRetry(${put.key.sk}) with 0 pending append(s) and reservation ${put.key.sk}; expected an idle writer`,
+    });
+    harness.writer.confirm(put, { kind: 'definitive_failure', code: 'ValidationException' });
+    assert.throws(() => harness.writer.prepareRetry({ ...put }), {
+      name: 'Error',
+      message: `prepareRetry() for ${put.key.sk} (retryable: ${put.key.sk}); expected the last put that confirm() reported not_applied, before any other event`,
+    });
+    const replanned = prepared(harness, 2);
+    harness.writer.confirm(replanned, { kind: 'applied' });
+    assert.throws(() => harness.writer.prepareRetry(put), {
+      name: 'Error',
+      message: `prepareRetry() for ${put.key.sk} (retryable: none); expected the last put that confirm() reported not_applied, before any other event`,
+    });
+  });
+
+  it('a retried put is no longer retryable once it is reserved again', () => {
+    const harness = writerHarness();
+    const put = prepared(harness);
+    harness.writer.confirm(put, { kind: 'definitive_failure', code: 'ValidationException' });
+    harness.writer.prepareRetry(put);
+    harness.writer.confirm(put, { kind: 'applied' });
+    assert.throws(() => harness.writer.prepareRetry(put), {
+      name: 'Error',
+      message: `prepareRetry() for ${put.key.sk} (retryable: none); expected the last put that confirm() reported not_applied, before any other event`,
+    });
   });
 
   it('confirm refuses a put that is not the outstanding reservation', () => {

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { foldEffectKnowledge } from '../../../src/attempt-lifecycle/effect-knowledge.ts';
+import { decideTerminality } from '../../../src/attempt-lifecycle/terminality.ts';
 import type { OutcomeClass } from '../../../src/attempt-lifecycle/outcome-classification.ts';
 import { classifyOutcome } from '../../../src/attempt-lifecycle/outcome-classification.ts';
 import type { AttemptOutcome, DispatchState } from '../../../src/record-contract/records/group-b/vocabulary.ts';
@@ -69,6 +70,45 @@ describe('AC-RUA-016 unknown knowledge is absorbing', () => {
       aggregate([
         ['TIMED_OUT', 'DISPATCHED'],
         ['SUCCEEDED', 'DISPATCHED'],
+      ]),
+      'UNKNOWN',
+    );
+  });
+
+  it('and processing may independently finish: FINISHED processing next to UNKNOWN knowledge', () => {
+    // A conventional request: receive 1 times out (ambiguous), receive 2 fails after dispatch.
+    // The first decision keeps processing RUNNING, the last receive FINISHES it, and the
+    // knowledge aggregate stays UNKNOWN throughout: the two models move independently.
+    const first: RecordedAttempt = ['TIMED_OUT', 'DISPATCHED'];
+    const second: RecordedAttempt = ['FAILED', 'DISPATCHED'];
+    assert.deepEqual(
+      decideTerminality({
+        variant: 'conventional',
+        receive_count: 1,
+        max_receive_count: 2,
+        attempt_ambiguous_or_failed: true,
+      }),
+      { processing_state: 'RUNNING', upstream_can_redeliver: true },
+    );
+    assert.equal(aggregate([first]), 'UNKNOWN');
+    assert.deepEqual(
+      decideTerminality({
+        variant: 'conventional',
+        receive_count: 2,
+        max_receive_count: 2,
+        attempt_ambiguous_or_failed: true,
+      }),
+      { processing_state: 'FINISHED', terminal_reason: 'RETRIES_EXHAUSTED' },
+    );
+    assert.equal(aggregate([first, second]), 'UNKNOWN');
+  });
+
+  it('an outcome recorded with UNKNOWN dispatch evidence still feeds the aggregate (BR-RUA-004)', () => {
+    assert.equal(aggregate([['TIMED_OUT', 'UNKNOWN']]), 'UNKNOWN');
+    assert.equal(
+      aggregate([
+        ['TIMED_OUT', 'UNKNOWN'],
+        ['SUCCEEDED', 'UNKNOWN'],
       ]),
       'UNKNOWN',
     );

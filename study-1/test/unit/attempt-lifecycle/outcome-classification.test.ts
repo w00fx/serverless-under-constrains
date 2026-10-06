@@ -1,6 +1,9 @@
 // BR-RUA-021 / BR-RUA-022 outcome classes for all 12 (outcome, dispatch state) pairs. Expected
 // values come from the spec text: "SUCCEEDED, REJECTED, and TIMED_OUT imply DISPATCHED; FAILED
-// may carry any dispatch state", and the four outcome classes of the BR-RUA-022 table.
+// may carry any dispatch state", and the four outcome classes of the BR-RUA-022 table. An
+// UNKNOWN dispatch state is evidence that cannot tell, not evidence against dispatch, so only a
+// proven NOT_DISPATCHED contradicts an outcome that implies DISPATCHED (BR-RUA-004 maps
+// "TIMED_OUT -> UNKNOWN" whatever the dispatch state).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -14,21 +17,17 @@ import type { AttemptOutcome, DispatchState } from '../../../src/record-contract
 
 const CLASSIFIED: readonly (readonly [AttemptOutcome, DispatchState, string])[] = [
   ['SUCCEEDED', 'DISPATCHED', 'SUCCESS'],
+  ['SUCCEEDED', 'UNKNOWN', 'SUCCESS'],
   ['REJECTED', 'DISPATCHED', 'REJECTION'],
+  ['REJECTED', 'UNKNOWN', 'REJECTION'],
   ['TIMED_OUT', 'DISPATCHED', 'AMBIGUOUS'],
+  ['TIMED_OUT', 'UNKNOWN', 'AMBIGUOUS'],
   ['FAILED', 'DISPATCHED', 'AMBIGUOUS'],
   ['FAILED', 'UNKNOWN', 'AMBIGUOUS'],
   ['FAILED', 'NOT_DISPATCHED', 'PRE_DISPATCH_FAILURE'],
 ];
 
-const CONTRADICTIONS: readonly (readonly [AttemptOutcome, DispatchState])[] = [
-  ['SUCCEEDED', 'NOT_DISPATCHED'],
-  ['SUCCEEDED', 'UNKNOWN'],
-  ['REJECTED', 'NOT_DISPATCHED'],
-  ['REJECTED', 'UNKNOWN'],
-  ['TIMED_OUT', 'NOT_DISPATCHED'],
-  ['TIMED_OUT', 'UNKNOWN'],
-];
+const CONTRADICTIONS: readonly AttemptOutcome[] = ['SUCCEEDED', 'REJECTED', 'TIMED_OUT'];
 
 describe('classifyOutcome', () => {
   for (const [outcome, dispatch, expected] of CLASSIFIED) {
@@ -37,18 +36,23 @@ describe('classifyOutcome', () => {
     });
   }
 
-  for (const [outcome, dispatch] of CONTRADICTIONS) {
-    it(`${outcome}/${dispatch} contradicts BR-RUA-021`, () => {
-      assert.deepEqual(classifyOutcome(outcome, dispatch), {
+  for (const outcome of CONTRADICTIONS) {
+    it(`${outcome}/NOT_DISPATCHED contradicts BR-RUA-021`, () => {
+      assert.deepEqual(classifyOutcome(outcome, 'NOT_DISPATCHED'), {
         ok: false,
         error: {
           code: OUTCOME_DISPATCH_CONTRADICTION,
           subject: 'BR-RUA-021',
-          detail: `outcome ${outcome} with dispatch state ${dispatch}; expected dispatch state DISPATCHED, because SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED`,
+          detail: `outcome ${outcome} with dispatch state NOT_DISPATCHED; expected DISPATCHED or UNKNOWN, because SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED`,
         },
       });
     });
   }
+
+  it('covers all 12 (outcome, dispatch state) pairs exactly once', () => {
+    const pairs = [...CLASSIFIED.map(([o, d]) => `${o}/${d}`), ...CONTRADICTIONS.map((o) => `${o}/NOT_DISPATCHED`)];
+    assert.equal(new Set(pairs).size, 12);
+  });
 
   it('names the four BR-RUA-022 columns in table order', () => {
     assert.deepEqual(OUTCOME_CLASSES, ['PRE_DISPATCH_FAILURE', 'REJECTION', 'SUCCESS', 'AMBIGUOUS']);

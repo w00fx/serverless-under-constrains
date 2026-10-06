@@ -139,10 +139,10 @@ describe('toAttemptReport', () => {
   });
 
   it('throws on a resolution that contradicts BR-RUA-021', () => {
-    const forged = { outcome: 'TIMED_OUT', dispatch_state: 'UNKNOWN' } as unknown as AttemptResolution;
+    const forged = { outcome: 'TIMED_OUT', dispatch_state: 'NOT_DISPATCHED' } as unknown as AttemptResolution;
     assert.throws(() => toAttemptReport(IDS, forged, undefined), {
       name: 'Error',
-      message: `attempt ${FIRST_ATTEMPT_ID} resolved inconsistently: outcome TIMED_OUT with dispatch state UNKNOWN; expected dispatch state DISPATCHED, because SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED`,
+      message: `attempt ${FIRST_ATTEMPT_ID} resolved inconsistently: outcome TIMED_OUT with dispatch state NOT_DISPATCHED; expected DISPATCHED or UNKNOWN, because SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED`,
     });
   });
 });

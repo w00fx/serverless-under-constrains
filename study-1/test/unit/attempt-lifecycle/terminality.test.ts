@@ -57,16 +57,47 @@ describe('AC-RUA-045 terminality spans every retry layer', () => {
     );
   });
 
-  it('a receive count above the maximum (a throttle consumed a receive, RK-08) is RETRIES_EXHAUSTED', () => {
+  it('a receive count above the maximum is an inconsistent fact and is refused (design §8.7)', () => {
+    // §8.7 accepts a recorded RETRIES_EXHAUSTED only when the deciding receive_count equals
+    // max_receive_count. RK-08 (a throttle consumes a receive) makes the first real invocation
+    // see receive_count == max_receive_count, never more: SQS redrives past the maximum.
+    for (const facts of [
+      { variant: 'conventional', receive_count: 3, max_receive_count: 2, attempt_ambiguous_or_failed: true },
+      { variant: 'durable', receive_count: 3, max_receive_count: 2, inner_execution_exhausted: true },
+      { variant: 'durable', receive_count: 3, max_receive_count: 2, inner_execution_exhausted: false },
+    ] as const) {
+      assert.throws(() => decideTerminality(facts), {
+        name: 'RangeError',
+        message:
+          'receive_count 3 above max_receive_count 2; expected receive_count <= max_receive_count, because the redrive policy moves the message to the DLQ after the last receive',
+      });
+    }
+  });
+
+  it('a throttled first receive (RK-08) makes the first real invocation the last receive', () => {
     assert.deepEqual(
       decideTerminality({
         variant: 'conventional',
-        receive_count: 3,
+        receive_count: 2,
         max_receive_count: 2,
         attempt_ambiguous_or_failed: true,
       }),
       EXHAUSTED,
     );
+  });
+
+  it('a Durable execution whose inner layer is not exhausted keeps the request running (BR-RUA-024)', () => {
+    for (const receive of [1, 2]) {
+      assert.deepEqual(
+        decideTerminality({
+          variant: 'durable',
+          receive_count: receive,
+          max_receive_count: 2,
+          inner_execution_exhausted: false,
+        }),
+        RUNNING,
+      );
+    }
   });
 
   it('a source with more receives left keeps the request running', () => {
@@ -85,16 +116,16 @@ describe('AC-RUA-045 terminality spans every retry layer', () => {
     assert.deepEqual(decideTerminality({ variant: 'probe', attempt_ambiguous_or_failed: true }), EXHAUSTED);
   });
 
-  it('facts without a failure are refused', () => {
+  it('conventional and probe facts without a failure are refused', () => {
     const noFailure: readonly RetryLayerFacts[] = [
       { variant: 'conventional', receive_count: 1, max_receive_count: 2, attempt_ambiguous_or_failed: false },
-      { variant: 'durable', receive_count: 2, max_receive_count: 2, inner_execution_exhausted: false },
+      { variant: 'conventional', receive_count: 2, max_receive_count: 2, attempt_ambiguous_or_failed: false },
       { variant: 'probe', attempt_ambiguous_or_failed: false },
     ];
     for (const facts of noFailure) {
       assert.throws(() => decideTerminality(facts), {
         name: 'RangeError',
-        message: `retry-layer facts ${JSON.stringify(facts)} describe no failure; expected attempt_ambiguous_or_failed or inner_execution_exhausted to be true`,
+        message: `retry-layer facts ${JSON.stringify(facts)} describe no failure; expected attempt_ambiguous_or_failed to be true`,
       });
     }
   });
@@ -110,6 +141,10 @@ describe('AC-RUA-045 terminality spans every retry layer', () => {
       [1, Number.POSITIVE_INFINITY],
     ];
     for (const [receive, max] of counts) {
+      const expected = {
+        name: 'RangeError',
+        message: `receive_count ${String(receive)} and max_receive_count ${String(max)}; expected positive safe integers`,
+      };
       assert.throws(
         () =>
           decideTerminality({
@@ -118,10 +153,18 @@ describe('AC-RUA-045 terminality spans every retry layer', () => {
             max_receive_count: max,
             attempt_ambiguous_or_failed: true,
           }),
-        {
-          name: 'RangeError',
-          message: `receive_count ${String(receive)} and max_receive_count ${String(max)}; expected positive safe integers`,
-        },
+        expected,
+      );
+      // Counts are checked before the Durable inner-layer shortcut, so bad counts never pass.
+      assert.throws(
+        () =>
+          decideTerminality({
+            variant: 'durable',
+            receive_count: receive,
+            max_receive_count: max,
+            inner_execution_exhausted: false,
+          }),
+        expected,
       );
     }
   });

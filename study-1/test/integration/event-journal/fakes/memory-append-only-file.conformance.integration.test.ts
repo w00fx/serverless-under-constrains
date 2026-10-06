@@ -73,7 +73,18 @@ describe('MemoryAppendOnlyFile fault injection', () => {
     file.failWriteAt('j', 1, 'torn_write');
     assert.deepEqual(await file.append('j', encoder.encode('abcd\n')), { kind: 'unknown', code: 'EIO' });
     assert.equal(file.text('j'), 'ab');
-    assert.deepEqual(await file.append('j', encoder.encode('e\n')), { kind: 'not_written', code: 'TORN_TAIL' });
+    assert.deepEqual(await file.append('j', encoder.encode('e\n')), { kind: 'appended' });
+    assert.equal(file.text('j'), 'ab\ne\n');
+  });
+
+  it('after a torn line, the next record is line 2 and its fault halves the terminator plus the record', async () => {
+    const file = new MemoryAppendOnlyFile();
+    file.seedRaw('j', encoder.encode('ab'));
+    file.failWriteAt('j', 1, 'nothing_written');
+    file.failWriteAt('j', 2, 'torn_write', 'ENOSPC');
+    assert.deepEqual(await file.append('j', encoder.encode('cdefg\n')), { kind: 'unknown', code: 'ENOSPC' });
+    assert.equal(file.text('j'), 'ab\ncd');
+    assert.equal(file.pendingFaultCount(), 1);
   });
 
   it('written_unacknowledged writes every byte but reports an unknown fate', async () => {

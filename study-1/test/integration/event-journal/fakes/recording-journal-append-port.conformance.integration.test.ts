@@ -1,7 +1,7 @@
 // Conformance of RecordingJournalAppendPort (design §12.2): as a decorator it must be
 // transparent. Every outcome of the wrapped real port reaches the caller unchanged, the stored
 // state is exactly what the wrapped port stored, and each entry is recorded in call order. Its
-// one fault, `throwNext`, throws without reaching the wrapped port.
+// faults, `throwNext` and `answerNext`, act once without reaching the wrapped port.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -65,5 +65,17 @@ describe('RecordingJournalAppendPort conformance', () => {
     assert.deepEqual(port.outcomes(), []);
     assert.equal(port.entries().length, 1);
     assert.deepEqual(await port.append(entry(1)), { kind: 'applied' });
+  });
+
+  it('answerNext returns the scripted outcome once without reaching the wrapped port', async () => {
+    const { store, log } = storeHarness();
+    const port = new RecordingJournalAppendPort(createDurableJournalPort(store, 'caller_journal'));
+    port.answerNext({ kind: 'condition_failed', failed_action_index: 0 });
+    assert.deepEqual(await port.append(entry(1)), { kind: 'condition_failed', failed_action_index: 0 });
+    assert.equal(log.isEmpty(), true);
+    assert.deepEqual(port.outcomes(), []);
+    assert.equal(port.entries().length, 1);
+    assert.deepEqual(await port.append(entry(1)), { kind: 'applied' });
+    assert.deepEqual(port.outcomes(), [{ kind: 'applied' }]);
   });
 });

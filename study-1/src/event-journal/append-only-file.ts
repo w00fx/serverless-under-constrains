@@ -7,6 +7,13 @@
 // - `appended`: every byte is written and flushed to stable storage;
 // - `not_written`: no byte was written (for example the file is finalized, or cannot be opened);
 // - `unknown`: some or all bytes may have been written (a write or flush failed midway).
+//
+// A file whose last line is torn (an earlier, now stopped, source instance's write was cut
+// short) still accepts appends: the implementation writes a lone newline before the new bytes,
+// so the fragment stays one malformed line that ingestion reports (`parseJsonl`, one entry per
+// line) and is never merged into the new record. BR-RUA-033: "After an ambiguous append
+// result, that source instance stops emitting events. A restart creates a new source
+// instance", and that new instance must be able to keep emitting to the same journal file.
 
 export type FileAppendOutcome =
   | { readonly kind: 'appended' }
@@ -19,12 +26,14 @@ export type FileFinalizeOutcome = { readonly kind: 'finalized' } | { readonly ki
 export const APPEND_FILE_CODES = {
   /** The file was finalized; it accepts no more bytes. */
   finalized: 'FILE_FINALIZED',
-  /** The file ends inside a line (an earlier write was torn); appending would merge two records. */
-  tornTail: 'TORN_TAIL',
 } as const;
 
 export interface AppendOnlyFile {
-  /** Appends `bytes` at the end of `path`, creating the file when it does not exist. */
+  /**
+   * Appends `bytes` at the end of `path`, creating the file when it does not exist. When the
+   * file ends inside a line, a lone newline is written first in the same write, so the torn
+   * fragment keeps its own line.
+   */
   append(path: string, bytes: Uint8Array): Promise<FileAppendOutcome>;
   /** Makes `path` permanently read-only, creating it empty when absent; idempotent. */
   finalize(path: string): Promise<FileFinalizeOutcome>;

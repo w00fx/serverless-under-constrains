@@ -62,7 +62,9 @@ describe('journal entries', () => {
 });
 
 describe('classifyJournalOutcome', () => {
-  const cases: readonly (readonly [string, WriteOutcome, string])[] = [
+  // Without the put's index (a caller-owned transaction that does not say where the put is),
+  // only an item returned at the entry's own key identifies the journal put.
+  const withoutIndex: readonly (readonly [string, WriteOutcome, string])[] = [
     ['applied', { kind: 'applied' }, 'applied'],
     ['ambiguous', { kind: 'ambiguous', code: 'TimeoutError' }, 'ambiguous'],
     ['definitive failure', { kind: 'definitive_failure', code: 'ValidationException' }, 'not_applied'],
@@ -83,9 +85,54 @@ describe('classifyJournalOutcome', () => {
       'sequence_conflict',
     ],
   ];
-  for (const [name, outcome, expected] of cases) {
-    it(`${name} is ${expected}`, () => {
+  for (const [name, outcome, expected] of withoutIndex) {
+    it(`without the put index, ${name} is ${expected}`, () => {
       assert.equal(classifyJournalOutcome(outcome, ENTRY), expected);
+    });
+  }
+
+  // With the put's index, the failed action decides whose condition failed. A failed
+  // item_absent condition on the put proves the key occupied, so without a decodable existing
+  // item (WP-04 omits an undecodable ALL_OLD image) it is a sequence conflict, never not_applied.
+  const withIndex: readonly (readonly [string, WriteOutcome, number, string])[] = [
+    [
+      'the put failed without a decodable item',
+      { kind: 'condition_failed', failed_action_index: 0 },
+      0,
+      'sequence_conflict',
+    ],
+    [
+      'the put failed (index 2) without a decodable item',
+      { kind: 'condition_failed', failed_action_index: 2 },
+      2,
+      'sequence_conflict',
+    ],
+    [
+      'the put failed on the identical entry',
+      { kind: 'condition_failed', failed_action_index: 1, existing: { ...ENTRY.item } },
+      1,
+      'applied',
+    ],
+    [
+      'the put failed on other content',
+      { kind: 'condition_failed', failed_action_index: 1, existing: { ...ENTRY.item, event_id: 'x' } },
+      1,
+      'sequence_conflict',
+    ],
+    ['another action failed without an item', { kind: 'condition_failed', failed_action_index: 1 }, 0, 'not_applied'],
+    [
+      'another action failed on its own item',
+      { kind: 'condition_failed', failed_action_index: 0, existing: { pk: KEY.pk, sk: 'state#attempt#x' } },
+      1,
+      'not_applied',
+    ],
+    ['a definitive failure', { kind: 'definitive_failure', code: 'ValidationException' }, 0, 'not_applied'],
+    ['an ambiguous outcome', { kind: 'ambiguous', code: 'TimeoutError' }, 0, 'ambiguous'],
+    ['an applied outcome', { kind: 'applied' }, 0, 'applied'],
+  ];
+  for (const [name, outcome, index, expected] of withIndex) {
+    it(`with the put at index ${String(index)}, ${name} is ${expected}`, () => {
+      assert.equal(classifyJournalOutcome(outcome, ENTRY, index), expected);
     });
   }
 });

@@ -4,7 +4,9 @@
 // a definitive failure is retried with the identical event until the budget runs out, which
 // stops the instance; an ambiguous result stops it at once; a stopped instance never touches
 // the medium again. The table medium scripts faults by write order (InMemoryItemStore), the
-// JSONL medium by line number (MemoryAppendOnlyFile).
+// JSONL medium by line number (MemoryAppendOnlyFile). A third property restarts the source
+// after every ambiguous write: each new instance keeps journaling to the same JSONL file, and
+// a torn fragment stays one malformed line, never merged into a record.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -12,8 +14,20 @@ import { describe, it } from 'node:test';
 import fc from 'fast-check';
 
 import type { AppendResult, JournalStopReason } from '../../../src/event-journal/journal-append-port.ts';
+import { JournalWriter } from '../../../src/event-journal/journal-writer.ts';
+import { createJsonlJournalPort } from '../../../src/event-journal/jsonl-journal-port.ts';
 import { parseJsonl } from '../../../src/record-contract/parsing.ts';
-import { dispatchStartedBody, JSONL_PATH, writerHarness } from '../../support/event-journal/journal-fixtures.ts';
+import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
+import { MemoryAppendOnlyFile } from '../../support/event-journal/memory-append-only-file.ts';
+import { SequentialUuidSource } from '../../support/kernel/sequential-uuid-source.ts';
+import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-scheduler.ts';
+import {
+  dispatchStartedBody,
+  EPOCH_MS,
+  JSONL_PATH,
+  TRIAL_SCOPE,
+  writerHarness,
+} from '../../support/event-journal/journal-fixtures.ts';
 import type { WriterHarness } from '../../support/event-journal/journal-fixtures.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
@@ -164,6 +178,101 @@ describe('JournalWriter state machine', () => {
         const report = parseJsonl(harness.file.contents(JSONL_PATH) ?? new Uint8Array(0));
         const wholeLines = report.lines.filter((line) => line.parsed.ok).length;
         assert.ok(wholeLines === appendedCount || wholeLines === appendedCount + 1);
+      }),
+      fuzzParameters(),
+    );
+  });
+});
+
+type LastWrite = 'whole' | 'torn_write' | 'written_unacknowledged';
+
+interface InstancePlan {
+  /** Appends before the last one, all whole. */
+  readonly leading: number;
+  /** The fate of the instance's last append; any fault stops the instance (ambiguous). */
+  readonly last: LastWrite;
+}
+
+const NEWLINE = 0x0a;
+
+// The line the next record lands on: a torn fragment counts as its own line
+// (MemoryAppendOnlyFile.failWriteAt contract).
+function nextRecordLine(bytes: Uint8Array): number {
+  const newlines = bytes.reduce((count, byte) => (byte === NEWLINE ? count + 1 : count), 0);
+  const torn = bytes.length > 0 && bytes[bytes.length - 1] !== NEWLINE;
+  return newlines + (torn ? 2 : 1);
+}
+
+function instanceId(index: number): Uuid4 {
+  return `cccccccc-0000-4000-8000-${String(index + 1).padStart(12, '0')}` as Uuid4;
+}
+
+async function runInstance(
+  file: MemoryAppendOnlyFile,
+  time: VirtualTimeScheduler,
+  index: number,
+  plan: InstancePlan,
+): Promise<readonly AppendResult[]> {
+  const writer = new JournalWriter({
+    port: createJsonlJournalPort(JSONL_PATH, file),
+    source: 'runner',
+    instanceId: instanceId(index),
+    scope: TRIAL_SCOPE,
+    clock: time,
+    ids: new SequentialUuidSource(String(index + 1).padStart(8, '0')),
+    maxDefinitiveRetries: 0,
+  });
+  const results: AppendResult[] = [];
+  for (let n = 1; n <= plan.leading + 1; n += 1) {
+    if (n === plan.leading + 1 && plan.last !== 'whole') {
+      file.failWriteAt(JSONL_PATH, nextRecordLine(file.contents(JSONL_PATH) ?? new Uint8Array(0)), plan.last);
+    }
+    results.push(await writer.append('dispatch_started', dispatchStartedBody(n)));
+  }
+  return results;
+}
+
+function expectedResults(plan: InstancePlan): readonly ModelResult[] {
+  const leading = Array.from({ length: plan.leading }, (_, index) => index + 1);
+  return [...leading, plan.last === 'whole' ? plan.leading + 1 : 'AMBIGUOUS_APPEND'];
+}
+
+describe('JournalWriter restarts over one JSONL file', () => {
+  it('every restarted instance keeps journaling after an ambiguous write, and fragments stay apart', async () => {
+    const plans = fc.array(
+      fc.record({
+        leading: fc.integer({ min: 0, max: 3 }),
+        last: fc.constantFrom<LastWrite>('whole', 'torn_write', 'written_unacknowledged'),
+      }),
+      { minLength: 1, maxLength: 6 },
+    );
+    await fc.assert(
+      fc.asyncProperty(plans, async (instances) => {
+        const file = new MemoryAppendOnlyFile();
+        const time = new VirtualTimeScheduler({ wallEpochMs: EPOCH_MS });
+        for (const [index, plan] of instances.entries()) {
+          assert.deepEqual(observed(await runInstance(file, time, index, plan)), expectedResults(plan));
+        }
+        const report = parseJsonl(file.contents(JSONL_PATH) ?? new Uint8Array(0));
+        const malformed = report.lines.filter((line) => !line.parsed.ok).length;
+        assert.equal(malformed, instances.filter((plan) => plan.last === 'torn_write').length);
+        assert.equal(report.ends_with_newline, instances.at(-1)?.last !== 'torn_write');
+        // Whole lines, grouped by instance, hold that instance's dense sequences from 1.
+        const sequences = new Map<string, number[]>();
+        for (const line of report.lines) {
+          if (line.parsed.ok) {
+            const event = line.parsed.value as { source_instance_id: string; source_sequence: number };
+            sequences.set(event.source_instance_id, [
+              ...(sequences.get(event.source_instance_id) ?? []),
+              event.source_sequence,
+            ]);
+          }
+        }
+        instances.forEach((plan, index) => {
+          const stored = plan.leading + (plan.last === 'torn_write' ? 0 : 1);
+          const expected = Array.from({ length: stored }, (_, n) => n + 1);
+          assert.deepEqual(sequences.get(instanceId(index)) ?? [], expected);
+        });
       }),
       fuzzParameters(),
     );

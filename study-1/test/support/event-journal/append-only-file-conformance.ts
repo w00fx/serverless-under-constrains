@@ -2,7 +2,7 @@
 // file-system binding `NodeAppendOnlyFile` in a temporary directory and against the
 // `MemoryAppendOnlyFile` emulator, so the emulator is held to the behavior of the real binding:
 // creation on first append, call-order accumulation, finalized-file refusal, idempotent
-// finalization that creates an absent file, and torn-tail refusal.
+// finalization that creates an absent file, and a torn last line closed by its own newline.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -77,15 +77,16 @@ export function describeAppendOnlyFileConformance(name: string, subjectFactory: 
       });
     });
 
-    it('refuses to append after a torn last line, and accepts an empty existing file', async () => {
+    it('closes a torn last line with its own newline before appending, and accepts an empty existing file', async () => {
+      // BR-RUA-033: a restarted source instance keeps emitting after an earlier instance's torn
+      // write; the fragment stays one malformed line and is never merged into the new record.
       const subject = subjectFactory();
       const torn = subject.path('torn.jsonl');
       await subject.seedRaw(torn, encoder.encode('{"a":1}\n{"b"'));
-      assert.deepEqual(await subject.file.append(torn, encoder.encode('{"c":3}\n')), {
-        kind: 'not_written',
-        code: 'TORN_TAIL',
-      });
-      assert.equal(await text(subject, torn), '{"a":1}\n{"b"');
+      assert.deepEqual(await subject.file.append(torn, encoder.encode('{"c":3}\n')), { kind: 'appended' });
+      assert.equal(await text(subject, torn), '{"a":1}\n{"b"\n{"c":3}\n');
+      assert.deepEqual(await subject.file.append(torn, encoder.encode('{"d":4}\n')), { kind: 'appended' });
+      assert.equal(await text(subject, torn), '{"a":1}\n{"b"\n{"c":3}\n{"d":4}\n');
       const empty = subject.path('empty-existing.jsonl');
       await subject.seedRaw(empty, new Uint8Array(0));
       assert.deepEqual(await subject.file.append(empty, encoder.encode('ok\n')), { kind: 'appended' });
