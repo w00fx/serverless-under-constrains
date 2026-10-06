@@ -34,6 +34,15 @@ const REFERENCE_MEMBERS = [
   'package_index_sha256',
 ] as const;
 
+/** Member names every JSON object inherits; JSON.parse makes each one an own member (A-05, A-07). */
+const INHERITED_NAMES = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf'] as const;
+/**
+ * The root closure finding of an unknown member. Group B closes its roots with
+ * `unevaluatedProperties` until WP-02's Owner amendment A-07 fix merges; the A-07 integration
+ * step then leaves only `additionalProperties` (design §6) and the registry refuses the other.
+ */
+const ROOT_CLOSURE_FINDINGS: readonly string[] = [' additionalProperties', ' unevaluatedProperties'];
+
 const payment = (): JsonObject => GROUP_A.payment();
 const dispatchStarted = (): JsonObject => toJson(GROUP_B.dispatch_started());
 const oracleResult = (): JsonObject => toJson(GROUP_C.oracle_result());
@@ -78,7 +87,11 @@ describe('AC-RUA-046 serialization rules', () => {
   it('casing', () => {
     assertAccepted(payment(), 'snake_case record');
     assertRejected({ ...payment(), paymentId: 'pay-poc-001' }, ' additionalProperties', 'camelCase field');
-    assertRejected({ ...dispatchStarted(), attemptId: LOWER_V4 }, ' unevaluatedProperties', 'camelCase event field');
+    const camelEvent = violationsOf({ ...dispatchStarted(), attemptId: LOWER_V4 });
+    assert.ok(
+      camelEvent.some((found) => ROOT_CLOSURE_FINDINGS.includes(found)),
+      `camelCase event field: expected a root closure finding, got ${JSON.stringify(camelEvent)}`,
+    );
     assert.deepEqual(violationsOf({ ...payment(), record_type: 'Payment' }), ['/record_type record_type']);
     // Domain and lifecycle enum values stay uppercase.
     assertRejected({ ...payment(), currency: 'brl' }, '/currency const', 'lowercase currency');
@@ -189,6 +202,17 @@ describe('AC-RUA-046 serialization rules', () => {
     );
     const withUndefined = { ...payment(), note: undefined } as unknown as StudyRecord;
     assert.throws(() => serializeRecordFile(withUndefined), /value at \$\.note is of type undefined/);
+  });
+
+  // WP-00 review round 2 (A-05 item 3, A-07): JSON.parse turns an inherited member name into an
+  // own member, which a closed record must refuse like any other unknown property.
+  it('an inherited member name is an unknown property of a closed record', () => {
+    const text = new TextDecoder().decode(serializeRecordFile(payment() as unknown as StudyRecord)).trim();
+    for (const name of INHERITED_NAMES) {
+      const parsed = parseJsonDocument(new TextEncoder().encode(`${text.slice(0, -1)},${JSON.stringify(name)}:1}`));
+      assert.ok(parsed.ok, name);
+      assert.deepEqual(violationsOf(parsed.value), [' additionalProperties'], name);
+    }
   });
 
   it('schema_version and record_type present', () => {

@@ -16,7 +16,13 @@ import {
   listSchemaFiles,
 } from '../../../src/record-contract/schema-registry.ts';
 import { InMemorySchemaFileSystem } from '../../support/kernel/in-memory-schema-file-system.ts';
-import { FIXTURE_CATALOGUE_ROOT, SHARED_DEFS_PATH, samplePayment } from '../../support/kernel/schema-fixtures.ts';
+import {
+  FIXTURE_CATALOGUE_ROOT,
+  SHARED_DEFS_PATH,
+  sampleDispatchStarted,
+  sampleOracleResult,
+  samplePayment,
+} from '../../support/kernel/schema-fixtures.ts';
 
 const ROOT = '/catalogue';
 const DEFS_BYTES = readFileSync(SHARED_DEFS_PATH);
@@ -187,6 +193,32 @@ describe('createRecordValidator', () => {
         },
       ],
     });
+  });
+
+  // WP-00 review round 2 (A-05 item 3, A-07): JSON.parse makes an inherited name an own member.
+  // An event closed with additionalProperties refuses it at the root, and so does a shared
+  // evidence reference nested in a record.
+  it('refuses an inherited member name at an event root and inside a nested reference', () => {
+    const validator = createRecordValidator({ schemaRoot: FIXTURE_CATALOGUE_ROOT, defsPath: SHARED_DEFS_PATH });
+    const withMember = (value: JsonObject, name: string): JsonObject =>
+      JSON.parse(`{${JSON.stringify(name)}:1,${JSON.stringify(value).slice(1)}`) as JsonObject;
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf']) {
+      const event = validator.validate(withMember(sampleDispatchStarted(), name));
+      assert.deepEqual(
+        event.valid ? [] : event.violations.map((violation) => [violation.instance_path, violation.keyword]),
+        [['', 'additionalProperties']],
+        name,
+      );
+      const result = sampleOracleResult();
+      const [first, ...rest] = result['evidence_refs'] as readonly JsonObject[];
+      const nested = validator.validate({ ...result, evidence_refs: [withMember(first ?? {}, name), ...rest] });
+      assert.deepEqual(
+        nested.valid ? [] : nested.violations.map((violation) => [violation.instance_path, violation.keyword]),
+        [['/evidence_refs/0', 'additionalProperties']],
+        name,
+      );
+    }
+    assert.equal(validator.validate(sampleDispatchStarted()).valid, true);
   });
 
   it('names a non-finite top-level value as itself, never as null', () => {
