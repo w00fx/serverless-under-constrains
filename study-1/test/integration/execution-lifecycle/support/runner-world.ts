@@ -6,7 +6,6 @@
 
 import { ExecutionRunner } from '../../../../src/execution-lifecycle/execution-runner.ts';
 import type { ExecutionRunnerDeps } from '../../../../src/execution-lifecycle/execution-runner.ts';
-import { RunSummaryWriter } from '../../../../src/execution-lifecycle/execution-finalization.ts';
 import type {
   AdmittedTrialExecution,
   ExecutionLogLine,
@@ -18,6 +17,7 @@ import type {
 import { EXECUTION_PATHS } from '../../../../src/evidence-package/package-layout.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import type { ResourceManifest } from '../../../../src/record-contract/records/group-a/resource_manifest.ts';
+import { summaryWriterFor } from '../../../../src/execution-lifecycle/summary-writers.ts';
 import { RUN_SAFETY } from '../../../../src/safety/safety-limits.ts';
 import type { SafetyLimits } from '../../../../src/safety/safety-limits.ts';
 import { SafetySupervisor } from '../../../../src/safety/safety-supervisor.ts';
@@ -94,7 +94,7 @@ export class RunnerWorld {
       cleanup: cleanupBindings(this.account, cloud.store, cloud.time),
       readers: { store: cloud.store, queues: cloud.counters, durable: cloud.durable, dlq: cloud.dlqReceiver },
       evidence: { files: cloud.storage, journals: cloud.storage },
-      summary: new RunSummaryWriter(lifecycleValidator()),
+      summary: summaryWriterFor(this.admitted.identity.execution_kind, lifecycleValidator()),
       services,
     };
     this.deps = { ...base, ...options.deps?.(this) };
