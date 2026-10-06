@@ -97,4 +97,21 @@ describe('committed quality files', () => {
     assert.ok((minimums.fuzz ?? 0) >= 2);
     assert.ok((minimums.integration ?? 0) >= 1);
   });
+
+  it('never lower the kernel suite minimums below their last ratified values (D-33 ratchet)', () => {
+    // Raised to the measured WP-00 counts in review round 1, so deleting a kernel regression
+    // case (such as the A-02 or deep-nesting ones) fails the suite guard. Raising a value here
+    // is routine; lowering one needs a human decision.
+    const floor = { unit: 253, contract: 15, fuzz: 15, integration: 44 } as const;
+    const minimums = parseSuiteMinimums(
+      'record-contract-kernel.json',
+      readJson('quality/suite-minimums/record-contract-kernel.json'),
+    );
+    for (const suite of ['unit', 'contract', 'fuzz', 'integration'] as const) {
+      assert.ok(
+        (minimums[suite] ?? 0) >= floor[suite],
+        `${suite} minimum ${String(minimums[suite])} < ${String(floor[suite])}`,
+      );
+    }
+  });
 });
