@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 
 import {
   canonicalJson,
+  canonicalJsonIfRepresentable,
   serializeJsonl,
   serializeRecordFile,
   structurallyEqual,
@@ -91,6 +92,20 @@ describe('canonicalJson', () => {
     const sparse: JsonValue[] = [];
     sparse[1] = 1;
     assert.throws(() => canonicalJson(sparse), /value at \$\[0\] is of type undefined/);
+  });
+});
+
+describe('canonicalJsonIfRepresentable', () => {
+  it('returns the canonical form of a JSON value', () => {
+    assert.equal(canonicalJsonIfRepresentable({ b: [2, 1], a: 'x' }), '{"a":"x","b":[2,1]}');
+    assert.equal(canonicalJsonIfRepresentable(-0), '0');
+    assert.equal(canonicalJsonIfRepresentable(null), 'null');
+  });
+
+  it('returns undefined instead of throwing for every value JSON cannot represent', () => {
+    for (const value of [undefined, Number.NaN, { a: undefined }, [new Date(0)], [1n], (): number => 1]) {
+      assert.equal(canonicalJsonIfRepresentable(value), undefined);
+    }
   });
 });
 

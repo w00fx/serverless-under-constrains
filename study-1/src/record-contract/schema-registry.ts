@@ -12,7 +12,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ErrorObject, ValidateFunction } from 'ajv/dist/2020.js';
 
 import { sha256Hex } from './digests.ts';
-import { isJsonObject } from './json-value.ts';
+import { boundedJsonText, isJsonObject } from './json-value.ts';
 import { parseJsonDocument } from './parsing.ts';
 import type { JsonObject, JsonValue, Sha256Hex } from './primitives.ts';
 import { RECORD_GROUPS, RECORD_TYPE_GROUPS, isRecordType, recordGroupOf } from './record-types.ts';
@@ -134,12 +134,12 @@ export function createRecordValidator(location: SchemaLocation = {}): RecordVali
       return rejected(undefined, {
         instance_path: '',
         keyword: 'type',
-        detail: `got ${JSON.stringify(value)}; expected a JSON object record`,
+        detail: `got ${boundedJsonText(value)}; expected a JSON object record`,
       });
     }
     const recordType = value['record_type'];
     if (!isRecordType(recordType)) {
-      const shown = recordType === undefined ? 'absent' : JSON.stringify(recordType);
+      const shown = recordType === undefined ? 'absent' : boundedJsonText(recordType);
       const detail = `record_type ${shown} is not catalogued; expected one of RECORD_TYPES`;
       return rejected(typeof recordType === 'string' ? recordType : undefined, {
         instance_path: '/record_type',
@@ -160,11 +160,14 @@ export function createRecordValidator(location: SchemaLocation = {}): RecordVali
     }
     return { valid: false, record_type: recordType, violations: errors.map(toViolation) };
   };
+  // Details quote untrusted values only through boundedJsonText, and Ajv's params hold schema
+  // values and instance keys, never nested instance values (verbose is off), so validation is
+  // total over deep or huge JSON (WP-00 review round 1).
 
   const validateAs = (type: RecordType, value: JsonValue): RecordValidation => {
     const declared = isJsonObject(value) ? value['record_type'] : undefined;
     if (declared !== undefined && declared !== type) {
-      const detail = `record_type is ${JSON.stringify(declared)}; expected ${JSON.stringify(type)}`;
+      const detail = `record_type is ${boundedJsonText(declared)}; expected ${JSON.stringify(type)}`;
       return rejected(typeof declared === 'string' ? declared : undefined, {
         instance_path: '/record_type',
         keyword: 'const',
@@ -215,7 +218,7 @@ function readSchemaObject(path: string, bytes: Uint8Array): JsonObject {
     );
   }
   if (!isJsonObject(parsed.value)) {
-    throw new Error(`schema file ${path} holds ${JSON.stringify(parsed.value)}; expected a JSON Schema object`);
+    throw new Error(`schema file ${path} holds ${boundedJsonText(parsed.value)}; expected a JSON Schema object`);
   }
   return parsed.value;
 }

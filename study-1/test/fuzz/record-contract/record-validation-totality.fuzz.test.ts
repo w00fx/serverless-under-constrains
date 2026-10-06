@@ -4,7 +4,9 @@
 // ids). `createRecordValidator().validate` and the code-level evidence-reference check must
 // return findings and never throw; a non-string ordering member must be a type finding at that
 // member and never an order finding. A second target checks the kernel's `uniqueItems` against
-// an independent oracle (canonical JSON equality, BR-RUA-034).
+// two oracles: canonical JSON equality (BR-RUA-034) and an independent pairwise scan with
+// structural equality. Since WP-00 review round 1, about 2% of drawn values are towers nested
+// 2,500-20,000 levels deep, past the call stack, where the recursive kernel code threw RangeError.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -22,6 +24,8 @@ import {
   EVIDENCE_REF_ORDER_KEYWORD,
   registerRecordVocabulary,
 } from '../../../src/record-contract/schema-vocabulary.ts';
+import { sameJsonValue } from '../../../src/record-contract/json-value.ts';
+import { deepTowerArbitrary } from '../../support/kernel/deep-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 import {
   FIXTURE_CATALOGUE_ROOT,
@@ -58,9 +62,21 @@ const hostileObject = fc.oneof(
   ) as fc.Arbitrary<JsonValue>,
 );
 const anyJson: fc.Arbitrary<JsonValue> = fc.oneof(
-  fc.jsonValue({ maxDepth: 3 }) as fc.Arbitrary<JsonValue>,
-  hostileObject,
+  { arbitrary: fc.jsonValue({ maxDepth: 3 }) as fc.Arbitrary<JsonValue>, weight: 49 },
+  { arbitrary: hostileObject, weight: 49 },
+  { arbitrary: deepTowerArbitrary(), weight: 2 },
 );
+
+/** Ajv's own scan order (largest i, then largest j < i), written independently of the kernel. */
+function pairwiseDuplicate(items: readonly JsonValue[]): { readonly i: number; readonly j: number } | undefined {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = items.slice(0, i).findLastIndex((other) => sameJsonValue(items[i], other));
+    if (j !== -1) {
+      return { i, j };
+    }
+  }
+  return undefined;
+}
 
 /** An oracle result with two canonically ordered references, each carrying every member. */
 function twoFullReferences(): JsonObject {
@@ -199,10 +215,12 @@ describe('AC-RUA-046 kernel uniqueItems agrees with canonical JSON equality', ()
         } catch (error) {
           return assert.fail(`uniqueItems threw ${String(error)}; expected a verdict`);
         }
-        assert.equal(accepted, !hasDuplicate, JSON.stringify(forms));
-        if (!accepted) {
-          const params = unique.errors?.[0]?.params as { readonly i: number; readonly j: number };
-          assert.ok(params.j < params.i);
+        assert.equal(accepted, !hasDuplicate, `${String(forms.length)} items`);
+        const params = accepted
+          ? undefined
+          : (unique.errors?.[0]?.params as { readonly i: number; readonly j: number });
+        assert.deepEqual(params, pairwiseDuplicate(items));
+        if (params !== undefined) {
           assert.equal(forms[params.j], forms[params.i]);
         }
       }),
