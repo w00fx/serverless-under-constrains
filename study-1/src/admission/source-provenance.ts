@@ -47,15 +47,7 @@ export function sourceProvenanceReasons(
     ...state.in_progress.map((operation) =>
       admissionReason('OPERATION_IN_PROGRESS', SUBJECT, `a ${operation} is in progress; expected none`),
     ),
-    ...snapshot.malformed
-      .slice(0, QUOTED_ENTRIES)
-      .map((record) =>
-        admissionReason(
-          'GIT_STATUS_UNREADABLE',
-          SUBJECT,
-          `git status record ${boundedJsonText(record)} is unreadable; expected a porcelain v2 record`,
-        ),
-      ),
+    ...malformedReasons(snapshot.malformed),
     ...dirtyReasons(snapshot.entries, state.lockfile.path),
     ...lockfileReasons(state.lockfile),
   ];
@@ -74,7 +66,8 @@ export function assessSourceProvenance(state: GitSourceState): StepVerdict<Admit
     subject: 'source_provenance',
     expected: 'clean_committed_source',
     observed: {
-      commit_sha: snapshot.commit_sha ?? 'unresolved',
+      // The commit comes from git's output unchecked; HEAD_UNRESOLVED judges it (A-05).
+      commit_sha: boundedText(snapshot.commit_sha ?? 'unresolved'),
       dirty_entries: snapshot.entries.filter((entry) => entry.kind !== 'ignored').length,
     },
   };
@@ -146,20 +139,46 @@ function headReasons(snapshot: GitStatusSnapshot, treeSha: string | undefined): 
   return reasons;
 }
 
+// At most QUOTED_ENTRIES reasons quote items and one more counts the rest, so a status of any
+// size is a bounded rejection that still says how much it left out.
+function quotedReasons<T>(
+  items: readonly T[],
+  quote: (item: T) => StructuredReason,
+  rest: (count: number) => StructuredReason,
+): readonly StructuredReason[] {
+  const quoted = items.slice(0, QUOTED_ENTRIES).map(quote);
+  return items.length <= QUOTED_ENTRIES ? quoted : [...quoted, rest(items.length - QUOTED_ENTRIES)];
+}
+
+function malformedReasons(records: readonly string[]): readonly StructuredReason[] {
+  return quotedReasons(
+    records,
+    (record) =>
+      admissionReason(
+        'GIT_STATUS_UNREADABLE',
+        SUBJECT,
+        `git status record ${boundedJsonText(record)} is unreadable; expected a porcelain v2 record`,
+      ),
+    (count) =>
+      admissionReason(
+        'GIT_STATUS_UNREADABLE',
+        SUBJECT,
+        `${String(count)} more unreadable git status records are not quoted; expected porcelain v2 records`,
+      ),
+  );
+}
+
 function dirtyReasons(entries: readonly GitStatusEntry[], lockfilePath: string): readonly StructuredReason[] {
-  const dirty = entries.filter((entry) => entry.kind !== 'ignored');
-  const quoted = dirty.slice(0, QUOTED_ENTRIES).map((entry) => dirtyReason(entry, lockfilePath));
-  if (dirty.length <= QUOTED_ENTRIES) {
-    return quoted;
-  }
-  return [
-    ...quoted,
-    admissionReason(
-      'WORK_TREE_DIRTY',
-      SUBJECT,
-      `${String(dirty.length - QUOTED_ENTRIES)} more dirty entries are not quoted; expected a clean work tree`,
-    ),
-  ];
+  return quotedReasons(
+    entries.filter((entry) => entry.kind !== 'ignored'),
+    (entry) => dirtyReason(entry, lockfilePath),
+    (count) =>
+      admissionReason(
+        'WORK_TREE_DIRTY',
+        SUBJECT,
+        `${String(count)} more dirty entries are not quoted; expected a clean work tree`,
+      ),
+  );
 }
 
 function dirtyReason(entry: GitStatusEntry, lockfilePath: string): StructuredReason {
