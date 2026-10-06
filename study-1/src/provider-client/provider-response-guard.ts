@@ -2,16 +2,16 @@
 // reads the provider's payload with it instead of compiling the Ajv validator inside the
 // attempt, and a unit property test keeps it in differential agreement with the real schema
 // (design §12.5 pattern for hand-written guards). The payload is untrusted bytes, so the guard is
-// total over every JSON value: it never recurses into the value, and every offending value it
-// names is rendered bounded and non-recursively (`offending-value.ts`; WP-06 review round 1,
-// where a 10,000-deep array overflowed the stack inside a recursive `JSON.stringify`).
+// total over every JSON value (Owner amendment A-05.2): it never recurses into the value, it
+// reads only own properties (`Object.hasOwn`), so an inherited name such as `constructor` or
+// `toString` is never mistaken for a field, and every offending value it names is rendered
+// through the kernel's bounded, iterative `describeJson` (A-05.1; WP-06 review rounds 1 and 2).
 
-import { isJsonObject } from '../record-contract/json-value.ts';
+import { describeJson, isJsonObject } from '../record-contract/json-value.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
 import type { JsonObject, JsonValue, Result } from '../record-contract/primitives.ts';
 import type { ProviderRefundResponse } from '../record-contract/records/group-a/provider_refund_response.ts';
 import { PROVIDER_REJECTION_REASONS } from '../record-contract/records/group-a/provider_refund_response.ts';
-import { describeJsonValue } from './offending-value.ts';
 
 const RESPONSE_PROPERTIES: ReadonlySet<string> = new Set([
   'schema_version',
@@ -36,7 +36,7 @@ const OPTIONAL_UUID_PROPERTIES = ['attempt_id', 'provider_request_id', 'provider
  */
 export function readProviderRefundResponse(value: JsonValue): Result<ProviderRefundResponse, string> {
   if (!isJsonObject(value)) {
-    return { ok: false, error: `payload ${describeJsonValue(value)}; expected a JSON object` };
+    return { ok: false, error: `payload ${describeJson(value)}; expected a JSON object` };
   }
   const problem = envelopeProblem(value) ?? outcomeProblem(value);
   if (problem !== undefined) {
@@ -45,42 +45,52 @@ export function readProviderRefundResponse(value: JsonValue): Result<ProviderRef
   return { ok: true, value: value as unknown as ProviderRefundResponse };
 }
 
+// The value of an own property, or undefined; never a member inherited from Object.prototype.
+function ownField(value: JsonObject, name: string): JsonValue | undefined {
+  return Object.hasOwn(value, name) ? value[name] : undefined;
+}
+
 function envelopeProblem(value: JsonObject): string | undefined {
   const unknownProperty = Object.keys(value).find((name) => !RESPONSE_PROPERTIES.has(name));
   if (unknownProperty !== undefined) {
-    return `property ${describeJsonValue(unknownProperty)}; expected only ${[...RESPONSE_PROPERTIES].join(', ')}`;
+    return `property ${describeJson(unknownProperty)}; expected only ${[...RESPONSE_PROPERTIES].join(', ')}`;
   }
-  if (value['schema_version'] !== 1) {
-    return `schema_version ${describeJsonValue(value['schema_version'])}; expected 1`;
+  const schemaVersion = ownField(value, 'schema_version');
+  if (schemaVersion !== 1) {
+    return `schema_version ${describeJson(schemaVersion)}; expected 1`;
   }
-  if (value['record_type'] !== 'provider_refund_response') {
-    return `record_type ${describeJsonValue(value['record_type'])}; expected "provider_refund_response"`;
+  const recordType = ownField(value, 'record_type');
+  if (recordType !== 'provider_refund_response') {
+    return `record_type ${describeJson(recordType)}; expected "provider_refund_response"`;
   }
-  if (!isUuid4(value['provider_call_id'])) {
-    return `provider_call_id ${describeJsonValue(value['provider_call_id'])}; expected a lowercase UUIDv4`;
+  const providerCallId = ownField(value, 'provider_call_id');
+  if (!isUuid4(providerCallId)) {
+    return `provider_call_id ${describeJson(providerCallId)}; expected a lowercase UUIDv4`;
   }
-  const badId = OPTIONAL_UUID_PROPERTIES.find((name) => name in value && !isUuid4(value[name]));
-  return badId === undefined ? undefined : `${badId} ${describeJsonValue(value[badId])}; expected a lowercase UUIDv4`;
+  const badId = OPTIONAL_UUID_PROPERTIES.find((name) => Object.hasOwn(value, name) && !isUuid4(value[name]));
+  return badId === undefined ? undefined : `${badId} ${describeJson(value[badId])}; expected a lowercase UUIDv4`;
 }
 
 function outcomeProblem(value: JsonObject): string | undefined {
-  const outcome = value['outcome'];
+  const outcome = ownField(value, 'outcome');
   if (outcome === 'SUCCEEDED') {
-    const missing = OPTIONAL_UUID_PROPERTIES.find((name) => !(name in value));
+    const missing = OPTIONAL_UUID_PROPERTIES.find((name) => !Object.hasOwn(value, name));
     if (missing !== undefined) {
       return `SUCCEEDED response without ${missing}; expected attempt_id, provider_request_id and provider_transaction_id`;
     }
-    return 'rejection_reason' in value ? 'SUCCEEDED response with rejection_reason; expected none' : undefined;
+    return Object.hasOwn(value, 'rejection_reason')
+      ? 'SUCCEEDED response with rejection_reason; expected none'
+      : undefined;
   }
   if (outcome !== 'REJECTED') {
-    return `outcome ${describeJsonValue(outcome)}; expected "SUCCEEDED" or "REJECTED"`;
+    return `outcome ${describeJson(outcome)}; expected "SUCCEEDED" or "REJECTED"`;
   }
-  if ('provider_transaction_id' in value) {
+  if (Object.hasOwn(value, 'provider_transaction_id')) {
     return 'REJECTED response with provider_transaction_id; expected none, because a rejection creates no transaction';
   }
-  const reason = value['rejection_reason'];
+  const reason = ownField(value, 'rejection_reason');
   if (!(PROVIDER_REJECTION_REASONS as readonly JsonValue[]).includes(reason ?? null)) {
-    return `rejection_reason ${describeJsonValue(reason)}; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`;
+    return `rejection_reason ${describeJson(reason)}; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`;
   }
   return undefined;
 }

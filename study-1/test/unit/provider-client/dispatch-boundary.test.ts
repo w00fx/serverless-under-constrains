@@ -121,7 +121,7 @@ describe('AC-RUA-028 dispatch boundary in the shared provider client', () => {
     assert.deepEqual(report.failure, {
       code: 'TRANSPORT_ERROR',
       subject: 'BR-RUA-053',
-      detail: 'transport_error:RangeError: Invalid payload; expected a provider response',
+      detail: 'transport_error:"RangeError": "Invalid payload"; expected a provider response',
     });
     assert.equal(report.dispatch_to_settlement_ns, '0');
   });

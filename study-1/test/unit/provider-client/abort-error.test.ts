@@ -46,7 +46,7 @@ describe('AC-RUA-044 an abort error alone never proves a timeout', () => {
       code: 'ABORTED_WITHOUT_DEADLINE',
       subject: 'BR-RUA-023',
       detail:
-        'transport aborted (Request aborted) without a deadline timer win; expected an abort only after the timer won',
+        'transport aborted ("Request aborted") without a deadline timer win; expected an abort only after the timer won',
     });
     assert.equal(report.dispatch_to_settlement_ns, '1000000000');
     const events = journalEvents(harness);
@@ -89,7 +89,7 @@ describe('AC-RUA-044 an abort error alone never proves a timeout', () => {
     assert.deepEqual(report.failure, {
       code: 'TRANSPORT_ERROR',
       subject: 'BR-RUA-053',
-      detail: 'transport_error:TooManyRequestsException (HTTP 429): Rate exceeded; expected a provider response',
+      detail: 'transport_error:"TooManyRequestsException" (HTTP 429): "Rate exceeded"; expected a provider response',
     });
   });
 

@@ -137,4 +137,33 @@ describe('ProviderClient over the caller journal', () => {
     assertEventsConform(events);
     assert.equal(attemptPhase(harness, events), 'DISPATCHED');
   });
+
+  // Regression (WP-06 review round 2): the raw function error and executed version reached the
+  // outcome event unbounded, so a 500,000-character header made the outcome item exceed the
+  // 400 KB limit the store enforces, and the dispatched attempt lost its outcome event.
+  it('outsized response headers still journal a stored, schema-valid outcome', async () => {
+    const outsized = [
+      { function_error: 'E'.repeat(500_000), executed_version: '7', code: 'FUNCTION_ERROR' },
+      { function_error: undefined, executed_version: '9'.repeat(450_000), code: 'VERSION_MISMATCH' },
+    ] as const;
+    for (const headers of outsized) {
+      const harness = clientHarness();
+      harness.invoker.resolveAfter(80n * MS, () => ({
+        ...invokeResponse(new Uint8Array(), headers.executed_version),
+        function_error: headers.function_error,
+      }));
+      const report = await settleAttempt(harness);
+      const events = journalEvents(harness);
+      assert.equal(report.failure?.code, headers.code);
+      assert.deepEqual(
+        events.map((event) => event.record_type),
+        ['attempt_registered', 'dispatch_started', 'attempt_outcome_recorded'],
+      );
+      const outcome = events[2];
+      assert.ok(outcome !== undefined);
+      assert.equal(report.outcome_event_id, outcome.event_id);
+      assertEventsConform(events);
+      assert.ok(serializeRecordFile(outcome).length < 8 * 1024);
+    }
+  });
 });

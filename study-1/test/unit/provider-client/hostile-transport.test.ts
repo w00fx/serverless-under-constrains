@@ -1,14 +1,18 @@
-// Regressions of WP-06 review round 1 at the boundary where the defects occurred: one whole
-// attempt through ProviderClient on virtual time. After the dispatch boundary is crossed the
-// attempt always resolves to an outcome and journals it in bounded time, whatever the
-// transport does:
-// - a 20 KB payload nested 10,000 deep is FAILED/MALFORMED_RESPONSE (design §9.9), not a thrown
-//   RangeError with no attempt_outcome_recorded;
+// Regressions of WP-06 review rounds 1 and 2 at the boundary where the defects occurred: one
+// whole attempt through ProviderClient on virtual time, against the size-enforcing
+// InMemoryItemStore. After the dispatch boundary is crossed the attempt always resolves to an
+// outcome and journals it in bounded time, whatever the transport does:
+// - a payload nested 100,000 deep (Owner amendment A-05.3) is FAILED/MALFORMED_RESPONSE (design
+//   §9.9), not a thrown RangeError with no attempt_outcome_recorded;
 // - a rejection with a non-stringifiable value is a transport error at its own time, not a
 //   timer win at 3 s plus an unhandled rejection;
 // - a transport that ignores the abort and never settles (RK-04) cannot hold back TIMED_OUT,
 //   which depends only on the durable caller_timeout_recorded (BR-RUA-023);
-// - an outsized offending value is repeated bounded, so the outcome event stays storable.
+// - an outsized function error or executed version is kept bounded, so the outcome event stays
+//   under the 400 KB item limit and is stored (round 2: a 500,000-character function error made
+//   the outcome put fail with ValidationException).
+// The A-05.3 payload classes (non-finite numbers, inherited member names) are in
+// hostile-payload-attempt.test.ts.
 
 import assert from 'node:assert/strict';
 import { setImmediate as nextMacrotask } from 'node:timers/promises';
@@ -16,6 +20,7 @@ import { describe, it } from 'node:test';
 
 import type { JournalEvent } from '../../../src/event-journal/journal-event.ts';
 import { UNREPRESENTABLE_THROWN_NAME } from '../../../src/provider-client/provider-invocation-port.ts';
+import { RESPONSE_DIAGNOSTIC_MAX_CHARS } from '../../../src/provider-client/provider-response.ts';
 import {
   attemptInput,
   clientHarness,
@@ -52,16 +57,16 @@ async function attemptPending(harness: ClientHarness): Promise<{ readonly finish
 }
 
 describe('ProviderClient with a hostile transport', () => {
-  it('a payload nested 10,000 deep is FAILED/MALFORMED_RESPONSE with its outcome journaled', async () => {
+  it('a payload nested 100,000 deep is FAILED/MALFORMED_RESPONSE with its outcome journaled', async () => {
     const harness = clientHarness();
-    harness.invoker.resolveAfter(100n * MS, () => invokeResponse(deepPayload(10_000)));
+    harness.invoker.resolveAfter(100n * MS, () => invokeResponse(deepPayload(100_000)));
     const report = await settleAttempt(harness);
     assert.equal(report.outcome, 'FAILED');
     assert.equal(report.dispatch_state, 'DISPATCHED');
     assert.deepEqual(report.failure, {
       code: 'MALFORMED_RESPONSE',
       subject: 'BR-RUA-018',
-      detail: 'payload an array of length 1; expected a JSON object',
+      detail: `payload array ${'['.repeat(200)}…[truncated]; expected a JSON object`,
     });
     const events = journalEvents(harness);
     assert.deepEqual(recordTypes(events), ['attempt_registered', 'dispatch_started', 'attempt_outcome_recorded']);
@@ -85,7 +90,7 @@ describe('ProviderClient with a hostile transport', () => {
     assert.deepEqual(report.failure, {
       code: 'TRANSPORT_ERROR',
       subject: 'BR-RUA-053',
-      detail: `transport_error:${UNREPRESENTABLE_THROWN_NAME}: the thrown value has no readable name or string form; expected a provider response`,
+      detail: `transport_error:"${UNREPRESENTABLE_THROWN_NAME}": "the thrown value has no readable name or string form"; expected a provider response`,
     });
     assert.equal(report.dispatch_to_settlement_ns, '100000000');
     assert.deepEqual(recordTypes(journalEvents(harness)), [
@@ -168,16 +173,32 @@ describe('ProviderClient with a hostile transport', () => {
     assert.deepEqual(attempted, ['caller_timeout_recorded']);
   });
 
-  it('an outsized function error is repeated bounded in the journaled failure detail', async () => {
+  it('an outsized function error is kept bounded and the outcome event is stored', async () => {
     const harness = clientHarness();
     const huge = 'E'.repeat(500_000);
     harness.invoker.resolveAfter(SECOND, () => ({ ...invokeResponse(new Uint8Array()), function_error: huge }));
     const report = await settleAttempt(harness);
     const outcome = onlyEvent(journalEvents(harness), 'attempt_outcome_recorded');
     assert.equal(report.failure?.code, 'FUNCTION_ERROR');
+    assert.equal(report.outcome_event_id, outcome.event_id);
     assert.equal(
       outcome.outcome === 'FAILED' ? outcome.failure.detail : '',
-      `function error "${'E'.repeat(255)}... (500002 chars); expected none`,
+      `function error string "${'E'.repeat(199)}…[truncated]; expected none`,
+    );
+    assert.equal(outcome.function_error, `${'E'.repeat(RESPONSE_DIAGNOSTIC_MAX_CHARS)}…[truncated from 500000 chars]`);
+  });
+
+  it('an outsized executed version is kept bounded and the outcome event is stored', async () => {
+    const harness = clientHarness();
+    const huge = '9'.repeat(450_000);
+    harness.invoker.resolveAfter(SECOND, () => invokeResponse(new Uint8Array(), huge));
+    const report = await settleAttempt(harness);
+    const outcome = onlyEvent(journalEvents(harness), 'attempt_outcome_recorded');
+    assert.equal(report.failure?.code, 'VERSION_MISMATCH');
+    assert.equal(report.outcome_event_id, outcome.event_id);
+    assert.equal(
+      outcome.executed_version,
+      `${'9'.repeat(RESPONSE_DIAGNOSTIC_MAX_CHARS)}…[truncated from 450000 chars]`,
     );
   });
 });

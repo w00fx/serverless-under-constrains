@@ -113,7 +113,10 @@ describe('ProviderClient outcomes', () => {
     harness.invoker.resolveAfter(MS, (call) => succeededResponder({ ...call, attempt_id: CAUSE_EVENT_ID }));
     const report = await settleAttempt(harness);
     assert.equal(report.failure?.code, 'MALFORMED_RESPONSE');
-    assert.equal(report.failure.detail, `attempt_id "${CAUSE_EVENT_ID}"; expected the request's ${FIRST_ATTEMPT_ID}`);
+    assert.equal(
+      report.failure.detail,
+      `attempt_id string "${CAUSE_EVENT_ID}"; expected the request's ${FIRST_ATTEMPT_ID}`,
+    );
   });
 
   it('a port whose promise rejects is a TRANSPORT_ERROR, still DISPATCHED', async () => {
@@ -121,7 +124,10 @@ describe('ProviderClient outcomes', () => {
     harness.invoker.rejectAfter(5n * MS, Object.assign(new Error('socket hang up'), { name: 'TimeoutError' }));
     const report = await settleAttempt(harness);
     assert.equal(report.dispatch_state, 'DISPATCHED');
-    assert.equal(report.failure?.detail, 'transport_error:TimeoutError: socket hang up; expected a provider response');
+    assert.equal(
+      report.failure?.detail,
+      'transport_error:"TimeoutError": "socket hang up"; expected a provider response',
+    );
     assert.equal(report.dispatch_to_settlement_ns, '5000000');
   });
 
