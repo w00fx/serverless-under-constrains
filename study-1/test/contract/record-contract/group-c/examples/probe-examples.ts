@@ -4,7 +4,13 @@
 import type { ProbeUsabilityAssessment } from '../../../../../src/record-contract/records/group-c/probe_usability_assessment.ts';
 import type { TransportProbeResult } from '../../../../../src/record-contract/records/group-c/transport_probe_result.ts';
 import type { TransportProbeSummary } from '../../../../../src/record-contract/records/group-c/transport_probe_summary.ts';
-import { EXECUTION_MANIFEST_SHA256, PROBE_ID, at, digest, reason } from '../../group-b/support/record-builders.ts';
+import {
+  EXECUTION_MANIFEST_SHA256,
+  PROBE_ID,
+  at,
+  digest,
+  reason,
+} from '../../../../support/record-contract/record-builders.ts';
 import {
   PROBE_DIRECTORY,
   PROBE_PATHS,

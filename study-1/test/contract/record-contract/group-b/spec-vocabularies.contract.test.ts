@@ -11,10 +11,10 @@ import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
-import { assertRejected, violationsOf } from './support/group-b-validation.ts';
-import { pathsMatching, pointerOf, withValueAt } from './support/json-paths.ts';
-import { toJson } from './support/record-builders.ts';
-import { resolvePointer, schemaOf } from './support/schema-reading.ts';
+import { assertRejected, violationsOf } from '../../../support/record-contract/group-b-validation.ts';
+import { pathsMatching, pointerOf, resolvePointer, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
+import { schemaOf } from './support/schema-reading.ts';
 
 // BR-RUA-021: "Attempt outcomes: SUCCEEDED | REJECTED | TIMED_OUT | FAILED".
 const SPEC_ATTEMPT_OUTCOMES = ['SUCCEEDED', 'REJECTED', 'TIMED_OUT', 'FAILED'];

@@ -12,10 +12,17 @@ import { isUuid4 } from '../../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import * as groupC from '../../../../src/record-contract/records/group-c/vocabulary.ts';
 import { isUtcMillis } from '../../../../src/record-contract/timestamps.ts';
-import { assertAccepted, assertRejected } from '../group-b/support/group-b-validation.ts';
-import { leavesOf, objectPathsOf, pointerOf, textOf, withMember, withValueAt } from '../group-b/support/json-paths.ts';
-import type { JsonLeaf, JsonPath } from '../group-b/support/json-paths.ts';
-import { toJson } from '../group-b/support/record-builders.ts';
+import { assertAccepted, assertRejected } from '../../../support/record-contract/group-b-validation.ts';
+import {
+  leavesOf,
+  objectPathsOf,
+  pointerOf,
+  textOf,
+  withMember,
+  withValueAt,
+} from '../../../support/record-contract/json-paths.ts';
+import type { JsonLeaf, JsonPath } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 import { GROUP_C_EXAMPLES } from './examples/group-c-examples.ts';
 import { NULLABLE_FREE_FORM_MEMBERS, NULLABLE_MEMBERS, isFreeForm, isNullable, isProse } from './support/json-scope.ts';
 import type { GroupCExample } from './support/record-example.ts';

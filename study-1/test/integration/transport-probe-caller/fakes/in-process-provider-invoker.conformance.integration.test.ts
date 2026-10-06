@@ -26,7 +26,7 @@ import {
   providerHarness,
   seedRunTrial,
   validCall,
-} from '../../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
 
 const QUALIFIER = '5';
 const EXPECTED = { qualifier: QUALIFIER, attempt_id: ATTEMPT_ID, provider_request_id: PROVIDER_REQUEST_ID };

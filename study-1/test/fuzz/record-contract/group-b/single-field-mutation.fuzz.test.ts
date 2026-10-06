@@ -3,6 +3,8 @@
 // kind, or adds an unknown member (a fresh or an inherited `Object.prototype` name) to any
 // object of any example. Strings and booleans are never swapped for each other: the tri-state
 // settlement fields legitimately admit both.
+// The property lives under test/fuzz so `npm run test:fuzz` and `fuzz:campaign` reach it (Owner
+// amendment A-11); its examples and helpers stay with the group's contract tests.
 // FC_RUNS sets the budget and FC_SEED replays a failure (test/support/kernel/fuzz-parameters.ts).
 
 import assert from 'node:assert/strict';
@@ -12,11 +14,17 @@ import fc from 'fast-check';
 
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
-import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
-import { violationsOf } from './support/group-b-validation.ts';
-import { INHERITED_MEMBER_NAMES, leavesOf, objectPathsOf, pointerOf, withValueAt } from './support/json-paths.ts';
-import type { JsonPath } from './support/json-paths.ts';
-import { toJson } from './support/record-builders.ts';
+import { GROUP_B_EXAMPLES } from '../../../contract/record-contract/group-b/examples/group-b-examples.ts';
+import { violationsOf } from '../../../support/record-contract/group-b-validation.ts';
+import {
+  INHERITED_MEMBER_NAMES,
+  leavesOf,
+  objectPathsOf,
+  pointerOf,
+  withValueAt,
+} from '../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 
 interface MutationSite {
   readonly label: string;

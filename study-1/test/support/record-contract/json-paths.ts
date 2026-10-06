@@ -1,9 +1,10 @@
-// Path utilities over parsed JSON for single-field mutations: list every leaf, walk a path or a
-// `*` pattern, and copy a document with one value replaced, removed or added. Every group-B test
-// walks JSON through these, so path semantics live in one place.
+// Path utilities over parsed JSON for single-field mutations: list every leaf, walk a path, a
+// `*` pattern or a JSON Pointer, and copy a document with one value replaced, removed or added.
+// The record-contract tests of groups A, B and C walk JSON through these, so path semantics live
+// in one place (Owner amendment A-11: test helpers shared by the groups, owned by WP-00).
 
-import { isJsonArray, isJsonObject } from '../../../../../src/record-contract/json-value.ts';
-import type { JsonObject, JsonValue } from '../../../../../src/record-contract/primitives.ts';
+import { isJsonArray, isJsonObject } from '../../../src/record-contract/json-value.ts';
+import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 
 export type JsonPath = readonly (string | number)[];
 
@@ -126,6 +127,16 @@ export function childAt(node: JsonValue | undefined, segment: string | number): 
  */
 export function valueAt(root: JsonValue, path: readonly (string | number)[]): JsonValue | undefined {
   return path.reduce<JsonValue | undefined>((node, segment) => childAt(node, segment), root);
+}
+
+/**
+ * The value at a JSON Pointer (no `~` escapes), or undefined when the pointer leads nowhere.
+ *
+ * @example
+ * resolvePointer({ a: [{ b: 1 }] }, '/a/0/b'); // 1
+ */
+export function resolvePointer(root: JsonValue, pointer: string): JsonValue | undefined {
+  return valueAt(root, pointer.split('/').slice(1));
 }
 
 /**

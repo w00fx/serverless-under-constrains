@@ -27,6 +27,7 @@ import type {
   Sha256Hex,
   Uuid4,
 } from '../record-contract/primitives.ts';
+import { NONEMPTY_TRIMMED_PATTERN } from '../record-contract/primitives.ts';
 import { isUtcMillis } from '../record-contract/timestamps.ts';
 import type { ConfiguredTrial, ControllerConfigView } from './controller-control-items.ts';
 import { ownMembers } from './own-members.ts';
@@ -58,8 +59,6 @@ const IDENTITY_FIELDS = ['run_id', 'variant_validation_id', 'transport_probe_id'
 const RECORD_TYPE = 'caller_timeout_recorded';
 const UUID_SHAPE = 'a lowercase RFC 4122 version-4 UUID';
 const UTC_SHAPE = 'a UTC timestamp YYYY-MM-DDTHH:mm:ss.SSSZ';
-// The NONEMPTY_TRIMMED `_defs` pattern; Ajv compiles schema patterns with the `u` flag.
-const NONEMPTY_TRIMMED = /^\S(.*\S)?$/u;
 
 type FieldCheck = readonly [field: string, holds: (value: JsonValue | undefined) => boolean, shape: string];
 
@@ -231,7 +230,7 @@ function isCausationList(value: JsonValue | undefined): boolean {
 }
 
 function isNonEmptyTrimmed(value: JsonValue | undefined): boolean {
-  return typeof value === 'string' && NONEMPTY_TRIMMED.test(value);
+  return typeof value === 'string' && NONEMPTY_TRIMMED_PATTERN.test(value);
 }
 
 function sourceProblem(image: JsonObject, source: EventSource): string | undefined {

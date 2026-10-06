@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_scope_snapshot.schema.json",
   "title": "transport_scope_snapshot (BR-RUA-028)",
-  "description": "The frozen qualification scope: the policy digest, the resolved entry points, every resolved source file with its exact digest, the transitive production dependency closure with resolved versions, the lockfile digest, the normalized configuration projections (provider and controller; each selected resource as a list of policy property paths with the canonical JSON text of their values), the runtime property values (scalars named by the committed policy, which owns their meaning; the snapshot builder checks each one against it), the timing values and the provider warm-up policy (addendum §2). Source files are listed once per path in strictly ascending code-point order; that per-path uniqueness and order are checked in code by the snapshot builder (it derives the list from a set of paths), not by this schema, which rejects only byte-identical duplicate entries. The snapshot carries no execution identity and no timestamp, so a recomputation over unchanged committed source is byte-identical and drift is a structural difference.",
+  "description": "The frozen qualification scope: the policy digest, the resolved entry points, every resolved source file with its exact digest, the transitive production dependency closure with resolved versions, the digest of the closure's lockfile entries, the normalized configuration projections (provider and controller; each selected resource as a list of policy property paths with the canonical JSON text of their values), the runtime property values (scalars named by the committed policy, which owns their meaning; the snapshot builder checks each one against it), the timing values and the provider warm-up policy (addendum §2). Source files are listed once per path in strictly ascending code-point order; that per-path uniqueness and order are checked in code by the snapshot builder (it derives the list from a set of paths), not by this schema, which rejects only byte-identical duplicate entries. The snapshot carries no execution identity and no timestamp, so a recomputation over unchanged committed source is byte-identical and drift is a structural difference.",
   "type": "object",
   "properties": {
     "schema_version": { "const": 1 },
@@ -42,7 +42,10 @@
       "minItems": 1,
       "uniqueItems": true
     },
-    "lockfile_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "lockfile_sha256": {
+      "description": "SHA-256 (lowercase hex) of the UTF-8 bytes of the canonical JSON text (BR-RUA-034 canonical form) of one object: one member per package of the transitive production dependency closure, named by its package-lock.json install path (for example node_modules/@scope/name or node_modules/a/node_modules/b) and holding that lockfile entry's version, plus its resolved and integrity values when the entry records them (omitted otherwise). It is not a digest of the package-lock.json bytes: lockfileVersion and the entries of packages outside the closure are not digested, so a dependency change outside the closure is no drift, while a re-published tarball under the same version is.",
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
     "configuration_projections": {
       "type": "array",
       "items": {

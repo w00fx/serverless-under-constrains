@@ -29,7 +29,7 @@ import {
   TRIAL_ID,
   TRIAL_MANIFEST_SHA,
   TRIAL_PK,
-} from '../../refund-provider/support/provider-fixtures.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
 
 export {
   ATTEMPT_ID,
@@ -50,7 +50,7 @@ export {
   armedTreatmentItem,
   probeConfigItem,
   trialConfigItem,
-} from '../../refund-provider/support/provider-fixtures.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
 
 export const CALLER_EVENT_ID = 'cafe0000-0000-4000-8000-000000000001' as Uuid4;
 export const OTHER_CALLER_EVENT_ID = 'cafe0000-0000-4000-8000-000000000002' as Uuid4;

@@ -11,10 +11,16 @@ import { describe, it } from 'node:test';
 import { parseJsonDocument } from '../../../../src/record-contract/parsing.ts';
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
-import { assertRejected, violationsOf } from './support/group-b-validation.ts';
-import { leavesOf, objectAt, objectPathsOf, pointerOf, withValueAt } from './support/json-paths.ts';
-import type { JsonPath } from './support/json-paths.ts';
-import { toJson } from './support/record-builders.ts';
+import { assertRejected, violationsOf } from '../../../support/record-contract/group-b-validation.ts';
+import {
+  leavesOf,
+  objectAt,
+  objectPathsOf,
+  pointerOf,
+  withValueAt,
+} from '../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 
 const EXAMPLES = GROUP_B_EXAMPLES.map((example) => ({ label: example.label, json: toJson(example.record) }));
 

@@ -17,7 +17,7 @@ import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
-import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import type { ProviderHarness } from '../../support/refund-provider/provider-fixtures.ts';
 import {
   armedTreatmentItem,
   field,
@@ -36,7 +36,7 @@ import {
   validCall,
   validProbeCall,
   WARMUP_ID,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 import { expectProviderFault } from './support/fault-assertions.ts';
 
 const DEEP = 100_000;

@@ -18,8 +18,8 @@ import { RECORD_TYPE_GROUPS } from '../../../../src/record-contract/record-types
 import { PREFLIGHT_VALUE_MAX_DEPTH } from '../../../../src/record-contract/records/group-a/preflight_check_recorded.ts';
 import { DEFAULT_SCHEMA_ROOT } from '../../../../src/record-contract/schema-registry.ts';
 import type { RecordValidation } from '../../../../src/record-contract/schema-registry.ts';
-import { pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
-import type { JsonPath } from '../group-b/support/json-paths.ts';
+import { pointerOf, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../support/record-contract/json-paths.ts';
 import { failedPreflightCheck, sourceProvenance, transportScopeSnapshot } from './support/admission-examples.ts';
 import { CANONICAL_EXAMPLES, allValidExamples } from './support/canonical-examples.ts';
 import { runExecutionManifest } from './support/manifest-examples.ts';

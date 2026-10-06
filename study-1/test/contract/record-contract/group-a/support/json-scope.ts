@@ -12,7 +12,7 @@
 //   path format admits spaces).
 // This is the single list of exemptions; every other leaf and object is governed.
 
-import type { JsonPath } from '../../group-b/support/json-paths.ts';
+import type { JsonPath } from '../../../../support/record-contract/json-paths.ts';
 
 /** Top-level members whose whole value is free record JSON. */
 const FREE_VALUE_MEMBERS: readonly string[] = ['expected', 'observed'];

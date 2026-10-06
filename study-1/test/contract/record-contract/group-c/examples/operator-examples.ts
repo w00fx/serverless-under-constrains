@@ -3,7 +3,7 @@
 
 import type { CliResult } from '../../../../../src/record-contract/records/group-c/cli_result.ts';
 import type { OracleRevisionCheck } from '../../../../../src/record-contract/records/group-c/oracle_revision_check.ts';
-import { RUN_ID, at, digest, reason, uuid } from '../../group-b/support/record-builders.ts';
+import { RUN_ID, at, digest, reason, uuid } from '../../../../support/record-contract/record-builders.ts';
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';
 

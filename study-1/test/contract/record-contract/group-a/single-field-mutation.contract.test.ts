@@ -9,29 +9,29 @@
 // bound rules at every depth. The open members the schemas deliberately accept, free text
 // included, are listed once, in support/json-scope.ts.
 // Each mutation kind runs twice: an exhaustive sweep with one fixed value per JSON kind over
-// every site, then a fast-check property with generated values. FC_RUNS sets the property
-// budget and FC_SEED replays a failure (test/support/kernel/fuzz-parameters.ts).
+// every site (here), then a fast-check property with generated values
+// (test/fuzz/record-contract/group-a/single-field-mutation.fuzz.test.ts, Owner amendment A-11).
+// Both draw their sites and kind rules from support/single-field-mutations.ts.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import fc from 'fast-check';
-
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
-import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
-import { pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
-import { allValidExamples } from './support/canonical-examples.ts';
-import { isFreeText } from './support/json-scope.ts';
-import { governedLeafSites, governedObjectSites } from './support/mutation-sites.ts';
+import { pointerOf, withValueAt } from '../../../support/record-contract/json-paths.ts';
 import type { MutationSite } from './support/mutation-sites.ts';
+import {
+  assertRejectedMutation,
+  EXAMPLES,
+  LEAF_SITES,
+  OBJECT_SITES,
+  otherKinds,
+  sameKindBreaks,
+} from './support/single-field-mutations.ts';
+import type { JsonKind } from './support/single-field-mutations.ts';
 import { catalogueValidator, withoutField } from './support/validation-assertions.ts';
-
-type JsonKind = 'null' | 'boolean' | 'number' | 'string' | 'array' | 'object';
-
-const EXAMPLES = allValidExamples();
 
 function readRequiredMembers(): ReadonlyMap<string, readonly string[]> {
   const required = new Map<string, readonly string[]>();
@@ -57,22 +57,9 @@ function requiredOf(record: JsonObject, label: string): readonly string[] {
   return required;
 }
 
-const LEAF_SITES = governedLeafSites(EXAMPLES);
-const OBJECT_SITES = governedObjectSites(EXAMPLES);
-
 const REMOVAL_SITES: readonly MutationSite[] = EXAMPLES.flatMap(({ name, record }) =>
   requiredOf(record, name).map((member) => ({ label: name, record, path: [member], value: null })),
 );
-
-function kindOf(value: JsonValue): JsonKind {
-  if (value === null) {
-    return 'null';
-  }
-  if (Array.isArray(value)) {
-    return 'array';
-  }
-  return typeof value as 'boolean' | 'number' | 'string' | 'object';
-}
 
 // One representative per JSON kind for the exhaustive sweep. A meaningful null (the probe
 // manifest's `qualification`) is never replaced by a string, which could be a valid enum value
@@ -85,70 +72,6 @@ const KIND_REPRESENTATIVES: Readonly<Record<JsonKind, JsonValue>> = {
   array: [1],
   object: { x_unknown: 1 },
 };
-
-const UNKNOWN_OBJECT = fc.dictionary(
-  fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`),
-  fc.integer(),
-  { maxKeys: 2 },
-);
-const ARBITRARY_BY_KIND: Readonly<Record<JsonKind, fc.Arbitrary<JsonValue>>> = {
-  null: fc.constant(null),
-  boolean: fc.boolean(),
-  number: fc.oneof(fc.integer(), fc.double({ noNaN: true, noDefaultInfinity: true })),
-  string: fc.string({ maxLength: 12 }),
-  array: fc.array(fc.integer(), { maxLength: 2 }),
-  object: UNKNOWN_OBJECT,
-};
-
-function otherKinds(value: JsonValue): readonly JsonKind[] {
-  const own = kindOf(value);
-  const kinds: readonly JsonKind[] = ['null', 'boolean', 'number', 'string', 'array', 'object'];
-  return kinds.filter((kind) => kind !== own && !(own === 'null' && kind === 'string'));
-}
-
-// Same-kind values that break the rule of every governed leaf of that kind: no governed group A
-// number admits a negative, fractional or unsafe value, no governed boolean admits the other
-// value, and no governed string except free text admits surrounding whitespace.
-function sameKindBreaks(site: MutationSite): readonly JsonValue[] {
-  const { value } = site;
-  if (typeof value === 'number') {
-    return [-1, 0.5, 2 ** 53];
-  }
-  if (typeof value === 'boolean') {
-    return [!value];
-  }
-  return typeof value === 'string' && !isFreeText(site.path) ? [` ${value}`, `${value}\n`] : [];
-}
-
-const WHITESPACE = fc.constantFrom(' ', '\t', '\n', '\r');
-const BROKEN_NUMBER: fc.Arbitrary<JsonValue> = fc.oneof(
-  fc.integer({ min: Number.MIN_SAFE_INTEGER, max: -1 }),
-  fc.integer().map((whole) => whole + 0.5),
-  fc.double({ min: 2 ** 53, max: 1e300, noNaN: true }),
-);
-
-function sameKindArbitrary(site: MutationSite): fc.Arbitrary<JsonValue> {
-  const { value } = site;
-  if (typeof value === 'number') {
-    return BROKEN_NUMBER;
-  }
-  if (typeof value === 'string') {
-    return fc
-      .tuple(WHITESPACE, fc.boolean())
-      .map(([space, before]) => (before ? `${space}${value}` : `${value}${space}`));
-  }
-  return fc.constant(!value);
-}
-
-// No group A record declares a member that starts with `x_`, so the name is always unknown.
-const UNKNOWN_MEMBER_NAME = fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`);
-
-// The failure message is built only on failure: serializing every record would dominate.
-function assertRejectedMutation(mutated: JsonValue, describeMutation: () => string): void {
-  if (catalogueValidator.validate(mutated).valid) {
-    assert.fail(`${describeMutation()} was accepted: ${JSON.stringify(mutated)}`);
-  }
-}
 
 describe('record validators (group A)', () => {
   it('generates over every governed leaf and object of the 19 record types', () => {
@@ -216,53 +139,5 @@ describe('record validators (group A)', () => {
         () => `${site.label} without ${pointerOf(site.path)}`,
       );
     }
-  });
-
-  it('a valid generated record mutated in one field is rejected', () => {
-    const leafMutation = fc
-      .constantFrom(...LEAF_SITES)
-      .chain((site) =>
-        fc
-          .constantFrom(...otherKinds(site.value))
-          .chain((kind) => ARBITRARY_BY_KIND[kind].map((replacement) => ({ site, replacement }))),
-      );
-    fc.assert(
-      fc.property(leafMutation, ({ site, replacement }) => {
-        assertRejectedMutation(
-          withValueAt(site.record, site.path, replacement),
-          () => `${site.label}${pointerOf(site.path)} = ${JSON.stringify(replacement)}`,
-        );
-      }),
-      fuzzParameters(),
-    );
-
-    const sameKindSites = LEAF_SITES.filter((site) => sameKindBreaks(site).length > 0);
-    const sameKindMutation = fc
-      .constantFrom(...sameKindSites)
-      .chain((site) => sameKindArbitrary(site).map((replacement) => ({ site, replacement })));
-    fc.assert(
-      fc.property(sameKindMutation, ({ site, replacement }) => {
-        assertRejectedMutation(
-          withValueAt(site.record, site.path, replacement),
-          () => `${site.label}${pointerOf(site.path)} = ${JSON.stringify(replacement)}`,
-        );
-      }),
-      fuzzParameters(),
-    );
-
-    const extraMember = fc.record({
-      site: fc.constantFrom(...OBJECT_SITES),
-      name: UNKNOWN_MEMBER_NAME,
-      member: fc.jsonValue(),
-    });
-    fc.assert(
-      fc.property(extraMember, ({ site, name, member }) => {
-        assertRejectedMutation(
-          withValueAt(site.record, [...site.path, name], member as JsonValue),
-          () => `${site.label}${pointerOf(site.path)}/${name}`,
-        );
-      }),
-      fuzzParameters(),
-    );
   });
 });

@@ -14,9 +14,9 @@ import {
   assertMissing,
   assertRejected,
   violationsOf,
-} from './support/group-b-validation.ts';
-import { objectAt, withMember, withValueAt } from './support/json-paths.ts';
-import { RUN_ID, toJson } from './support/record-builders.ts';
+} from '../../../support/record-contract/group-b-validation.ts';
+import { objectAt, withMember, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import { RUN_ID, toJson } from '../../../support/record-contract/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
   return toJson(record);

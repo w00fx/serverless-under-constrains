@@ -7,7 +7,7 @@ import {
   PAYMENT_ID,
   PROBE_ID,
   REFUND_REQUEST_ID,
-} from '../../refund-provider/support/provider-fixtures.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
 
 export {
   MANIFEST_SHA,
@@ -18,7 +18,7 @@ export {
   PROBE_PK,
   REFUND_REQUEST_ID,
   RUN,
-} from '../../refund-provider/support/provider-fixtures.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
 
 /** A valid `probe_workload_request` for PROBE. */
 export function workloadRequest(overrides: JsonObject = {}): JsonObject {

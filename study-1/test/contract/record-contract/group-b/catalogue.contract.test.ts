@@ -17,9 +17,10 @@ import * as vocabulary from '../../../../src/record-contract/records/group-b/voc
 import { findSchemaConventionViolations } from '../../../../src/record-contract/schema-conventions.ts';
 import { listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
 import { CANONICAL_EXAMPLES, GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
-import { toJson } from './support/record-builders.ts';
-import { groupBValidator } from './support/group-b-validation.ts';
-import { resolvePointer, schemaOf } from './support/schema-reading.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
+import { groupBValidator } from '../../../support/record-contract/group-b-validation.ts';
+import { resolvePointer } from '../../../support/record-contract/json-paths.ts';
+import { schemaOf } from './support/schema-reading.ts';
 
 const GROUP_B: readonly GroupBRecordType[] = RECORD_TYPE_GROUPS['group-b'];
 const RECORD_MODULE_DIRECTORY = fileURLToPath(

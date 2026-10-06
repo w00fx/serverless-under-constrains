@@ -7,9 +7,14 @@ import { describe, it } from 'node:test';
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import * as runner from './examples/runner-examples.ts';
-import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { withMember, withValueAt } from './support/json-paths.ts';
-import { at, digest, toJson } from './support/record-builders.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertMissing,
+  assertRejected,
+} from '../../../support/record-contract/group-b-validation.ts';
+import { withMember, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import { at, digest, toJson } from '../../../support/record-contract/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
   return toJson(record);

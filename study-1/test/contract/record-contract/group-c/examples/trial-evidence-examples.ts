@@ -15,7 +15,7 @@ import {
   at,
   ns,
   uuid,
-} from '../../group-b/support/record-builders.ts';
+} from '../../../../support/record-contract/record-builders.ts';
 import {
   EXECUTION_MANIFEST_PATH,
   PROBE_PATHS,

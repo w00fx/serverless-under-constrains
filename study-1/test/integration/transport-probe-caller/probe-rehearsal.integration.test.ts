@@ -13,7 +13,7 @@ import { describe, it } from 'node:test';
 import type { JournalEvent } from '../../../src/event-journal/journal-event.ts';
 import { parseJsonl } from '../../../src/record-contract/parsing.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
-import { PROBE_PK } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import { PROBE_PK } from '../../support/refund-provider/provider-fixtures.ts';
 import {
   collectProbeEvidence,
   evidenceViolations,

@@ -19,7 +19,7 @@ import {
   at,
   digest,
   uuid,
-} from '../../group-b/support/record-builders.ts';
+} from '../../../../support/record-contract/record-builders.ts';
 import { EXECUTION_MANIFEST_PATH, codedReason, indexEntry } from '../support/group-c-builders.ts';
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';

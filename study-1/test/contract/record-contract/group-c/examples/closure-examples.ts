@@ -22,7 +22,7 @@ import {
   digest,
   reason,
   uuid,
-} from '../../group-b/support/record-builders.ts';
+} from '../../../../support/record-contract/record-builders.ts';
 import {
   EXECUTION_MANIFEST_PATH,
   RUNNER_JOURNAL_PATH,

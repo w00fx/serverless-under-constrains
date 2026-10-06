@@ -3,8 +3,8 @@
 
 import { isJsonArray, isJsonObject } from '../../../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../../../src/record-contract/primitives.ts';
-import { withMember, withValueAt } from '../../group-b/support/json-paths.ts';
-import type { JsonPath } from '../../group-b/support/json-paths.ts';
+import { withMember, withValueAt } from '../../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../../support/record-contract/json-paths.ts';
 
 /**
  * Copies a record with each listed top-level member set, or removed when its value is undefined.

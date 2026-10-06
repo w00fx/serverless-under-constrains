@@ -1,6 +1,8 @@
 // The gate entry points as processes (design §12.1, §15.1-§15.4): exit codes and messages of
 // run-suite, mutation-gate, generate-quality-config, check-module-boundaries and fuzz-campaign,
-// each run in a scratch study tree so the real repository is never touched.
+// each run in a scratch study tree so the real repository is never touched. They spawn child
+// processes and write a real filesystem, so they are integration tests (Owner amendment A-11:
+// test/integration/tools/ is WP-00's).
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

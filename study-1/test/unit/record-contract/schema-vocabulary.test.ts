@@ -51,6 +51,16 @@ describe('schema vocabulary', () => {
     assert.equal(isPackageRelativePath('./a'), false);
   });
 
+  it('refuses package-relative paths with a NUL character or whitespace at either end', () => {
+    const check = strictAjv().compile({ type: 'string', format: 'package-relative-path' });
+    for (const bad of ['a\u0000b', 'a/b.json\u0000', ' a/b.json', 'a/b.json ', '\ta', 'a\r\n', '\u2028a', 'a\u00a0']) {
+      assert.equal(check(bad), false, JSON.stringify(bad));
+      assert.equal(isPackageRelativePath(bad), false, JSON.stringify(bad));
+    }
+    assert.equal(check('ledger/ledger snapshot.json'), true);
+    assert.equal(isPackageRelativePath('ledger/ledger snapshot.json'), true);
+  });
+
   it('enforces strictly ascending string arrays when enabled', () => {
     const ajv = strictAjv();
     const check = ajv.compile({ type: 'array', [ASCENDING_UNIQUE_KEYWORD]: true });

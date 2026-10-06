@@ -9,9 +9,20 @@ import { ATTEMPT_FAILURE_CODES, DISPATCH_STATES } from '../../../../src/record-c
 import type { AttemptFailureCode, DispatchState } from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import * as caller from './examples/caller-examples.ts';
-import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { objectAt, textOf, withMember, withValueAt, withoutMembers } from './support/json-paths.ts';
-import { ATTEMPT_CORRELATION, toJson, uuid } from './support/record-builders.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertMissing,
+  assertRejected,
+} from '../../../support/record-contract/group-b-validation.ts';
+import {
+  objectAt,
+  textOf,
+  withMember,
+  withValueAt,
+  withoutMembers,
+} from '../../../support/record-contract/json-paths.ts';
+import { ATTEMPT_CORRELATION, toJson, uuid } from '../../../support/record-contract/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
   return toJson(record);

@@ -33,7 +33,7 @@ import {
   TRIAL_PK,
   trialConfigItem,
   VALIDATION,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 const CALL_ID = '12345678-0000-4000-8000-000000000001' as Uuid4;
 

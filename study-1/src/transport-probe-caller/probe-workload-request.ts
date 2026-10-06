@@ -9,6 +9,7 @@
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
 import { boundedJsonText, describeJson, isJsonObject } from '../record-contract/json-value.ts';
+import { NONEMPTY_TRIMMED_PATTERN } from '../record-contract/primitives.ts';
 import type { ExecutionIdentity, JsonObject, JsonValue, Result } from '../record-contract/primitives.ts';
 import type { ProbeWorkloadRequest } from '../record-contract/records/group-a/probe_workload_request.ts';
 
@@ -23,8 +24,6 @@ const FIELDS = [
   'amount_minor',
   'currency',
 ] as const;
-// The `_defs` `nonempty_trimmed` pattern; Ajv compiles schema patterns with the `u` flag.
-const NONEMPTY_TRIMMED_PATTERN = /^\S(.*\S)?$/u;
 
 /**
  * Reads the invocation payload as this probe's workload request, or names the first violation.

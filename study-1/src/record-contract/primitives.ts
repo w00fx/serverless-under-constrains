@@ -66,6 +66,17 @@ export const RULE_OUTCOMES = ['pass', 'fail', 'indeterminate', 'not_applicable']
 export type RuleOutcome = (typeof RULE_OUTCOMES)[number];
 
 /**
+ * `_defs.schema.json#/$defs/nonempty_trimmed` (BR-RUA-033 "nonempty after whitespace trimming"),
+ * with the `u` flag Ajv compiles schema patterns with: at least one character, no whitespace at
+ * either end and no line terminator inside. The one definition every hand-written guard uses.
+ *
+ * @example
+ * NONEMPTY_TRIMMED_PATTERN.test('provider-1'); // true
+ * NONEMPTY_TRIMMED_PATTERN.test(' provider-1'); // false
+ */
+export const NONEMPTY_TRIMMED_PATTERN = /^\S(.*\S)?$/u;
+
+/**
  * A machine-readable reason. `code` is UPPER_SNAKE and closed per producer; `detail`
  * names the offending value and the expected shape (clean-code rule).
  */

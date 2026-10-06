@@ -1,11 +1,12 @@
-// Assertions over the real catalogue validator: the committed group-B schemas and the shared
-// `$defs`, read from disk by the production filesystem adapter (the boundary under test).
+// Assertions over the real catalogue validator: the committed record schemas and the shared
+// `$defs`, read from disk by the production filesystem adapter (the boundary under test). Written
+// for group B and shared with group C (Owner amendment A-11: owned by WP-00).
 
 import assert from 'node:assert/strict';
 
-import type { JsonValue } from '../../../../../src/record-contract/primitives.ts';
-import { createRecordValidator } from '../../../../../src/record-contract/schema-registry.ts';
-import type { RecordValidation } from '../../../../../src/record-contract/schema-registry.ts';
+import type { JsonValue } from '../../../src/record-contract/primitives.ts';
+import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
+import type { RecordValidation } from '../../../src/record-contract/schema-registry.ts';
 
 export const groupBValidator = createRecordValidator();
 

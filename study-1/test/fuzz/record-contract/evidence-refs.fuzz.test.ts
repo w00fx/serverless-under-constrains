@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import fc from 'fast-check';
 
 import {
+  classifyArtifactPath,
   compareEvidenceRefs,
   sortEvidenceRefs,
   validateEvidenceRefList,
@@ -14,6 +15,7 @@ import {
 import type { EvidenceRef, EvidenceRefViolation } from '../../../src/record-contract/evidence-refs.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
+import { isPackageRelativePath } from '../../../src/record-contract/schema-vocabulary.ts';
 import { deepTowerArbitrary } from '../../support/kernel/deep-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
@@ -95,6 +97,29 @@ describe('AC-RUA-048 evidence reference fuzz', () => {
           violationsOf({ evidence_refs: asJson([{ ...ref, artifact_path: corrupt(ref.artifact_path) }]) }),
           [violation],
         );
+      }),
+      fuzzParameters(),
+    );
+  });
+
+  it('flags a NUL character anywhere and whitespace at either end of a path (M0 chores)', () => {
+    // ECMAScript WhiteSpace and LineTerminator code points, ASCII and Unicode.
+    const whitespace = fc.constantFrom(' ', '\t', '\n', '\r', '\v', '\f', '\u00a0', '\u2028', '\u3000', '\ufeff');
+    const corrupted = fc.oneof(
+      fc
+        .tuple(artifactPath, fc.nat())
+        .map(([path, at]) => `${path.slice(0, at % (path.length + 1))}\u0000${path.slice(at % (path.length + 1))}`),
+      fc.tuple(artifactPath, whitespace).map(([path, space]) => `${space}${path}`),
+      fc.tuple(artifactPath, whitespace).map(([path, space]) => `${path}${space}`),
+    );
+    fc.assert(
+      fc.property(wellFormedRef(false), corrupted, (ref, path) => {
+        assert.equal(isPackageRelativePath(ref.artifact_path), true, ref.artifact_path);
+        assert.equal(classifyArtifactPath(path), 'NON_NORMALIZED_PATH', JSON.stringify(path));
+        assert.equal(isPackageRelativePath(path), false, JSON.stringify(path));
+        assert.deepEqual(violationsOf({ evidence_refs: asJson([{ ...ref, artifact_path: path }]) }), [
+          'NON_NORMALIZED_PATH',
+        ]);
       }),
       fuzzParameters(),
     );

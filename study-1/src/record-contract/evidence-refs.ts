@@ -71,6 +71,11 @@ const JSON_POINTER_PATTERN = /^(\/([^/~]|~[01])*)*$/;
 // A drive root such as `C:/` or `C:\` is absolute on Windows. `c:relative` or `a:b.json` is a
 // legal relative POSIX name, so only the rooted form is rejected (WP-00 review round 1).
 const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:[/\\]/;
+// A NUL character or whitespace at either end is never part of a normalized package path: a NUL
+// cuts the name short at the filesystem call, and edge whitespace gives one artifact two
+// spellings (M0 chores, kernel defect). `\s` with the `u` flag is the ECMAScript WhiteSpace and
+// LineTerminator set, the same set the catalogue's nonempty-trimmed pattern refuses at the edges.
+const EDGE_WHITESPACE_PATTERN = /^\s|\s$/u;
 
 /**
  * Classifies a path against BR-RUA-035; `undefined` means it is a normalized
@@ -79,6 +84,7 @@ const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:[/\\]/;
  * @example
  * classifyArtifactPath('/tmp/x.json'); // 'ABSOLUTE_PATH'
  * classifyArtifactPath('trials/t/../x'); // 'PARENT_TRAVERSAL'
+ * classifyArtifactPath(' trials/t/x.json'); // 'NON_NORMALIZED_PATH'
  * classifyArtifactPath('trials/t/ledger/ledger-snapshot.json'); // undefined
  */
 export function classifyArtifactPath(path: string): EvidenceRefViolation | undefined {
@@ -89,10 +95,19 @@ export function classifyArtifactPath(path: string): EvidenceRefViolation | undef
   if (segments.includes('..')) {
     return 'PARENT_TRAVERSAL';
   }
-  if (path.includes('\\') || segments.some((segment) => segment === '' || segment === '.')) {
+  if (isNonNormalized(path, segments)) {
     return 'NON_NORMALIZED_PATH';
   }
   return undefined;
+}
+
+function isNonNormalized(path: string, segments: readonly string[]): boolean {
+  return (
+    path.includes('\\') ||
+    path.includes('\0') ||
+    EDGE_WHITESPACE_PATTERN.test(path) ||
+    segments.some((segment) => segment === '' || segment === '.')
+  );
 }
 
 /**

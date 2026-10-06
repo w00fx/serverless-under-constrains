@@ -1,15 +1,16 @@
-// Typed builders for group-B canonical examples. Examples are written as their TypeScript
-// record types and reach the validator only through the serialization kernel
+// Typed builders for group-B canonical examples, shared with the group-C examples and the
+// catalogue-wide contract tests (Owner amendment A-11: owned by WP-00). Examples are written as
+// their TypeScript record types and reach the validator only through the serialization kernel
 // (`serializeRecordFile` then `parseJsonDocument`), so every contract case also proves that a
 // typed record serializes into schema-valid bytes (BR-RUA-033).
 
-import { serializeRecordFile } from '../../../../../src/record-contract/canonical-json.ts';
-import { isDecimalString } from '../../../../../src/record-contract/decimal.ts';
-import { sha256Hex } from '../../../../../src/record-contract/digests.ts';
-import type { EventEnvelope, ExecutionIdentityFields } from '../../../../../src/record-contract/envelope.ts';
-import { isUuid4 } from '../../../../../src/record-contract/identifiers.ts';
-import { isJsonObject } from '../../../../../src/record-contract/json-value.ts';
-import { parseJsonDocument } from '../../../../../src/record-contract/parsing.ts';
+import { serializeRecordFile } from '../../../src/record-contract/canonical-json.ts';
+import { isDecimalString } from '../../../src/record-contract/decimal.ts';
+import { sha256Hex } from '../../../src/record-contract/digests.ts';
+import type { EventEnvelope, ExecutionIdentityFields } from '../../../src/record-contract/envelope.ts';
+import { isUuid4 } from '../../../src/record-contract/identifiers.ts';
+import { isJsonObject } from '../../../src/record-contract/json-value.ts';
+import { parseJsonDocument } from '../../../src/record-contract/parsing.ts';
 import type {
   DecimalString,
   JsonObject,
@@ -17,15 +18,15 @@ import type {
   StructuredReason,
   Uuid4,
   UtcMillis,
-} from '../../../../../src/record-contract/primitives.ts';
-import type { EventRecordType } from '../../../../../src/record-contract/record-types.ts';
+} from '../../../src/record-contract/primitives.ts';
+import type { EventRecordType } from '../../../src/record-contract/record-types.ts';
 import type {
   AttemptCorrelation,
   CommitTriple,
   TrialScoped,
-} from '../../../../../src/record-contract/records/group-b/shared-shapes.ts';
-import type { StudyRecord } from '../../../../../src/record-contract/records/index.ts';
-import { formatUtcMillis } from '../../../../../src/record-contract/timestamps.ts';
+} from '../../../src/record-contract/records/group-b/shared-shapes.ts';
+import type { StudyRecord } from '../../../src/record-contract/records/index.ts';
+import { formatUtcMillis } from '../../../src/record-contract/timestamps.ts';
 
 const BASE_INSTANT_MS = Date.UTC(2026, 9, 5, 12, 0, 0, 0);
 

@@ -19,10 +19,15 @@ import type { GroupCRecordType } from '../../../../src/record-contract/records/g
 import { createRecordValidator } from '../../../../src/record-contract/schema-registry.ts';
 import type { RecordValidation, SchemaViolation } from '../../../../src/record-contract/schema-registry.ts';
 import { parsedTower } from '../../../support/kernel/deep-json.ts';
-import { leavesOf, objectPathsOf, pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
-import type { JsonPath } from '../group-b/support/json-paths.ts';
-import { toJson } from '../group-b/support/record-builders.ts';
-import { resolvePointer } from '../group-b/support/schema-reading.ts';
+import {
+  leavesOf,
+  objectPathsOf,
+  pointerOf,
+  resolvePointer,
+  withValueAt,
+} from '../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 import { CANONICAL_EXAMPLES, GROUP_C_EXAMPLES } from './examples/group-c-examples.ts';
 import { treatmentPassOracleResult } from './examples/oracle-examples.ts';
 import { INHERITED_MEMBER_NAMES, NON_FINITE_NUMBERS } from './support/hostile-json.ts';
