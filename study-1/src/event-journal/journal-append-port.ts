@@ -3,7 +3,7 @@
 
 import type { WriteOutcome } from '../durable-store/item-store-port.ts';
 import type { JournalEntry } from './journal-entry.ts';
-import { holdsEntryKey, isSameStoredEntry } from './journal-entry.ts';
+import { isSameStoredEntry } from './journal-entry.ts';
 import type { JournalEvent } from './journal-event.ts';
 
 /** One journal medium: a journal table (`createDurableJournalPort`) or a JSONL file (`createJsonlJournalPort`). */
@@ -46,15 +46,16 @@ export type JournalOutcomeClass = 'applied' | 'not_applied' | 'ambiguous' | 'seq
 
 /**
  * Reads a store outcome for an entry written with `journalPutAction`. `journalActionIndex` is
- * the position of that put in the write: 0 for a standalone append, the put's index inside a
- * caller-owned transaction, or `undefined` when the caller cannot tell.
+ * the position of that put in the write: 0 for a standalone append, or the put's index inside a
+ * caller-owned transaction. It is required: without it, a failed `item_absent` condition on the
+ * put itself that comes back without a decodable item (WP-04 omits an undecodable ALL_OLD
+ * image) could not be told from a failed business condition, and an occupied sequence would be
+ * freed (WP-05 review round 2).
  *
  * A failed condition on the entry's own put is the entry itself when the item there holds
  * identical content (an earlier write landed), and a sequence conflict otherwise, including
- * when the store returned no decodable item (WP-04 omits an undecodable ALL_OLD image, and an
- * `item_absent` put fails only on an occupied key). A failed condition on another action, or a
- * definitive failure, left the entry unwritten. Without an index, only an item returned at the
- * entry's own key identifies the journal put.
+ * when the store returned no decodable item (an `item_absent` put fails only on an occupied
+ * key). A failed condition on another action, or a definitive failure, left the entry unwritten.
  *
  * @example
  * classifyJournalOutcome({ kind: 'ambiguous', code: 'TimeoutError' }, entry, 0); // 'ambiguous'
@@ -63,7 +64,7 @@ export type JournalOutcomeClass = 'applied' | 'not_applied' | 'ambiguous' | 'seq
 export function classifyJournalOutcome(
   outcome: WriteOutcome,
   entry: JournalEntry,
-  journalActionIndex?: number,
+  journalActionIndex: number,
 ): JournalOutcomeClass {
   switch (outcome.kind) {
     case 'applied':
@@ -81,13 +82,9 @@ function classifyConditionFailure(
   failedActionIndex: number,
   existing: JournalEntry['item'] | undefined,
   entry: JournalEntry,
-  journalActionIndex: number | undefined,
+  journalActionIndex: number,
 ): JournalOutcomeClass {
-  const ownPutFailed =
-    journalActionIndex === undefined
-      ? existing !== undefined && holdsEntryKey(existing, entry)
-      : failedActionIndex === journalActionIndex;
-  if (!ownPutFailed) {
+  if (failedActionIndex !== journalActionIndex) {
     return 'not_applied';
   }
   return existing !== undefined && isSameStoredEntry(existing, entry) ? 'applied' : 'sequence_conflict';

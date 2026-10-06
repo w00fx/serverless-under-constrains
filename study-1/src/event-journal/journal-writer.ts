@@ -110,7 +110,7 @@ export class JournalWriter {
    *
    * @example
    * const prepared = journal.prepare('dispatch_started', body);
-   * if (prepared.kind === 'prepared') journal.confirm(prepared.put, await attempts.transitionToDispatched(id, prepared.put));
+   * if (prepared.kind === 'prepared') journal.confirm(prepared.put, await attempts.transitionToDispatched(id, prepared.put), 0);
    */
   prepare<T extends EventRecordType>(type: T, body: EventBody<T>, causation: readonly Uuid4[] = []): PrepareResult {
     if (this.#stopped !== undefined) {
@@ -128,7 +128,7 @@ export class JournalWriter {
    * Throws an Error for any other put, or while the writer is not idle.
    *
    * @example
-   * const confirmed = journal.confirm(prepared.put, outcome); // { kind: 'not_applied', … }
+   * const confirmed = journal.confirm(prepared.put, outcome, 1); // { kind: 'not_applied', … }
    * const again = journal.prepareRetry(prepared.put); // { kind: 'prepared', put: prepared.put }
    */
   prepareRetry(put: PreparedJournalPut): PrepareResult {
@@ -148,14 +148,14 @@ export class JournalWriter {
    * Settles the reserved put with the outcome of the transaction that carried it: `applied`
    * advances the sequence, an ambiguous outcome or a sequence conflict stops the instance, and
    * a transaction that was definitively not applied frees the sequence (or `prepareRetry`
-   * resubmits the same put). `journalActionIndex` is the put's index in the transaction; with
-   * it, a failed condition on the put itself is never mistaken for a failed business condition.
+   * resubmits the same put). `journalActionIndex` is the put's index in the transaction, so a
+   * failed condition on the put itself is never mistaken for a failed business condition.
    * Throws an Error when `prepared` is not the outstanding reservation.
    *
    * @example
    * const confirmed = journal.confirm(prepared.put, outcome, 1); // { kind: 'appended', event }
    */
-  confirm(prepared: PreparedJournalPut, outcome: WriteOutcome, journalActionIndex?: number): ConfirmResult {
+  confirm(prepared: PreparedJournalPut, outcome: WriteOutcome, journalActionIndex: number): ConfirmResult {
     if (prepared !== this.#reservation) {
       throw new Error(
         `confirm() for ${prepared.key.sk} without its reservation (outstanding: ${this.#reservation?.key.sk ?? 'none'}); expected the put returned by the last prepare()`,

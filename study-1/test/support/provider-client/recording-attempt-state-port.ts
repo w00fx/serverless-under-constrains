@@ -21,7 +21,7 @@ import type {
   AttemptRegistration,
   AttemptStatePort,
 } from '../../../src/provider-client/attempt-state-port.ts';
-import { attemptStateSortKey } from '../../../src/provider-client/attempt-state-port.ts';
+import { ATTEMPT_JOURNAL_ACTION_INDEX, attemptStateSortKey } from '../../../src/provider-client/attempt-state-port.ts';
 
 export type AttemptOperation = 'registerPreDispatch' | 'transitionToNotDispatched' | 'transitionToDispatched';
 
@@ -133,7 +133,7 @@ export class RecordingAttemptStatePort implements AttemptStatePort {
       return { kind: 'definitive_failure', code: fault.code };
     }
     if (fault?.kind === 'condition_failed') {
-      return conditionFailed(fault.existing);
+      return conditionFailed(fault.existing, scriptedFailedActionIndex(fault.existing, event));
     }
     if (fault?.kind === 'ambiguous') {
       // A lost response never makes a transaction whose condition fails take effect.
@@ -141,7 +141,7 @@ export class RecordingAttemptStatePort implements AttemptStatePort {
       return { kind: 'ambiguous', code: fault.code };
     }
     if (!change.allowed) {
-      return conditionFailed(change.existing);
+      return conditionFailed(change.existing, STATE_ACTION_INDEX);
     }
     this.#commit(true, attemptId, event, change.next);
     return { kind: 'applied' };
@@ -164,8 +164,18 @@ interface StateChange {
   readonly next: StoredItem;
 }
 
-function conditionFailed(existing: StoredItem | undefined): WriteOutcome {
+function conditionFailed(existing: StoredItem | undefined, failedActionIndex: number): WriteOutcome {
   return existing === undefined
-    ? { kind: 'condition_failed', failed_action_index: STATE_ACTION_INDEX }
-    : { kind: 'condition_failed', failed_action_index: STATE_ACTION_INDEX, existing };
+    ? { kind: 'condition_failed', failed_action_index: failedActionIndex }
+    : { kind: 'condition_failed', failed_action_index: failedActionIndex, existing };
+}
+
+// A scripted ALL_OLD item at the event's own key is a failed condition of the journal put: the
+// store reports the action whose condition failed, and only the journal put targets that key.
+// The writer's confirm reads the index, so the double must report it as the store would (WP-05
+// review round 2 made the index required).
+function scriptedFailedActionIndex(existing: StoredItem | undefined, event: PreparedJournalPut): number {
+  return existing?.pk === event.key.pk && existing.sk === event.key.sk
+    ? ATTEMPT_JOURNAL_ACTION_INDEX
+    : STATE_ACTION_INDEX;
 }

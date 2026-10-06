@@ -122,11 +122,14 @@ describe('signal condition failure: re-read ALL_OLD and re-decide once', () => {
     assert.equal(harness.state.transitions().length, 1);
   });
 
-  it('the journal put failed its condition: SIGNAL_FAILED', async () => {
+  it('the journal put failed its condition: a sequence conflict stops the instance, JOURNAL_STOPPED', async () => {
+    // A failed item_absent condition on the signal record's own put (index 1) proves another
+    // event occupies its key, even without an ALL_OLD item (WP-05 review round 2).
     const harness = racingHarness();
     harness.state.answerNextSignal({ kind: 'condition_failed', failed_action_index: 1 });
     await assert.rejects(harness.controller.handle(streamInsert(callerTimeoutImage('probe'))), {
-      code: 'SIGNAL_FAILED',
+      code: 'JOURNAL_STOPPED',
+      message: 'JOURNAL_STOPPED: signal transaction SEQUENCE_CONFLICT; expected applied',
     });
   });
 });

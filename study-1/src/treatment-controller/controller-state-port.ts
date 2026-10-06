@@ -25,6 +25,13 @@ export interface ControllerReadFailure {
 
 export type ControllerStateRead<T> = Result<T | undefined, ControllerReadFailure>;
 
+/**
+ * The position of the `timeout_signal_recorded` put in the signal transaction: after the
+ * treatment update (index 0). The writer's `confirm` needs it to tell a failed condition on the
+ * put itself from a failed treatment condition (WP-05 review round 2).
+ */
+export const SIGNAL_JOURNAL_ACTION_INDEX = 1;
+
 /** The signal transition of one partition, with the prepared signal record. */
 export interface SignalTransition {
   readonly partition: string;

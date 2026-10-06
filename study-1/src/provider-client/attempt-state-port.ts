@@ -29,6 +29,13 @@ export interface AttemptStatePort {
   transitionToDispatched(attemptId: Uuid4, event: PreparedJournalPut): Promise<WriteOutcome>;
 }
 
+/**
+ * The position of the journal put in every `AttemptStatePort` transaction: first, before the
+ * registration put or the phase update. The writer's `confirm` needs it to tell a failed
+ * condition on the put itself from a failed phase condition (WP-05 review round 2).
+ */
+export const ATTEMPT_JOURNAL_ACTION_INDEX = 0;
+
 /** The sort-key prefix of attempt-state items in the caller journal (design §9.3). */
 export const ATTEMPT_STATE_SK_PREFIX = 'state#attempt#';
 

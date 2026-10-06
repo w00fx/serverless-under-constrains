@@ -51,13 +51,3 @@ export function journalPutAction(table: JournalTableRole, entry: JournalEntry): 
 export function isSameStoredEntry(existing: StoredItem, entry: JournalEntry): boolean {
   return structurallyEqual(existing, entry.item);
 }
-
-/**
- * Whether a stored item sits at this entry's key.
- *
- * @example
- * holdsEntryKey(outcome.existing, entry); // false when another transaction member failed
- */
-export function holdsEntryKey(existing: StoredItem, entry: JournalEntry): boolean {
-  return existing.pk === entry.key.pk && existing.sk === entry.key.sk;
-}

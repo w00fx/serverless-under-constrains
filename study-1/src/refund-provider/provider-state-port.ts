@@ -24,6 +24,13 @@ import {
 } from './control-items.ts';
 import type { CallPartition } from './provider-partition.ts';
 
+/**
+ * The position of the provider journal put in a treatment transition transaction: after the
+ * treatment update (index 0). The writer's `confirm` needs it to tell a failed condition on the
+ * put itself from a failed treatment condition (WP-05 review round 2).
+ */
+export const TRANSITION_JOURNAL_ACTION_INDEX = 1;
+
 /** Why a control read gave no usable answer: a store error code, or an undecodable item. */
 export interface ProviderStateReadFailure {
   readonly code: string;

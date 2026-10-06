@@ -43,6 +43,9 @@ function prepared(
   return result.put;
 }
 
+// The journal put is the first action of dispatchTransaction.
+const DISPATCH_PUT_INDEX = 0;
+
 function dispatchTransaction(put: PreparedJournalPut): readonly WriteAction[] {
   return [journalPutAction('caller_journal', put), TO_DISPATCHED];
 }
@@ -56,7 +59,7 @@ describe('JournalWriter.prepare and confirm', () => {
     assert.deepEqual(put.event.causation_event_ids, [CAUSE_LOW, CAUSE_HIGH]);
     assert.equal(harness.store.peek('caller_journal', put.key), undefined);
     const outcome = await harness.store.transact(dispatchTransaction(put), TOKEN);
-    assert.deepEqual(harness.writer.confirm(put, outcome), { kind: 'appended', event: put.event });
+    assert.deepEqual(harness.writer.confirm(put, outcome, DISPATCH_PUT_INDEX), { kind: 'appended', event: put.event });
     assert.deepEqual(harness.store.peek('caller_journal', put.key), put.item);
     const next = await harness.writer.append('dispatch_started', dispatchStartedBody(2));
     assert.equal(appendedEvent(next).source_sequence, 2);
@@ -68,7 +71,11 @@ describe('JournalWriter.prepare and confirm', () => {
     const put = prepared(harness);
     const outcome = await harness.store.transact(dispatchTransaction(put), TOKEN);
     assert.equal(outcome.kind, 'condition_failed');
-    assert.deepEqual(harness.writer.confirm(put, outcome), { kind: 'not_applied', event: put.event, outcome });
+    assert.deepEqual(harness.writer.confirm(put, outcome, DISPATCH_PUT_INDEX), {
+      kind: 'not_applied',
+      event: put.event,
+      outcome,
+    });
     assert.equal(harness.writer.isStopped(), false);
     const next = await harness.writer.append('dispatch_started', dispatchStartedBody(2));
     assert.equal(appendedEvent(next).source_sequence, 1);
@@ -79,7 +86,11 @@ describe('JournalWriter.prepare and confirm', () => {
     harness.store.scriptWriteFault({ kind: 'definitive_failure', code: 'ValidationException' });
     const put = prepared(harness);
     const outcome = await harness.store.transact(dispatchTransaction(put), TOKEN);
-    assert.deepEqual(harness.writer.confirm(put, outcome), { kind: 'not_applied', event: put.event, outcome });
+    assert.deepEqual(harness.writer.confirm(put, outcome, DISPATCH_PUT_INDEX), {
+      kind: 'not_applied',
+      event: put.event,
+      outcome,
+    });
     const again = prepared(harness, 2);
     assert.equal(again.event.source_sequence, 1);
     assert.notEqual(again.event.event_id, put.event.event_id);
@@ -94,7 +105,7 @@ describe('JournalWriter.prepare and confirm', () => {
       reason: 'INSTANCE_ALREADY_STOPPED',
       detail: `stopped earlier by AMBIGUOUS_APPEND: ${ambiguous}`,
     };
-    assert.deepEqual(harness.writer.confirm(put, { kind: 'ambiguous', code: 'TimeoutError' }), {
+    assert.deepEqual(harness.writer.confirm(put, { kind: 'ambiguous', code: 'TimeoutError' }, DISPATCH_PUT_INDEX), {
       kind: 'stopped',
       reason: 'AMBIGUOUS_APPEND',
       detail: ambiguous,
@@ -109,17 +120,25 @@ describe('JournalWriter.prepare and confirm', () => {
     const landed = writerHarness();
     const put = prepared(landed);
     assert.deepEqual(
-      landed.writer.confirm(put, { kind: 'condition_failed', failed_action_index: 0, existing: { ...put.item } }),
+      landed.writer.confirm(
+        put,
+        { kind: 'condition_failed', failed_action_index: 0, existing: { ...put.item } },
+        DISPATCH_PUT_INDEX,
+      ),
       { kind: 'appended', event: put.event },
     );
     const conflicting = writerHarness();
     const other = prepared(conflicting);
     assert.deepEqual(
-      conflicting.writer.confirm(other, {
-        kind: 'condition_failed',
-        failed_action_index: 0,
-        existing: { ...other.item, refund_request_id: 'ref-poc-999' },
-      }),
+      conflicting.writer.confirm(
+        other,
+        {
+          kind: 'condition_failed',
+          failed_action_index: 0,
+          existing: { ...other.item, refund_request_id: 'ref-poc-999' },
+        },
+        DISPATCH_PUT_INDEX,
+      ),
       {
         kind: 'stopped',
         reason: 'SEQUENCE_CONFLICT',
@@ -139,6 +158,28 @@ describe('JournalWriter.prepare and confirm', () => {
     });
   });
 
+  it('confirm requires the put index, so an occupied sequence is never freed (WP-05 review round 2)', () => {
+    const harness = writerHarness();
+    const put = prepared(harness);
+    // Type-level regression: a call without the put's index must not compile. The closure is
+    // never invoked; typecheck fails if the parameter becomes optional again.
+    const withoutIndex = (): unknown =>
+      // @ts-expect-error journalActionIndex is required
+      harness.writer.confirm(put, { kind: 'condition_failed', failed_action_index: 0 });
+    assert.equal(typeof withoutIndex, 'function');
+    const confirmed = harness.writer.confirm(
+      put,
+      { kind: 'condition_failed', failed_action_index: 0 },
+      DISPATCH_PUT_INDEX,
+    );
+    assert.equal(confirmed.kind, 'stopped');
+    assert.deepEqual(harness.writer.prepare('dispatch_started', dispatchStartedBody(2)), {
+      kind: 'stopped',
+      reason: 'INSTANCE_ALREADY_STOPPED',
+      detail: `stopped earlier by SEQUENCE_CONFLICT: ${put.key.sk}: condition_failed at action 0 without a decodable existing item; other content occupies this sequence`,
+    });
+  });
+
   it('with the put index, a failed condition on another action is not applied', () => {
     const harness = writerHarness();
     const put = prepared(harness);
@@ -153,10 +194,10 @@ describe('JournalWriter.prepare and confirm', () => {
     harness.store.scriptWriteFault({ kind: 'definitive_failure', code: 'ThrottlingException' });
     const put = prepared(harness);
     const failed = await harness.store.transact(dispatchTransaction(put), TOKEN);
-    assert.equal(harness.writer.confirm(put, failed).kind, 'not_applied');
+    assert.equal(harness.writer.confirm(put, failed, DISPATCH_PUT_INDEX).kind, 'not_applied');
     assert.deepEqual(harness.writer.prepareRetry(put), { kind: 'prepared', put });
     const outcome = await harness.store.transact(dispatchTransaction(put), TOKEN);
-    assert.deepEqual(harness.writer.confirm(put, outcome), { kind: 'appended', event: put.event });
+    assert.deepEqual(harness.writer.confirm(put, outcome, DISPATCH_PUT_INDEX), { kind: 'appended', event: put.event });
     assert.deepEqual(harness.store.peek('caller_journal', put.key), put.item);
     assert.equal(harness.ids.issuedCount(), 1);
     assert.equal(
@@ -172,13 +213,13 @@ describe('JournalWriter.prepare and confirm', () => {
       name: 'Error',
       message: `prepareRetry(${put.key.sk}) with 0 pending append(s) and reservation ${put.key.sk}; expected an idle writer`,
     });
-    harness.writer.confirm(put, { kind: 'definitive_failure', code: 'ValidationException' });
+    harness.writer.confirm(put, { kind: 'definitive_failure', code: 'ValidationException' }, DISPATCH_PUT_INDEX);
     assert.throws(() => harness.writer.prepareRetry({ ...put }), {
       name: 'Error',
       message: `prepareRetry() for ${put.key.sk} (retryable: ${put.key.sk}); expected the last put that confirm() reported not_applied, before any other event`,
     });
     const replanned = prepared(harness, 2);
-    harness.writer.confirm(replanned, { kind: 'applied' });
+    harness.writer.confirm(replanned, { kind: 'applied' }, DISPATCH_PUT_INDEX);
     assert.throws(() => harness.writer.prepareRetry(put), {
       name: 'Error',
       message: `prepareRetry() for ${put.key.sk} (retryable: none); expected the last put that confirm() reported not_applied, before any other event`,
@@ -188,9 +229,9 @@ describe('JournalWriter.prepare and confirm', () => {
   it('a retried put is no longer retryable once it is reserved again', () => {
     const harness = writerHarness();
     const put = prepared(harness);
-    harness.writer.confirm(put, { kind: 'definitive_failure', code: 'ValidationException' });
+    harness.writer.confirm(put, { kind: 'definitive_failure', code: 'ValidationException' }, DISPATCH_PUT_INDEX);
     harness.writer.prepareRetry(put);
-    harness.writer.confirm(put, { kind: 'applied' });
+    harness.writer.confirm(put, { kind: 'applied' }, DISPATCH_PUT_INDEX);
     assert.throws(() => harness.writer.prepareRetry(put), {
       name: 'Error',
       message: `prepareRetry() for ${put.key.sk} (retryable: none); expected the last put that confirm() reported not_applied, before any other event`,
@@ -201,12 +242,12 @@ describe('JournalWriter.prepare and confirm', () => {
     const harness = writerHarness();
     const put = prepared(harness);
     const copy = { ...put };
-    assert.throws(() => harness.writer.confirm(copy, { kind: 'applied' }), {
+    assert.throws(() => harness.writer.confirm(copy, { kind: 'applied' }, DISPATCH_PUT_INDEX), {
       name: 'Error',
       message: `confirm() for ${put.key.sk} without its reservation (outstanding: ${put.key.sk}); expected the put returned by the last prepare()`,
     });
-    harness.writer.confirm(put, { kind: 'applied' });
-    assert.throws(() => harness.writer.confirm(put, { kind: 'applied' }), {
+    harness.writer.confirm(put, { kind: 'applied' }, DISPATCH_PUT_INDEX);
+    assert.throws(() => harness.writer.confirm(put, { kind: 'applied' }, DISPATCH_PUT_INDEX), {
       name: 'Error',
       message: `confirm() for ${put.key.sk} without its reservation (outstanding: none); expected the put returned by the last prepare()`,
     });
@@ -223,7 +264,7 @@ describe('JournalWriter.prepare and confirm', () => {
       name: 'Error',
       message: `append(dispatch_started) while the put ${put.key.sk} is reserved; expected confirm() before the next append`,
     });
-    harness.writer.confirm(put, { kind: 'applied' });
+    harness.writer.confirm(put, { kind: 'applied' }, DISPATCH_PUT_INDEX);
     const pending = harness.writer.append('dispatch_started', dispatchStartedBody(3));
     assert.throws(() => harness.writer.prepare('dispatch_started', dispatchStartedBody(4)), {
       name: 'Error',

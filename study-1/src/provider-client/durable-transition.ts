@@ -14,6 +14,7 @@ import type { ConfirmResult } from '../event-journal/journal-append-port.ts';
 import type { EventBody, JournalEvent } from '../event-journal/journal-event.ts';
 import type { JournalWriter, PreparedJournalPut } from '../event-journal/journal-writer.ts';
 import type { Uuid4 } from '../record-contract/primitives.ts';
+import { ATTEMPT_JOURNAL_ACTION_INDEX } from './attempt-state-port.ts';
 
 export type TransitionEventType = 'attempt_registered' | 'attempt_not_dispatched' | 'dispatch_started';
 
@@ -40,7 +41,7 @@ export async function runDurableTransition<T extends TransitionEventType>(
     return { kind: 'ambiguous' };
   }
   const outcome = await writeOrAmbiguous(write, prepared.put);
-  return transitionResultOf(journal.confirm(prepared.put, outcome));
+  return transitionResultOf(journal.confirm(prepared.put, outcome, ATTEMPT_JOURNAL_ACTION_INDEX));
 }
 
 // A port that throws gives no proof either way, exactly like an ambiguous store outcome. The
