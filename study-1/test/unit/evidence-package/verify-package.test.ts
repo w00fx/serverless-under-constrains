@@ -63,11 +63,15 @@ describe('AC-RUA-022 package verification', () => {
       FIXTURE_DEPS,
     );
     assert.equal(verification.package_eligibility, 'ineligible');
-    assert.ok(codes(verification).includes('ALTERED_BYTES'));
-    assert.ok(
-      verification.package_ineligibility_reasons.some(
-        (reason) => reason.artifact_path === 'probe/ledger/ledger-snapshot.json',
-      ),
+    // The final index and the probe's evidence index both froze the ledger's digest, and the
+    // derived probe result cites it, so the edit trips all three.
+    assert.deepEqual(
+      verification.package_ineligibility_reasons.map((reason) => [reason.code, reason.artifact_path]),
+      [
+        ['ALTERED_BYTES', 'probe/ledger/ledger-snapshot.json'],
+        ['ALTERED_BYTES', 'probe/ledger/ledger-snapshot.json'],
+        ['UNRESOLVED_REFERENCE', 'probe/derived/transport-probe-result.json'],
+      ],
     );
   });
 
@@ -85,7 +89,9 @@ describe('AC-RUA-022 package verification', () => {
     assert.ok(orphan !== undefined);
     const verification = verifyPackage(verificationInput(fixture, [first, orphan], orphan.index_sha256), FIXTURE_DEPS);
     assert.equal(verification.package_eligibility, 'ineligible');
-    assert.ok(codes(verification).includes('BROKEN_PARENT'));
+    // The orphan names another original index and a parent that is not amendment 1, so amendment
+    // 1 is known but outside the chain selected at the orphan.
+    assert.deepEqual(codes(verification), ['BROKEN_PARENT', 'BROKEN_PARENT', 'UNSELECTED_DESCENDANT']);
   });
 
   it('sequence-gap', () => {
@@ -93,7 +99,8 @@ describe('AC-RUA-022 package verification', () => {
     const [first, , third] = threeAmendments(fixture);
     assert.ok(first !== undefined && third !== undefined);
     const verification = verifyPackage(verificationInput(fixture, [first, third], third.index_sha256), FIXTURE_DEPS);
-    assert.ok(codes(verification).includes('SEQUENCE_GAP'));
+    // Amendment 3 names the absent amendment 2 as its parent, so amendment 1 is left unselected.
+    assert.deepEqual(codes(verification), ['BROKEN_PARENT', 'SEQUENCE_GAP', 'UNSELECTED_DESCENDANT']);
     assert.equal(verification.package_eligibility, 'ineligible');
   });
 
@@ -126,7 +133,8 @@ describe('AC-RUA-022 package verification', () => {
       validator: FIXTURE_VALIDATOR,
       digest: aliasing.digest,
     });
-    assert.ok(codes(verification).includes('CYCLE'), JSON.stringify(codes(verification)));
+    // Sequence 1 must name no parent, so the loop is also a broken parent.
+    assert.deepEqual(codes(verification), ['BROKEN_PARENT', 'CYCLE']);
     assert.equal(verification.package_eligibility, 'ineligible');
     assert.ok(verification.selected_chain.length <= 2);
   });
