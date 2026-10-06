@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 
 import {
   EVIDENCE_REF_ALIASES,
+  MISSING_EVIDENCE_REASON_CODES,
   classifyArtifactPath,
   compareEvidenceRefs,
   isOrderableEvidenceRef,
@@ -16,7 +17,7 @@ import {
 } from '../../../src/record-contract/evidence-refs.ts';
 import type { EvidenceRef, EvidenceRefFinding } from '../../../src/record-contract/evidence-refs.ts';
 import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
-import type { JsonValue, Sha256Hex, Uuid4 } from '../../../src/record-contract/primitives.ts';
+import type { JsonValue, Sha256Hex, StructuredReason, Uuid4 } from '../../../src/record-contract/primitives.ts';
 
 const SHA_A = 'a'.repeat(64) as Sha256Hex;
 const SHA_B = 'b'.repeat(64) as Sha256Hex;
@@ -106,16 +107,32 @@ describe('AC-RUA-048 evidence references are well formed', () => {
   });
 
   it('missing-evidence-empty-with-reason', () => {
-    const byArtifact = {
+    const byArtifact: StructuredReason = {
       code: 'ARTIFACT_MISSING',
       subject: 'BR-RUA-001',
       artifact_path: 'ledger/ledger-snapshot.json',
       detail: 'absent',
     };
-    const byEvent = { code: 'EVENT_MISSING', subject: 'BR-RUA-004', event_id: EVENT_1, detail: 'absent' };
-    const vague = { code: 'UNKNOWN', subject: 'BR-RUA-001', detail: 'no idea' };
+    const byEvent: StructuredReason = {
+      code: 'CAUSAL_PREDECESSOR_MISSING',
+      subject: 'BR-RUA-004',
+      event_id: EVENT_1,
+      detail: 'absent',
+    };
+    const byInput: StructuredReason = {
+      code: 'INPUT_MISSING',
+      subject: 'BR-RUA-009',
+      artifact_path: 'inputs/approved-decision.json',
+      detail: 'absent',
+    };
+    const vague: StructuredReason = { code: 'UNKNOWN', subject: 'BR-RUA-001', detail: 'no idea' };
+    assert.deepEqual(MISSING_EVIDENCE_REASON_CODES, [
+      'ARTIFACT_MISSING',
+      'CAUSAL_PREDECESSOR_MISSING',
+      'INPUT_MISSING',
+    ]);
     assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact]), []);
-    assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact, byEvent]), []);
+    assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact, byEvent, byInput]), []);
     // BR-RUA-035: only a result caused ENTIRELY by missing evidence may carry an empty list.
     assert.deepEqual(validateResultReferences('indeterminate', [], [vague, byEvent]), [
       'EMPTY_WITHOUT_MISSING_EVIDENCE_REASON',
@@ -126,6 +143,20 @@ describe('AC-RUA-048 evidence references are well formed', () => {
     assert.deepEqual(validateResultReferences('indeterminate', [], [vague]), ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON']);
     assert.deepEqual(validateResultReferences('indeterminate', [], []), ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON']);
     assert.deepEqual(validateResultReferences('indeterminate', [ref('ledger/a.json')], []), []);
+    // WP-00 review round 2: naming an artifact is not enough when the cause is not its absence.
+    // The digest mismatch concerns evidence that exists and can be referenced.
+    const mismatch: StructuredReason = { ...byArtifact, code: 'CORE_FILE_DIGEST_MISMATCH' };
+    assert.deepEqual(validateResultReferences('indeterminate', [], [mismatch]), [
+      'EMPTY_WITHOUT_MISSING_EVIDENCE_REASON',
+    ]);
+    assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact, mismatch]), [
+      'EMPTY_WITHOUT_MISSING_EVIDENCE_REASON',
+    ]);
+    // A missing-evidence code must still identify what is missing.
+    const unnamed: StructuredReason = { code: 'ARTIFACT_MISSING', subject: 'G5', detail: 'something is absent' };
+    assert.deepEqual(validateResultReferences('indeterminate', [], [unnamed]), [
+      'EMPTY_WITHOUT_MISSING_EVIDENCE_REASON',
+    ]);
   });
 });
 

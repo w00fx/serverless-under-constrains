@@ -1,7 +1,8 @@
 // Evidence references (BR-RUA-035, AC-RUA-048). A reference names an artifact by a
 // normalized package-relative POSIX path and its digest. Lists are sorted canonically and
 // duplicate-free; a conclusive result carries at least one reference; an indeterminate
-// result may carry none only when a structured reason names the missing artifact or event.
+// result may carry none only when every structured reason is a missing-evidence reason that
+// names the missing artifact or event.
 
 import { isSha256Hex } from './digests.ts';
 import { isUuid4 } from './identifiers.ts';
@@ -42,6 +43,20 @@ export type ReferenceLocation = 'inside_package' | 'outside_package';
 
 /** Field names BR-RUA-035 rejects as aliases of `evidence_refs`. */
 export const EVIDENCE_REF_ALIASES = ['evidence_references', 'evidence', 'references'] as const;
+
+/**
+ * Reason codes that mean "this evidence is absent", the only cause that lets an indeterminate
+ * result carry no reference (BR-RUA-035). They are the approved design's absence codes: an
+ * expected artifact that is not present (§8.2 I1 `ARTIFACT_MISSING`), a causal predecessor event
+ * that does not resolve (§8.2 I6 `CAUSAL_PREDECESSOR_MISSING`), and an absent payment or decision
+ * input (§8.5 `INPUT_MISSING`). Any other cause, such as a digest mismatch or a sequence gap,
+ * concerns evidence that exists and can be referenced (WP-00 review round 2).
+ */
+export const MISSING_EVIDENCE_REASON_CODES = [
+  'ARTIFACT_MISSING',
+  'CAUSAL_PREDECESSOR_MISSING',
+  'INPUT_MISSING',
+] as const;
 
 const REF_FIELDS: ReadonlySet<string> = new Set([
   'artifact_path',
@@ -168,11 +183,14 @@ export function validateEvidenceRefList(
 /**
  * Applies the result-level rules of BR-RUA-035: `pass` and `fail` need at least one
  * reference. An empty `indeterminate` list is allowed only when the result is "caused entirely
- * by missing evidence": there is at least one reason, and every reason names the missing
- * artifact or event. A reason naming any other cause makes the empty list a violation.
+ * by missing evidence": there is at least one reason, and every reason has a
+ * `MISSING_EVIDENCE_REASON_CODES` code and names the missing artifact or event. A reason with any
+ * other cause makes the empty list a violation, even when it names an artifact.
  *
  * @example
  * validateResultReferences('pass', [], []); // ['MISSING_REFERENCE_FOR_CONCLUSIVE_RESULT']
+ * validateResultReferences('indeterminate', [], [{ code: 'ARTIFACT_MISSING', subject: 'G5',
+ *   artifact_path: 'ledger/ledger-snapshot.json', detail: 'absent' }]); // []
  */
 export function validateResultReferences(
   result: 'pass' | 'fail' | 'indeterminate',
@@ -185,10 +203,13 @@ export function validateResultReferences(
   if (result !== 'indeterminate') {
     return ['MISSING_REFERENCE_FOR_CONCLUSIVE_RESULT'];
   }
-  const entirelyMissingEvidence =
-    reasons.length > 0 &&
-    reasons.every((reason) => reason.artifact_path !== undefined || reason.event_id !== undefined);
+  const entirelyMissingEvidence = reasons.length > 0 && reasons.every(isMissingEvidenceReason);
   return entirelyMissingEvidence ? [] : ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON'];
+}
+
+function isMissingEvidenceReason(reason: StructuredReason): boolean {
+  const codes: readonly string[] = MISSING_EVIDENCE_REASON_CODES;
+  return codes.includes(reason.code) && (reason.artifact_path !== undefined || reason.event_id !== undefined);
 }
 
 function validateEntry(entry: JsonValue, index: number, location: ReferenceLocation): readonly EvidenceRefFinding[] {
