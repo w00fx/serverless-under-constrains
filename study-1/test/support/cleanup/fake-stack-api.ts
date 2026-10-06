@@ -5,7 +5,9 @@
 //   retained members survive (CloudFormation retries delete them on the next request);
 // - otherwise it ends DELETE_COMPLETE, and the stack and every member leave the surfaces.
 // A deleted stack described by name fails, as CloudFormation answers "does not exist"; described
-// by its id it still reads DELETE_COMPLETE.
+// by its id it still reads DELETE_COMPLETE. `forgetDeletedStack()` stands for a deleted stack
+// CloudFormation no longer reports at all (`ListStacks` keeps deleted stacks for 90 days, [R-aws]
+// §6.3), which the StackRead port reports as absent.
 
 import type { StackApi, StackDeleteRequest, StackRead } from '../../../src/cleanup/cleanup-ports.ts';
 import { resourceKey } from '../../../src/cleanup/resource-names.ts';
@@ -42,6 +44,7 @@ export class FakeStackApi implements StackApi {
   #retained: ReadonlySet<string> | undefined;
   #requestFailure = false;
   #describeFailure = false;
+  #forgetDeleted = false;
   #blockedReads = 0;
 
   constructor(
@@ -70,6 +73,11 @@ export class FakeStackApi implements StackApi {
   /** Every describe fails. */
   failDescribe(): void {
     this.#describeFailure = true;
+  }
+
+  /** A completed deletion leaves no record, so even a describe by id reads absent. */
+  forgetDeletedStack(): void {
+    this.#forgetDeleted = true;
   }
 
   status(): StackStatus | 'absent' {
@@ -133,7 +141,7 @@ export class FakeStackApi implements StackApi {
       return;
     }
     this.#surfaces.remove(resourceKey({ resource_type: STACK_RESOURCE_TYPE, identifier: this.#options.stackId }));
-    this.#status = 'DELETE_COMPLETE';
+    this.#status = this.#forgetDeleted ? 'absent' : 'DELETE_COMPLETE';
   }
 }
 

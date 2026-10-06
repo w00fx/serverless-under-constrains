@@ -94,6 +94,16 @@ describe('FakeStackApi conformance', () => {
     assert.equal(surfaces.isPresent(TABLE_KEY), false);
   });
 
+  it('reads a forgotten deleted stack as absent, even by id', async () => {
+    const { surfaces, stack } = rig();
+    stack.forgetDeletedStack();
+    await stack.requestDelete(STACK_ID);
+    assert.deepEqual(await stack.describe(STACK_ID), { kind: 'absent' });
+    assert.equal(stack.status(), 'absent');
+    assert.equal(surfaces.isPresent(STACK_KEY), false);
+    assert.equal(surfaces.isPresent(TABLE_KEY), false);
+  });
+
   it('reads a never-created stack, or another stack, as absent', async () => {
     const { stack } = rig(false);
     assert.deepEqual(await stack.describe(STACK_ID), { kind: 'absent' });
