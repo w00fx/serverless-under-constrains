@@ -1,6 +1,11 @@
 // Conformance of StubDiscoverySurfaces (design §12.2) to the DiscoverySurfaces contract: each
 // surface lists exactly its own sightings, presence follows the native (non-tag-index)
 // sightings, failures are values except the scripted throw, and each fault acts as documented.
+//
+// Sources (RK-17): [R-aws] §6.1, `GetResources` returns tagged or previously tagged resources, and
+// whether it keeps listing deleted ones is unverified (so the stub can lag absence); [R-aws] §6.2,
+// IAM roles and Lambda versions/aliases are not tag-discoverable; [R-aws] §6.3, the native
+// listing APIs per surface.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

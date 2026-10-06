@@ -135,26 +135,37 @@ async function deleteStackAndWait(stackId: string, ports: DeletionPorts): Promis
   if (request.kind === 'failed') {
     return { action: 'DELETE_FAILED', reason: request.reason };
   }
-  let lastObserved = 'no read';
-  for (let poll = 1; poll <= STACK_DELETE_MAX_POLLS; poll += 1) {
-    await ports.sleeper.sleep(STACK_DELETE_POLL_INTERVAL_MS);
-    const read = await ports.stacks.describe(stackId);
-    if (read.kind === 'failed') {
-      lastObserved = `an unreadable stack (${read.reason.code})`;
-      continue;
-    }
-    if (read.kind === 'absent' || read.status === DELETE_COMPLETE) {
-      return { action: 'DELETED' };
-    }
-    if (read.status === DELETE_FAILED) {
-      return {
-        action: 'DELETE_FAILED',
-        reason: stackReason('STACK_DELETE_FAILED', stackId, `status ${DELETE_FAILED}`),
-      };
-    }
-    lastObserved = `status ${boundedJsonText(read.status)}`;
+  return awaitStackDeletion(stackId, ports, 1);
+}
+
+// Sleeps, then reads the stack once (the `poll`-th read) and, while it is still deleting, does so
+// again: at most STACK_DELETE_MAX_POLLS reads deep.
+async function awaitStackDeletion(stackId: string, ports: DeletionPorts, poll: number): Promise<StackDeletion> {
+  await ports.sleeper.sleep(STACK_DELETE_POLL_INTERVAL_MS);
+  const settled = stackPollOutcome(stackId, await ports.stacks.describe(stackId), poll);
+  return settled ?? awaitStackDeletion(stackId, ports, poll + 1);
+}
+
+// What one read after the deletion request shows: how the deletion ended, or undefined while the
+// stack is still deleting (or unreadable) and reads remain, at most STACK_DELETE_MAX_POLLS. The
+// timeout names the last read itself, so no placeholder "last observation" exists to go stale.
+function stackPollOutcome(stackId: string, read: StackRead, poll: number): StackDeletion | undefined {
+  if (read.kind === 'absent') {
+    return { action: 'DELETED' };
   }
-  const observed = `${lastObserved} after ${String(STACK_DELETE_MAX_POLLS)} reads`;
+  const status = read.kind === 'present' ? read.status : undefined;
+  if (status === DELETE_COMPLETE) {
+    return { action: 'DELETED' };
+  }
+  if (status === DELETE_FAILED) {
+    return { action: 'DELETE_FAILED', reason: stackReason('STACK_DELETE_FAILED', stackId, `status ${DELETE_FAILED}`) };
+  }
+  if (poll < STACK_DELETE_MAX_POLLS) {
+    return undefined;
+  }
+  const last =
+    read.kind === 'failed' ? `an unreadable stack (${read.reason.code})` : `status ${boundedJsonText(read.status)}`;
+  const observed = `${last} after ${String(STACK_DELETE_MAX_POLLS)} reads`;
   return { action: 'DELETE_FAILED', reason: stackReason('STACK_DELETE_TIMED_OUT', stackId, observed) };
 }
 

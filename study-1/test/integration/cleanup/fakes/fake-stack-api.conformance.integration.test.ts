@@ -3,6 +3,10 @@
 // execution runs (RK-10); DELETE_FAILED keeps the retained members and a retry deletes them;
 // DELETE_COMPLETE removes the stack and its members; a deleted stack described by name fails
 // while described by id it reads DELETE_COMPLETE; scripted failures are values.
+//
+// Sources (RK-17): [R-aws] §6.3, `DescribeStacks` needs the unique stack id for a deleted stack
+// and `DELETE_SKIPPED`/retained resources stay to audit; [R-durable] §8 R8, deletion waits while a
+// durable execution runs (up to 1 h).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -87,6 +91,16 @@ describe('FakeStackApi conformance', () => {
     assert.equal(surfaces.isPresent(resourceKey(STACK_MEMBERS[0] ?? { resource_type: '', identifier: '' })), false);
     await stack.requestDelete(STACK_ID);
     assert.deepEqual(await stack.describe(STACK_ID), { kind: 'present', status: 'DELETE_COMPLETE' });
+    assert.equal(surfaces.isPresent(TABLE_KEY), false);
+  });
+
+  it('reads a forgotten deleted stack as absent, even by id', async () => {
+    const { surfaces, stack } = rig();
+    stack.forgetDeletedStack();
+    await stack.requestDelete(STACK_ID);
+    assert.deepEqual(await stack.describe(STACK_ID), { kind: 'absent' });
+    assert.equal(stack.status(), 'absent');
+    assert.equal(surfaces.isPresent(STACK_KEY), false);
     assert.equal(surfaces.isPresent(TABLE_KEY), false);
   });
 

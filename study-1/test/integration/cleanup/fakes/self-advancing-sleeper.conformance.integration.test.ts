@@ -1,6 +1,9 @@
 // Conformance of SelfAdvancingSleeper to the Sleeper contract on virtual time: a sleep resolves
 // after exactly its duration of monotonic and wall time, an early wake-up is one-shot (RK-03),
 // a stalled sleeper resolves without time passing, and requests are recorded.
+//
+// Sources (RK-17): no AWS service is emulated; the contract is the kernel Sleeper on the
+// VirtualTimeScheduler time base (design §12.2, RK-03 early timer fire).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

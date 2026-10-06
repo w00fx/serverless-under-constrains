@@ -9,11 +9,16 @@
 //
 // An ambiguous write is reported failed: the step fails, and a re-run reads the item again,
 // finding it either released (`not_held`) or still waiting (released then).
+//
+// The item is untrusted store content (Owner amendment A-05): only its own `state` and `version`
+// members are read, and an item whose state is not a BR-RUA-025 treatment state or whose version
+// is not an integer >= 1 (the `treatment_item` contract) fails the release instead of passing as
+// `not_held`, because nothing then proves that no barrier is held.
 
 import { describeJson } from '../record-contract/json-value.ts';
-import type { StructuredReason } from '../record-contract/primitives.ts';
-import type { NonterminalTreatmentState } from '../record-contract/records/group-b/vocabulary.ts';
-import { NONTERMINAL_TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.ts';
+import type { JsonValue, StructuredReason } from '../record-contract/primitives.ts';
+import type { NonterminalTreatmentState, TreatmentState } from '../record-contract/records/group-b/vocabulary.ts';
+import { NONTERMINAL_TREATMENT_STATES, TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.ts';
 import type { DurableItemStore, StoredItem, WriteAction, WriteOutcome } from '../durable-store/item-store-port.ts';
 import type { BarrierReleaseOutcome, BarrierReleasePort } from './cleanup-ports.ts';
 
@@ -43,25 +48,19 @@ export class ControlTableBarrierRelease implements BarrierReleasePort {
   }
 
   /** Moves the partition's treatment item to SAFETY_RELEASED when it is in a nonterminal state. */
-  async requestSafetyRelease(partitionKey: string): Promise<BarrierReleaseOutcome> {
-    let lastOutcome = 'none';
-    for (let attempt = 1; attempt <= MAX_RELEASE_ATTEMPTS; attempt += 1) {
-      const decision = await this.#decide(partitionKey);
-      if (decision.kind === 'done') {
-        return decision.outcome;
-      }
-      const written = await this.#store.write(releaseAction(partitionKey, decision.from, decision.version));
-      if (written.kind === 'applied') {
-        return { kind: 'released', from_state: decision.from };
-      }
-      if (written.kind !== 'condition_failed') {
-        return failed(partitionKey, `release write ${describeOutcome(written)}; expected applied`);
-      }
-      lastOutcome = describeOutcome(written);
+  requestSafetyRelease(partitionKey: string): Promise<BarrierReleaseOutcome> {
+    return this.#attemptRelease(partitionKey, 1);
+  }
+
+  // One read-and-release attempt; a lost race tries again, at most MAX_RELEASE_ATTEMPTS deep.
+  async #attemptRelease(partitionKey: string, attempt: number): Promise<BarrierReleaseOutcome> {
+    const decision = await this.#decide(partitionKey);
+    if (decision.kind === 'done') {
+      return decision.outcome;
     }
-    return failed(
-      partitionKey,
-      `treatment item changed during ${String(MAX_RELEASE_ATTEMPTS)} release attempts (last ${lastOutcome}); expected a stable state`,
+    const written = await this.#store.write(releaseAction(partitionKey, decision.from, decision.version));
+    return (
+      releaseOutcome(partitionKey, decision.from, written, attempt) ?? this.#attemptRelease(partitionKey, attempt + 1)
     );
   }
 
@@ -80,15 +79,38 @@ export class ControlTableBarrierRelease implements BarrierReleasePort {
   }
 }
 
+// The outcome of one release write, or undefined when a concurrent transition won the race and
+// the item must be read and decided again (at most MAX_RELEASE_ATTEMPTS times).
+function releaseOutcome(
+  partitionKey: string,
+  from: NonterminalTreatmentState,
+  written: WriteOutcome,
+  attempt: number,
+): BarrierReleaseOutcome | undefined {
+  if (written.kind === 'applied') {
+    return { kind: 'released', from_state: from };
+  }
+  if (written.kind !== 'condition_failed') {
+    return failed(partitionKey, `release write ${describeOutcome(written)}; expected applied`);
+  }
+  if (attempt < MAX_RELEASE_ATTEMPTS) {
+    return undefined;
+  }
+  return failed(
+    partitionKey,
+    `treatment item changed during ${String(MAX_RELEASE_ATTEMPTS)} release attempts (last ${describeOutcome(written)}); expected a stable state`,
+  );
+}
+
 function decideFromItem(partitionKey: string, item: StoredItem): ReleaseDecision {
-  const state = item['state'];
-  const version = item['version'];
-  if (typeof state !== 'string' || typeof version !== 'number' || !Number.isSafeInteger(version)) {
+  const state = ownMember(item, 'state');
+  const version = ownMember(item, 'version');
+  if (!isTreatmentState(state) || !isTreatmentVersion(version)) {
     return {
       kind: 'done',
       outcome: failed(
         partitionKey,
-        `treatment item state ${describeJson(state)} version ${describeJson(version)}; expected a state string and an integer version`,
+        `treatment item state ${describeJson(state)} version ${describeJson(version)}; expected one of ${TREATMENT_STATES.join(', ')} and an integer version >= 1`,
       ),
     };
   }
@@ -96,6 +118,20 @@ function decideFromItem(partitionKey: string, item: StoredItem): ReleaseDecision
     return { kind: 'done', outcome: { kind: 'not_held', state } };
   }
   return { kind: 'release', from: state, version };
+}
+
+// A member the item itself holds; an inherited name never counts (A-05).
+function ownMember(item: StoredItem, name: string): JsonValue | undefined {
+  return Object.hasOwn(item, name) ? item[name] : undefined;
+}
+
+function isTreatmentState(state: JsonValue | undefined): state is TreatmentState {
+  return typeof state === 'string' && (TREATMENT_STATES as readonly string[]).includes(state);
+}
+
+// The `treatment_item` contract: an integer version >= 1 (a non-finite number is no integer).
+function isTreatmentVersion(version: JsonValue | undefined): version is number {
+  return typeof version === 'number' && Number.isSafeInteger(version) && version >= 1;
 }
 
 function releaseAction(partitionKey: string, from: NonterminalTreatmentState, version: number): WriteAction {
@@ -115,7 +151,7 @@ function releaseAction(partitionKey: string, from: NonterminalTreatmentState, ve
   };
 }
 
-function isNonterminal(state: string): state is NonterminalTreatmentState {
+function isNonterminal(state: TreatmentState): state is NonterminalTreatmentState {
   return (NONTERMINAL_TREATMENT_STATES as readonly string[]).includes(state);
 }
 

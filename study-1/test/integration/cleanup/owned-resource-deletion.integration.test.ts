@@ -73,6 +73,15 @@ describe('deleteOwnedResources: the recorded stack', () => {
     assert.deepEqual(world.sleeper.requests(), [STACK_DELETE_POLL_INTERVAL_MS]);
   });
 
+  it('counts a stack that reads absent after the request as deleted', async () => {
+    const world = cleanupWorld();
+    world.stack.forgetDeletedStack();
+    const run = await runStep9(world);
+    assert.deepEqual(run.outcome, { status: 'succeeded', reasons: [] });
+    assert.deepEqual(run.items, [`DELETED recorded_stack ${STACK_ID}`]);
+    assert.deepEqual(world.sleeper.requests(), [STACK_DELETE_POLL_INTERVAL_MS]);
+  });
+
   it('reports a refused deletion request and still sweeps the remaining resources', async () => {
     const world = cleanupWorld();
     world.stack.failDeleteRequests();
