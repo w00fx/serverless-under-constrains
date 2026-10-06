@@ -188,3 +188,14 @@ function quoteTokens(tokens: readonly string[]): string {
 export function usageReason(problem: string, expected: string): StructuredReason {
   return { code: 'USAGE_ERROR', subject: 'operator-cli', detail: `${problem}; expected ${expected}` };
 }
+
+/**
+ * The value of a named operand; a parse always gives every operand of the grammar, so the empty
+ * fallback only answers a caller that asks for a name its grammar lacks.
+ *
+ * @example
+ * operandOf(args, 'package'); // 'evidence/runs/0b6d…'
+ */
+export function operandOf(args: ParsedArgs, name: string): string {
+  return args.positionals.get(name) ?? '';
+}

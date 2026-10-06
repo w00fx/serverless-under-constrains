@@ -9,7 +9,11 @@ import { NodePackageFileSystem } from '../evidence-package/node/node-package-fil
 import { createRecordValidator } from '../record-contract/schema-registry.ts';
 import type { CliCommand, CompositionRoot } from './cli-types.ts';
 import { GitRevisionWorkspace } from './node/git-revision-workspace.ts';
+import { OracleEvaluateCommand } from './oracle-evaluate-command.ts';
 import { OracleRevisionCheckCommand } from './oracle-revision-check.ts';
+import { StoredQualificationReader } from './run-completion-inputs.ts';
+import { RunVerifyCommand } from './run-verify-command.ts';
+import { ProbeVerifyCommand, ValidationVerifyCommand } from './verify-commands.ts';
 
 /** Where the CLI runs: its study root, working directory, environment and temporary directory. */
 export interface CompositionSettings {
@@ -49,6 +53,10 @@ export function createCompositionRoot(settings: CompositionSettings): Compositio
       clock,
       node_version: settings.nodeVersion,
     }),
+    new OracleEvaluateCommand({ files, validator, clock }),
+    new ProbeVerifyCommand({ files, validator, clock }),
+    new ValidationVerifyCommand({ files, validator, clock }),
+    new RunVerifyCommand({ files, validator, clock, qualifications: new StoredQualificationReader(clock, validator) }),
   ];
   return { commands, clock, validator, resolvePath: (path: string): string => resolve(settings.cwd, path) };
 }
