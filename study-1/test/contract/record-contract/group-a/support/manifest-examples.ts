@@ -198,7 +198,15 @@ export function succeededResourceManifest(): ResourceManifest {
     ],
     outputs: [{ key: 'ProviderQualifier', value: '1' }],
     provider_version: '1',
-    configuration: { provider_version: '1', event_source_mappings: [{ batch_size: 1 }] },
+    configuration: [
+      { logical_id: 'ControllerStreamMapping5E6F7A8B', attribute_path: 'BatchSize', canonical_json: '1' },
+      {
+        logical_id: 'ControllerStreamMapping5E6F7A8B',
+        attribute_path: 'FilterCriteria',
+        canonical_json: '{"Filters":[{"Pattern":"{\\"eventName\\":[\\"INSERT\\"]}"}]}',
+      },
+      { logical_id: 'ConventionalSourceQueue9A0B1C2D', attribute_path: 'VisibilityTimeout', canonical_json: '"60"' },
+    ],
     deploy_started_at: instant('12:00:10.000'),
     deploy_completed_at: instant('12:03:10.000'),
     frozen_at: instant('12:03:11.000'),

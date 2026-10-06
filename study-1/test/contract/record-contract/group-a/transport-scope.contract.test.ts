@@ -8,6 +8,7 @@ import { serializeRecordFile } from '../../../../src/record-contract/canonical-j
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import { transportScopePolicy, transportScopeSnapshot } from './support/admission-examples.ts';
 import { IDS } from './support/sample-values.ts';
+import { pointerOf as pointer, withValueAt } from '../group-b/support/json-paths.ts';
 import {
   asJson,
   assertAccepted,
@@ -139,6 +140,15 @@ describe('transport_scope_snapshot (BR-RUA-028)', () => {
       'null',
     );
     assertRejected(
+      withPath(transportScopeSnapshot(), ['runtime_properties', 'memory_size_mb'], 9007199254740992),
+      '/runtime_properties/memory_size_mb anyOf',
+      'unsafe integer',
+    );
+    assertAccepted(
+      withPath(transportScopeSnapshot(), ['runtime_properties', 'memory_size_mb'], -9007199254740991),
+      'smallest safe integer',
+    );
+    assertRejected(
       withField(transportScopeSnapshot(), 'runtime_properties', { NodeRuntime: 'nodejs24.x' }),
       '/runtime_properties propertyNames',
       'key',
@@ -152,6 +162,73 @@ describe('transport_scope_snapshot (BR-RUA-028)', () => {
       withPath(transportScopeSnapshot(), ['timing_values', 'treatment_poll_interval_ms'], 250.5),
       '/timing_values/treatment_poll_interval_ms type',
       'fraction',
+    );
+  });
+
+  it('carries each projected CloudFormation value as canonical JSON text under a snake_case member (BR-RUA-033)', () => {
+    const resource = ['configuration_projections', 1, 'resources', 0] as const;
+    const timeout = [...resource, 'property_values', 0] as const;
+    // The canonical snapshot leaves FilterCriteria unset: the entry keeps only its path.
+    assert.deepEqual(transportScopeSnapshot().configuration_projections[0].resources[0].property_values[2], {
+      property_path: 'Properties.FilterCriteria',
+    });
+    assertAccepted(transportScopeSnapshot(), 'set and unset properties');
+    // An object keyed by CloudFormation names, as an earlier projection format wrote it, is refused.
+    assertRejected(
+      withValueAt(
+        asJson(transportScopeSnapshot()),
+        ['configuration_projections', 1, 'values'],
+        [{ 'Properties.Timeout': 30 }],
+      ),
+      '/configuration_projections/1 additionalProperties',
+      'CloudFormation-keyed values',
+    );
+    assertRejected(
+      withPath(transportScopeSnapshot(), [...timeout, 'canonical_json'], 30),
+      `${pointer([...timeout, 'canonical_json'])} type`,
+      'raw JSON number',
+    );
+    assertRejected(
+      withPath(transportScopeSnapshot(), [...timeout, 'canonical_json'], null),
+      `${pointer([...timeout, 'canonical_json'])} type`,
+      'null instead of omitted',
+    );
+    assertRejected(
+      withPath(transportScopeSnapshot(), [...timeout, 'canonical_json'], ''),
+      `${pointer([...timeout, 'canonical_json'])} minLength`,
+      'empty text',
+    );
+    assertRejected(
+      withPath(transportScopeSnapshot(), [...timeout, 'property_path'], 'Properties..Timeout'),
+      `${pointer([...timeout, 'property_path'])} pattern`,
+      'path',
+    );
+    assertRejected(
+      withValueAt(asJson(transportScopeSnapshot()), [...timeout, 'Timeout'], 30),
+      `${pointer(timeout)} additionalProperties`,
+      'CloudFormation member name',
+    );
+    assertRejected(
+      withPath(transportScopeSnapshot(), [...resource, 'property_values'], []),
+      `${pointer([...resource, 'property_values'])} minItems`,
+      'resource without properties',
+    );
+    assertRejected(
+      withPath(transportScopeSnapshot(), ['configuration_projections', 1, 'resources'], []),
+      '/configuration_projections/1/resources minItems',
+      'projection without resources',
+    );
+    // Two resources with the same configuration are two equal entries.
+    const twin = transportScopeSnapshot().configuration_projections[1]?.resources[0];
+    assertAccepted(
+      withPath(transportScopeSnapshot(), ['configuration_projections', 1, 'resources'], [twin, twin]),
+      'equal resources',
+    );
+    const timeoutEntry = transportScopeSnapshot().configuration_projections[1]?.resources[0]?.property_values[0];
+    assertRejected(
+      withPath(transportScopeSnapshot(), [...resource, 'property_values'], [timeoutEntry, timeoutEntry]),
+      `${pointer([...resource, 'property_values'])} uniqueItems`,
+      'one property listed twice',
     );
   });
 

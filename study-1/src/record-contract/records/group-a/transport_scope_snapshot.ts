@@ -2,7 +2,7 @@
 // carries no execution identity and no timestamp, so a recomputation over unchanged committed
 // source is byte-identical and any drift is a structural difference.
 
-import type { JsonValue, Sha256Hex } from '../../primitives.ts';
+import type { Sha256Hex } from '../../primitives.ts';
 
 export interface ScopedSourceFile {
   readonly path: string;
@@ -14,10 +14,27 @@ export interface ResolvedDependency {
   readonly version: string;
 }
 
+/**
+ * One policy property path of one selected resource. The value is the canonical JSON text of
+ * the normalized CloudFormation value (names, ARNs, ids and tags stripped): CloudFormation
+ * member names such as `StreamViewType` or `Fn::GetAtt` are not BR-RUA-033 property names, so
+ * the snapshot carries them as text. `canonical_json` is omitted when the resource does not set
+ * the property, because an absent property is configuration too.
+ */
+export interface ProjectedProperty {
+  readonly property_path: string;
+  readonly canonical_json?: string;
+}
+
+/** The projected properties of one selected resource, in policy order. */
+export interface ProjectedResource {
+  readonly property_values: readonly [ProjectedProperty, ...ProjectedProperty[]];
+}
+
 export interface NormalizedConfigurationProjection {
   readonly projection_id: string;
-  /** Configuration values with names, ARNs, ids and tags stripped. */
-  readonly values: JsonValue;
+  /** One entry per selected resource, in canonical order; equal resources give equal entries. */
+  readonly resources: readonly [ProjectedResource, ...ProjectedResource[]];
 }
 
 /** The transport timing values in force when the snapshot was taken (OR-RUA-002). */
@@ -45,6 +62,11 @@ export interface TransportScopeSnapshot {
     NormalizedConfigurationProjection,
     ...NormalizedConfigurationProjection[],
   ];
+  /**
+   * The runtime property values the committed policy names. The policy, not this schema, owns
+   * the names and their meaning, so each value is a string, safe integer or boolean and the
+   * snapshot builder checks it against the policy.
+   */
   readonly runtime_properties: Readonly<Record<string, string | number | boolean>>;
   readonly timing_values: ScopeTimingValues;
   readonly provider_warmup: ProviderWarmupPolicy;

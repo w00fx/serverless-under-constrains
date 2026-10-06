@@ -1,15 +1,21 @@
 // Configuration projections of the transport scope (BR-RUA-028): for one policy projection,
 // the normalized values of its property paths on every selected template resource.
 //
-// Each selected resource contributes one object mapping every declared property path to its
-// normalized value, or to `null` when the resource does not set it: an absent property is
+// Each selected resource contributes one entry listing every declared property path, in policy
+// order, with the canonical JSON text of its normalized value. The text form keeps CloudFormation
+// member names (`StreamViewType`, `Fn::GetAtt`) out of the record's property names (BR-RUA-033).
+// The text is omitted when the resource does not set the property: an absent property is
 // configuration too (for example "no reserved concurrency"), so setting it later is drift.
-// The objects are sorted by their canonical form, because the logical ids and some construct
+// The entries are sorted by their canonical form, because the logical ids and some construct
 // paths below the selector embed execution-specific hashes and cannot serve as keys.
 
 import { canonicalJson } from '../../record-contract/canonical-json.ts';
-import type { JsonObject, JsonValue, Result, StructuredReason } from '../../record-contract/primitives.ts';
+import type { JsonObject, Result, StructuredReason } from '../../record-contract/primitives.ts';
 import type { ConfigurationProjectionPolicy } from '../../record-contract/records/group-a/transport_scope_policy.ts';
+import type {
+  ProjectedProperty,
+  ProjectedResource,
+} from '../../record-contract/records/group-a/transport_scope_snapshot.ts';
 import { compareCodeUnits } from './bundle-inputs.ts';
 import type { CfnTemplate, TemplateResource } from './cfn-template.ts';
 import { listTemplateResources, valueAtPath } from './cfn-template.ts';
@@ -26,22 +32,27 @@ import { scopeViolation } from './scope-reasons.ts';
  * normalizeConfigurationProjection(template, {
  *   projection_id: 'experiment_core__functions', resource_type: 'AWS::Lambda::Function',
  *   property_paths: ['Properties.Timeout'],
- * }); // ok([{ 'Properties.Timeout': 30 }, { 'Properties.Timeout': 30 }])
+ * }); // ok([{ property_values: [{ property_path: 'Properties.Timeout', canonical_json: '30' }] }, ...])
  */
 export function normalizeConfigurationProjection(
   template: CfnTemplate,
   projection: ConfigurationProjectionPolicy,
-): Result<JsonValue, StructuredReason> {
+): Result<readonly [ProjectedResource, ...ProjectedResource[]], StructuredReason> {
   const resources = listTemplateResources(template);
   if (!resources.ok) {
     return resources;
   }
   const resourceTypes = new Map(resources.value.map((resource) => [resource.logical_id, resource.type]));
   const selector = projectionSelector(projection.projection_id);
-  const selected = resources.value.filter(
-    (resource) => resource.type === projection.resource_type && constructPathMatches(resource.construct_path, selector),
+  const [first, ...rest] = sortCanonically(
+    resources.value
+      .filter(
+        (resource) =>
+          resource.type === projection.resource_type && constructPathMatches(resource.construct_path, selector),
+      )
+      .map((resource) => projectResource(resource, projection.property_paths, resourceTypes)),
   );
-  if (selected.length === 0) {
+  if (first === undefined) {
     return {
       ok: false,
       error: scopeViolation(
@@ -51,8 +62,7 @@ export function normalizeConfigurationProjection(
       ),
     };
   }
-  const values = selected.map((resource) => projectResource(resource, projection.property_paths, resourceTypes));
-  return { ok: true, value: sortCanonically(values) };
+  return { ok: true, value: [first, ...rest] };
 }
 
 /**
@@ -88,20 +98,50 @@ export function snakeCaseSegment(segment: string): string {
 
 function projectResource(
   resource: TemplateResource,
-  propertyPaths: readonly string[],
+  propertyPaths: readonly [string, ...string[]],
   resourceTypes: ReadonlyMap<string, string>,
-): JsonObject {
-  const projected: Record<string, JsonValue> = {};
-  for (const path of propertyPaths) {
-    const value = valueAtPath(resource.resource, path);
-    projected[path] = value === undefined ? null : normalizeCfnValue(value, resourceTypes);
-  }
-  return projected;
+): ProjectedResource {
+  const [firstPath, ...otherPaths] = propertyPaths;
+  return {
+    property_values: [
+      projectProperty(resource, firstPath, resourceTypes),
+      ...otherPaths.map((path) => projectProperty(resource, path, resourceTypes)),
+    ],
+  };
 }
 
-function sortCanonically(values: readonly JsonObject[]): readonly JsonValue[] {
+function projectProperty(
+  resource: TemplateResource,
+  path: string,
+  resourceTypes: ReadonlyMap<string, string>,
+): ProjectedProperty {
+  const value = valueAtPath(resource.resource, path);
+  return value === undefined
+    ? { property_path: path }
+    : { property_path: path, canonical_json: canonicalJson(normalizeCfnValue(value, resourceTypes)) };
+}
+
+/**
+ * A projected resource as plain JSON, for canonical ordering and drift reports; an unset
+ * property keeps only its path.
+ *
+ * @example
+ * projectedResourceJson({ property_values: [{ property_path: 'Properties.Timeout', canonical_json: '30' }] });
+ * // { property_values: [{ property_path: 'Properties.Timeout', canonical_json: '30' }] }
+ */
+export function projectedResourceJson(resource: ProjectedResource): JsonObject {
+  return { property_values: resource.property_values.map(projectedPropertyJson) };
+}
+
+function projectedPropertyJson(property: ProjectedProperty): JsonObject {
+  return property.canonical_json === undefined
+    ? { property_path: property.property_path }
+    : { property_path: property.property_path, canonical_json: property.canonical_json };
+}
+
+function sortCanonically(values: readonly ProjectedResource[]): readonly ProjectedResource[] {
   return values
-    .map((value) => ({ value, canonical: canonicalJson(value) }))
+    .map((value) => ({ value, canonical: canonicalJson(projectedResourceJson(value)) }))
     .sort((a, b) => compareCodeUnits(a.canonical, b.canonical))
     .map((entry) => entry.value);
 }

@@ -147,7 +147,32 @@ export function transportScopeSnapshot(): TransportScopeSnapshot {
       { name: '@smithy/node-http-handler', version: '4.12.1' },
     ],
     lockfile_sha256: DIGESTS.lockfile,
-    configuration_projections: [{ projection_id: 'provider_function', values: { Timeout: 30, MemorySize: 512 } }],
+    configuration_projections: [
+      {
+        projection_id: 'controller_event_source_mapping',
+        resources: [
+          {
+            property_values: [
+              { property_path: 'Properties.BatchSize', canonical_json: '1' },
+              { property_path: 'Properties.StartingPosition', canonical_json: '"LATEST"' },
+              { property_path: 'Properties.FilterCriteria' },
+            ],
+          },
+        ],
+      },
+      {
+        projection_id: 'provider_function',
+        resources: [
+          {
+            property_values: [
+              { property_path: 'Properties.Timeout', canonical_json: '30' },
+              { property_path: 'Properties.MemorySize', canonical_json: '512' },
+              { property_path: 'Properties.Runtime', canonical_json: '"nodejs24.x"' },
+            ],
+          },
+        ],
+      },
+    ],
     runtime_properties: { node_runtime: 'nodejs24.x', architecture: 'x86_64', memory_size_mb: 512 },
     timing_values: {
       provider_client_deadline_ms: 3000,

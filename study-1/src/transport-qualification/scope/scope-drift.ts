@@ -13,6 +13,7 @@ import type {
   TransportScopeSnapshot,
 } from '../../record-contract/records/group-a/transport_scope_snapshot.ts';
 import { sortedCodeUnits } from './bundle-inputs.ts';
+import { projectedResourceJson } from './configuration-projection.ts';
 import { SCOPE_REASON_SUBJECT } from './scope-reasons.ts';
 import { SCOPE_TIMING_KEYS, scopeSnapshotSha256 } from './scope-snapshot.ts';
 
@@ -93,8 +94,8 @@ function itemizeDrift(selected: TransportScopeSnapshot, recomputed: TransportSco
     ...diffValue('SCOPED_LOCKFILE_CHANGED', 'lockfile_sha256', selected.lockfile_sha256, recomputed.lockfile_sha256),
     ...diffKeyed(
       'SCOPED_CONFIGURATION_CHANGED',
-      keyedBy(selected.configuration_projections, (p) => [p.projection_id, p.values]),
-      keyedBy(recomputed.configuration_projections, (p) => [p.projection_id, p.values]),
+      keyedBy(selected.configuration_projections, (p) => [p.projection_id, p.resources.map(projectedResourceJson)]),
+      keyedBy(recomputed.configuration_projections, (p) => [p.projection_id, p.resources.map(projectedResourceJson)]),
     ),
     ...diffKeyed(
       'SCOPED_RUNTIME_PROPERTY_CHANGED',

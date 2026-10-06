@@ -23,6 +23,7 @@ import { CLIENT_SOURCE, CLIENT_TIMING_FILE, sampleSnapshotInput } from './suppor
 
 const SHA_A = 'a'.repeat(64) as Sha256Hex;
 const SHA_B = 'b'.repeat(64) as Sha256Hex;
+const TIMEOUT_31 = { property_values: [{ property_path: 'Properties.Timeout', canonical_json: '31' }] } as const;
 
 function baseSnapshot(): TransportScopeSnapshot {
   const result = computeScopeSnapshot(sampleSnapshotInput());
@@ -127,19 +128,19 @@ describe('compareScopeSnapshots: itemized drift', () => {
     assert.ok(tables !== undefined);
     const recomputed: TransportScopeSnapshot = {
       ...base,
-      configuration_projections: [{ projection_id: functions.projection_id, values: [{ 'Properties.Timeout': 31 }] }],
+      configuration_projections: [{ projection_id: functions.projection_id, resources: [TIMEOUT_31] }],
     };
     assert.deepEqual(driftItems(compareScopeSnapshots(base, recomputed)), [
       {
         code: 'SCOPED_CONFIGURATION_CHANGED',
         subject: 'experiment_core__functions',
-        selected: functions.values,
-        recomputed: [{ 'Properties.Timeout': 31 }],
+        selected: functions.resources,
+        recomputed: [TIMEOUT_31],
       },
       {
         code: 'SCOPED_CONFIGURATION_CHANGED',
         subject: 'experiment_core__tables',
-        selected: tables.values,
+        selected: tables.resources,
         recomputed: null,
       },
     ]);

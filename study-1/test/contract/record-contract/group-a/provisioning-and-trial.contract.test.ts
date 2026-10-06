@@ -15,7 +15,14 @@ import {
   trialRegistration,
 } from './support/manifest-examples.ts';
 import { FIXTURE, IDS } from './support/sample-values.ts';
-import { assertAccepted, assertRejected, withField, withPath, withoutField } from './support/validation-assertions.ts';
+import {
+  assertAccepted,
+  assertRejected,
+  withField,
+  withPath,
+  withoutField,
+  withoutPath,
+} from './support/validation-assertions.ts';
 
 describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
   it('accepts every provisioning status', () => {
@@ -38,6 +45,47 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       withField(succeededResourceManifest(), 'resources', []),
       '/resources minItems',
       'succeeded without resources',
+    );
+  });
+
+  it('snapshots post-deploy configuration as attribute entries with canonical JSON text (BR-RUA-033)', () => {
+    const entry = ['configuration', 0] as const;
+    assertRejected(
+      withField(succeededResourceManifest(), 'configuration', { FunctionName: null, MemorySize: 512 }),
+      '/configuration type',
+      'AWS-keyed object with a null',
+    );
+    assertRejected(withField(succeededResourceManifest(), 'configuration', []), '/configuration minItems', 'empty');
+    assertAccepted(withField(failedResourceManifest(), 'configuration', []), 'a failed deploy read nothing');
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'canonical_json'], 1),
+      '/configuration/0/canonical_json type',
+      'raw value',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'canonical_json'], null),
+      '/configuration/0/canonical_json type',
+      'null value',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'canonical_json'], ''),
+      '/configuration/0/canonical_json minLength',
+      'empty text',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'attribute_path'], 'Batch Size'),
+      '/configuration/0/attribute_path pattern',
+      'attribute path',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'logical_id'], 'Controller-Mapping'),
+      '/configuration/0/logical_id pattern',
+      'logical id',
+    );
+    assertRejected(
+      withoutPath(succeededResourceManifest(), [...entry, 'canonical_json']),
+      '/configuration/0 required',
+      'no value',
     );
   });
 

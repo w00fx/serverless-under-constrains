@@ -2,7 +2,7 @@
 // only after a `succeeded` manifest, which always names the stack id and provider version.
 
 import type { ExecutionIdentityFields } from '../../envelope.ts';
-import type { JsonObject, Sha256Hex, UtcMillis } from '../../primitives.ts';
+import type { Sha256Hex, UtcMillis } from '../../primitives.ts';
 
 export const PROVISIONING_STATUSES = ['succeeded', 'partial', 'failed'] as const;
 export type ProvisioningStatus = (typeof PROVISIONING_STATUSES)[number];
@@ -20,6 +20,17 @@ export interface StackResourceEntry {
 export interface KeyValueEntry {
   readonly key: string;
   readonly value: string;
+}
+
+/**
+ * One attribute of the post-deploy configuration snapshot, for example the `BatchSize` of an
+ * event source mapping. The value is the canonical JSON text of what the AWS API returned,
+ * because AWS member names are not BR-RUA-033 property names.
+ */
+export interface ConfigurationAttribute {
+  readonly logical_id: string;
+  readonly attribute_path: string;
+  readonly canonical_json: string;
 }
 
 interface ResourceManifestFields {
@@ -41,8 +52,8 @@ export interface SucceededProvisioning {
   readonly stack_id: string;
   /** The immutable `AWS::Lambda::Version` number of the provider (BR-RUA-053). */
   readonly provider_version: string;
-  /** Post-deploy configuration snapshot (provider version, ESM settings, queues, streams, tags). */
-  readonly configuration: JsonObject;
+  /** Post-deploy configuration snapshot (ESM settings, queue attributes, table streams, tags). */
+  readonly configuration: readonly [ConfigurationAttribute, ...ConfigurationAttribute[]];
   readonly deploy_completed_at: UtcMillis;
 }
 
@@ -50,7 +61,7 @@ export interface IncompleteProvisioning {
   readonly provisioning_status: 'partial' | 'failed';
   readonly stack_id?: string;
   readonly provider_version?: string;
-  readonly configuration?: JsonObject;
+  readonly configuration?: readonly ConfigurationAttribute[];
   readonly deploy_completed_at?: UtcMillis;
 }
 
