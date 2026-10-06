@@ -44,7 +44,8 @@ const SHARED_TEMPLATE: Omit<VariantDeploymentSheet, 'caller_strategy'> = {
   },
   provider_configuration: {
     runtime: 'nodejs24.x',
-    architecture: 'arm64',
+    // D-22: every function runs x86_64 with 512 MB.
+    architecture: 'x86_64',
     memory_mb: 512,
     timeout_s: 30,
     environment_keys: ['LEDGER_TABLE', 'PROVIDER_JOURNAL_TABLE', 'TREATMENT_TABLE'],
@@ -55,7 +56,16 @@ const SHARED_TEMPLATE: Omit<VariantDeploymentSheet, 'caller_strategy'> = {
     batch_size: 1,
     filter: 'INSERT',
   },
-  caller_timing: { http_handler: { request_timeout_ms: 3000, keep_alive: false } },
+  // Design §9.13 row 3 (CF V-2): no lower-level timeout preempts the 3 s provider-client deadline.
+  caller_timing: {
+    http_handler: {
+      connection_timeout_ms: 0,
+      request_timeout_ms: 0,
+      socket_timeout_ms: 0,
+      throw_on_request_timeout: false,
+      keep_alive: true,
+    },
+  },
 };
 
 /** The Durable strategy's own settings (design §8.14 `caller_timing` declared differences). */
