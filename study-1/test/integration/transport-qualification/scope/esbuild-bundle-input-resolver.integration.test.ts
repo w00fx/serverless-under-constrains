@@ -72,6 +72,17 @@ describe('EsbuildBundleInputResolver', () => {
     assert.deepEqual(await resolver.resolve([]), []);
   });
 
+  it('reports the bundling options it resolves with as runtime properties', () => {
+    const resolver = new EsbuildBundleInputResolver({ projectRoot: project.projectRoot });
+    assert.deepEqual(resolver.runtime_properties, {
+      bundle_aws_sdk: true,
+      bundle_format: 'esm',
+      bundle_main_fields: 'module,main',
+      bundle_platform: 'node',
+      bundle_target: 'node24',
+    });
+  });
+
   it('binds the bundling options ObservableFunction deploys with', () => {
     const construct = readFileSync(
       new URL('../../../../infra/constructs/observable-function.ts', import.meta.url),

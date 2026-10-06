@@ -134,6 +134,14 @@ describe('normalizeCfnValue', () => {
     ]);
   });
 
+  it('keeps a parsed __proto__ key as a key instead of replacing the prototype', () => {
+    const parsed = JSON.parse('{"__proto__":{"Ref":"LedgerA1B2"},"Timeout":3}') as JsonValue;
+    const normalized = normalizeCfnValue(parsed, TYPES);
+    assert.deepEqual(Object.keys(normalized as object), ['__proto__', 'Timeout']);
+    assert.equal(Object.getPrototypeOf(normalized), Object.prototype);
+    assert.equal(JSON.stringify(normalized), '{"__proto__":{"Ref":"<AWS::DynamoDB::Table>"},"Timeout":3}');
+  });
+
   it('keeps numbers, booleans and null', () => {
     assert.equal(normalizeCfnValue(30, TYPES), 30);
     assert.equal(normalizeCfnValue(false, TYPES), false);

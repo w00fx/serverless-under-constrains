@@ -3,6 +3,7 @@
 // a structured qualification reason. Runs over the named fakes of both read ports.
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { createRecordValidator } from '../../../../src/record-contract/schema-registry.ts';
@@ -24,6 +25,7 @@ import {
   SAMPLE_RUNTIME,
   SAMPLE_TIMING,
   cdkTemplate,
+  policyBytes,
   sampleSnapshotInput,
 } from './support/scope-fixtures.ts';
 
@@ -38,7 +40,7 @@ const ENVIRONMENT: ScopeEnvironment = {
 function committedProject(): MemoryCommittedSourceReader {
   return new MemoryCommittedSourceReader({
     ...SAMPLE_COMMITTED_FILES,
-    [TRANSPORT_SCOPE_POLICY_PATH]: JSON.stringify(SAMPLE_POLICY),
+    [TRANSPORT_SCOPE_POLICY_PATH]: policyBytes(),
     [PACKAGE_LOCK_PATH]: SAMPLE_LOCK_BYTES,
   });
 }
@@ -201,5 +203,123 @@ describe('recomputeScopeSnapshot', () => {
     const result = await recomputeScopeSnapshot(ENVIRONMENT, { sources: committedProject(), bundles, validator });
     assert.ok(!result.ok);
     assert.match(result.error[0]?.detail ?? '', /failed: plain failure; expected every entry point/);
+  });
+
+  it('binds the policy digest over the exact committed policy bytes', async () => {
+    const sources = committedProject();
+    const pretty = new TextEncoder().encode(`${JSON.stringify(SAMPLE_POLICY, null, 2)}\n`);
+    sources.commit(TRANSPORT_SCOPE_POLICY_PATH, pretty);
+    const recomputed = await recomputeScopeSnapshot(ENVIRONMENT, {
+      sources,
+      bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      validator,
+    });
+    assert.ok(recomputed.ok);
+    assert.equal(recomputed.value.policy_sha256, createHash('sha256').update(pretty).digest('hex'));
+  });
+});
+
+describe('recomputeScopeSnapshot port failures (regression: verify/eng-git-reader.log)', () => {
+  const READ_DETAIL = 'expected the admitted revision to be readable';
+
+  async function recomputeWith(sources: MemoryCommittedSourceReader): ReturnType<typeof recomputeScopeSnapshot> {
+    return recomputeScopeSnapshot(ENVIRONMENT, {
+      sources,
+      bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+      validator,
+    });
+  }
+
+  it('reports an unreadable policy read as a source read failure, not as an uncommitted policy', async () => {
+    const sources = committedProject();
+    sources.failWith('read', 'git ls-tree no-such-revision exited 128: fatal: Not a valid object name');
+    assert.deepEqual(await recomputeWith(sources), {
+      ok: false,
+      error: [
+        {
+          code: 'SOURCE_READ_FAILED',
+          subject: 'BR-RUA-028',
+          detail:
+            `reading committed ${TRANSPORT_SCOPE_POLICY_PATH} failed: git ls-tree no-such-revision exited 128: ` +
+            `fatal: Not a valid object name; ${READ_DETAIL}`,
+        },
+      ],
+    });
+  });
+
+  it('reports an unreadable lockfile read as a source read failure', async () => {
+    const sources = committedProject();
+    sources.failWith('read', 'object corrupt', PACKAGE_LOCK_PATH);
+    assert.deepEqual(await recomputeWith(sources), {
+      ok: false,
+      error: [
+        {
+          code: 'SOURCE_READ_FAILED',
+          subject: 'BR-RUA-028',
+          detail: `reading committed ${PACKAGE_LOCK_PATH} failed: object corrupt; ${READ_DETAIL}`,
+        },
+      ],
+    });
+  });
+
+  it('reports an unreadable scoped file as a source read failure, not as uncommitted', async () => {
+    const sources = committedProject();
+    sources.failWith('read', 'maxBuffer exceeded', CLIENT_SOURCE);
+    assert.deepEqual(await recomputeWith(sources), {
+      ok: false,
+      error: [
+        {
+          code: 'SOURCE_READ_FAILED',
+          subject: 'BR-RUA-028',
+          detail: `reading committed ${CLIENT_SOURCE} failed: maxBuffer exceeded; ${READ_DETAIL}`,
+        },
+      ],
+    });
+  });
+
+  it('resolves a listing failure to a reason instead of rejecting', async () => {
+    const sources = committedProject();
+    sources.failWith('listFiles', 'git ls-tree HEAD exited 128: fatal: not a git repository');
+    assert.deepEqual(await recomputeWith(sources), {
+      ok: false,
+      error: [
+        {
+          code: 'SOURCE_READ_FAILED',
+          subject: 'BR-RUA-028',
+          detail:
+            `listing the committed files under ${JSON.stringify(SAMPLE_POLICY.source_roots)} failed: ` +
+            `git ls-tree HEAD exited 128: fatal: not a git repository; ${READ_DETAIL}`,
+        },
+      ],
+    });
+  });
+});
+
+describe('recomputeScopeSnapshot runtime properties', () => {
+  it('binds the runtime properties the bundler resolved with', async () => {
+    const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES, { bundle_format: 'cjs', bundle_target: 'node22' });
+    const recomputed = await recomputeScopeSnapshot(
+      { ...ENVIRONMENT, runtime: { unrelated_property: 'ignored' } },
+      { sources: committedProject(), bundles, validator },
+    );
+    assert.ok(recomputed.ok);
+    assert.deepEqual(recomputed.value.runtime_properties, { bundle_format: 'cjs', bundle_target: 'node22' });
+  });
+
+  it('refuses an environment value that contradicts the bundler, before bundling', async () => {
+    const bundles = new FixedBundleInputResolver(SAMPLE_BUNDLES, { bundle_format: 'cjs', bundle_target: 'node24' });
+    assert.deepEqual(await recomputeScopeSnapshot(ENVIRONMENT, { sources: committedProject(), bundles, validator }), {
+      ok: false,
+      error: [
+        {
+          code: 'RUNTIME_PROPERTY_INVALID',
+          subject: 'BR-RUA-028',
+          detail:
+            'runtime property bundle_format is "esm" in the admission environment but the bundler resolved with "cjs"; ' +
+            "expected the bundler's value",
+        },
+      ],
+    });
+    assert.deepEqual(bundles.requests(), []);
   });
 });

@@ -1,20 +1,27 @@
 // Named fake of `BundleInputResolver`: returns preset closures. It emulates the esbuild
-// adapter: one result per requested entry point in request order, and a rejection naming the
-// entry point when it cannot be resolved. `failWith` scripts a bundler failure. Its
-// conformance test compares it with `EsbuildBundleInputResolver` over a real project.
+// adapter: one result per requested entry point in request order, a rejection naming the
+// entry point when it cannot be resolved, and the same bundling runtime properties unless a
+// test presets others. `failWith` scripts a bundler failure. Its conformance test compares it
+// with `EsbuildBundleInputResolver` over a real project.
 
+import { SCOPE_BUNDLE_RUNTIME_PROPERTIES } from '../../../../../src/transport-qualification/scope/bundle-inputs.ts';
 import type {
   BundleInputResolver,
   BundleInputs,
 } from '../../../../../src/transport-qualification/scope/bundle-inputs.ts';
 
 export class FixedBundleInputResolver implements BundleInputResolver {
+  readonly runtime_properties: Readonly<Record<string, string | number | boolean>>;
   readonly #bundles: Map<string, BundleInputs>;
   readonly #requests: (readonly string[])[] = [];
   #failure: { readonly value: string; readonly asError: boolean } | undefined;
 
-  constructor(bundles: readonly BundleInputs[] = []) {
+  constructor(
+    bundles: readonly BundleInputs[] = [],
+    runtimeProperties: Readonly<Record<string, string | number | boolean>> = SCOPE_BUNDLE_RUNTIME_PROPERTIES,
+  ) {
     this.#bundles = new Map(bundles.map((bundle) => [bundle.entry_point, bundle]));
+    this.runtime_properties = runtimeProperties;
   }
 
   /** Every later `resolve` rejects with an Error carrying this message. */

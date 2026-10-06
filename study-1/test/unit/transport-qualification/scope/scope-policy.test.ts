@@ -1,11 +1,11 @@
-// BR-RUA-028: the committed scope policy is validated against its schema and digested over
-// its canonical record bytes, so formatting never drifts the scope but content always does.
+// BR-RUA-028: the committed scope policy is validated against its schema, and "the policy
+// digest" is a file digest: lowercase SHA-256 over the exact stored bytes (BR-RUA-033). Any
+// byte change, formatting included, is a different digest.
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
-import { serializeRecordFile } from '../../../../src/record-contract/canonical-json.ts';
-import { sha256Hex } from '../../../../src/record-contract/digests.ts';
 import { createRecordValidator } from '../../../../src/record-contract/schema-registry.ts';
 import {
   TRANSPORT_SCOPE_POLICY_PATH,
@@ -18,23 +18,29 @@ const encoder = new TextEncoder();
 const validator = createRecordValidator();
 
 describe('parseTransportScopePolicy', () => {
-  it('returns the policy and the digest of its canonical record bytes', () => {
-    const parsed = parseTransportScopePolicy(encoder.encode(JSON.stringify(SAMPLE_POLICY, null, 2)), validator);
+  it('returns the policy and the SHA-256 of its exact stored bytes', () => {
+    const bytes = encoder.encode(JSON.stringify(SAMPLE_POLICY, null, 2));
+    const parsed = parseTransportScopePolicy(bytes, validator);
     assert.deepEqual(parsed, {
       ok: true,
-      value: { policy: SAMPLE_POLICY, policy_sha256: sha256Hex(serializeRecordFile(SAMPLE_POLICY)) },
+      value: { policy: SAMPLE_POLICY, policy_sha256: createHash('sha256').update(bytes).digest('hex') },
     });
   });
 
-  it('gives the same digest for a reformatted policy and a new digest for changed content', () => {
-    const pretty = parseTransportScopePolicy(encoder.encode(JSON.stringify(SAMPLE_POLICY, null, 4)), validator);
-    const compact = parseTransportScopePolicy(encoder.encode(JSON.stringify(SAMPLE_POLICY)), validator);
+  it('gives a reformatted policy a new digest, as it gives changed content (BR-RUA-033 file digest)', () => {
+    const prettyBytes = encoder.encode(JSON.stringify(SAMPLE_POLICY, null, 4));
+    const compactBytes = encoder.encode(JSON.stringify(SAMPLE_POLICY));
+    const pretty = parseTransportScopePolicy(prettyBytes, validator);
+    const compact = parseTransportScopePolicy(compactBytes, validator);
     const changed = parseTransportScopePolicy(
       encoder.encode(JSON.stringify({ ...SAMPLE_POLICY, dependencies: ['@scope/declared-dep', 'esbuild'] })),
       validator,
     );
     assert.ok(pretty.ok && compact.ok && changed.ok);
-    assert.equal(pretty.value.policy_sha256, compact.value.policy_sha256);
+    assert.deepEqual(pretty.value.policy, compact.value.policy);
+    assert.equal(pretty.value.policy_sha256, createHash('sha256').update(prettyBytes).digest('hex'));
+    assert.equal(compact.value.policy_sha256, createHash('sha256').update(compactBytes).digest('hex'));
+    assert.notEqual(pretty.value.policy_sha256, compact.value.policy_sha256);
     assert.notEqual(changed.value.policy_sha256, compact.value.policy_sha256);
   });
 

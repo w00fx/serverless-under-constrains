@@ -20,11 +20,18 @@ export interface GitCommittedSourceReaderDeps {
 interface GitOutput {
   readonly exitCode: number;
   readonly stdout: Buffer;
+  /** Git's stderr, or the spawn error message when git never ran (missing binary or directory). */
   readonly stderr: string;
 }
 
+/** One `git ls-tree -z` entry: `<mode> SP <type> SP <object> TAB <path>`. */
+const LS_TREE_ENTRY = /^[0-7]+ (\w+) ([0-9a-f]+)\t(.*)$/s;
+
 /**
- * The production `CommittedSourceReader`.
+ * The production `CommittedSourceReader`. Only a confirmed "the revision's tree has no file at
+ * this path" reads as `undefined`; every operational failure (no git, no repository, a bad
+ * revision, an unreadable object, an oversized output) rejects with git's exit status and
+ * stderr, so it can never pass for "not committed".
  *
  * @example
  * const sources = new GitCommittedSourceReader({ projectRoot: '/repo/study-1' });
@@ -40,23 +47,35 @@ export class GitCommittedSourceReader implements CommittedSourceReader {
   }
 
   async listFiles(roots: readonly string[]): Promise<readonly string[]> {
-    const output = await this.#git(['ls-tree', '-r', '-z', '--name-only', this.#revision, '--', ...roots]);
-    if (output.exitCode !== 0) {
-      throw new Error(
-        `git ls-tree ${this.#revision} in ${this.#projectRoot} exited ${String(output.exitCode)}: ${output.stderr.trim()}; ` +
-          'expected a git work tree with that revision',
-      );
+    // `git ls-tree` without a pathspec lists the whole tree; no root means no file.
+    if (roots.length === 0) {
+      return [];
     }
-    return output.stdout
-      .toString('utf8')
-      .split('\0')
-      .filter((path) => path !== '')
-      .sort();
+    const output = await this.#gitOrThrow(['ls-tree', '-r', '-z', '--name-only', this.#revision, '--', ...roots]);
+    return splitNul(output.stdout).sort();
   }
 
   async read(path: string): Promise<Uint8Array | undefined> {
-    const output = await this.#git(['cat-file', 'blob', `${this.#revision}:./${path}`]);
-    return output.exitCode === 0 ? new Uint8Array(output.stdout) : undefined;
+    // Listing the single path first separates "absent at the revision" (an empty listing, exit
+    // 0) from a failure, without parsing git's localized error text.
+    const listing = await this.#gitOrThrow(['ls-tree', '-z', this.#revision, '--', path]);
+    const object = blobObject(splitNul(listing.stdout), path);
+    if (object === undefined) {
+      return undefined;
+    }
+    const content = await this.#gitOrThrow(['cat-file', 'blob', object]);
+    return new Uint8Array(content.stdout);
+  }
+
+  async #gitOrThrow(args: readonly string[]): Promise<GitOutput> {
+    const output = await this.#git(args);
+    if (output.exitCode !== 0) {
+      throw new Error(
+        `git ${String(args[0])} ${this.#revision} in ${this.#projectRoot} exited ${String(output.exitCode)}: ` +
+          `${output.stderr.trim()}; expected a git work tree with that revision`,
+      );
+    }
+    return output;
   }
 
   #git(args: readonly string[]): Promise<GitOutput> {
@@ -66,10 +85,31 @@ export class GitCommittedSourceReader implements CommittedSourceReader {
         ['--literal-pathspecs', ...args],
         { cwd: this.#projectRoot, encoding: 'buffer', maxBuffer: GIT_MAX_BUFFER_BYTES },
         (error, stdout, stderr) => {
-          const exitCode = error === null ? 0 : typeof error.code === 'number' ? error.code : 1;
-          resolve({ exitCode, stdout, stderr: stderr.toString('utf8') });
+          if (error === null) {
+            resolve({ exitCode: 0, stdout, stderr: stderr.toString('utf8') });
+            return;
+          }
+          const exitCode = typeof error.code === 'number' ? error.code : 1;
+          const detail = stderr.length > 0 ? stderr.toString('utf8') : error.message;
+          resolve({ exitCode, stdout, stderr: detail });
         },
       );
     });
   }
+}
+
+// The object id of the one blob listed exactly at `path`; a directory (a tree, or several
+// entries), a submodule or another path is no committed file.
+function blobObject(entries: readonly string[], path: string): string | undefined {
+  const [entry, ...others] = entries;
+  const match = entry === undefined || others.length > 0 ? null : LS_TREE_ENTRY.exec(entry);
+  const [, type, object, listedPath] = match ?? [];
+  return type === 'blob' && listedPath === path ? object : undefined;
+}
+
+function splitNul(stdout: Buffer): string[] {
+  return stdout
+    .toString('utf8')
+    .split('\0')
+    .filter((entry) => entry !== '');
 }

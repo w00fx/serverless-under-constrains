@@ -1,7 +1,7 @@
 // Conformance of MemoryCommittedSourceReader with GitCommittedSourceReader over the same
 // committed tree (RK-17): `git ls-tree -r` listing semantics (sorted, prefix roots on path
-// segments, file roots, absent roots) and `git cat-file blob` bytes, with undefined for a path
-// the revision does not contain.
+// segments, file roots, absent roots, no root) and `git cat-file blob` bytes, with undefined
+// for a path the revision does not hold as a file.
 
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
@@ -27,7 +27,14 @@ const LISTINGS: readonly (readonly string[])[] = [
   ['src/missing', 'Zeta.ts'],
   [],
 ];
-const READS = ['src/provider-client/a.ts', 'src/provider-client/deep/z.json', 'src/absent.ts', 'src'];
+const READS = [
+  'src/provider-client/a.ts',
+  'src/provider-client/deep/z.json',
+  'src/absent.ts',
+  'src',
+  'src/refund-provider/',
+  './Zeta.ts',
+];
 
 describe('MemoryCommittedSourceReader conformance with GitCommittedSourceReader', () => {
   let project: TemporaryScopeProject;
@@ -44,7 +51,7 @@ describe('MemoryCommittedSourceReader conformance with GitCommittedSourceReader'
     project.dispose();
   });
 
-  for (const roots of LISTINGS.filter((list) => list.length > 0)) {
+  for (const roots of LISTINGS) {
     it(`lists the same files for roots ${JSON.stringify(roots)}`, async () => {
       assert.deepEqual(await memory.listFiles(roots), await git.listFiles(roots));
     });
@@ -69,5 +76,21 @@ describe('MemoryCommittedSourceReader controls', () => {
     assert.deepEqual(await reader.read('b.ts'), Uint8Array.from([1, 2]));
     assert.equal(await reader.read('a.ts'), undefined);
     assert.deepEqual(reader.reads(), ['b.ts', 'b.ts', 'a.ts']);
+  });
+
+  it('scripts listing failures, read failures and read failures of one path', async () => {
+    const reader = new MemoryCommittedSourceReader({ 'a.ts': 'a', 'b.ts': 'b' });
+    reader.failWith('read', 'b unreadable', 'b.ts');
+    assert.deepEqual(await reader.read('a.ts'), new TextEncoder().encode('a'));
+    await assert.rejects(
+      reader.read('b.ts'),
+      (error: unknown) => error instanceof Error && error.message === 'b unreadable',
+    );
+    assert.deepEqual(await reader.listFiles(['a.ts']), ['a.ts']);
+    reader.failWith('read', 'all unreadable');
+    await assert.rejects(reader.read('a.ts'), /^Error: all unreadable$/);
+    reader.failWith('listFiles', 'no listing');
+    await assert.rejects(reader.listFiles(['a.ts']), /^Error: no listing$/);
+    assert.deepEqual(await reader.read('a.ts'), new TextEncoder().encode('a'));
   });
 });

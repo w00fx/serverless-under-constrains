@@ -106,6 +106,10 @@ export function computeScopeSnapshot(
       entry_points: sortedCodeUnits(policy.entry_points) as NonEmpty<string>,
       source_files: sources.value as NonEmpty<ScopedSourceFile>,
       dependency_closure: closure.value.dependencies as TransportScopeSnapshot['dependency_closure'],
+      // Not the package-lock.json file digest: the digest of the closure's own lockfile entries
+      // (dependency-closure.ts), so an unrelated lockfile change never drifts the scope
+      // (AC-RUA-051). The WP-01 schema names it only "the lockfile digest"; making that explicit
+      // in the group-A contract is routed to the Owner (WP-11 review round 1).
       lockfile_sha256: closure.value.lockfile_sha256,
       configuration_projections: projections.value as NonEmpty<NormalizedConfigurationProjection>,
       runtime_properties: runtime.value,
