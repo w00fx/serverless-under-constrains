@@ -1,6 +1,6 @@
 // The local CommandRunner binding against real subprocesses (design §12.2): an exit status with
-// both output streams, a run ended by a signal, an executable that cannot start (a value, never a
-// rejection), exactly the given environment and working directory with nothing inherited, a
+// both output streams, a run ended by a signal, an executable that cannot start or arguments that
+// spawn refuses (a value, never a rejection), exactly the given environment and working directory with nothing inherited, a
 // closed stdin, and each stream kept as its last 64 KiB.
 
 import assert from 'node:assert/strict';
@@ -40,6 +40,19 @@ describe('ChildProcessCommandRunner', () => {
     const result = await runner.run({ executable: '/nonexistent/node', args: [], cwd: tmpdir(), env: {} });
     assert.ok(result.kind === 'spawn_failed', JSON.stringify(result));
     assert.match(result.detail, /^\/nonexistent\/node: spawn \/nonexistent\/node ENOENT/);
+  });
+
+  // Regression (WP-24 review, 2026-10-06): `spawn` validates its arguments synchronously and throws
+  // ERR_INVALID_ARG_VALUE for a NUL byte, which rejected the promise the port says never rejects.
+  it('returns spawn_failed, never a rejection, when spawn refuses its arguments synchronously', async () => {
+    for (const invocation of [
+      { executable: process.execPath, args: ['-e', 'a\u0000b'], cwd: tmpdir(), env: {} },
+      { executable: process.execPath, args: [], cwd: tmpdir(), env: { SUC_MARKER: 'a\u0000b' } },
+    ]) {
+      const result = await runner.run(invocation);
+      assert.ok(result.kind === 'spawn_failed', JSON.stringify(result));
+      assert.match(result.detail, /^\S+: .*must be a string without null bytes/);
+    }
   });
 
   it('runs with exactly the given environment and working directory, and stdin closed', async () => {
