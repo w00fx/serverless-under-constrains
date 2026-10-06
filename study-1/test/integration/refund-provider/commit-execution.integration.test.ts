@@ -23,6 +23,7 @@ import {
   TRIAL_PK,
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
 import { expectProviderFault } from './support/fault-assertions.ts';
+import { journalKeyHeldBy, ledgerItemAlreadyExists } from './support/scripted-provider-state-port.ts';
 import type { StateHarness } from './support/state-harness.ts';
 import { journalEvents, stateHarness, stopJournal } from './support/state-harness.ts';
 
@@ -132,11 +133,7 @@ describe('executeCommit', () => {
   it('records a failed ledger condition as TransactionConditionFailed without re-planning', async () => {
     const harness = stateHarness();
     harness.store.seed('control', armedTreatmentItem(TRIAL_PK));
-    harness.state.scriptCommitResponder((plan) => ({
-      kind: 'condition_failed',
-      failed_action_index: 0,
-      existing: { pk: TRIAL_PK, sk: `tx#${plan.ids.provider_transaction_id}` },
-    }));
+    harness.state.scriptCommitResponder(ledgerItemAlreadyExists);
     await expectProviderFault(commitFor(harness, 'targeted'), 'COMMIT_FAILED', 'before_commit');
 
     assert.equal(harness.state.commitsSeen().length, 1);
@@ -160,11 +157,7 @@ describe('executeCommit', () => {
 
   it('faults JOURNAL_STOPPED when the commit event collides with another event at its sequence', async () => {
     const harness = stateHarness();
-    harness.state.scriptCommitResponder((plan) => {
-      const journalPut = plan.actions[1];
-      const item = journalPut?.kind === 'put' ? journalPut.item : { pk: '', sk: '' };
-      return { kind: 'condition_failed', failed_action_index: 1, existing: { ...item, event_id: CALL_ID } };
-    });
+    harness.state.scriptCommitResponder(journalKeyHeldBy(CALL_ID));
     const fault = await expectProviderFault(commitFor(harness, 'untargeted'), 'JOURNAL_STOPPED', 'commit_unknown');
 
     assert.match(fault.message, /\(SEQUENCE_CONFLICT\)/u);

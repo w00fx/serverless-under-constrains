@@ -141,7 +141,7 @@ describe('TreatmentBarrier', () => {
   it('treats a failed read as no news: waits one poll and reads again', async () => {
     const harness = stateHarness();
     seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID });
-    harness.state.scriptTreatmentRead({ ok: false, error: { code: 'InternalServerError', detail: 'read failed' } });
+    harness.store.scriptReadFault('InternalServerError', { table: 'control', operation: 'getConsistent' });
     const running = await startBarrier(harness);
     assert.equal(running.settled(), false);
     await harness.time.advanceBy(BARRIER_TIMING.poll_interval_ms);
@@ -210,7 +210,10 @@ describe('TreatmentBarrier', () => {
   it('retries a definitively failed release after one poll, from the observed state it reads', async () => {
     const harness = stateHarness();
     seedWait(harness, 'TIMEOUT_OBSERVED', { signal_event_id: SIGNAL_EVENT_ID, observed_event_id: OBSERVED_ID });
-    harness.state.scriptTransitionOutcome({ kind: 'definitive_failure', code: 'InternalServerError' });
+    harness.store.scriptWriteFault(
+      { kind: 'definitive_failure', code: 'InternalServerError' },
+      { operation: 'transact' },
+    );
     const running = await startBarrier(harness);
     assert.equal(running.settled(), false);
     await harness.time.advanceBy(BARRIER_TIMING.poll_interval_ms);
