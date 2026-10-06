@@ -7,13 +7,13 @@
 // The frozen bytes themselves are never changed (AC-RUA-030): folding returns new bytes.
 
 import { canonicalJson } from '../../record-contract/canonical-json.ts';
-import { boundedJsonText } from '../../record-contract/json-value.ts';
 import { parseJsonDocument } from '../../record-contract/parsing.ts';
 import { err, ok } from '../../record-contract/primitives.ts';
 import type { JsonObject, JsonValue, Result } from '../../record-contract/primitives.ts';
 import type { RecordType } from '../../record-contract/record-types.ts';
 import type { LedgerSnapshot } from '../../record-contract/records/group-b/ledger_snapshot.ts';
 import type { RecordValidator } from '../../record-contract/schema-registry.ts';
+import { describeFirstViolation } from './late-evidence-reasons.ts';
 import type { LateFold } from './late-record-routing.ts';
 
 /** The folds that merge one document into another. */
@@ -87,11 +87,7 @@ function validItems(
 ): Result<ValidDocument, string> {
   const validation = validator.validateAs(shape.record_type, value);
   if (!validation.valid) {
-    const why = validation.violations
-      .slice(0, 1)
-      .map((violation) => `${violation.instance_path} ${violation.detail}`)
-      .join('');
-    return err(`${name} is not a valid ${shape.record_type}: ${boundedJsonText(why)}`);
+    return err(`${name} is not a valid ${shape.record_type}: ${describeFirstViolation(validation.violations)}`);
   }
   // The three schemas require the item member to be an array of objects.
   const document = validation.record as unknown as JsonObject;

@@ -16,7 +16,7 @@ import type { RecordValidator } from '../../record-contract/schema-registry.ts';
 import type { OracleResult } from '../../record-contract/records/group-c/oracle_result.ts';
 import type { ArtifactRef, TrialExecutionIdentity } from '../../record-contract/records/group-c/shared-shapes.ts';
 import type { FrozenTrialEvidence } from './late-evidence-input.ts';
-import { LATE_EVIDENCE_SUBJECT } from './late-evidence-reasons.ts';
+import { LATE_EVIDENCE_SUBJECT, describeFirstViolation } from './late-evidence-reasons.ts';
 import { activeExecution } from './late-stream-reading.ts';
 
 /** One frozen trial whose result was read and checked. */
@@ -74,11 +74,8 @@ function readFrozenTrial(
   }
   const validation = validator.validateAs('oracle_result', parsed.value);
   if (!validation.valid) {
-    const why = validation.violations
-      .slice(0, 1)
-      .map((violation) => `${violation.instance_path} ${violation.detail}`)
-      .join('');
-    return err(frozenReason('FROZEN_RESULT_INVALID', path, `${boundedJsonText(why)}; expected a valid oracle_result`));
+    const why = describeFirstViolation(validation.violations);
+    return err(frozenReason('FROZEN_RESULT_INVALID', path, `${why}; expected a valid oracle_result`));
   }
   const result = validation.record as OracleResult;
   const digest = result.execution_manifest_sha256;
