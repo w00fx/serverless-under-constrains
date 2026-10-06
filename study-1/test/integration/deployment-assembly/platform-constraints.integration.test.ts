@@ -8,11 +8,12 @@
 // the study app with local esbuild under the Docker sentinel; the client is the real SDK client
 // built through a spying handler factory. Nothing touches AWS.
 //
-// Case 4g reads each bundle's syntax tree, not its text: every real bundle quotes
-// `require("@aws-sdk/signature-v4-crt")` inside an SDK error message, which the inventory's text
-// scan (`BARE_AWS_SDK_IMPORT`, src/evidence-package/assembly-inventory.ts) reports as an import, so
-// `inventoryAssembly` refuses every real assembly. That defect belongs to WP-13 and is reported by
-// WP-24 (decisions file, 2026-10-06); this file asserts the RK-12 property itself.
+// Case 4g checks RK-12 twice: each bundle's syntax tree (the TypeScript parser, an independent
+// oracle) loads only Node built-ins, and the production inventory that admission freezes with
+// accepts both real assemblies yet refuses one whose bundle gains a bare SDK import. Every real
+// bundle quotes `require("@aws-sdk/signature-v4-crt")` inside an SDK error message; the inventory's
+// former text scan refused every real assembly for it (A-14 fix in WP-13's inventory, found by
+// WP-24 on 2026-10-06), so the acceptance below is the regression at the boundary where it failed.
 
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -37,6 +38,8 @@ import {
 } from '../../../src/deployment-assembly/execution-template.ts';
 import { NodeAssemblyFileSystem } from '../../../src/deployment-assembly/node/node-assembly-file-system.ts';
 import { buildResourceManifest } from '../../../src/deployment-assembly/resource-manifest.ts';
+import { inventoryAssembly } from '../../../src/evidence-package/assembly-inventory.ts';
+import { loadsBareAwsSdk } from '../../../src/evidence-package/bundle-module-loads.ts';
 import { containerAssetFindings } from '../../../src/evidence-package/container-assets.ts';
 import { createProviderLambdaClient } from '../../../src/provider-client/aws/provider-lambda-client.ts';
 import {
@@ -47,7 +50,7 @@ import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import type { JsonObject, JsonValue, VariantId } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { loadedModules } from '../../support/deployment-assembly/bundle-imports.ts';
-import { synthContext } from '../../support/deployment-assembly/deployment-fixtures.ts';
+import { ADMITTED_AT, ASSEMBLY_PATH, synthContext } from '../../support/deployment-assembly/deployment-fixtures.ts';
 import { recordedStackResources } from '../../support/deployment-assembly/recorded-stack-resources.ts';
 import { succeededInput } from '../../support/deployment-assembly/resource-manifest-inputs.ts';
 import { DOCKER_SENTINEL, synthesizeExecution } from '../../support/deployment-assembly/study-synth.ts';
@@ -315,6 +318,35 @@ describe('AC-RUA-053 platform and transport constraints', () => {
             bundle.path,
           );
         }
+      }
+    });
+
+    it('4g (RK-12): the production inventory accepts both real assemblies and refuses an injected bare SDK import', async () => {
+      for (const execution of [run, probe]) {
+        const listing = await readAssemblyListing(new NodeAssemblyFileSystem(), execution.assemblyDir);
+        assert.ok(listing.ok);
+        const inventoryOf = (files: typeof listing.value.files): ReturnType<typeof inventoryAssembly> =>
+          inventoryAssembly({ assembly_path: ASSEMBLY_PATH, ...listing.value, files, inventoried_at: ADMITTED_AT });
+        const accepted = inventoryOf(listing.value.files);
+        assert.ok(accepted.ok, JSON.stringify(accepted.ok ? [] : accepted.error));
+        const bundles = listing.value.files.filter((file) => file.path.endsWith('.mjs'));
+        const texts = bundles.map((bundle) => new TextDecoder().decode(bundle.bytes));
+        // A text search would refuse these bundles: they quote SDK loads in their error messages.
+        assert.ok(
+          texts.some((text) => text.includes('require("@aws-sdk/')),
+          'a bundle quotes an SDK load',
+        );
+        assert.deepEqual(
+          texts.map((text) => loadsBareAwsSdk(text)),
+          texts.map((text) => loadedModules(text).some((specifier) => specifier.startsWith('@aws-sdk/'))),
+        );
+        const [first] = bundles;
+        assert.ok(first !== undefined);
+        const injected = encoder.encode(`import { S3 } from "@aws-sdk/client-s3";\n${texts[0] ?? ''}`);
+        const refused = inventoryOf(
+          listing.value.files.map((file) => (file.path === first.path ? { path: file.path, bytes: injected } : file)),
+        );
+        assert.deepEqual(refused.ok ? [] : refused.error.map((reason) => reason.code), ['BARE_AWS_SDK_IMPORT']);
       }
     });
 

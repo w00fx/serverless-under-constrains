@@ -7,8 +7,11 @@
 //   permission bits, proven equal to its inventory, deployed by the scripted CLI, whose read lock
 //   lands in the copy only, and the package re-verifies unchanged; a changed byte, a changed mode,
 //   a link or a file added to the package, and a stale deploy directory are each refused.
-// The D1-D3 assembly is a small fixture: the inventory's text scan refuses every real bundle
-// (finding reported to WP-13 on 2026-10-06; see platform-constraints case 4g).
+// - S2-S3 then D1-D3 on the real assembly S1 synthesized: admission's copy freezes it into the
+//   package, the production inventory accepts its SDK-bundled handlers, and the deploy copy, the
+//   lock and the re-verification hold as they do for the small fixture the refusal cases mutate.
+//   Until the A-14 fix of the inventory's bundle scan (2026-10-06) only the fixture could be
+//   inventoried; this case is the regression at the deploy boundary.
 
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -17,6 +20,7 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
 import type { ExecutionSynthContext } from '../../../infra/ownership/execution-context.ts';
+import { copyAssemblyDirectory, readAssemblyDirectory } from '../../../src/admission/assembly-files.ts';
 import { readAssemblyListing } from '../../../src/deployment-assembly/assembly-listing.ts';
 import { verifyAssemblyUnchanged } from '../../../src/deployment-assembly/assembly-verification.ts';
 import { CdkAssemblyDeployer } from '../../../src/deployment-assembly/cdk-assembly-deployer.ts';
@@ -105,6 +109,44 @@ describe('S1: one synthesis by the pinned CLI', () => {
 
   it('writes nothing outside the staging directory but the context file and the assembly', () => {
     assert.deepEqual(readdirSync(staging).toSorted(), ['cdk.out', 'execution-context.json']);
+  });
+
+  it('S2-S3, D1-D3: the synthesized assembly is frozen, inventoried, deployed from its copy, and re-verifies', async () => {
+    assert.ok(report.ok);
+    const staged = await readAssemblyDirectory(files, report.value.assembly_dir);
+    assert.ok(staged.ok, JSON.stringify(staged.ok ? {} : staged.error));
+    const root = temporaryRoot();
+    const packageDir = join(root, 'evidence/runs/x/admission/deployment-assembly');
+    assert.equal(await copyAssemblyDirectory(staged.value, packageDir, files), undefined);
+    const rig: FrozenRig = {
+      packageDir,
+      copyDir: join(root, 'study-1/.deploy-staging/x'),
+      inventory: await frozenInventory(files, packageDir),
+    };
+    assert.deepEqual(
+      rig.inventory.files.map((file) => [file.path, Number.parseInt(file.mode, 8)]).toSorted(),
+      staged.value.files.map((file) => [file.path, file.mode]).toSorted(),
+    );
+    assert.equal(rig.inventory.files.filter((file) => file.path.endsWith('/index.mjs')).length, 3);
+    const copy = await prepareVerifiedDeployCopy(rig.packageDir, rig.inventory, rig.copyDir, files);
+    assert.ok(copy.ok, JSON.stringify(copy.ok ? [] : copy.error));
+    const runner = new FakeCommandRunner(new DiskCommandEffects());
+    runner.enqueue({ kind: 'signalled', signal: 'SIGKILL', stdout: '', stderr: '' });
+    const deployer = new CdkAssemblyDeployer({ runner, files, tools: tools(), clock: new SteppingWallClock() });
+    const deployed = await deployer.deploy(
+      copy.value,
+      report.value.stack_name,
+      join(rig.copyDir, '..', 'outputs.json'),
+    );
+    assert.equal(deployed.deployed, false);
+    assert.deepEqual(runner.locksWritten(), [join(rig.copyDir, 'read.4242.1.lock')]);
+    assert.deepEqual(await packageReasons(rig), []);
+    const copyListing = await readAssemblyListing(files, rig.copyDir);
+    assert.ok(copyListing.ok);
+    assert.deepEqual(
+      verifyAssemblyUnchanged(rig.inventory, copyListing.value).map((reason) => reason.code),
+      ['FILE_ADDED'],
+    );
   });
 
   it('reports SYNTH_FAILED when the app refuses its context', async () => {
