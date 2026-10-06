@@ -162,18 +162,43 @@ describe('interrupted trials', () => {
     assert.equal(verdictOf(cloud, trialId), 'indeterminate');
   });
 
-  it('an interruption during collection stops the next observation before its first poll', async () => {
+  // Design §10.2: once an interruption source fires, "the active trial records trial_interrupted"
+  // and its available evidence is frozen indeterminate. A trial collecting its evidence (T8) is
+  // still active, so the pre-freeze recheck is not taken and settlement is not established.
+  it('an interruption during collection records trial_interrupted and freezes without the recheck', async () => {
     const cloud = await startedCloud();
     const running = cloud.start(1);
+    const trialId = running.plan.trial.trial_id;
     cloud.telemetry.onNextCollection(() => {
-      cloud.pump.pause();
-      cloud.injectSourceMessage();
       cloud.gate.interrupt(ABORT);
     });
     const report = frozenReport(await cloud.finish(running));
     assert.deepEqual(report.interruption, ABORT);
-    assert.equal(cloud.telemetry.collectionCount(), 2);
-    assert.ok(report.settlement.restarts.some((restart) => restart.cause === 'PRE_FREEZE_ACTIVITY'));
+    assert.equal(report.settlement.status, 'not_established');
+    assert.equal(cloud.telemetry.collectionCount(), 1);
+    const phases = trialLines(cloud, trialId, 'settlementSamples').map((sample) => sample['phase']);
+    assert.equal(phases.includes('pre_freeze_recheck'), false);
+    assert.equal(
+      runnerEvents(cloud, trialId).find((event) => event['record_type'] === 'trial_interrupted')?.['cause'],
+      ABORT.cause,
+    );
+    assert.equal(verdictOf(cloud, trialId), 'indeterminate');
+  });
+
+  it('an interruption during publication stops the observation before its first poll', async () => {
+    const cloud = await startedCloud();
+    const running = cloud.start(1);
+    const trialId = running.plan.trial.trial_id;
+    cloud.publisher.tamperNextBody((body) => {
+      cloud.gate.interrupt(ABORT);
+      return body;
+    });
+    const report = frozenReport(await cloud.finish(running));
+    assert.deepEqual(report.interruption, ABORT);
+    assert.equal(report.settlement.status, 'not_established');
+    assert.deepEqual(trialLines(cloud, trialId, 'settlementSamples'), []);
+    assert.equal(cloud.telemetry.collectionCount(), 1);
+    assert.equal(verdictOf(cloud, trialId), 'indeterminate');
   });
 
   it('an interruption the runner journal cannot record is reported', async () => {
