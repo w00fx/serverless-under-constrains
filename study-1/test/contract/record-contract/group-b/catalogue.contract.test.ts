@@ -9,6 +9,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { EVENT_SOURCES } from '../../../../src/record-contract/envelope.ts';
+import { isJsonObject } from '../../../../src/record-contract/json-value.ts';
 import { EXECUTION_KINDS, VARIANT_IDS } from '../../../../src/record-contract/primitives.ts';
 import { EVENT_RECORD_TYPES, RECORD_TYPES, RECORD_TYPE_GROUPS } from '../../../../src/record-contract/record-types.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
@@ -185,6 +186,18 @@ describe('AC-RUA-046 group B catalogue', () => {
         EVENT_WRITERS[recordType],
         `${recordType} source`,
       );
+    }
+  });
+
+  it('restates the queue counter shape identically in every schema that carries it', () => {
+    // The registry compiles each schema on first use with only `_defs` preloaded, so a group-B
+    // schema cannot $ref another record schema; the copies are pinned equal here instead, because
+    // the settlement evaluator compares settlement samples with queue observations (BR-RUA-032).
+    const pointer = '/$defs/queue_counters';
+    const reference = resolvePointer(schemaOf('queue_observation'), pointer);
+    assert.ok(isJsonObject(reference), 'queue_observation defines queue_counters');
+    for (const recordType of ['settlement_sample', 'pre_cleanup_snapshot'] as const) {
+      assert.deepEqual(resolvePointer(schemaOf(recordType), pointer), reference, `${recordType}#${pointer}`);
     }
   });
 
