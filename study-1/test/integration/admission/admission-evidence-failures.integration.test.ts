@@ -26,6 +26,7 @@ import {
 import { AdmissionHarness, harnessId } from '../../support/admission/admission-harness.ts';
 import { FakeSchemaCatalog } from '../../support/admission/fake-schema-catalog.ts';
 import { synthesizedAssemblyFiles } from '../../support/admission/synth-templates.ts';
+import type { ScriptedAssemblyFile } from '../../support/deployment-assembly/fake-command-runner.ts';
 
 const ATTEMPT = harnessId(1);
 const JOURNAL_PATH = `${EVIDENCE_ROOT}/${PACKAGE_LAYOUT.admissionAttemptDirectory(ATTEMPT)}/${ATTEMPT_FILES.preflightJournal}`;
@@ -208,11 +209,10 @@ describe('the assembly is synthesized, read and frozen exactly (A12, S2)', () =>
   ] as const) {
     it(name, async () => {
       const harness = await AdmissionHarness.create('RUN');
-      harness.runner.scriptSynthOutput(
-        synthesizedAssemblyFiles('RUN', harnessId(2)).map((file) =>
+      harness.synthScript = (context): readonly ScriptedAssemblyFile[] =>
+        synthesizedAssemblyFiles(context).map((file) =>
           file.path === TEMPLATE_FILE ? { ...file, bytes: new TextEncoder().encode(text) } : file,
-        ),
-      );
+        );
       const outcome = await harness.admit();
       assert.equal(outcome.kind, 'rejected');
       assert.deepEqual(outcome.reasons, [

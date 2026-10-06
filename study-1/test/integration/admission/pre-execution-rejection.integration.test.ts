@@ -23,6 +23,8 @@ import { AdmissionHarness } from '../../support/admission/admission-harness.ts';
 import { FakeAccountSettings } from '../../support/admission/fake-account-settings.ts';
 import { FakeCallerIdentity } from '../../support/admission/fake-caller-identity.ts';
 import { FakeCoordinationTable } from '../../support/admission/fake-coordination-table.ts';
+import { synthesizedAssemblyFiles } from '../../support/admission/synth-templates.ts';
+import type { ScriptedAssemblyFile } from '../../support/deployment-assembly/fake-command-runner.ts';
 
 const HOLDER = leaseOwnerOf(
   { execution_kind: 'RUN', run_id: '7d2c4b1a-9e8f-4a3b-8c2d-1e0f9a8b7c6d' as Uuid4 },
@@ -33,6 +35,8 @@ interface ExpectedRejection {
   readonly rejection_class: string;
   readonly failed_check_id: string;
   readonly codes: readonly string[];
+  /** A12 rejects after its one local synthesis; every earlier check rejects before any. */
+  readonly synthesized?: true;
 }
 
 // The rejection, the journal and the absence of every package file and cloud mutation.
@@ -70,7 +74,11 @@ async function assertRejectedBeforeExecution(
   assert.equal(harness.journalFinalized(outcome.admission_attempt_id), true);
   assert.deepEqual(await harness.packagePaths(), [], 'no manifest, trial, result or index is written');
   assert.deepEqual(harness.mutationLog.entries(), [], 'no cloud mutation');
-  assert.deepEqual(harness.runner.invocations(), [], 'nothing is synthesized before a rejection');
+  assert.deepEqual(
+    harness.runner.invocations().map((invocation) => invocation.args[1]),
+    expected.synthesized === true ? ['synth'] : [],
+    'nothing is synthesized before A12, and nothing is ever deployed',
+  );
 }
 
 describe('AC-RUA-014 invalid inputs are rejected before execution', () => {
@@ -187,6 +195,18 @@ describe('AC-RUA-014 invalid inputs are rejected before execution', () => {
       rejection_class: 'SAFETY',
       failed_check_id: 'A8',
       codes: ['CONFLICTING_LEASE'],
+    });
+  });
+
+  it('safety-missing-ownership-strategy', async () => {
+    const harness = await AdmissionHarness.create('RUN');
+    harness.synthScript = (context): readonly ScriptedAssemblyFile[] =>
+      synthesizedAssemblyFiles(context, { stack_tags: 'absent' });
+    await assertRejectedBeforeExecution(harness, await harness.admit(), {
+      rejection_class: 'SAFETY',
+      failed_check_id: 'A12',
+      codes: ['OWNERSHIP_STRATEGY_MISSING'],
+      synthesized: true,
     });
   });
 

@@ -1,6 +1,7 @@
 // Step A12 (BR-RUA-042, D-25): one synthesis, then the assembly as admission reads it is
-// inventoried and its template parsed. The synthesizer and admission's reader are separate ports,
-// so a template the synthesizer reported but admission cannot find is refused, not assumed.
+// inventoried, its template parsed and its ownership strategy checked (BR-RUA-046, BR-RUA-050).
+// The synthesizer and admission's reader are separate ports, so a template the synthesizer
+// reported but admission cannot find is refused, not assumed.
 //
 // Boundary: the production `CdkAssemblySynthesizer` over the scripted CDK CLI writes into one
 // memory file system; admission reads either that one or a second memory file system.
@@ -17,6 +18,7 @@ import { stackName } from '../../../infra/ownership/resource-naming.ts';
 import { ACCOUNT_ID } from '../../support/admission/admission-fixtures.ts';
 import { harnessId } from '../../support/admission/admission-harness.ts';
 import { synthesizedAssemblyFiles } from '../../support/admission/synth-templates.ts';
+import type { SynthOutputOptions } from '../../support/admission/synth-templates.ts';
 import { MEMORY_TOOLS } from '../../support/deployment-assembly/deployment-fixtures.ts';
 import { FakeCommandRunner } from '../../support/deployment-assembly/fake-command-runner.ts';
 import { MemoryAssemblyFileSystem } from '../../support/deployment-assembly/memory-assembly-file-system.ts';
@@ -34,9 +36,9 @@ const CONTEXT: ExecutionSynthContext = {
 };
 const TEMPLATE_FILE = `${stackName('TRANSPORT_PROBE', EXECUTION_ID)}.template.json`;
 
-function synthesizerOver(files: MemoryAssemblyFileSystem): CdkAssemblySynthesizer {
+function synthesizerOver(files: MemoryAssemblyFileSystem, options: SynthOutputOptions = {}): CdkAssemblySynthesizer {
   const runner = new FakeCommandRunner(files);
-  runner.scriptSynthOutput(synthesizedAssemblyFiles('TRANSPORT_PROBE', EXECUTION_ID));
+  runner.scriptSynthOutput(synthesizedAssemblyFiles(CONTEXT, options));
   return new CdkAssemblySynthesizer({ runner, files, tools: MEMORY_TOOLS });
 }
 
@@ -57,7 +59,7 @@ describe('synthesizeAssembly (A12)', () => {
   it('refuses a template that admission cannot find where the synthesizer reported it', async () => {
     const synthesized = new MemoryAssemblyFileSystem();
     const reader = new MemoryAssemblyFileSystem();
-    for (const file of synthesizedAssemblyFiles('TRANSPORT_PROBE', EXECUTION_ID)) {
+    for (const file of synthesizedAssemblyFiles(CONTEXT)) {
       if (file.path !== TEMPLATE_FILE) {
         await reader.createFile(`${STAGING}/${SYNTH_OUTPUT_DIR}/${file.path}`, file.bytes, file.mode);
       }
@@ -77,5 +79,32 @@ describe('synthesizeAssembly (A12)', () => {
         detail: `template string "${TEMPLATE_FILE}" is absent; expected the synthesized stack template`,
       },
     ]);
+  });
+
+  it('BR-RUA-046: refuses a stack without the ownership strategy, after reading its template', async () => {
+    const files = new MemoryAssemblyFileSystem();
+    const synthesizer = synthesizerOver(files, { stack_tags: 'absent' });
+    const verdict = await synthesizeAssembly(CONTEXT, STAGING, { synthesizer, files }, AT);
+    assert.ok(!verdict.passed);
+    assert.equal(verdict.rejection_class, 'SAFETY');
+    assert.deepEqual(verdict.statement.expected, {
+      boundary: 'OWNERSHIP_STRATEGY',
+      assembly_path: FROZEN_ASSEMBLY_PATH,
+    });
+    assert.deepEqual(
+      verdict.reasons.map((reason) => [reason.code, reason.subject]),
+      [['OWNERSHIP_STRATEGY_MISSING', 'BR-RUA-046']],
+    );
+  });
+
+  it('reports every invalid ownership tag at once', async () => {
+    const files = new MemoryAssemblyFileSystem();
+    const synthesizer = synthesizerOver(files, { stack_tags: { 'suc:project': 'serverless-under-constraints' } });
+    const verdict = await synthesizeAssembly(CONTEXT, STAGING, { synthesizer, files }, AT);
+    assert.ok(!verdict.passed);
+    assert.deepEqual(
+      verdict.reasons.map((reason) => reason.detail.slice(0, reason.detail.indexOf(' is '))),
+      ['stack tag suc:study_id', 'stack tag suc:run_id', 'stack tag suc:managed_by', 'stack tag suc:expires_at'],
+    );
   });
 });

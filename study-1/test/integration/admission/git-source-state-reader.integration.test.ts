@@ -1,11 +1,12 @@
 // The production git provenance port (BR-RUA-042, design §10.1 A5) over real repositories: it
 // reports what git says without writing the index (optional locks off), answers a failed
-// `git status` with GIT_STATUS_FAILED, reads the lockfile's exact bytes, and omits the tree id
-// while HEAD does not resolve.
+// `git status` with GIT_STATUS_FAILED, reads the lockfile's exact bytes, omits the tree id while
+// HEAD does not resolve, and answers a lockfile it cannot read with LOCKFILE_UNREADABLE instead of
+// throwing (A-05; WP-23 review).
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -94,6 +95,23 @@ describe('GitSourceStateReader', () => {
       assert.match(state.error.detail, /not a git repository/);
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails with LOCKFILE_UNREADABLE when the lockfile path cannot be read', async () => {
+    const tree = TemporaryGitWorkTree.create();
+    try {
+      tree.remove(WORK_TREE_LOCKFILE);
+      mkdirSync(join(tree.root, WORK_TREE_LOCKFILE));
+      const state = await new GitSourceStateReader({
+        repositoryRoot: tree.root,
+        lockfilePath: WORK_TREE_LOCKFILE,
+      }).readGitSourceState();
+      assert.ok(!state.ok);
+      assert.equal(state.error.code, 'LOCKFILE_UNREADABLE');
+      assert.match(state.error.detail, /EISDIR/);
+    } finally {
+      tree.dispose();
     }
   });
 });

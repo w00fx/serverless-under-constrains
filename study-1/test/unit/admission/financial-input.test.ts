@@ -15,6 +15,7 @@ import {
 import type { FinancialInputObjects } from '../../../src/admission/financial-input.ts';
 import { OR_RUA_001_APPROVED_DECISION, OR_RUA_001_PAYMENT } from '../../../src/admission/declared-inputs.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
+import { parsedJson, parsedTower } from '../../support/kernel/deep-json.ts';
 
 function codes(payment: JsonValue, decision: JsonValue): readonly string[] {
   return validateFinancialInput(payment, decision).map((reason) => reason.code);
@@ -213,5 +214,26 @@ describe('validateIdentityInput and assessIdentityInput (A4)', () => {
     const probe = assessIdentityInput(OBJECTS, 'TRANSPORT_PROBE', undefined);
     assert.ok(probe.passed);
     assert.deepEqual(probe.value.target, { kind: 'TRANSPORT_PROBE' });
+  });
+
+  it('A-05: stays total when amounts A3 would refuse reach it, never coercing them', () => {
+    // Regression (WP-23 review): `Number(...)` on a parsed `{"toString":1,"valueOf":1}` threw
+    // TypeError "Cannot convert object to primitive value" out of the step.
+    const hostile = [
+      parsedJson('{"toString":1,"valueOf":1}'),
+      parsedJson('[{"valueOf":1}]'),
+      parsedJson('"10000"'),
+      parsedTower('mixed'),
+    ];
+    for (const amount of hostile) {
+      const objects = {
+        payment: payment({ captured_amount_minor: amount }),
+        decision: decision({ approved_amount_minor: amount }),
+      };
+      const verdict = assessIdentityInput(objects, 'RUN', undefined);
+      assert.ok(verdict.passed, 'A4 judges identifiers only');
+      assert.ok(Number.isNaN(verdict.value.financial_inputs.captured_amount_minor));
+      assert.ok(Number.isNaN(verdict.value.financial_inputs.approved_amount_minor));
+    }
   });
 });

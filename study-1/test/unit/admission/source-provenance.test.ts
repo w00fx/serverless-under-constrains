@@ -1,6 +1,7 @@
 // Step A5 (BR-RUA-042): only a clean committed tree with a resolved HEAD and a tracked lockfile
-// is admitted; every problem has its own code, dirty entries are quoted up to ten, and the
-// `source_provenance` record states the admitted source.
+// is admitted; every problem has its own code, dirty entries and unreadable records are quoted up
+// to ten with the rest counted, the observed values stay bounded, and the `source_provenance`
+// record states the admitted source.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -126,7 +127,7 @@ describe('assessSourceProvenance (A5)', () => {
     });
   });
 
-  it('refuses unreadable status records, quoting at most ten', () => {
+  it('refuses unreadable status records, quoting ten and counting the rest', () => {
     const state: GitSourceState = {
       status_porcelain_v2: `# branch.oid ${COMMIT_SHA}\0${'?\0'.repeat(12)}`,
       tree_sha: TREE_SHA,
@@ -134,12 +135,40 @@ describe('assessSourceProvenance (A5)', () => {
       lockfile: { path: LOCKFILE_PATH, tracked: true, bytes: new Uint8Array() },
     };
     const reasons = sourceProvenanceReasons(parseGitPorcelainV2(state.status_porcelain_v2), state);
-    assert.equal(reasons.length, 10);
+    assert.equal(reasons.length, 11);
     assert.deepEqual(reasons[0], {
       code: 'GIT_STATUS_UNREADABLE',
       subject: 'BR-RUA-042',
       detail: 'git status record "?" is unreadable; expected a porcelain v2 record',
     });
+    // Regression (WP-23 review): the two records past the tenth were dropped without a count.
+    assert.deepEqual(reasons[10], {
+      code: 'GIT_STATUS_UNREADABLE',
+      subject: 'BR-RUA-042',
+      detail: '2 more unreadable git status records are not quoted; expected porcelain v2 records',
+    });
+    const ten = { ...state, status_porcelain_v2: `# branch.oid ${COMMIT_SHA}\0${'?\0'.repeat(10)}` };
+    assert.equal(sourceProvenanceReasons(parseGitPorcelainV2(ten.status_porcelain_v2), ten).length, 10);
+  });
+
+  it('A-05: states an overlong HEAD commit bounded in the observed value', () => {
+    // Regression (WP-23 review): the observed commit was copied unbounded into the journal line.
+    const state: GitSourceState = {
+      status_porcelain_v2: `# branch.oid ${'f'.repeat(100_000)}\0`,
+      tree_sha: TREE_SHA,
+      in_progress: [],
+      lockfile: { path: LOCKFILE_PATH, tracked: true, bytes: new Uint8Array() },
+    };
+    const verdict = assessSourceProvenance(state);
+    assert.ok(!verdict.passed);
+    assert.deepEqual(verdict.statement.observed, {
+      commit_sha: `${'f'.repeat(200)}…[truncated]`,
+      dirty_entries: 0,
+    });
+    assert.deepEqual(
+      verdict.reasons.map((reason) => [reason.code, reason.detail.length < 400]),
+      [['HEAD_UNRESOLVED', true]],
+    );
   });
 });
 

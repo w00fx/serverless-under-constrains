@@ -1,7 +1,8 @@
 // The production toolchain port (design §10.1 A6) over this repository and over an empty study
 // root: it reports the running Node, npm, the installed esbuild and CDK CLI, and whether `npm ls`
-// finds the tree consistent with the lockfile; a tool that is not installed is absent, and an npm
-// that cannot start leaves the dependency tree unconfirmed.
+// finds the tree consistent with the lockfile; a tool that is not installed is absent, a tool
+// manifest that cannot be read reads as not installed instead of throwing (A-05; WP-23 review),
+// and an npm that cannot start leaves the dependency tree unconfirmed.
 
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -52,6 +53,22 @@ describe('ToolchainReader', () => {
       assert.equal(facts.value.aws_cdk_cli_version, undefined);
       assert.equal(facts.value.dependency_tree_consistent, false);
       assert.match(facts.value.dependency_tree_detail, /^npm ls exited 127: /);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a tool manifest that cannot be read as not installed', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rua-admission-toolchain-'));
+    try {
+      mkdirSync(join(root, 'node_modules', 'aws-cdk', 'package.json'), { recursive: true });
+      const facts = await new ToolchainReader({
+        studyRoot: root,
+        nodeVersion: 'v24.15.0',
+        npmExecutable: join(root, 'missing-npm'),
+      }).readToolchain();
+      assert.ok(facts.ok);
+      assert.equal(facts.value.aws_cdk_cli_version, undefined);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

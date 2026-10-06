@@ -3,13 +3,23 @@
 // `HEAD^{tree}`, asks git where its in-progress markers live (`MERGE_HEAD`, `CHERRY_PICK_HEAD`,
 // `rebase-merge`, `rebase-apply`) and checks whether each exists, checks that the lockfile is
 // tracked (`git ls-files --error-unmatch`), and reads the lockfile's bytes. Git runs without a
-// shell, with optional locks disabled so a status never writes the index.
+// shell, with optional locks disabled so a status never writes the index. A lockfile that exists
+// but cannot be read fails the read with LOCKFILE_UNREADABLE instead of throwing (A-05; WP-23
+// review): it is neither a missing lockfile nor one admission may assume unmodified.
 
 import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
-import type { GitProvenancePort, GitSourceState, InProgressOperation, PortResult } from '../admission-ports.ts';
+import { err, ok } from '../../record-contract/primitives.ts';
+import type { Result } from '../../record-contract/primitives.ts';
+import type {
+  GitProvenancePort,
+  GitSourceState,
+  InProgressOperation,
+  PortFailure,
+  PortResult,
+} from '../admission-ports.ts';
 
 const GIT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
 const IN_PROGRESS_MARKERS: readonly (readonly [InProgressOperation, string])[] = [
@@ -62,7 +72,10 @@ export class GitSourceStateReader implements GitProvenancePort {
     }
     const tree = await this.#git(['rev-parse', '--verify', '--quiet', 'HEAD^{tree}']);
     const tracked = await this.#git(['ls-files', '--error-unmatch', '--', this.#lockfilePath]);
-    const lockfile = join(this.#root, this.#lockfilePath);
+    const lockfile = this.#lockfileBytes();
+    if (!lockfile.ok) {
+      return lockfile;
+    }
     return {
       ok: true,
       value: {
@@ -72,10 +85,22 @@ export class GitSourceStateReader implements GitProvenancePort {
         lockfile: {
           path: this.#lockfilePath,
           tracked: tracked.exitCode === 0,
-          ...(existsSync(lockfile) ? { bytes: new Uint8Array(readFileSync(lockfile)) } : {}),
+          ...(lockfile.value === undefined ? {} : { bytes: lockfile.value }),
         },
       },
     };
+  }
+
+  #lockfileBytes(): Result<Uint8Array | undefined, PortFailure> {
+    const lockfile = join(this.#root, this.#lockfilePath);
+    if (!existsSync(lockfile)) {
+      return ok(undefined);
+    }
+    try {
+      return ok(new Uint8Array(readFileSync(lockfile)));
+    } catch (error: unknown) {
+      return err({ code: 'LOCKFILE_UNREADABLE', detail: `${this.#lockfilePath}: ${String(error)}` });
+    }
   }
 
   async #inProgress(): Promise<readonly InProgressOperation[]> {

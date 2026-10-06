@@ -2,7 +2,8 @@
 // admissible state for one execution kind. The cloud reads answer the allowlisted account in
 // `us-east-1` with a usable bootstrap, enough concurrency and a correctly configured, unheld
 // coordination table; the golden suite is final; the work tree is clean; synthesis is the real
-// `CdkAssemblySynthesizer` over a scripted CDK CLI; the transport scope is recomputed by the
+// `CdkAssemblySynthesizer` over a scripted CDK CLI whose output follows each synthesis context
+// (`synthScript`, replaceable per test); the transport scope is recomputed by the
 // production code over the WP-11 miniature project; and a run or a validation selects a usable
 // probe whose snapshot that project reproduces. A test changes one fake to reach one rejection.
 // Every mutating cloud call of a fake lands in `mutationLog`; local writes stay in `files` and
@@ -58,6 +59,8 @@ import { FakeGoldenSuiteRunner } from './fake-golden-suite-runner.ts';
 import { FakeProbePackageReader } from './fake-probe-package-reader.ts';
 import { FakeSchemaCatalog } from './fake-schema-catalog.ts';
 import { FakeToolchain } from './fake-toolchain.ts';
+import { ContextScriptedSynthesizer } from './context-scripted-synthesizer.ts';
+import type { SynthScript } from './context-scripted-synthesizer.ts';
 import { SELECTED_PROBE_ID, selectedProbePackage } from './selected-probe-package.ts';
 import type { SelectedProbePackage } from './selected-probe-package.ts';
 import { synthesizedAssemblyFiles } from './synth-templates.ts';
@@ -110,6 +113,8 @@ export class AdmissionHarness {
   coordination = new FakeCoordinationTable();
   goldenSuite = new FakeGoldenSuiteRunner();
   schemas = FakeSchemaCatalog.fromCommittedCatalog();
+  /** What the scripted `cdk synth` writes for a synthesis context; tests replace it. */
+  synthScript: SynthScript = (context) => synthesizedAssemblyFiles(context);
   /** The request `admit()` sends; tests replace members of it. */
   request: AdmissionRequest;
   /** The selected probe of a run or a validation; `undefined` for a probe. */
@@ -125,7 +130,6 @@ export class AdmissionHarness {
       ...(kind === 'VARIANT_VALIDATION' ? { variant } : {}),
       ...(selected === undefined ? {} : { qualification: selected.selection }),
     };
-    this.runner.scriptSynthOutput(synthesizedAssemblyFiles(kind, harnessId(2)));
   }
 
   /**
@@ -184,7 +188,11 @@ export class AdmissionHarness {
       packages: this.packages,
       goldenSuite: this.goldenSuite,
       schemas: this.schemas,
-      synthesizer: new CdkAssemblySynthesizer({ runner: this.runner, files: this.files, tools: MEMORY_TOOLS }),
+      synthesizer: new ContextScriptedSynthesizer({
+        runner: this.runner,
+        script: this.synthScript,
+        synthesizer: new CdkAssemblySynthesizer({ runner: this.runner, files: this.files, tools: MEMORY_TOOLS }),
+      }),
       scope: { sources: this.sources, bundles: this.bundles, installed: this.installed, validator: this.validator },
       files: this.files,
       journal: this.journal,

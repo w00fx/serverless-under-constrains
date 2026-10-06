@@ -1,10 +1,13 @@
 // The production golden-suite port (BR-RUA-055, design §10.1 A9, D-18) over a real miniature
 // suite: it runs `npm run test:golden -- --report-json <path>` through the real command runner,
 // returns the runner's exit code and exact report bytes, and loads every trial-oracle case
-// declaration. A9 then attests a final, covering run and refuses a failing one.
+// declaration. A9 then attests a final, covering run and refuses a failing one. A stale report it
+// cannot clear fails the read, and a case module that throws while loading covers nothing; neither
+// throws out of the port (A-05; WP-23 review).
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import { parseSuiteReport } from '../../../src/admission/golden-report.ts';
@@ -94,6 +97,36 @@ describe('GoldenSuiteReader', () => {
       const run = await reader(suite, process.execPath).readGoldenSuiteRun();
       assert.ok(!run.ok);
       assert.equal(run.error.code, 'GOLDEN_REPORT_UNREADABLE');
+    } finally {
+      suite.dispose();
+    }
+  });
+
+  it('fails with GOLDEN_REPORT_NOT_CLEARED when the previous report cannot be removed', async () => {
+    const suite = TemporaryGoldenSuite.create(PASSING);
+    try {
+      mkdirSync(join(suite.reportPath, 'stale'), { recursive: true });
+      const run = await reader(suite).readGoldenSuiteRun();
+      assert.ok(!run.ok);
+      assert.equal(run.error.code, 'GOLDEN_REPORT_NOT_CLEARED');
+      assert.match(run.error.detail, /golden-report\.json/);
+    } finally {
+      suite.dispose();
+    }
+  });
+
+  it('leaves out a case module that throws while loading', async () => {
+    const suite = TemporaryGoldenSuite.create(PASSING);
+    try {
+      const broken = join(suite.studyRoot, 'test/golden/trial-oracle/miniature/cases/broken.case.ts');
+      mkdirSync(dirname(broken), { recursive: true });
+      writeFileSync(broken, 'throw new Error("broken case module");\n');
+      const run = await reader(suite).readGoldenSuiteRun();
+      assert.ok(run.ok, JSON.stringify(run));
+      assert.deepEqual(
+        run.value.case_declarations.map((declaration) => declaration.case_id),
+        ['covers-br-rua-006', 'covers-traceability'],
+      );
     } finally {
       suite.dispose();
     }
