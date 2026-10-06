@@ -2,6 +2,7 @@
 // "the JSON, JSONL and package parsers never crash on malformed input"). Every function
 // here returns a Result or a report for any byte sequence and never throws.
 
+import { boundedJsonText } from './json-value.ts';
 import type { JsonValue, Result } from './primitives.ts';
 
 export interface DecodeFailure {
@@ -63,7 +64,9 @@ export function decodeUtf8Strict(bytes: Uint8Array): Result<string, DecodeFailur
 
 /**
  * Parses one JSON document from exact file bytes. Numbers that overflow to an infinite
- * double are rejected, so every accepted value can be serialized back canonically.
+ * double are rejected, so every accepted value can be serialized back canonically. The failure
+ * detail quotes the number's JSON pointer bounded: the pointer is built from untrusted member
+ * names and nesting, so it can be megabytes long (WP-00 review round 2, A-05 policy 1).
  *
  * @example
  * const parsed = parseJsonDocument(await readFile('oracle-result.json'));
@@ -140,7 +143,10 @@ function parseJsonText(text: string): Result<JsonValue, JsonParseFailure> {
   if (overflowAt !== undefined) {
     return {
       ok: false,
-      error: { kind: 'invalid_json', detail: `number at JSON pointer "${overflowAt}" overflows a finite double` },
+      error: {
+        kind: 'invalid_json',
+        detail: `number at JSON pointer ${boundedJsonText(overflowAt)} overflows a finite double`,
+      },
     };
   }
   return { ok: true, value };

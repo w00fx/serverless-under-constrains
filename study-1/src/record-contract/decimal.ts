@@ -2,6 +2,7 @@
 // safe-integer JSON numbers, aggregates and elapsed nanoseconds are canonical base-10 strings.
 // All arithmetic runs on BigInt so no aggregate is ever rounded through a double.
 
+import { boundedJsonText } from './json-value.ts';
 import type { DecimalString, SignedDecimalString, UtcMillis } from './primitives.ts';
 import { isUtcMillis } from './timestamps.ts';
 
@@ -80,14 +81,16 @@ export function signedDifferenceMs(later: UtcMillis, earlier: UtcMillis): Signed
 
 function toBigInt(value: DecimalString): bigint {
   if (!isDecimalString(value)) {
-    throw new RangeError(`${JSON.stringify(value)} is not a decimal string; expected ${DECIMAL_STRING_PATTERN.source}`);
+    throw new RangeError(
+      `${boundedJsonText(value)} is not a decimal string; expected ${DECIMAL_STRING_PATTERN.source}`,
+    );
   }
   return BigInt(value);
 }
 
 function toEpochMillis(value: UtcMillis): number {
   if (!isUtcMillis(value)) {
-    throw new RangeError(`${JSON.stringify(value)} is not a UTC millis timestamp; expected YYYY-MM-DDTHH:mm:ss.SSSZ`);
+    throw new RangeError(`${boundedJsonText(value)} is not a UTC millis timestamp; expected YYYY-MM-DDTHH:mm:ss.SSSZ`);
   }
   return Date.parse(value);
 }

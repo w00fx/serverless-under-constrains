@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/_defs.schema.json",
   "title": "CAP-RUA shared definitions (BR-RUA-033, BR-RUA-035)",
-  "description": "Shared $defs for every record schema. A record schema lives at <group>/<record_type>.schema.json with $id https://rua.serverless-under-constraints.invalid/schemas/<record_type>.schema.json, so the relative reference _defs.schema.json#/$defs/<name> resolves here. Event records compose the envelope with allOf [{\"$ref\": \"_defs.schema.json#/$defs/event_envelope\"}] and close the object with unevaluatedProperties: false.",
+  "description": "Shared $defs for every record schema. A record schema lives at <group>/<record_type>.schema.json with $id https://rua.serverless-under-constraints.invalid/schemas/<record_type>.schema.json, so the relative reference _defs.schema.json#/$defs/<name> resolves here. Event records compose the envelope with allOf [{\"$ref\": \"_defs.schema.json#/$defs/event_envelope\"}] and close the root with additionalProperties: false, declaring every envelope member in their own properties (true is enough, because the envelope constrains it). No object relies on unevaluatedProperties for closure: Ajv counts inherited names such as __proto__ or toString as evaluated (design section 6, Owner amendment A-07).",
   "$defs": {
     "schema_version": {
       "const": 1

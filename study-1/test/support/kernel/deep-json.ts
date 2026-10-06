@@ -1,7 +1,8 @@
 // Deeply nested JSON parsed from bytes (WP-00 review round 1). JSON.parse accepts nesting far
 // deeper than the call stack, so every kernel function that takes parsed JSON is checked against
-// towers like these: 50,000 levels is about 100 KB of input, far past the ~2,500 levels where
-// the former recursive code threw RangeError.
+// towers like these: 100,000 levels (the floor Owner amendment A-05 sets for every boundary,
+// raised from 50,000 in review round 2) is about 200 KB of input, far past the ~2,500 levels
+// where the former recursive code threw RangeError.
 
 import fc from 'fast-check';
 
@@ -9,7 +10,7 @@ import { parseJsonDocument } from '../../../src/record-contract/parsing.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 
 /** Nesting depth of the permanent deep-input regression cases. */
-export const DEEP_NESTING = 50_000;
+export const DEEP_NESTING = 100_000;
 
 export type TowerShape = 'array' | 'object' | 'mixed';
 

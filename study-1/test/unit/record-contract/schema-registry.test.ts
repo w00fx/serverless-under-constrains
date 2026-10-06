@@ -11,11 +11,18 @@ import type { JsonObject } from '../../../src/record-contract/primitives.ts';
 import {
   DEFAULT_SCHEMA_ROOT,
   NODE_SCHEMA_FILE_SYSTEM,
+  VIOLATION_TEXT_LIMIT,
   createRecordValidator,
   listSchemaFiles,
 } from '../../../src/record-contract/schema-registry.ts';
 import { InMemorySchemaFileSystem } from '../../support/kernel/in-memory-schema-file-system.ts';
-import { FIXTURE_CATALOGUE_ROOT, SHARED_DEFS_PATH, samplePayment } from '../../support/kernel/schema-fixtures.ts';
+import {
+  FIXTURE_CATALOGUE_ROOT,
+  SHARED_DEFS_PATH,
+  sampleDispatchStarted,
+  sampleOracleResult,
+  samplePayment,
+} from '../../support/kernel/schema-fixtures.ts';
 
 const ROOT = '/catalogue';
 const DEFS_BYTES = readFileSync(SHARED_DEFS_PATH);
@@ -146,6 +153,80 @@ describe('createRecordValidator', () => {
       ],
     );
     assert.match(violations[1]?.detail ?? '', /^must be >= 1 \(params \{"comparison":">=","limit":1\}\)$/);
+  });
+
+  // WP-00 review round 2 (A-05 policy 1): Ajv copies an additional or open-map member name into
+  // params and the instance path, so a 5 MB name made a 5 MB violation.
+  it('bounds the instance path and params that a hostile member name reaches', () => {
+    const name = 'k'.repeat(5_000_000);
+    const openMap = JSON.stringify({
+      ...(JSON.parse(minimalSchema('source_provenance')) as JsonObject),
+      properties: {
+        schema_version: { const: 1 },
+        record_type: { const: 'source_provenance' },
+        tool_versions: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    });
+    const fileSystem = catalogueWithPayment().writeFile(`${ROOT}/group-a/source_provenance.schema.json`, openMap);
+    const validator = createRecordValidator({ schemaRoot: ROOT, fileSystem });
+    const paramsPrefix = '{"additionalProperty":"';
+    assert.deepEqual(validator.validate({ ...samplePayment(), [name]: 1 }), {
+      valid: false,
+      record_type: 'payment',
+      violations: [
+        {
+          instance_path: '',
+          keyword: 'additionalProperties',
+          detail: `must NOT have additional properties (params ${paramsPrefix}${'k'.repeat(VIOLATION_TEXT_LIMIT - paramsPrefix.length)}…[truncated])`,
+        },
+      ],
+    });
+    const inMap = { schema_version: 1, record_type: 'source_provenance', tool_versions: { [name]: 7 } };
+    assert.deepEqual(validator.validate(inMap), {
+      valid: false,
+      record_type: 'source_provenance',
+      violations: [
+        {
+          instance_path: `/tool_versions/${'k'.repeat(VIOLATION_TEXT_LIMIT - '/tool_versions/'.length)}…[truncated]`,
+          keyword: 'type',
+          detail: 'must be string (params {"type":"string"})',
+        },
+      ],
+    });
+  });
+
+  // WP-00 review round 2 (A-05 item 3, A-07): JSON.parse makes an inherited name an own member.
+  // An event closed with additionalProperties refuses it at the root, and so does a shared
+  // evidence reference nested in a record.
+  it('refuses an inherited member name at an event root and inside a nested reference', () => {
+    const validator = createRecordValidator({ schemaRoot: FIXTURE_CATALOGUE_ROOT, defsPath: SHARED_DEFS_PATH });
+    const withMember = (value: JsonObject, name: string): JsonObject =>
+      JSON.parse(`{${JSON.stringify(name)}:1,${JSON.stringify(value).slice(1)}`) as JsonObject;
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf']) {
+      const event = validator.validate(withMember(sampleDispatchStarted(), name));
+      assert.deepEqual(
+        event.valid ? [] : event.violations.map((violation) => [violation.instance_path, violation.keyword]),
+        [['', 'additionalProperties']],
+        name,
+      );
+      const result = sampleOracleResult();
+      const [first, ...rest] = result['evidence_refs'] as readonly JsonObject[];
+      const nested = validator.validate({ ...result, evidence_refs: [withMember(first ?? {}, name), ...rest] });
+      assert.deepEqual(
+        nested.valid ? [] : nested.violations.map((violation) => [violation.instance_path, violation.keyword]),
+        [['/evidence_refs/0', 'additionalProperties']],
+        name,
+      );
+    }
+    assert.equal(validator.validate(sampleDispatchStarted()).valid, true);
+  });
+
+  it('names a non-finite top-level value as itself, never as null', () => {
+    const validator = createRecordValidator({ schemaRoot: ROOT, fileSystem: catalogueWithPayment() });
+    assert.deepEqual(validator.validate(JSON.parse('-1e400') as number), {
+      valid: false,
+      violations: [{ instance_path: '', keyword: 'type', detail: 'got -Infinity; expected a JSON object record' }],
+    });
   });
 
   it('rejects a value that is not a JSON object without loading any schema', () => {

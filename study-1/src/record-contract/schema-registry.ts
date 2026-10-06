@@ -12,7 +12,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ErrorObject, ValidateFunction } from 'ajv/dist/2020.js';
 
 import { sha256Hex } from './digests.ts';
-import { boundedJsonText, isJsonObject } from './json-value.ts';
+import { boundedJsonText, boundedText, isJsonObject } from './json-value.ts';
 import { parseJsonDocument } from './parsing.ts';
 import type { JsonObject, JsonValue, Sha256Hex } from './primitives.ts';
 import { RECORD_GROUPS, RECORD_TYPE_GROUPS, isRecordType, recordGroupOf } from './record-types.ts';
@@ -23,6 +23,14 @@ import type { StudyRecord } from './records/index.ts';
 
 export const DEFAULT_SCHEMA_ROOT = fileURLToPath(new URL('./schemas/', import.meta.url));
 const SCHEMA_SUFFIX = '.schema.json';
+
+/**
+ * The most characters a violation quotes from Ajv's instance path or params. Both mix schema
+ * text, which reaches about 1,130 characters in the catalogue (the longest enum), with untrusted
+ * member names: an additional or open-map property name is copied verbatim, so a 5 MB name once
+ * made a 5 MB detail (WP-00 review round 2; Owner amendment A-05 policy 1).
+ */
+export const VIOLATION_TEXT_LIMIT = 2_000;
 
 export interface SchemaViolation {
   readonly instance_path: string;
@@ -160,9 +168,9 @@ export function createRecordValidator(location: SchemaLocation = {}): RecordVali
     }
     return { valid: false, record_type: recordType, violations: errors.map(toViolation) };
   };
-  // Details quote untrusted values only through boundedJsonText, and Ajv's params hold schema
-  // values and instance keys, never nested instance values (verbose is off), so validation is
-  // total over deep or huge JSON (WP-00 review round 1).
+  // Details quote untrusted values only through the bounded renderers, and Ajv's params hold
+  // schema values and instance keys, never nested instance values (verbose is off), so validation
+  // is total over deep or huge JSON and every violation has a bounded size (WP-00 review rounds 1-2).
 
   const validateAs = (type: RecordType, value: JsonValue): RecordValidation => {
     const declared = isJsonObject(value) ? value['record_type'] : undefined;
@@ -224,10 +232,11 @@ function readSchemaObject(path: string, bytes: Uint8Array): JsonObject {
 }
 
 function toViolation(error: ErrorObject): SchemaViolation {
+  const params: JsonValue = error.params;
   return {
-    instance_path: error.instancePath,
+    instance_path: boundedText(error.instancePath, VIOLATION_TEXT_LIMIT),
     keyword: error.keyword,
-    detail: [error.message, `(params ${JSON.stringify(error.params)})`].join(' '),
+    detail: [error.message, `(params ${boundedJsonText(params, VIOLATION_TEXT_LIMIT)})`].join(' '),
   };
 }
 
