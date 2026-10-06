@@ -134,9 +134,9 @@ export function assessIdentityInput(
   const financialInputs: DeclaredFinancialInputs = {
     currency: 'BRL',
     payment_id: textOf(ownField(payment, 'payment_id')),
-    captured_amount_minor: Number(ownField(payment, 'captured_amount_minor')),
+    captured_amount_minor: amountOf(ownField(payment, 'captured_amount_minor')),
     refund_request_id: textOf(ownField(decision, 'refund_request_id')),
-    approved_amount_minor: Number(ownField(decision, 'approved_amount_minor')),
+    approved_amount_minor: amountOf(ownField(decision, 'approved_amount_minor')),
     decision: 'APPROVED',
   };
   return verdictOf('IDENTITY', statement, reasons, {
@@ -313,4 +313,11 @@ function identifierReason(field: string, value: JsonValue | undefined): Structur
 // A4 fails on any non-string identifier; the value it carries then is never frozen.
 function textOf(value: JsonValue | undefined): string {
   return typeof value === 'string' ? value : '';
+}
+
+// A3 admitted the amounts before A4 runs. A typed read keeps A4 total on its own: `Number(...)`
+// would call a hostile object's `valueOf` or `toString` and throw (A-05; WP-23 review), and a
+// value A3 would refuse is never coerced into one it admits.
+function amountOf(value: JsonValue | undefined): number {
+  return typeof value === 'number' ? value : Number.NaN;
 }

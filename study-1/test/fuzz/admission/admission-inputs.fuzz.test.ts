@@ -17,9 +17,18 @@ import {
   unreservedConcurrencyOf,
 } from '../../../src/admission/cloud-readings.ts';
 import { validateEnvironmentInput } from '../../../src/admission/environment-input.ts';
-import { assessFinancialInput, validateFinancialInput } from '../../../src/admission/financial-input.ts';
+import {
+  assessFinancialInput,
+  assessIdentityInput,
+  validateFinancialInput,
+} from '../../../src/admission/financial-input.ts';
 import { caseDeclarationOf, parseSuiteReport } from '../../../src/admission/golden-report.ts';
-import type { JsonValue, StructuredReason } from '../../../src/record-contract/primitives.ts';
+import type {
+  ExecutionKind,
+  JsonObject,
+  JsonValue,
+  StructuredReason,
+} from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { OR_RUA_001_APPROVED_DECISION, OR_RUA_001_PAYMENT } from '../../../src/admission/declared-inputs.ts';
 import { deepTowerArbitrary, towerText } from '../../support/kernel/deep-json.ts';
@@ -47,9 +56,12 @@ const anyJson: fc.Arbitrary<JsonValue> = fc.oneof(
 );
 
 // A real record with one member replaced or removed, so most values reach the deeper checks.
-function nearRecord(base: Readonly<Record<string, JsonValue>>): fc.Arbitrary<JsonValue> {
+function nearRecord(
+  base: Readonly<Record<string, JsonValue>>,
+  values: fc.Arbitrary<JsonValue> = hostileLeaf,
+): fc.Arbitrary<JsonObject> {
   return fc
-    .tuple(fc.constantFrom(...Object.keys(base), ...INHERITED_NAMES), fc.option(hostileLeaf, { nil: undefined }))
+    .tuple(fc.constantFrom(...Object.keys(base), ...INHERITED_NAMES), fc.option(values, { nil: undefined }))
     .map(([member, value]) => {
       const copy: Record<string, JsonValue> = Object.fromEntries(
         Object.entries(base).filter(([name]) => name !== member),
@@ -80,6 +92,39 @@ describe('financial input properties', () => {
           assertBounded(verdict.reasons);
         }
       }),
+      fuzzParameters(),
+    );
+  });
+
+  it('assesses identity over any member values without throwing, freezing only own typed values', () => {
+    // Regression property (WP-23 review): A4 coerced amounts with `Number(...)`, which throws on a
+    // parsed object whose `valueOf` and `toString` are not functions.
+    const members = fc.oneof(hostileLeaf, inheritedObject, deepTowerArbitrary());
+    const kinds = fc.constantFrom<ExecutionKind>('RUN', 'TRANSPORT_PROBE', 'VARIANT_VALIDATION');
+    const variants = fc.option(fc.oneof(fc.constantFrom<JsonValue>('conventional', 'durable'), members), {
+      nil: undefined,
+    });
+    fc.assert(
+      fc.property(
+        nearRecord(OR_RUA_001_PAYMENT, members),
+        nearRecord(OR_RUA_001_APPROVED_DECISION, members),
+        kinds,
+        variants,
+        (payment, decision, kind, variant) => {
+          const verdict = assessIdentityInput({ payment, decision }, kind, variant);
+          if (!verdict.passed) {
+            assert.equal(verdict.rejection_class, 'IDENTITY');
+            assert.ok(verdict.reasons.length > 0);
+            assertBounded(verdict.reasons);
+            return;
+          }
+          const inputs = verdict.value.financial_inputs;
+          assert.equal(inputs.payment_id, payment['payment_id']);
+          assert.equal(inputs.refund_request_id, decision['refund_request_id']);
+          assert.equal(typeof inputs.captured_amount_minor, 'number');
+          assert.equal(typeof inputs.approved_amount_minor, 'number');
+        },
+      ),
       fuzzParameters(),
     );
   });
