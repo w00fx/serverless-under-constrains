@@ -153,6 +153,24 @@ describe('AC-RUA-046 durable_execution_metadata', () => {
     assertAccepted(withValueAt(metadata, ['executions', 0, 'history', 0], minimal), 'minimal history event');
   });
 
+  it('names the service history id apart from the study event_id', () => {
+    // BR-RUA-033 reserves `event_id` for the study's lowercase UUIDv4 event identity.
+    const metadata = json(observation.durableExecutionMetadata());
+    const historyEvent = ['executions', 0, 'history', 0];
+    assertRejected(
+      withValueAt(metadata, [...historyEvent, 'event_id'], 1),
+      'service id as event_id',
+      '/executions/0/history/0 additionalProperties',
+    );
+    const historyId = [...historyEvent, 'history_event_id'];
+    assertAccepted(withValueAt(metadata, historyId, 0), 'first service id');
+    assertRejected(
+      withValueAt(metadata, historyId, -1),
+      'negative id',
+      '/executions/0/history/0/history_event_id minimum',
+    );
+  });
+
   it('a running execution has no end', () => {
     const metadata = json(observation.durableExecutionMetadata());
     const running = withValueAt(

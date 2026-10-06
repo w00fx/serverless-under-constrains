@@ -7,7 +7,11 @@ import type { DurableExecutionStatus } from './vocabulary.ts';
 
 /** One history event in the service spelling (`StepFailed`, `InvocationCompleted`, ...). */
 export interface DurableHistoryEvent {
-  readonly event_id?: number;
+  /**
+   * The service's integer history `EventId`, named apart from the study's UUIDv4 `event_id`
+   * (BR-RUA-033) so a walker over `event_id` members never mistakes one for the other.
+   */
+  readonly history_event_id?: number;
   readonly event_type: string;
   readonly event_timestamp: UtcMillis;
   readonly name?: string;

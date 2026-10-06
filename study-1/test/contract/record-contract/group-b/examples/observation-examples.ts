@@ -214,7 +214,7 @@ export function durableExecutionMetadata(): DurableExecutionMetadata {
         history_complete: true,
         history: [
           {
-            event_id: 1,
+            history_event_id: 1,
             event_type: 'StepStarted',
             event_timestamp: at(2),
             name: 'refund',
