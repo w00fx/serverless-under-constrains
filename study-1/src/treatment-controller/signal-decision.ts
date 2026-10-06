@@ -8,6 +8,13 @@
 // and is INVALID_EVENT. SAFETY_RELEASED always yields `late_rejected`, including for the event
 // that would once have been a duplicate, because a released barrier has no signal to repeat and
 // the duplicate record admits only the signalled states.
+//
+// Declared deviation (WP-08 review r1): §9.11 lists only "none or another" existing signal for
+// SAFETY_RELEASED. When a signal was recorded before a cleanup safety release and its own caller
+// event is re-delivered, this writes `late_timeout_signal_rejected` for the event that already
+// signalled. Treatment fidelity (WP-10) must not read such a rejection as a second signal
+// attempt: it names the same `caller_timeout_event_id` as the earlier `timeout_signal_recorded`.
+// Fidelity is unverified after any safety release anyway, so no verdict changes.
 
 import type { ExecutionIdentity, JsonValue, Uuid4 } from '../record-contract/primitives.ts';
 import type { SignalledTreatmentState, TreatmentState } from '../record-contract/records/group-b/vocabulary.ts';

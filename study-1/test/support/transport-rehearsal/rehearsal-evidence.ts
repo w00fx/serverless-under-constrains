@@ -1,10 +1,18 @@
 // The probe evidence directory of an offline transport rehearsal (design §7 "A probe package
 // replaces trials/ with a single probe/ directory", §12.3). It holds what the collector would read
 // after the probe: the probe partition's caller, provider and controller journals, the
-// configuration, payment and treatment state, and the strongly consistent ledger snapshot. The
-// readiness evidence of the canary (D-10) and the warm-up (addendum §2) sits under `readiness/`
-// until the evidence collector (WP-10) fixes its package path. Every record is checked against
-// its catalogue schema before anything is written.
+// configuration, payment and treatment state, and the strongly consistent ledger snapshot. Every
+// record is checked against its catalogue schema before anything is written.
+//
+// PROVISIONAL LAYOUT. This is a subset of the §7 probe layout, not a package: it has no
+// `probe/inputs/approved-decision.json`, no `settlement/` and no `derived/`, and its `readiness/`
+// paths are invented here. The package layout and its collection belong to WP-13 (evidence
+// package) and WP-25 (evidence collection); the readiness phase that writes the canary and the
+// warm-up belongs to WP-26. In particular the rehearsal canary cites runner-generated
+// predecessor ids (its `causation_event_ids` and `monotonic_origin_event_id`, which the
+// `caller_timeout_recorded` schema requires) that no exported event carries, because D-10 does
+// not say which runner event the canary follows. The `readiness/` files therefore do not resolve
+// under BR-RUA-034 and must not be read as package evidence until WP-26 defines that predecessor.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

@@ -37,29 +37,39 @@ type Environment = Readonly<Record<string, string | undefined>>;
  */
 export function parseControllerEnvironment(env: Environment): Result<ControllerEnvironment, string> {
   const names = CONTROLLER_ENVIRONMENT_VARIABLES;
-  const kind = env[names.execution_kind];
-  const id = env[names.execution_id];
-  const journal = env[names.experiment_journal];
-  const control = env[names.control];
-  const problems = [
-    isExecutionKind(kind)
-      ? undefined
-      : `${names.execution_kind}=${JSON.stringify(kind)}; expected one of ${EXECUTION_KINDS.join(', ')}`,
-    isUuid4(id)
-      ? undefined
-      : `${names.execution_id}=${JSON.stringify(id)}; expected a lowercase RFC 4122 version-4 UUID`,
-    isTableName(journal)
-      ? undefined
-      : `${names.experiment_journal}=${JSON.stringify(journal)}; expected a non-empty table name`,
-    isTableName(control) ? undefined : `${names.control}=${JSON.stringify(control)}; expected a non-empty table name`,
-  ].filter((problem) => problem !== undefined);
-  if (!isExecutionKind(kind) || !isUuid4(id) || !isTableName(journal) || !isTableName(control)) {
+  const kind = readControllerVariable(
+    env,
+    names.execution_kind,
+    isExecutionKind,
+    `one of ${EXECUTION_KINDS.join(', ')}`,
+  );
+  const id = readControllerVariable(env, names.execution_id, isUuid4, 'a lowercase RFC 4122 version-4 UUID');
+  const journal = readControllerVariable(env, names.experiment_journal, isTableName, 'a non-empty table name');
+  const control = readControllerVariable(env, names.control, isTableName, 'a non-empty table name');
+  if (!kind.ok || !id.ok || !journal.ok || !control.ok) {
+    const problems = [kind, id, journal, control].flatMap((read) => (read.ok ? [] : [read.error]));
     return { ok: false, error: `controller environment invalid: ${problems.join('; ')}` };
   }
   return {
     ok: true,
-    value: { deployment: deploymentOf(kind, id), tables: { experiment_journal: journal, control } },
+    value: {
+      deployment: deploymentOf(kind.value, id.value),
+      tables: { experiment_journal: journal.value, control: control.value },
+    },
   };
+}
+
+// Reads one variable, narrowing it once; the failure names the variable, its value and the shape.
+function readControllerVariable<T extends string>(
+  env: Environment,
+  name: string,
+  accepts: (value: string | undefined) => value is T,
+  shape: string,
+): Result<T, string> {
+  const value = env[name];
+  return accepts(value)
+    ? { ok: true, value }
+    : { ok: false, error: `${name}=${JSON.stringify(value)}; expected ${shape}` };
 }
 
 function deploymentOf(kind: ExecutionKind, id: Uuid4): ExecutionIdentity {

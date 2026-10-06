@@ -2,13 +2,15 @@
 // `probe_workload_request`). It accepts exactly what the JSON Schema accepts, plus one check the
 // schema cannot state: the request must name this deployment's transport probe. It is
 // hand-written so the probe caller compiles no schema at load time (RK-01), and the fuzz suite
-// checks it against the Ajv validator differentially.
+// checks it against the Ajv validator differentially. It never throws: a refusal describes the
+// offending value without serializing nested content (`payload-value.ts`, WP-08 review r1).
 
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { describeJson, isJsonObject } from '../record-contract/json-value.ts';
+import { isJsonObject } from '../record-contract/json-value.ts';
 import type { ExecutionIdentity, JsonObject, JsonValue, Result } from '../record-contract/primitives.ts';
 import type { ProbeWorkloadRequest } from '../record-contract/records/group-a/probe_workload_request.ts';
+import { describePayloadValue } from './payload-value.ts';
 
 const RECORD_TYPE = 'probe_workload_request';
 const FIELDS = [
@@ -36,7 +38,7 @@ export function parseProbeWorkloadRequest(
   deployment: ExecutionIdentity,
 ): Result<ProbeWorkloadRequest, string> {
   if (!isJsonObject(payload)) {
-    return refuse(`payload is ${describeJson(payload)}; expected a ${RECORD_TYPE} object`);
+    return refuse(`payload is ${describePayloadValue(payload)}; expected a ${RECORD_TYPE} object`);
   }
   const problem = shapeProblem(payload) ?? valueProblem(payload);
   if (problem !== undefined) {
@@ -45,7 +47,7 @@ export function parseProbeWorkloadRequest(
   const probeId = deployment.execution_kind === 'TRANSPORT_PROBE' ? deployment.transport_probe_id : undefined;
   if (payload['transport_probe_id'] !== probeId) {
     return refuse(
-      `transport_probe_id ${describeJson(payload['transport_probe_id'])}; expected this deployment's probe ${probeId ?? `(none: ${deployment.execution_kind} deployment)`}`,
+      `transport_probe_id ${describePayloadValue(payload['transport_probe_id'])}; expected this deployment's probe ${probeId ?? `(none: ${deployment.execution_kind} deployment)`}`,
     );
   }
   // Every field was checked above; the cast restates it.
@@ -77,7 +79,9 @@ function valueProblem(payload: JsonObject): string | undefined {
     ['currency', payload['currency'] === 'BRL', 'BRL'],
   ];
   const failed = checks.find(([, holds]) => !holds);
-  return failed === undefined ? undefined : `${failed[0]} ${describeJson(payload[failed[0]])}; expected ${failed[2]}`;
+  return failed === undefined
+    ? undefined
+    : `${failed[0]} ${describePayloadValue(payload[failed[0]])}; expected ${failed[2]}`;
 }
 
 function isNonEmptyTrimmed(value: JsonValue | undefined): boolean {

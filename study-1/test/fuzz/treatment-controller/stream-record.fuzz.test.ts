@@ -1,5 +1,7 @@
 // Property-based tests of the controller's untrusted-input boundary: the raw DynamoDB stream
 // record (testing rule 6; design §9.5, F-2). `unmarshallStreamRecord` is total over any value,
+// including images nested far deeper than the call stack (review r1: decoding overflowed at
+// 1,563 levels), and an image within the nesting bound is decoded, never refused for depth,
 // so a record the controller cannot read never loops the shard; a readable record round-trips
 // its event name, sequence number and image; and, through the composed controller over the
 // store emulator, a record that is not an INSERT of `caller_timeout_recorded` is ignored and
@@ -15,10 +17,12 @@ import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import {
   CALLER_TIMEOUT_RECORD_TYPE,
+  MAX_IMAGE_ATTRIBUTE_LEVELS,
   isConsumableInsert,
   unmarshallStreamRecord,
 } from '../../../src/treatment-controller/stream-record.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
+import { nestedArrays, nestedMapAttribute } from '../../support/transport-rehearsal/deep-values.ts';
 import {
   PROBE,
   PROBE_PK,
@@ -82,6 +86,18 @@ const brokenRaw: fc.Arbitrary<unknown> = fc.oneof(
   }),
 );
 
+// A raw record whose image nests `levels` maps (or plain arrays) under one attribute.
+const nestedRaw = (levels: number, maps: boolean): Readonly<Record<string, unknown>> => ({
+  eventName: 'INSERT',
+  dynamodb: {
+    SequenceNumber: '1',
+    NewImage: { pk: { S: 'p' }, sk: { S: 's' }, deep: maps ? nestedMapAttribute(levels) : nestedArrays(levels) },
+  },
+});
+const deepRaw = fc
+  .tuple(fc.integer({ min: MAX_IMAGE_ATTRIBUTE_LEVELS + 1, max: 4_000 }), fc.boolean())
+  .map(([levels, maps]) => nestedRaw(levels, maps));
+
 describe('stream record properties', () => {
   it('reads any value without throwing, into a record or a structured STREAM_RECORD_MALFORMED reason', () => {
     fc.assert(
@@ -89,6 +105,7 @@ describe('stream record properties', () => {
         fc.oneof(
           brokenRaw,
           wellFormedRaw.map((entry) => entry.raw),
+          deepRaw,
         ),
         (raw) => {
           const result = unmarshallStreamRecord(raw);
@@ -102,6 +119,16 @@ describe('stream record properties', () => {
           assert.ok(result.error.detail.length > 0);
         },
       ),
+      fuzzParameters(),
+    );
+  });
+
+  it('decodes every image of nested maps within the bound and refuses every deeper one', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 3 * MAX_IMAGE_ATTRIBUTE_LEVELS }), (levels) => {
+        const result = unmarshallStreamRecord(nestedRaw(levels, true));
+        assert.equal(result.ok, levels <= MAX_IMAGE_ATTRIBUTE_LEVELS, String(levels));
+      }),
       fuzzParameters(),
     );
   });

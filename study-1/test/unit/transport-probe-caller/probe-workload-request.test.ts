@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import { parseProbeWorkloadRequest } from '../../../src/transport-probe-caller/probe-workload-request.ts';
+import { nestedArrays, nestedObjects } from '../../support/transport-rehearsal/deep-values.ts';
 import { OTHER_RUN_ID, PROBE, PROBE_ID, RUN, workloadRequest } from './support/probe-fixtures.ts';
 
 function refusal(problem: string): object {
@@ -68,6 +69,21 @@ describe('parseProbeWorkloadRequest', () => {
     for (const [overrides, problem] of cases) {
       assert.deepEqual(parseProbeWorkloadRequest(workloadRequest(overrides), PROBE), refusal(problem), problem);
     }
+  });
+
+  it('refuses deeply nested payloads without throwing (review r1: RangeError at 6,174 levels)', () => {
+    assert.deepEqual(
+      parseProbeWorkloadRequest(nestedArrays(20_000), PROBE),
+      refusal('payload is array of length 1; expected a probe_workload_request object'),
+    );
+    assert.deepEqual(
+      parseProbeWorkloadRequest(workloadRequest({ transport_probe_id: nestedArrays(10_000) }), PROBE),
+      refusal('transport_probe_id array of length 1; expected a lowercase RFC 4122 version-4 UUID'),
+    );
+    assert.deepEqual(
+      parseProbeWorkloadRequest(workloadRequest({ amount_minor: nestedObjects(10_000) }), PROBE),
+      refusal('amount_minor object with 1 member(s); expected a safe integer >= 1'),
+    );
   });
 
   it("refuses a request for another probe or in a deployment that is not this probe's", () => {

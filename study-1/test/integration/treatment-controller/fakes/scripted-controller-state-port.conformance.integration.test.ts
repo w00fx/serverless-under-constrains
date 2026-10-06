@@ -4,20 +4,20 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createControllerStatePort } from '../../../src/treatment-controller/controller-state-port.ts';
-import type { SignalTransition } from '../../../src/treatment-controller/controller-state-port.ts';
-import { InMemoryItemStore } from '../../support/durable-store/in-memory-item-store.ts';
-import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-scheduler.ts';
-import { toJournalEntry } from '../../../src/event-journal/journal-entry.ts';
-import type { JournalEvent } from '../../../src/event-journal/journal-event.ts';
+import { createControllerStatePort } from '../../../../src/treatment-controller/controller-state-port.ts';
+import type { SignalTransition } from '../../../../src/treatment-controller/controller-state-port.ts';
+import { InMemoryItemStore } from '../../../support/durable-store/in-memory-item-store.ts';
+import { VirtualTimeScheduler } from '../../../support/kernel/virtual-time-scheduler.ts';
+import { toJournalEntry } from '../../../../src/event-journal/journal-entry.ts';
+import type { JournalEvent } from '../../../../src/event-journal/journal-event.ts';
 import {
   ATTEMPT_ID,
   CALLER_EVENT_ID,
   PROBE_PK,
   committedTreatmentItem,
   probeConfigItem,
-} from '../../unit/treatment-controller/support/controller-fixtures.ts';
-import { ScriptedControllerStatePort } from './support/scripted-controller-state-port.ts';
+} from '../../../unit/treatment-controller/support/controller-fixtures.ts';
+import { ScriptedControllerStatePort } from '../support/scripted-controller-state-port.ts';
 
 const PARTITION = { kind: 'probe', key: PROBE_PK } as const;
 

@@ -12,12 +12,12 @@
 import type { StoredItem } from '../durable-store/item-store-port.ts';
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { describeJson } from '../record-contract/json-value.ts';
 import type { JsonValue, Result, Scenario, Sha256Hex, Uuid4 } from '../record-contract/primitives.ts';
 import { SCENARIOS } from '../record-contract/primitives.ts';
 import type { CallerId, SignalledTreatmentState } from '../record-contract/records/group-b/vocabulary.ts';
 import { CALLER_IDS, TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.ts';
 import type { ExperimentPartition } from './controller-partition.ts';
+import { describeUntrustedValue } from './untrusted-value.ts';
 
 export const CONFIG_SORT_KEY = 'config';
 export const TREATMENT_SORT_KEY = 'treatment';
@@ -67,13 +67,19 @@ export function decodeControllerConfig(
   const caller = item['registered_caller_id'];
   const scenario = item['scenario'];
   if (!isSha256Hex(digest)) {
-    return refuse(item, `execution_manifest_sha256 ${describeJson(digest)}; expected 64 lowercase hex digits`);
+    return refuse(
+      item,
+      `execution_manifest_sha256 ${describeUntrustedValue(digest)}; expected 64 lowercase hex digits`,
+    );
   }
   if (!isOneOf(CALLER_IDS, caller)) {
-    return refuse(item, `registered_caller_id ${describeJson(caller)}; expected one of ${CALLER_IDS.join(', ')}`);
+    return refuse(
+      item,
+      `registered_caller_id ${describeUntrustedValue(caller)}; expected one of ${CALLER_IDS.join(', ')}`,
+    );
   }
   if (!isOneOf(SCENARIOS, scenario)) {
-    return refuse(item, `scenario ${describeJson(scenario)}; expected one of ${SCENARIOS.join(', ')}`);
+    return refuse(item, `scenario ${describeUntrustedValue(scenario)}; expected one of ${SCENARIOS.join(', ')}`);
   }
   const view = { execution_manifest_sha256: digest, registered_caller_id: caller, scenario };
   if (partition.kind === 'probe') {
@@ -97,10 +103,10 @@ export function decodeControllerTreatment(item: StoredItem): Result<ControllerTr
   const state = item['state'];
   const version = item['version'];
   if (!isOneOf(TREATMENT_STATES, state)) {
-    return refuse(item, `state ${describeJson(state)}; expected one of ${TREATMENT_STATES.join(', ')}`);
+    return refuse(item, `state ${describeUntrustedValue(state)}; expected one of ${TREATMENT_STATES.join(', ')}`);
   }
   if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
-    return refuse(item, `version ${describeJson(version)}; expected a safe integer >= 1`);
+    return refuse(item, `version ${describeUntrustedValue(version)}; expected a safe integer >= 1`);
   }
   if (state === 'ARMED' || state === 'SAFETY_RELEASED') {
     return { ok: true, value: { state } };
@@ -119,10 +125,16 @@ export function decodeControllerTreatment(item: StoredItem): Result<ControllerTr
 function configuredTrial(item: StoredItem, partitionTrial: Uuid4): Result<ConfiguredTrial, string> {
   const trialDigest = item['trial_manifest_sha256'];
   if (item['trial_id'] !== partitionTrial) {
-    return refuse(item, `trial_id ${describeJson(item['trial_id'])}; expected the partition trial ${partitionTrial}`);
+    return refuse(
+      item,
+      `trial_id ${describeUntrustedValue(item['trial_id'])}; expected the partition trial ${partitionTrial}`,
+    );
   }
   if (!isSha256Hex(trialDigest)) {
-    return refuse(item, `trial_manifest_sha256 ${describeJson(trialDigest)}; expected 64 lowercase hex digits`);
+    return refuse(
+      item,
+      `trial_manifest_sha256 ${describeUntrustedValue(trialDigest)}; expected 64 lowercase hex digits`,
+    );
   }
   return { ok: true, value: { trial_id: partitionTrial, trial_manifest_sha256: trialDigest } };
 }
@@ -155,7 +167,7 @@ function requiredId(item: StoredItem, field: string, state: string): Result<Uuid
   if (!isUuid4(value)) {
     return refuse(
       item,
-      `${field} ${describeJson(value)} in state ${state}; expected a lowercase RFC 4122 version-4 UUID`,
+      `${field} ${describeUntrustedValue(value)} in state ${state}; expected a lowercase RFC 4122 version-4 UUID`,
     );
   }
   return { ok: true, value };

@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { JsonValue } from '../../../src/record-contract/primitives.ts';
+import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import {
   canaryExpectation,
   experimentExpectation,
@@ -26,6 +26,7 @@ import {
   TRIAL_MANIFEST_SHA,
   callerTimeoutImage,
 } from './support/controller-fixtures.ts';
+import { nestedArrays, nestedObjects } from '../../support/transport-rehearsal/deep-values.ts';
 
 const TRIAL_CONFIG: ControllerConfigView = {
   execution_manifest_sha256: MANIFEST_SHA,
@@ -187,6 +188,96 @@ describe('readCallerTimeout', () => {
       rejected(`event_id number 7 and attempt_id string "${ATTEMPT_ID}"; expected lowercase RFC 4122 version-4 UUIDs`, {
         attempt_id: ATTEMPT_ID,
       }),
+    );
+  });
+});
+
+function without(image: JsonObject, field: string): JsonObject {
+  const { [field]: _removed, ...rest } = image;
+  return rest;
+}
+
+describe('readCallerTimeout record shape (design §9.11 "invalid event"; BR-RUA-023 fields)', () => {
+  const expected = experimentExpectation(PROBE, PROBE_CONFIG);
+  const UUID = 'a lowercase RFC 4122 version-4 UUID';
+  const UTC = 'a UTC timestamp YYYY-MM-DDTHH:mm:ss.SSSZ';
+  // Each required field, a malformed value, how it is described and the shape it must have.
+  const FIELDS: readonly (readonly [string, JsonValue, string, string])[] = [
+    ['occurred_at', '2026-02-30T00:00:00.000Z', 'string "2026-02-30T00:00:00.000Z"', UTC],
+    ['source_instance_id', 'x', 'string "x"', UUID],
+    ['source_sequence', 0, 'number 0', 'a safe integer >= 1'],
+    ['causation_event_ids', [], 'array of length 0', 'a non-empty ascending list of distinct lowercase UUIDv4s'],
+    ['provider_request_id', 1, 'number 1', UUID],
+    ['refund_request_id', ' r', 'string " r"', 'a non-empty string without edge whitespace'],
+    ['elapsed_ns', '03000000000', 'string "03000000000"', 'a decimal string of nanoseconds without leading zeros'],
+    ['monotonic_origin_event_id', null, 'null null', UUID],
+    ['dispatch_at', '2026-10-05T12:00:00Z', 'string "2026-10-05T12:00:00Z"', UTC],
+    ['deadline_at', 3, 'number 3', UTC],
+    ['timer_fired_at', '', 'string ""', UTC],
+    ['abort_requested_at', true, 'boolean true', UTC],
+    ['recorded_at', '2026-10-05 12:00:03.000Z', 'string "2026-10-05 12:00:03.000Z"', UTC],
+    ['arbiter_winner', 'timer', 'string "timer"', 'TIMER or TRANSPORT'],
+    ['transport_settled_at_claim', 'false', 'string "false"', 'a boolean'],
+  ];
+
+  it('refuses each required BR-RUA-023 or envelope field when absent or malformed', () => {
+    for (const [field, value, described, shape] of FIELDS) {
+      assert.deepEqual(
+        readCallerTimeout(without(callerTimeoutImage('probe'), field), expected),
+        rejected(`${field} absent; expected ${shape}`),
+        `${field} absent`,
+      );
+      assert.deepEqual(
+        readCallerTimeout(callerTimeoutImage('probe', { [field]: value }), expected),
+        rejected(`${field} ${described}; expected ${shape}`),
+        `${field} malformed`,
+      );
+    }
+  });
+
+  it('refuses a causation list out of order, repeated or holding a non-UUID', () => {
+    const shape = 'a non-empty ascending list of distinct lowercase UUIDv4s';
+    const [low, high] = [ATTEMPT_ID, CALLER_EVENT_ID].sort();
+    for (const list of [
+      [high, low],
+      [low, low],
+      [low, 'not-a-uuid'],
+    ] as readonly JsonValue[]) {
+      assert.deepEqual(
+        readCallerTimeout(callerTimeoutImage('probe', { causation_event_ids: list }), expected),
+        rejected(`causation_event_ids array of length 2; expected ${shape}`),
+      );
+    }
+    const ordered = callerTimeoutImage('probe', { causation_event_ids: [low ?? '', high ?? ''] });
+    assert.deepEqual(readCallerTimeout(ordered, expected), VALID);
+  });
+
+  it('refuses a property the caller_timeout_recorded schema does not declare', () => {
+    assert.deepEqual(
+      readCallerTimeout(callerTimeoutImage('probe', { provider_transaction_id: CALLER_EVENT_ID }), expected),
+      rejected(
+        'property "provider_transaction_id" is not declared by caller_timeout_recorded; expected only its schema properties',
+      ),
+    );
+  });
+
+  it('accepts the values the schema admits on purpose for the oracle to judge (BR-RUA-011)', () => {
+    const judgedLater = callerTimeoutImage('probe', {
+      elapsed_ns: '12',
+      arbiter_winner: 'TRANSPORT',
+      transport_settled_at_claim: true,
+    });
+    assert.deepEqual(readCallerTimeout(judgedLater, expected), VALID);
+  });
+
+  it('describes deeply nested values without throwing (review r1)', () => {
+    assert.deepEqual(
+      readCallerTimeout(nestedArrays(20_000), expected),
+      rejected('stream image is array of length 1; expected a JSON object', {}),
+    );
+    assert.deepEqual(
+      readCallerTimeout(callerTimeoutImage('probe', { source: nestedObjects(20_000) }), expected),
+      rejected('source object with 1 member(s); expected probe_caller'),
     );
   });
 });
