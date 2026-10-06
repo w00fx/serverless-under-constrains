@@ -150,6 +150,28 @@ describe('classifyRecords', () => {
     assert.equal(validities(classify(input), `${subjectOf(input)}/journals/caller-journal.jsonl`)[2], 'schema_invalid');
   });
 
+  it('classifies a record missing correlation that carries an own inherited-name member as schema-invalid', () => {
+    // Review finding WP-12 R1: filling the absent members through `Object.assign` ran the
+    // `__proto__` setter, so the member vanished and the record passed as correlation-missing.
+    const input = trialInput();
+    const caller = `${subjectOf(input)}/journals/caller-journal.jsonl`;
+    const lines = artifactValues(input, caller).map((value) => JSON.stringify(value));
+    const { run_id: _dropped, ...uncorrelated } = artifactValues(input, caller)[2] as Readonly<
+      Record<string, JsonValue>
+    >;
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+      const tampered = `{${JSON.stringify(name)}:{},${JSON.stringify(uncorrelated).slice(1)}`;
+      const bytes = text(`${lines.toSpliced(2, 1, tampered).join('\n')}\n`);
+      const classified = classify(withArtifact(input, caller, bytes));
+      assert.deepEqual(validities(classified, caller), ['valid', 'valid', 'schema_invalid', 'valid', 'valid'], name);
+      assert.deepEqual(
+        classified.findings.map((finding) => finding.code),
+        ['RECORD_SCHEMA_INVALID'],
+        name,
+      );
+    }
+  });
+
   it('rejects a non-event record in a journal and a record of the wrong type in a document', () => {
     const input = trialInput();
     const subject = subjectOf(input);

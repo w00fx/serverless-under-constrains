@@ -178,6 +178,28 @@ describe('buildIdentityRegistry over hand-built events', () => {
     assert.deepEqual(collision.origin_event_ids, [uuid(1), uuid(2)]);
   });
 
+  it('does not judge a collision found only among supplementary records (addendum §2.2, review WP-12 R2)', () => {
+    const warmup = (n: number): ReturnType<typeof indexedEvent> =>
+      indexedEvent({
+        event_id: uuid(n),
+        record_type: 'provider_warmup_completed',
+        origin: 'supplementary',
+        members: { provider_call_id: uuid(51) },
+      });
+    assert.deepEqual(buildIdentityRegistry([warmup(7), warmup(8)], []).provider_collisions, []);
+  });
+
+  it('judges a supplementary record that reuses a subject identity (INV-RUA-001)', () => {
+    const rejected = indexedEvent({
+      event_id: uuid(2),
+      record_type: 'provider_call_rejected',
+      origin: 'supplementary',
+      members: { provider_call_id: uuid(50) },
+    });
+    const [collision] = buildIdentityRegistry([received, rejected], []).provider_collisions;
+    assert.deepEqual(collision?.origin_event_ids, [uuid(1), uuid(2)]);
+  });
+
   it('counts a caller timeout as an attempt reference only when a caller recorded it', () => {
     const timeout = (source: string): ReturnType<typeof indexedEvent> =>
       indexedEvent({

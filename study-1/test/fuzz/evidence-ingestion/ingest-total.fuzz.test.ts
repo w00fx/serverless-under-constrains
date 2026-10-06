@@ -2,7 +2,8 @@
 // ingestion and the G2, G3 and G8 assessments return a classification for any artifact bytes,
 // paths and JSON values, with bounded findings in a deterministic order (A-05, A-12). The
 // BR-RUA-034 rules hold as properties: equivalent copies always collapse, whatever their member
-// order, and a source instance's gap count is exact for any set of sequences.
+// order, and a source instance's gap count is exact for any set of sequences. A record root stays
+// closed to own members named like inherited properties (A-07; review WP-12 R1).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -109,6 +110,45 @@ describe('ingestion is total (AC-RUA-046, design §8.2)', () => {
         if (corrupted?.requirement === 'required' && unreadable) {
           assert.equal(assessEvidenceIntegrity(evidence).value, 'invalid');
         }
+      }),
+      fuzzParameters(),
+    );
+  });
+});
+
+describe('closed record roots (A-05, A-07)', () => {
+  // Review finding WP-12 R1: a parsed own member named like an Object.prototype property is a
+  // member the closed root refuses, also while absent correlation members are filled in.
+  const inheritedNames = Object.getOwnPropertyNames(Object.prototype);
+  const correlationUnits: readonly (readonly string[])[] = [
+    ['run_id'],
+    ['execution_manifest_sha256'],
+    ['trial_id', 'trial_manifest_sha256'],
+  ];
+
+  it('classifies a caller event with an own inherited-name member as schema-invalid, whatever correlation it lacks (property)', () => {
+    const scenario = fc.record({
+      line: fc.nat({ max: CALLER_LINES.length - 1 }),
+      name: fc.constantFrom(...inheritedNames),
+      member: fc.jsonValue({ maxDepth: 2 }) as fc.Arbitrary<JsonValue>,
+      dropped: fc.subarray([...correlationUnits]),
+    });
+    fc.assert(
+      fc.property(scenario, ({ line, name, member, dropped }) => {
+        const absent = new Set(dropped.flat());
+        const kept = Object.entries(CALLER_LINES[line] as Readonly<Record<string, JsonValue>>).filter(
+          ([key]) => !absent.has(key),
+        );
+        const tampered = `{${JSON.stringify(name)}:${JSON.stringify(member)},${JSON.stringify(Object.fromEntries(kept)).slice(1)}`;
+        const lines = CALLER_LINES.map((value) => JSON.stringify(value)).toSpliced(line, 1, tampered);
+        const evidence = ingest({
+          ...CLEAN,
+          artifacts: CLEAN.artifacts.map((artifact) =>
+            artifact.path === CALLER ? { path: CALLER, bytes: encoder.encode(`${lines.join('\n')}\n`) } : artifact,
+          ),
+        });
+        assert.equal(evidence.artifacts.get(CALLER)?.records[line]?.validity, 'schema_invalid');
+        assert.equal(assessEvidenceIntegrity(evidence).value, 'invalid');
       }),
       fuzzParameters(),
     );

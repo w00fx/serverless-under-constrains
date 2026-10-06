@@ -30,8 +30,8 @@ const AC_047_CASES = [
   'core-file-digest-mismatch',
   'ledger-larger-than-expected-not-truncated',
 ] as const;
-/** The WP-12 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 146, golden: 9, fuzz: 4 } as const;
+/** The WP-12 counts after its single-pass review (first delivery: unit 146, golden 9, fuzz 4). */
+const RATIFIED_FLOOR = { unit: 159, golden: 9, fuzz: 5 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));

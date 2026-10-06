@@ -7,8 +7,10 @@
 // reference names other bytes. Unverified when correlation is missing, the consumer rejected the
 // message for missing correlation, a predecessor does not resolve, a manifest is unusable, or a
 // re-evaluated reference names unindexed bytes. Verdict-critical records are the subject's.
+// Values a reason quotes from evidence bytes are bounded, so a reason never scales with the
+// evidence (A-12; review finding WP-12 R3).
 
-import { isJsonArray, isJsonObject } from '../record-contract/json-value.ts';
+import { boundedText, isJsonArray, isJsonObject } from '../record-contract/json-value.ts';
 import type { JsonValue, Sha256Hex } from '../record-contract/primitives.ts';
 import type { ArtifactClass } from '../record-contract/records/group-c/vocabulary.ts';
 import { isUnitFile } from './artifact-roles.ts';
@@ -23,7 +25,7 @@ import type {
   IngestedEvidence,
   IngestedRecord,
 } from './ingestion-model.ts';
-import { namesOtherExecution, ownString } from './record-correlation.ts';
+import { otherExecutionField, ownString } from './record-correlation.ts';
 
 const SUBJECT = 'BR-RUA-008';
 /** D-28: consumer rejections that prove the message belonged to another execution or trial. */
@@ -62,15 +64,19 @@ function usableRecords(artifact: IngestedArtifact): readonly IngestedRecord[] {
 
 // Another execution: any execution id member other than the active one. Another trial: a record
 // of the trial directory naming a different trial, or any probe record naming a trial (D-06).
+// The reason quotes the foreign member and its value, bounded (review finding WP-12 R4).
 function foreignRecordCauses(artifact: IngestedArtifact, scope: EvidenceScope): readonly GateCause[] {
   return usableRecords(artifact).flatMap((record) => {
-    const execution = scope.execution !== undefined && namesOtherExecution(record.value, scope.execution);
-    if (!execution && !namesOtherTrial(artifact, record.value, scope)) {
+    const executionField =
+      scope.execution === undefined ? undefined : otherExecutionField(record.value, scope.execution);
+    const field = executionField ?? (namesOtherTrial(artifact, record.value, scope) ? 'trial_id' : undefined);
+    if (field === undefined) {
       return [];
     }
     const ref = recordRef(artifact, record);
-    const code = execution ? 'EXECUTION_IDENTITY_MISMATCH' : 'TRIAL_IDENTITY_MISMATCH';
-    const detail = `expected the active ${execution ? 'execution' : 'trial'} identity; a record of ${artifact.path} names another`;
+    const code = executionField === undefined ? 'TRIAL_IDENTITY_MISMATCH' : 'EXECUTION_IDENTITY_MISMATCH';
+    const named = boundedText(String(ownString(record.value, field)));
+    const detail = `expected the active ${executionField === undefined ? 'trial' : 'execution'} identity; a record of ${artifact.path} names ${field} ${named}`;
     return [{ value: 'invalid', reason: reasonAt(SUBJECT, code, detail, ref), refs: [ref] }];
   });
 }
@@ -125,7 +131,7 @@ function unresolvedCauses(evidence: IngestedEvidence): readonly GateCause[] {
     }
     // The predecessor itself is absent, so the dependent event is what can be cited.
     const ref = eventRef(event);
-    const detail = `expected every causal predecessor of ${event.record.record_type} to resolve; absent ${missing.join(', ')}`;
+    const detail = `expected every causal predecessor of ${event.record.record_type} to resolve; absent ${boundedText(missing.join(', '))}`;
     return [{ value: 'unverified', reason: reasonAt(SUBJECT, 'CAUSAL_PREDECESSOR_MISSING', detail, ref), refs: [ref] }];
   });
 }
@@ -182,10 +188,12 @@ function referenceCause(
     return [];
   }
   const ref = recordRef(artifact, record);
+  // The referenced path comes from the record's bytes: quoted bounded (review finding WP-12 R3).
+  const quoted = boundedText(path);
   if (indexedDigest === undefined) {
-    const detail = `expected every evidence reference to name indexed bytes; ${path} is not in the evidence index`;
+    const detail = `expected every evidence reference to name indexed bytes; ${quoted} is not in the evidence index`;
     return [{ value: 'unverified', reason: reasonAt(SUBJECT, 'EVIDENCE_REF_UNRESOLVED', detail, ref), refs: [ref] }];
   }
-  const detail = `expected ${path} at the indexed digest ${indexedDigest}; the reference names ${digest}`;
+  const detail = `expected ${quoted} at the indexed digest ${indexedDigest}; the reference names ${boundedText(digest)}`;
   return [{ value: 'invalid', reason: reasonAt(SUBJECT, 'EVIDENCE_REF_DIGEST_MISMATCH', detail, ref), refs: [ref] }];
 }

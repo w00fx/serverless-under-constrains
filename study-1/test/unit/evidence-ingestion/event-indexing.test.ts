@@ -89,6 +89,24 @@ describe('indexEvents', () => {
     );
   });
 
+  it('keeps the subject copy whatever order the artifacts are listed in (review WP-12 R2)', () => {
+    const changed = { ...EVENT, run_id: uuid(9) };
+    const collapse = indexEvents([
+      artifact('z.jsonl', [changed], 'execution_scope'),
+      artifact('y.jsonl', [changed], 'supplementary'),
+      artifact('a.jsonl', [EVENT]),
+    ]);
+    const kept = collapse.by_id.get(uuid(1));
+    assert.equal(kept?.artifact_path, 'a.jsonl');
+    assert.equal(kept.origin, 'subject');
+    assert.deepEqual(kept.record, EVENT);
+    assert.deepEqual(
+      collapse.findings.map((finding) => [finding.code, finding.artifact_path]),
+      [['CONFLICTING_EVENT_CONTENT', 'a.jsonl']],
+    );
+    assert.match(collapse.findings[0]?.detail ?? '', /differ: a\.jsonl:1, y\.jsonl:1, z\.jsonl:1$/u);
+  });
+
   it('indexes copies found only in earlier trials without judging them', () => {
     const collapse = indexEvents([
       artifact('a.jsonl', [EVENT], 'execution_scope'),
