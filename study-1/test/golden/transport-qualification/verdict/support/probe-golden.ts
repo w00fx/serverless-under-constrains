@@ -23,7 +23,7 @@ export const GOLDEN_VALIDATOR: RecordValidator = createRecordValidator();
 export const PROBE_CHECKED_AT = '2026-10-05T12:08:00.000Z' as UtcMillis;
 
 /** Members whose name would claim formal ordering proof; AC-RUA-002 forbids every one. */
-const HAPPENED_BEFORE_PATTERN = /happen|proof/iu;
+export const HAPPENED_BEFORE_PATTERN = /happen|proof/iu;
 
 /**
  * Loads a verdict case by id.

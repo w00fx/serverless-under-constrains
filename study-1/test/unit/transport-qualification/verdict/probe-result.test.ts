@@ -13,7 +13,10 @@ import { evaluateTreatmentConditions } from '../../../../src/treatment-fidelity/
 import { buildProbeResult } from '../../../../src/transport-qualification/verdict/probe-result.ts';
 import { deriveProbeVerdict } from '../../../../src/transport-qualification/verdict/probe-verdict.ts';
 import { GOLDEN_VALIDATOR } from '../../../golden/transport-qualification/verdict/support/probe-golden.ts';
-import { assertWellFormed } from '../../../golden/transport-qualification/verdict/support/verdict-assertions.ts';
+import {
+  assertOutcomesReached,
+  assertWellFormed,
+} from '../../../golden/transport-qualification/verdict/support/verdict-assertions.ts';
 import {
   deleteOp,
   EXTRA_CALL_PLAN,
@@ -98,6 +101,24 @@ describe('buildProbeResult', () => {
     assert.equal(result.value.probe_validity, 'indeterminate');
     assert.equal(result.value.probe_cardinality.committed_transactions, 1);
     assert.equal(result.value.transport_probe_verdict, 'fail');
+  });
+
+  it('lets a golden declare only the rule outcomes its result reaches', () => {
+    const result = resultOf(PROBE_EDITS.elapsed_short);
+    assert.equal(result.ok, true);
+    assertOutcomesReached(
+      [
+        { rule_id: 'BR-RUA-011', outcome: 'fail' },
+        { rule_id: 'BR-RUA-027', outcome: 'fail' },
+      ],
+      result.value,
+    );
+    assert.throws(() => {
+      assertOutcomesReached([{ rule_id: 'BR-RUA-027', outcome: 'pass' }], result.value);
+    }, /BR-RUA-027 reached fail; declared pass/u);
+    assert.throws(() => {
+      assertOutcomesReached([{ rule_id: 'BR-RUA-099', outcome: 'pass' }], result.value);
+    }, /BR-RUA-099 reached nothing; declared pass/u);
   });
 
   it('records an invalid probe as indeterminate, with the validity reasons', () => {
