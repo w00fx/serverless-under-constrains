@@ -3,7 +3,8 @@
 // at a time; the provider cannot read the trial registry (IAM matrix §9.6), so the call's own
 // `trial_id` names the partition, and the frozen configuration found there decides whether
 // the call is accepted. Every provider event of the call is journaled in that partition with
-// the configuration's manifest digest.
+// the configuration's manifest digest. A call that names no configured trial is journaled in
+// `<execution_id>#provider` instead (Owner amendment A-09).
 
 import type { JournalScope } from '../event-journal/journal-scope.ts';
 import { executionIdOf } from '../event-journal/journal-scope.ts';
@@ -57,4 +58,16 @@ export function callJournalScope(deployment: ExecutionIdentity, config: Provider
  */
 export function warmupJournalScope(deployment: ExecutionIdentity, manifestSha256: Sha256Hex): JournalScope {
   return { execution: deployment, execution_manifest_sha256: manifestSha256, partition: { kind: 'warmup' } };
+}
+
+/**
+ * The journal scope of a call the provider cannot attribute to a trial partition: the
+ * execution-level partition `<execution_id>#provider`, under the execution configuration's
+ * frozen manifest digest (Owner amendment A-09, human decision).
+ *
+ * @example
+ * const journal = openJournal(unattributedJournalScope(deployment, executionConfig.execution_manifest_sha256));
+ */
+export function unattributedJournalScope(deployment: ExecutionIdentity, manifestSha256: Sha256Hex): JournalScope {
+  return { execution: deployment, execution_manifest_sha256: manifestSha256, partition: { kind: 'provider' } };
 }

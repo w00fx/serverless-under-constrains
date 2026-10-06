@@ -6,6 +6,7 @@
 
 import type { StoredItem } from '../../../../src/durable-store/item-store-port.ts';
 import type { JournalEvent } from '../../../../src/event-journal/journal-event.ts';
+import { executionIdOf } from '../../../../src/event-journal/journal-scope.ts';
 import type { EventRecordType } from '../../../../src/record-contract/record-types.ts';
 import type {
   ExecutionIdentity,
@@ -50,6 +51,8 @@ export const VALIDATION: ExecutionIdentity = {
 
 export const TRIAL_PK = `${RUN_ID}#${TRIAL_ID}`;
 export const PROBE_PK = `${PROBE_ID}#probe`;
+/** The run's execution-level journal partition for calls that name no configured trial (A-09). */
+export const RUN_PROVIDER_PK = `${RUN_ID}#provider`;
 
 /** A valid trial-scoped call of the conventional caller (OR-RUA-001 fixture values). */
 export function validCall(overrides: JsonObject = {}): JsonObject {
@@ -134,6 +137,25 @@ export function probeConfigItem(overrides: JsonObject = {}): StoredItem {
   };
 }
 
+/**
+ * The execution-level `config` item the runner writes at execution start
+ * (`provider_execution_configuration`, Owner amendment A-09).
+ */
+export function executionConfigItem(execution: ExecutionIdentity = RUN, overrides: JsonObject = {}): StoredItem {
+  const { execution_kind: kind, ...identity } = execution;
+  return {
+    pk: `${executionIdOf(execution)}#execution`,
+    sk: 'config',
+    schema_version: 1,
+    record_type: 'provider_execution_configuration',
+    execution_kind: kind,
+    ...identity,
+    execution_manifest_sha256: MANIFEST_SHA,
+    written_at: '2026-10-05T11:58:00.000Z',
+    ...overrides,
+  };
+}
+
 /** The trial payment item (CTR-RUA-005, OR-RUA-001). */
 export function paymentItem(pk: string, overrides: JsonObject = {}): StoredItem {
   return {
@@ -189,6 +211,11 @@ export function seedRunTrial(harness: ProviderHarness, scenario: Scenario): void
   if (scenario === 'COMMIT_THEN_TIMEOUT') {
     harness.store.seed('control', armedTreatmentItem(TRIAL_PK));
   }
+}
+
+/** Seeds the execution configuration the runner writes before anything else (A-09). */
+export function seedExecutionConfiguration(harness: ProviderHarness, execution: ExecutionIdentity = RUN): void {
+  harness.store.seed('control', executionConfigItem(execution));
 }
 
 /** Seeds the transport-probe partition: configuration, payment and the armed treatment. */

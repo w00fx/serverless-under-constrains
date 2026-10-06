@@ -1,6 +1,7 @@
 // Partition resolution and journal scopes (design §9.3, addendum §2): the probe deployment has
 // one fixed partition; a trial deployment takes the partition from the call's own trial_id; the
-// warm-up journals in the execution-level `#warmup` partition.
+// warm-up journals in the execution-level `#warmup` partition, and a call that names no
+// configured trial in the execution-level `#provider` partition (A-09).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -9,6 +10,7 @@ import { journalPartitionKey } from '../../../src/event-journal/journal-scope.ts
 import {
   callJournalScope,
   resolveCallPartition,
+  unattributedJournalScope,
   warmupJournalScope,
 } from '../../../src/refund-provider/provider-partition.ts';
 import {
@@ -82,5 +84,15 @@ describe('journal scopes', () => {
     const scope = warmupJournalScope(RUN, MANIFEST_SHA);
     assert.deepEqual(scope, { execution: RUN, execution_manifest_sha256: MANIFEST_SHA, partition: { kind: 'warmup' } });
     assert.equal(journalPartitionKey(scope), `${RUN_ID}#warmup`);
+  });
+
+  it('scopes an unattributed call to the execution-level provider partition (A-09)', () => {
+    const scope = unattributedJournalScope(VALIDATION, MANIFEST_SHA);
+    assert.deepEqual(scope, {
+      execution: VALIDATION,
+      execution_manifest_sha256: MANIFEST_SHA,
+      partition: { kind: 'provider' },
+    });
+    assert.equal(journalPartitionKey(scope), `${VALIDATION_ID}#provider`);
   });
 });

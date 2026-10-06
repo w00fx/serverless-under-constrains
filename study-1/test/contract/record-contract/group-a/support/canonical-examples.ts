@@ -28,12 +28,15 @@ import {
   failedResourceManifest,
   probeExecutionManifest,
   probeProviderConfiguration,
+  probeProviderExecutionConfiguration,
   runExecutionManifest,
+  runProviderExecutionConfiguration,
   succeededResourceManifest,
   trialManifest,
   trialProviderConfiguration,
   trialRegistration,
   validationExecutionManifest,
+  validationProviderExecutionConfiguration,
 } from './manifest-examples.ts';
 import { branchExamples } from './branch-examples.ts';
 import { asJson } from './validation-assertions.ts';
@@ -64,6 +67,7 @@ export const CANONICAL_EXAMPLES: Readonly<Record<GroupARecordType, () => JsonObj
   resource_manifest: () => asJson(succeededResourceManifest()),
   trial_manifest: () => asJson(trialManifest()),
   provider_trial_configuration: () => asJson(trialProviderConfiguration()),
+  provider_execution_configuration: () => asJson(runProviderExecutionConfiguration()),
   trial_registration: () => asJson(trialRegistration()),
 };
 
@@ -84,6 +88,14 @@ export function allValidExamples(): readonly NamedExample[] {
     { name: 'execution_manifest (transport probe)', record: asJson(probeExecutionManifest()) },
     { name: 'resource_manifest (failed)', record: asJson(failedResourceManifest()) },
     { name: 'provider_trial_configuration (probe)', record: asJson(probeProviderConfiguration()) },
+    {
+      name: 'provider_execution_configuration (variant validation)',
+      record: asJson(validationProviderExecutionConfiguration()),
+    },
+    {
+      name: 'provider_execution_configuration (transport probe)',
+      record: asJson(probeProviderExecutionConfiguration()),
+    },
     ...branchExamples(),
   ];
 }

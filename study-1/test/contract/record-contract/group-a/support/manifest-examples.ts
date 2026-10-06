@@ -6,6 +6,7 @@ import type {
   DeclaredTiming,
   ExecutionManifest,
 } from '../../../../../src/record-contract/records/group-a/execution_manifest.ts';
+import type { ProviderExecutionConfiguration } from '../../../../../src/record-contract/records/group-a/provider_execution_configuration.ts';
 import type { ProviderTrialConfiguration } from '../../../../../src/record-contract/records/group-a/provider_trial_configuration.ts';
 import type {
   OwnershipTagEntry,
@@ -337,6 +338,58 @@ export function probeProviderConfiguration(): ProviderTrialConfiguration {
     safety_release_ms: 15000,
     treatment_poll_interval_ms: 250,
     written_at: instant('12:04:01.000'),
+  };
+}
+
+/**
+ * The run's execution-level provider configuration (Owner amendment A-09): written once at
+ * execution start, before the probe, the canary, any warm-up and any trial.
+ *
+ * @example
+ * runProviderExecutionConfiguration().execution_kind; // 'RUN'
+ */
+export function runProviderExecutionConfiguration(): ProviderExecutionConfiguration {
+  return {
+    schema_version: 1,
+    record_type: 'provider_execution_configuration',
+    execution_kind: 'RUN',
+    run_id: IDS.run,
+    execution_manifest_sha256: DIGESTS.executionManifest,
+    written_at: instant('12:03:59.000'),
+  };
+}
+
+/**
+ * The execution-level provider configuration of a variant validation (A-09).
+ *
+ * @example
+ * validationProviderExecutionConfiguration().execution_kind; // 'VARIANT_VALIDATION'
+ */
+export function validationProviderExecutionConfiguration(): ProviderExecutionConfiguration {
+  return {
+    schema_version: 1,
+    record_type: 'provider_execution_configuration',
+    execution_kind: 'VARIANT_VALIDATION',
+    variant_validation_id: IDS.variantValidation,
+    execution_manifest_sha256: DIGESTS.executionManifest,
+    written_at: instant('12:03:59.000'),
+  };
+}
+
+/**
+ * The execution-level provider configuration of a transport probe (A-09).
+ *
+ * @example
+ * probeProviderExecutionConfiguration().execution_kind; // 'TRANSPORT_PROBE'
+ */
+export function probeProviderExecutionConfiguration(): ProviderExecutionConfiguration {
+  return {
+    schema_version: 1,
+    record_type: 'provider_execution_configuration',
+    execution_kind: 'TRANSPORT_PROBE',
+    transport_probe_id: IDS.transportProbe,
+    execution_manifest_sha256: DIGESTS.executionManifest,
+    written_at: instant('12:03:59.000'),
   };
 }
 

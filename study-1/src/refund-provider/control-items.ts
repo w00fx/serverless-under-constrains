@@ -1,7 +1,10 @@
 // The control-table items the provider reads (design §9.3): the immutable `config` item (a
 // `provider_trial_configuration` record), the `payment#<payment_id>` item (a `payment` record)
 // and the `treatment` item (the BR-RUA-025 state, version, commit triple and signal ids). Each
-// item is the record's attributes plus `pk` and `sk`.
+// item is the record's attributes plus `pk` and `sk`. Owner amendment A-09 (human decision) adds
+// the execution-level `config` item in `<execution_id>#execution` (a
+// `provider_execution_configuration` record), the trusted manifest digest under which the
+// provider journals a call it cannot attribute to a trial.
 //
 // The provider decodes items with these hand-written readers instead of Ajv (no schema
 // compilation on the call path, RK-01). A reader checks only the attributes the provider uses
@@ -12,9 +15,17 @@
 // values (BARRIER_TIMING), so a configuration that declares other values is refused rather than
 // silently misdescribing the run it is evidence for (WP-07 review round 1).
 
+import { executionIdOf } from '../event-journal/journal-scope.ts';
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import type { JsonValue, Result, Scenario, Sha256Hex, Uuid4 } from '../record-contract/primitives.ts';
+import type {
+  ExecutionIdentity,
+  JsonValue,
+  Result,
+  Scenario,
+  Sha256Hex,
+  Uuid4,
+} from '../record-contract/primitives.ts';
 import { SCENARIOS } from '../record-contract/primitives.ts';
 import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
 import { PROVIDER_CALLER_IDS } from '../record-contract/records/group-a/provider_refund_call.ts';
@@ -23,12 +34,15 @@ import type { SafetyReleaseCause, TreatmentState } from '../record-contract/reco
 import { SAFETY_RELEASE_CAUSES, TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.ts';
 import type { StoredItem } from '../durable-store/item-store-port.ts';
 import { BARRIER_TIMING } from './barrier-timing.ts';
+import { describeExecution, parseExecutionIdentityFields, sameExecution } from './execution-identity-fields.ts';
 import type { CallTrial } from './refund-call-shape.ts';
 import { describeUntrusted } from './untrusted-json.ts';
 
 export const CONFIG_SORT_KEY = 'config';
 export const TREATMENT_SORT_KEY = 'treatment';
 export const PAYMENT_SORT_KEY_PREFIX = 'payment#';
+/** The partition suffix of the execution-level control items (A-09): `<execution_id>#execution`. */
+export const EXECUTION_PARTITION_SUFFIX = 'execution';
 
 /** The parts of the frozen trial configuration the provider acts on. */
 export interface ProviderConfigView {
@@ -38,6 +52,11 @@ export interface ProviderConfigView {
   readonly payment_id: string;
   /** The configured trial; absent exactly for the transport-probe configuration (D-06). */
   readonly trial?: CallTrial;
+}
+
+/** The part of the execution configuration the provider acts on (A-09). */
+export interface ProviderExecutionConfigView {
+  readonly execution_manifest_sha256: Sha256Hex;
 }
 
 /** The parts of the trial payment the provider compares (BR-RUA-018 checks 5 and 7). */
@@ -107,6 +126,45 @@ export function decodeConfigItem(
   }
   const view = { execution_manifest_sha256: digest, registered_caller_id: caller, scenario, payment_id: paymentId };
   return { ok: true, value: partitionTrial === undefined ? view : { ...view, trial: trialOf(item, partitionTrial) } };
+}
+
+/**
+ * The control partition of the execution configuration item (A-09).
+ *
+ * @example
+ * executionConfigPartition({ execution_kind: 'RUN', run_id }); // `${run_id}#execution`
+ */
+export function executionConfigPartition(deployment: ExecutionIdentity): string {
+  return `${executionIdOf(deployment)}#${EXECUTION_PARTITION_SUFFIX}`;
+}
+
+/**
+ * Reads the execution `config` item (A-09). It must name the deployment's execution, with the
+ * identity field of its declared kind, and a frozen manifest digest.
+ *
+ * @example
+ * decodeExecutionConfigItem(item, deployment); // { ok: true, value: { execution_manifest_sha256 } }
+ */
+export function decodeExecutionConfigItem(
+  item: StoredItem,
+  deployment: ExecutionIdentity,
+): Result<ProviderExecutionConfigView, string> {
+  const identity = parseExecutionIdentityFields(item);
+  if (!identity.ok) {
+    return refuse(item, identity.error);
+  }
+  const kind = item['execution_kind'];
+  if (kind !== identity.value.execution_kind || !sameExecution(identity.value, deployment)) {
+    return refuse(
+      item,
+      `execution_kind ${describeUntrusted(kind)} with ${describeExecution(identity.value)}; expected the deployment execution ${describeExecution(deployment)}`,
+    );
+  }
+  const digest = item['execution_manifest_sha256'];
+  if (!isSha256Hex(digest)) {
+    return refuse(item, `execution_manifest_sha256 ${describeUntrusted(digest)}; expected 64 lowercase hex digits`);
+  }
+  return { ok: true, value: { execution_manifest_sha256: digest } };
 }
 
 /**

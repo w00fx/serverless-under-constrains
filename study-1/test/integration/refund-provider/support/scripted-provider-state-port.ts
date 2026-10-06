@@ -8,10 +8,14 @@
 // integration.test.ts` proves each against the emulator (design §12.2, RK-17).
 
 import type { StoredItem, WriteOutcome } from '../../../../src/durable-store/item-store-port.ts';
-import type { Uuid4 } from '../../../../src/record-contract/primitives.ts';
+import type { ExecutionIdentity, Uuid4 } from '../../../../src/record-contract/primitives.ts';
 import type { TreatmentItem } from '../../../../src/record-contract/records/group-b/treatment_state_snapshot.ts';
 import type { CommitPlan } from '../../../../src/refund-provider/commit-plan.ts';
-import type { PaymentView, ProviderConfigView } from '../../../../src/refund-provider/control-items.ts';
+import type {
+  PaymentView,
+  ProviderConfigView,
+  ProviderExecutionConfigView,
+} from '../../../../src/refund-provider/control-items.ts';
 import type { CallPartition } from '../../../../src/refund-provider/provider-partition.ts';
 import type {
   ProviderStatePort,
@@ -127,6 +131,10 @@ export class ScriptedProviderStatePort implements ProviderStatePort {
 
   loadTrialConfiguration(partition: CallPartition): Promise<ProviderStateRead<ProviderConfigView>> {
     return this.#inner.loadTrialConfiguration(partition);
+  }
+
+  loadExecutionConfiguration(deployment: ExecutionIdentity): Promise<ProviderStateRead<ProviderExecutionConfigView>> {
+    return this.#inner.loadExecutionConfiguration(deployment);
   }
 
   loadPayment(partition: string, paymentId: string): Promise<ProviderStateRead<PaymentView>> {

@@ -1,5 +1,5 @@
-// AC-RUA-046 catalogue completeness (design §6; addendum §3: 90 record types, the 88 catalogue
-// rows plus the warm-up pair): every catalogued record type, across groups A, B and C, has
+// AC-RUA-046 catalogue completeness (design §6; addendum §3; A-09: 91 record types, the 88
+// catalogue rows plus the warm-up pair and the execution-level provider configuration): every catalogued record type, across groups A, B and C, has
 // exactly one JSON Schema in its group directory, one TypeScript interface module in its group,
 // and one canonical example that the real validator accepts as that type. No schema file or
 // record module exists for a name outside the catalogue.
@@ -86,13 +86,13 @@ function canonicalExampleOf(recordType: RecordType): JsonObject {
   return build();
 }
 
-describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
-  it('catalogues 90 distinct record types in three groups', () => {
-    assert.equal(RECORD_TYPES.length, 90);
-    assert.equal(new Set(RECORD_TYPES).size, 90);
+describe('AC-RUA-046 catalogue completeness over all 91 record types', () => {
+  it('catalogues 91 distinct record types in three groups', () => {
+    assert.equal(RECORD_TYPES.length, 91);
+    assert.equal(new Set(RECORD_TYPES).size, 91);
     assert.deepEqual(
       RECORD_GROUPS.map((group) => RECORD_TYPE_GROUPS[group].length),
-      [18, 49, 23],
+      [19, 49, 23],
     );
     assert.deepEqual(
       RECORD_GROUPS.flatMap((group) => RECORD_TYPE_GROUPS[group]),
@@ -127,7 +127,7 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
   });
 
   it('every type has a canonical example the validator accepts as that type', () => {
-    assert.equal(CANONICAL_EXAMPLES.size, 90);
+    assert.equal(CANONICAL_EXAMPLES.size, 91);
     const validator = createRecordValidator();
     for (const recordType of RECORD_TYPES) {
       const example = canonicalExampleOf(recordType);
@@ -154,7 +154,7 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
         checked += 1;
       }
     }
-    assert.equal(checked, 90 * 89);
+    assert.equal(checked, 91 * 90);
   });
 
   it('every type rejects each inherited member name added to its canonical example (A-07)', () => {
@@ -176,6 +176,6 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
         checked += 1;
       }
     }
-    assert.equal(checked, 90 * INHERITED_NAMES.length);
+    assert.equal(checked, 91 * INHERITED_NAMES.length);
   });
 });

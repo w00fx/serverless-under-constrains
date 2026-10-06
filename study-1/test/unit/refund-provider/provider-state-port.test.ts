@@ -18,6 +18,7 @@ import {
   armedTreatmentItem,
   ATTEMPT_ID,
   EPOCH_MS,
+  executionConfigItem,
   MANIFEST_SHA,
   PAYMENT_ID,
   paymentItem,
@@ -26,10 +27,12 @@ import {
   PROVIDER_REQUEST_ID,
   REFUND_REQUEST_ID,
   RUN,
+  RUN_ID,
   TRIAL_ID,
   TRIAL_MANIFEST_SHA,
   TRIAL_PK,
   trialConfigItem,
+  VALIDATION,
 } from './support/provider-fixtures.ts';
 
 const CALL_ID = '12345678-0000-4000-8000-000000000001' as Uuid4;
@@ -122,6 +125,36 @@ describe('ProviderStatePort reads', () => {
       error: {
         code: 'UndecodableItem',
         detail: `control item ${TRIAL_PK}/payment#${PAYMENT_ID}: currency number 7; expected a string`,
+      },
+    });
+  });
+});
+
+describe('ProviderStatePort execution configuration read (A-09)', () => {
+  it('reads <execution_id>#execution/config consistently, or undefined when absent', async () => {
+    const { store } = portHarness();
+    const state = createProviderStatePort(store);
+    assert.deepEqual(await state.loadExecutionConfiguration(RUN), { ok: true, value: undefined });
+    store.seed('control', executionConfigItem(RUN));
+    assert.deepEqual(await state.loadExecutionConfiguration(RUN), {
+      ok: true,
+      value: { execution_manifest_sha256: MANIFEST_SHA },
+    });
+    assert.deepEqual(await state.loadExecutionConfiguration(VALIDATION), { ok: true, value: undefined });
+  });
+
+  it('reports a failed or undecodable read of the item', async () => {
+    const { store } = portHarness();
+    store.seed('control', executionConfigItem(RUN, { execution_manifest_sha256: 'A'.repeat(64) }));
+    const state = createProviderStatePort(store);
+    const undecodable = await state.loadExecutionConfiguration(RUN);
+    assert.equal(!undecodable.ok && undecodable.error.code, 'UndecodableItem');
+    store.scriptReadFault('InternalServerError');
+    assert.deepEqual(await state.loadExecutionConfiguration(RUN), {
+      ok: false,
+      error: {
+        code: 'InternalServerError',
+        detail: `control read ${RUN_ID}#execution/config failed: InternalServerError`,
       },
     });
   });

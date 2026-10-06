@@ -49,7 +49,7 @@ export const TRIAL_SCOPE: JournalScope = {
 /** A scope of `execution` whose partition has no trial. */
 export function executionLevelScope(
   execution: ExecutionIdentity,
-  kind: 'probe' | 'canary' | 'warmup' | 'execution',
+  kind: 'probe' | 'canary' | 'warmup' | 'provider' | 'execution',
 ): JournalScope {
   return { execution, execution_manifest_sha256: MANIFEST_SHA, partition: { kind } };
 }

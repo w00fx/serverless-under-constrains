@@ -1,5 +1,5 @@
 // Journal partitions and item keys (design §9.3; addendum §2 warm-up partition): partition key
-// `<execution_id>#<trial_id|probe|canary|warmup>` and sort key
+// `<execution_id>#<trial_id|probe|canary|warmup|provider>` (A-09 provider partition) and sort key
 // `<source>#<source_instance_id>#<source_sequence zero-padded to 12 digits>`.
 
 import assert from 'node:assert/strict';
@@ -38,6 +38,15 @@ describe('journal scope', () => {
     assert.equal(journalPartitionKey(executionLevelScope(PROBE, 'probe')), `${PROBE_ID}#probe`);
     assert.equal(journalPartitionKey(executionLevelScope(RUN, 'canary')), `${RUN_ID}#canary`);
     assert.equal(journalPartitionKey(executionLevelScope(VALIDATION, 'warmup')), `${VALIDATION_ID}#warmup`);
+  });
+
+  it('unattributable provider calls have the execution-level partition <execution_id>#provider (A-09)', () => {
+    assert.equal(journalPartitionKey(executionLevelScope(RUN, 'provider')), `${RUN_ID}#provider`);
+    assert.equal(journalPartitionKey(executionLevelScope(PROBE, 'provider')), `${PROBE_ID}#provider`);
+    assert.deepEqual(journalItemKey(executionLevelScope(VALIDATION, 'provider'), 'refund_provider', INSTANCE_ID, 1), {
+      pk: `${VALIDATION_ID}#provider`,
+      sk: `refund_provider#${INSTANCE_ID}#000000000001`,
+    });
   });
 
   it('the execution partition has an in-memory key only, outside design §9.3', () => {

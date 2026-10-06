@@ -2,7 +2,8 @@
 // Per call it assigns a fresh `provider_call_id`, reads the partition's frozen configuration,
 // the trial payment and the treatment item with consistent reads, records
 // `provider_call_received`, and judges the call (design §9.10). A rejected call records
-// `provider_call_rejected`, creates no transaction and leaves treatment untouched. An accepted
+// `provider_call_rejected`, creates no transaction and leaves treatment untouched; a call that
+// names no configured trial is rejected in `<execution_id>#provider` instead (A-09). An accepted
 // call commits exactly one SUCCEEDED ledger transaction; the targeted call then holds its
 // response at the treatment barrier, and every other call records `provider_response_returned`.
 // Business outcomes are responses and never throw; operational faults throw ProviderFault.
@@ -10,7 +11,6 @@
 import type { JournalScope } from '../event-journal/journal-scope.ts';
 import type { JournalWriter } from '../event-journal/journal-writer.ts';
 import type { EventBody } from '../event-journal/journal-event.ts';
-import { isUuid4 } from '../record-contract/identifiers.ts';
 import { isJsonObject } from '../record-contract/json-value.ts';
 import type {
   ExecutionIdentity,
@@ -25,7 +25,7 @@ import type { ProviderRefundResponse } from '../record-contract/records/group-a/
 import type { ProviderWarmupCompleted } from '../record-contract/records/group-b/provider_warmup_completed.ts';
 import type { TreatmentItem } from '../record-contract/records/group-b/treatment_state_snapshot.ts';
 import type { EventRecordType } from '../record-contract/record-types.ts';
-import type { AcceptanceContext, AcceptanceDecision, AcceptedCall } from './acceptance.ts';
+import type { AcceptanceContext, AcceptanceRejection, AcceptedCall } from './acceptance.ts';
 import { evaluateAcceptance } from './acceptance.ts';
 import type { ConfirmedCommit } from './commit-execution.ts';
 import { executeCommit } from './commit-execution.ts';
@@ -37,7 +37,10 @@ import type { CallPartition } from './provider-partition.ts';
 import { callJournalScope, resolveCallPartition } from './provider-partition.ts';
 import type { ProviderStatePort, ProviderStateRead } from './provider-state-port.ts';
 import { ProviderWarmup } from './provider-warmup.ts';
+import { rejectedResponse } from './rejected-response.ts';
 import { BARRIER_TIMING, TreatmentBarrier } from './treatment-barrier.ts';
+import type { UnattributedCause } from './unattributed-call.ts';
+import { rejectUnattributedCall } from './unattributed-call.ts';
 import { describeUntrusted, requestDigest } from './untrusted-json.ts';
 
 export interface RefundProviderDeps {
@@ -56,6 +59,11 @@ export interface RefundProviderDeps {
 
 /** What one invocation returns: a refund response, or the recorded warm-up completion. */
 export type ProviderInvocationResult = ProviderRefundResponse | ProviderWarmupCompleted;
+
+/** The trial partition a call addresses with its frozen configuration, or why there is none. */
+type Attribution =
+  | { readonly kind: 'attributed'; readonly partition: CallPartition; readonly config: ProviderConfigView }
+  | { readonly kind: 'unattributed'; readonly cause: UnattributedCause };
 
 /** Everything one call carries from its reads to its decision. */
 interface CallSession {
@@ -109,14 +117,20 @@ export class RefundProvider {
   }
 
   /**
-   * Handles one refund call. Returns SUCCEEDED or REJECTED; throws ProviderFault when the call
-   * cannot be attributed, read, committed or recorded.
+   * Handles one refund call. Returns SUCCEEDED or REJECTED; a call that names no configured
+   * trial is rejected in `<execution_id>#provider` (A-09). Throws ProviderFault when the call
+   * cannot be journaled, read, committed or recorded.
    *
    * @example
    * const response = await provider.handleCall(call); // { outcome: 'REJECTED', rejection_reason: 'CURRENCY_MISMATCH', ... }
    */
   async handleCall(raw: JsonValue): Promise<ProviderRefundResponse> {
-    const session = await this.#openSession(raw, this.#deps.ids.next());
+    const providerCallId = this.#deps.ids.next();
+    const attribution = await this.#attribute(raw, providerCallId);
+    if (attribution.kind === 'unattributed') {
+      return rejectUnattributedCall(this.#deps, raw, providerCallId, attribution.cause);
+    }
+    const session = await this.#openSession(raw, providerCallId, attribution.partition, attribution.config);
     const decision = evaluateAcceptance(raw, session.context);
     if (!decision.accepted) {
       return this.#reject(session, raw, decision);
@@ -150,28 +164,29 @@ export class RefundProvider {
     };
   }
 
-  async #openSession(raw: JsonValue, providerCallId: Uuid4): Promise<CallSession> {
+  async #attribute(raw: JsonValue, providerCallId: Uuid4): Promise<Attribution> {
     const partition = resolveCallPartition(this.#deps.deployment, raw);
     if (partition === undefined) {
       const named = isJsonObject(raw)
         ? `trial_id ${describeUntrusted(raw['trial_id'])}`
         : `payload ${describeUntrusted(raw)}`;
-      throw new ProviderFault(
-        'UNATTRIBUTABLE_CALL',
-        'before_commit',
-        providerCallId,
-        `call names no trial partition (${named}); expected a call object with a lowercase UUIDv4 trial_id`,
-      );
+      const detail = `call names no trial partition (${named}); expected a call object with a lowercase UUIDv4 trial_id`;
+      return { kind: 'unattributed', cause: { code: 'UNATTRIBUTABLE_CALL', detail } };
     }
     const config = readOrFault(await this.#deps.state.loadTrialConfiguration(partition), providerCallId);
     if (config === undefined) {
-      throw new ProviderFault(
-        'CONFIGURATION_MISSING',
-        'before_commit',
-        providerCallId,
-        `no provider configuration in partition ${partition.key}; expected the frozen config item`,
-      );
+      const detail = `no provider configuration in partition ${partition.key}; expected the frozen config item`;
+      return { kind: 'unattributed', cause: { code: 'CONFIGURATION_MISSING', detail } };
     }
+    return { kind: 'attributed', partition, config };
+  }
+
+  async #openSession(
+    raw: JsonValue,
+    providerCallId: Uuid4,
+    partition: CallPartition,
+    config: ProviderConfigView,
+  ): Promise<CallSession> {
     // BR-RUA-016: a trial partition holds exactly one payment, the one its configuration names.
     const payment = readOrFault(await this.#deps.state.loadPayment(partition.key, config.payment_id), providerCallId);
     const treatment = readOrFault(await this.#deps.state.loadTreatment(partition.key), providerCallId);
@@ -191,25 +206,14 @@ export class RefundProvider {
     };
   }
 
-  async #reject(
-    session: CallSession,
-    raw: JsonValue,
-    decision: Extract<AcceptanceDecision, { readonly accepted: false }>,
-  ): Promise<ProviderRefundResponse> {
+  async #reject(session: CallSession, raw: JsonValue, decision: AcceptanceRejection): Promise<ProviderRefundResponse> {
     await appendOrFault(
       session,
       'provider_call_rejected',
       { provider_call_id: session.provider_call_id, reason: decision.reason, detail: decision.detail },
       'before_commit',
     );
-    return {
-      schema_version: 1,
-      record_type: 'provider_refund_response',
-      outcome: 'REJECTED',
-      provider_call_id: session.provider_call_id,
-      ...echoedIdentities(raw),
-      rejection_reason: decision.reason,
-    };
+    return rejectedResponse(session.provider_call_id, raw, decision.reason);
   }
 
   async #finish(session: CallSession, call: AcceptedCall, commit: ConfirmedCommit): Promise<void> {
@@ -297,13 +301,4 @@ function receivedBody(raw: JsonValue, providerCallId: Uuid4): EventBody<'provide
 
 function acceptedBody(session: CallSession, call: AcceptedCall): EventBody<'provider_call_accepted'> {
   return { provider_call_id: session.provider_call_id, ...call };
-}
-
-function echoedIdentities(raw: JsonValue): { readonly attempt_id?: Uuid4; readonly provider_request_id?: Uuid4 } {
-  const attemptId = isJsonObject(raw) ? raw['attempt_id'] : undefined;
-  const requestId = isJsonObject(raw) ? raw['provider_request_id'] : undefined;
-  return {
-    ...(isUuid4(attemptId) ? { attempt_id: attemptId } : {}),
-    ...(isUuid4(requestId) ? { provider_request_id: requestId } : {}),
-  };
 }

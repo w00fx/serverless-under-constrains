@@ -5,7 +5,7 @@
 // (ADR keep-business-invariants-out-of-the-controlled-provider).
 
 import { isJsonObject } from '../record-contract/json-value.ts';
-import type { ExecutionIdentity, JsonValue, Uuid4 } from '../record-contract/primitives.ts';
+import type { ExecutionIdentity, JsonValue, Sha256Hex, Uuid4 } from '../record-contract/primitives.ts';
 import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
 import type { ProviderRejectionReason } from '../record-contract/records/group-b/vocabulary.ts';
 import type { PaymentView, ProviderConfigView } from './control-items.ts';
@@ -35,9 +35,22 @@ export interface AcceptedCall {
   readonly currency: string;
 }
 
-export type AcceptanceDecision =
-  | { readonly accepted: true; readonly call: AcceptedCall }
-  | { readonly accepted: false; readonly reason: ProviderRejectionReason; readonly detail: string };
+/** Why a call is rejected: the first failed check of design §9.10 and a bounded detail. */
+export interface AcceptanceRejection {
+  readonly accepted: false;
+  readonly reason: ProviderRejectionReason;
+  readonly detail: string;
+}
+
+export type AcceptanceDecision = { readonly accepted: true; readonly call: AcceptedCall } | AcceptanceRejection;
+
+/** What the provider knows about a call that names no configured trial partition (A-09). */
+export interface UnattributedCallContext {
+  /** The execution this deployment belongs to (from the function environment). */
+  readonly deployment_execution: ExecutionIdentity;
+  /** The frozen manifest digest of the execution configuration item. */
+  readonly execution_manifest_sha256: Sha256Hex;
+}
 
 /**
  * Judges one received call. Pure and total over any value the runtime's JSON.parse produces,
@@ -61,6 +74,31 @@ export function evaluateAcceptance(raw: JsonValue, ctx: AcceptanceContext): Acce
     return reject('SCHEMA_INVALID', shape.error);
   }
   return judgeShape(shape.value, ctx);
+}
+
+/**
+ * Judges a call that names no configured trial partition (Owner amendment A-09, AC-RUA-042).
+ * Check 1 needs the registered caller of a trial configuration, which such a call has none of,
+ * so the judgement starts at check 2 (the schema) and check 3 (execution identity and manifest
+ * digest against the execution configuration). A well-formed call of the active execution that
+ * names an unconfigured trial fails check 3 too, as a trial mismatch does in `evaluateAcceptance`.
+ * Pure and total over any value the runtime's JSON.parse produces.
+ *
+ * @example
+ * judgeUnattributedCall(42, ctx); // { accepted: false, reason: 'SCHEMA_INVALID', detail: 'call is number 42; ...' }
+ */
+export function judgeUnattributedCall(raw: JsonValue, ctx: UnattributedCallContext): AcceptanceRejection {
+  const shape = guardRefundCallShape(raw);
+  if (!shape.ok) {
+    return reject('SCHEMA_INVALID', shape.error);
+  }
+  const active = ctx.deployment_execution;
+  const identity = executionOrDigestMismatch(shape.value, active, ctx.execution_manifest_sha256);
+  return reject(
+    'EXECUTION_IDENTITY_MISMATCH',
+    identity ??
+      `trial ${describeTrial(shape.value.trial)}; expected a trial configured in the active execution ${describeExecution(active)}`,
+  );
 }
 
 function judgeShape(shape: RefundCallShape, ctx: AcceptanceContext): AcceptanceDecision {
@@ -93,15 +131,25 @@ function judgeShape(shape: RefundCallShape, ctx: AcceptanceContext): AcceptanceD
 }
 
 function executionMismatch(shape: RefundCallShape, ctx: AcceptanceContext): string | undefined {
-  const active = ctx.deployment_execution;
+  const configuration = ctx.trial_configuration;
+  return (
+    executionOrDigestMismatch(shape, ctx.deployment_execution, configuration.execution_manifest_sha256) ??
+    trialMismatch(shape.trial, configuration.trial)
+  );
+}
+
+function executionOrDigestMismatch(
+  shape: RefundCallShape,
+  active: ExecutionIdentity,
+  digest: Sha256Hex,
+): string | undefined {
   if (!sameExecution(shape.execution, active)) {
     return `execution ${describeExecution(shape.execution)}; expected the active execution ${describeExecution(active)}`;
   }
-  const digest = ctx.trial_configuration.execution_manifest_sha256;
   if (shape.execution_manifest_sha256 !== digest) {
     return `execution_manifest_sha256 ${shape.execution_manifest_sha256}; expected the frozen manifest ${digest}`;
   }
-  return trialMismatch(shape.trial, ctx.trial_configuration.trial);
+  return undefined;
 }
 
 function trialMismatch(call: CallTrial | undefined, configured: CallTrial | undefined): string | undefined {
@@ -128,6 +176,6 @@ function acceptedCallOf(shape: RefundCallShape): AcceptedCall {
   };
 }
 
-function reject(reason: ProviderRejectionReason, detail: string): AcceptanceDecision {
+function reject(reason: ProviderRejectionReason, detail: string): AcceptanceRejection {
   return { accepted: false, reason, detail };
 }

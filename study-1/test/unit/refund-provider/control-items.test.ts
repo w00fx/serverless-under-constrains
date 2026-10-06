@@ -9,13 +9,23 @@ import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
 import type { Result } from '../../../src/record-contract/primitives.ts';
 import {
   decodeConfigItem,
+  decodeExecutionConfigItem,
   decodePaymentItem,
   decodeTreatmentItem,
+  executionConfigPartition,
   paymentSortKey,
 } from '../../../src/refund-provider/control-items.ts';
 import {
+  executionConfigItem,
   MANIFEST_SHA,
+  OTHER_RUN_ID,
   OTHER_TRIAL_ID,
+  PROBE,
+  PROBE_ID,
+  RUN,
+  RUN_ID,
+  VALIDATION,
+  VALIDATION_ID,
   PAYMENT_ID,
   paymentItem,
   PROBE_PK,
@@ -116,6 +126,57 @@ describe('decodeConfigItem', () => {
     assert.equal(
       refusal(decodeConfigItem(trialConfigItem('CONTROL', { payment_id: null }), TRIAL_ID)),
       `${prefix}payment_id null null; expected a string`,
+    );
+  });
+});
+
+describe('the execution configuration item (A-09)', () => {
+  it('lives in the control partition <execution_id>#execution', () => {
+    assert.equal(executionConfigPartition(RUN), `${RUN_ID}#execution`);
+    assert.equal(executionConfigPartition(PROBE), `${PROBE_ID}#execution`);
+    assert.equal(executionConfigPartition(VALIDATION), `${VALIDATION_ID}#execution`);
+  });
+
+  it('reads the frozen manifest digest of the deployment execution, of every kind', () => {
+    for (const execution of [RUN, PROBE, VALIDATION]) {
+      assert.deepEqual(decodeExecutionConfigItem(executionConfigItem(execution), execution), {
+        ok: true,
+        value: { execution_manifest_sha256: MANIFEST_SHA },
+      });
+    }
+  });
+
+  it('refuses another execution, a kind that its identity field contradicts, or no single identity', () => {
+    const prefix = `control item ${RUN_ID}#execution/config: `;
+    assert.equal(
+      refusal(decodeExecutionConfigItem(executionConfigItem(RUN, { run_id: OTHER_RUN_ID }), RUN)),
+      `${prefix}execution_kind string "RUN" with RUN ${OTHER_RUN_ID}; expected the deployment execution RUN ${RUN_ID}`,
+    );
+    assert.equal(
+      refusal(decodeExecutionConfigItem(executionConfigItem(RUN, { execution_kind: 'VARIANT_VALIDATION' }), RUN)),
+      `${prefix}execution_kind string "VARIANT_VALIDATION" with RUN ${RUN_ID}; expected the deployment execution RUN ${RUN_ID}`,
+    );
+    assert.equal(
+      refusal(decodeExecutionConfigItem(executionConfigItem(VALIDATION), RUN)),
+      `control item ${VALIDATION_ID}#execution/config: execution_kind string "VARIANT_VALIDATION" with VARIANT_VALIDATION ${VALIDATION_ID}; expected the deployment execution RUN ${RUN_ID}`,
+    );
+    assert.equal(
+      refusal(decodeExecutionConfigItem(executionConfigItem(RUN, { transport_probe_id: PROBE_ID }), RUN)),
+      `${prefix}execution identity fields [run_id, transport_probe_id]; expected exactly one of run_id, variant_validation_id, transport_probe_id`,
+    );
+  });
+
+  it('refuses a malformed digest, including a non-finite or inherited-name value', () => {
+    const prefix = `control item ${RUN_ID}#execution/config: `;
+    assert.equal(
+      refusal(decodeExecutionConfigItem(executionConfigItem(RUN, { execution_manifest_sha256: Infinity }), RUN)),
+      `${prefix}execution_manifest_sha256 number Infinity; expected 64 lowercase hex digits`,
+    );
+    const { execution_manifest_sha256: _digest, ...withoutDigest } = executionConfigItem(RUN);
+    const inherited = JSON.parse(`{"toString":1,${JSON.stringify(withoutDigest).slice(1)}`) as typeof withoutDigest;
+    assert.equal(
+      refusal(decodeExecutionConfigItem(inherited, RUN)),
+      `${prefix}execution_manifest_sha256 absent; expected 64 lowercase hex digits`,
     );
   });
 });

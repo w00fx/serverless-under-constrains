@@ -15,14 +15,14 @@ import {
 import type { RecordType } from '../../../src/record-contract/record-types.ts';
 
 describe('record type catalogue', () => {
-  it('lists 90 unique snake_case names: 18 in group A, 49 in group B, 23 in group C', () => {
+  it('lists 91 unique snake_case names: 19 in group A, 49 in group B, 23 in group C', () => {
     assert.deepEqual(RECORD_GROUPS, ['group-a', 'group-b', 'group-c']);
     assert.deepEqual(
       RECORD_GROUPS.map((group) => RECORD_TYPE_GROUPS[group].length),
-      [18, 49, 23],
+      [19, 49, 23],
     );
-    assert.equal(RECORD_TYPES.length, 90);
-    assert.equal(new Set(RECORD_TYPES).size, 90);
+    assert.equal(RECORD_TYPES.length, 91);
+    assert.equal(new Set(RECORD_TYPES).size, 91);
     assert.deepEqual(
       RECORD_TYPES.filter((name) => !/^[a-z][a-z0-9_]*$/.test(name)),
       [],

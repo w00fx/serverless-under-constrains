@@ -1,4 +1,4 @@
-// The closed record-type catalogue (design §6.2, addendum §3). WP-00 creates the full list
+// The closed record-type catalogue (design §6.2, addendum §3, Owner amendment A-09). WP-00 creates the full list
 // up front so later packages never edit a shared file: group A belongs to WP-01, group B
 // to WP-02 and group C to WP-03. Each group directory under `schemas/` and `records/`
 // holds one file per name listed here.
@@ -22,6 +22,9 @@ export const RECORD_TYPE_GROUPS = {
     'resource_manifest',
     'trial_manifest',
     'provider_trial_configuration',
+    // Owner amendment A-09 (human decision): the execution-level control `config` item, catalogued
+    // beside the per-trial one it mirrors.
+    'provider_execution_configuration',
     'trial_registration',
   ],
   'group-b': [
@@ -108,7 +111,7 @@ export type RecordType = (typeof RECORD_TYPE_GROUPS)[RecordGroup][number];
 
 export const RECORD_GROUPS: readonly RecordGroup[] = ['group-a', 'group-b', 'group-c'];
 
-/** Every catalogued record type, in catalogue order (90 names). */
+/** Every catalogued record type, in catalogue order (91 names: addendum §3 and A-09). */
 export const RECORD_TYPES: readonly RecordType[] = [
   ...RECORD_TYPE_GROUPS['group-a'],
   ...RECORD_TYPE_GROUPS['group-b'],
