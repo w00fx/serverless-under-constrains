@@ -45,6 +45,8 @@ export interface StreamDeliveryAttempt {
   readonly event_name: 'INSERT' | 'MODIFY';
   readonly attempt: number;
   readonly outcome: 'succeeded' | 'failed';
+  /** Why a failed delivery failed: the consumer's error, so a test can tell a scripted failure from a crash. */
+  readonly error?: { readonly name: string; readonly message: string };
 }
 
 /** What the on-failure destination receives: batch metadata, never the record itself. */
@@ -67,6 +69,15 @@ interface PendingRecord {
   deliveriesRemaining: number;
 }
 
+/**
+ * One DynamoDB Streams event source mapping in front of one consumer, on virtual time.
+ *
+ * @example
+ * const feed = new StreamFeed({ source: store, table: 'caller_journal', scheduler: time, clock: time, consumer });
+ * feed.enable();
+ * await store.write(putAction('caller_journal', record));
+ * await time.advanceUntilIdle(); // feed.deliveries() lists each attempt and its outcome
+ */
 export class StreamFeed {
   readonly #options: StreamFeedOptions;
   readonly #filters: readonly JsonObject[];
@@ -212,15 +223,17 @@ export class StreamFeed {
 
   async #deliver(head: PendingRecord): Promise<void> {
     head.attempts += 1;
-    const succeeded = await this.#invokeConsumer(head.record);
-    this.#deliveries.push({
+    const failure = await this.#invokeConsumer(head.record);
+    const attempt = {
       event_id: head.event_id,
       sequence_number: head.sequence_number,
       event_name: head.event_name,
       attempt: head.attempts,
-      outcome: succeeded ? 'succeeded' : 'failed',
-    });
-    this.#settle(head, succeeded);
+    };
+    this.#deliveries.push(
+      failure === undefined ? { ...attempt, outcome: 'succeeded' } : { ...attempt, outcome: 'failed', error: failure },
+    );
+    this.#settle(head, failure === undefined);
     this.#scheduleHead();
   }
 
@@ -245,12 +258,17 @@ export class StreamFeed {
     }
   }
 
-  async #invokeConsumer(record: DynamoDBRecord): Promise<boolean> {
+  // Resolves to `undefined` on success, or to the consumer's error as name and message.
+  async #invokeConsumer(
+    record: DynamoDBRecord,
+  ): Promise<{ readonly name: string; readonly message: string } | undefined> {
     try {
       await this.#options.consumer({ Records: [structuredClone(record)] });
-      return true;
-    } catch {
-      return false;
+      return undefined;
+    } catch (error) {
+      return error instanceof Error
+        ? { name: error.name, message: error.message }
+        : { name: 'NonErrorThrown', message: String(error) };
     }
   }
 }
