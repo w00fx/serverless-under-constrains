@@ -23,6 +23,24 @@ export interface KeyValueEntry {
 }
 
 /**
+ * The BR-RUA-050 ownership tag keys. A manifest lists each of the first five exactly once and
+ * `suc:variant_id` at most once (variant-specific resources only).
+ */
+export const OWNERSHIP_TAG_KEYS = [
+  'suc:project',
+  'suc:study_id',
+  'suc:run_id',
+  'suc:managed_by',
+  'suc:expires_at',
+  'suc:variant_id',
+] as const;
+export type OwnershipTagKey = (typeof OWNERSHIP_TAG_KEYS)[number];
+
+export interface OwnershipTagEntry extends KeyValueEntry {
+  readonly key: OwnershipTagKey;
+}
+
+/**
  * One attribute of the post-deploy configuration snapshot, for example the `BatchSize` of an
  * event source mapping. The value is the canonical JSON text of what the AWS API returned,
  * because AWS member names are not BR-RUA-033 property names.
@@ -41,7 +59,7 @@ interface ResourceManifestFields {
   readonly stack_name: string;
   readonly resources: readonly StackResourceEntry[];
   /** The `suc:*` ownership tags of BR-RUA-050. */
-  readonly ownership_tags: readonly [KeyValueEntry, ...KeyValueEntry[]];
+  readonly ownership_tags: readonly OwnershipTagEntry[];
   readonly outputs: readonly KeyValueEntry[];
   readonly deploy_started_at: UtcMillis;
   readonly frozen_at: UtcMillis;

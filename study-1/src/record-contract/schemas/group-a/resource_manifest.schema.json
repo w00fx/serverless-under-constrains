@@ -33,17 +33,52 @@
       "uniqueItems": true
     },
     "ownership_tags": {
+      "description": "The BR-RUA-050 ownership tags of the execution stack: each of suc:project, suc:study_id, suc:run_id, suc:managed_by and suc:expires_at exactly once, and suc:variant_id at most once (variant-specific resources only). A generic project tag alone never authorizes deletion.",
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "key": { "type": "string", "pattern": "^suc:[a-z][a-z_]*$" },
+          "key": {
+            "enum": ["suc:project", "suc:study_id", "suc:run_id", "suc:managed_by", "suc:expires_at", "suc:variant_id"]
+          },
           "value": { "type": "string", "minLength": 1, "pattern": "^[^@]*$" }
         },
         "required": ["key", "value"],
         "additionalProperties": false
       },
-      "minItems": 1,
+      "allOf": [
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:project" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:study_id" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:run_id" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:managed_by" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:expires_at" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      ],
+      "minItems": 5,
       "uniqueItems": true
     },
     "outputs": {
