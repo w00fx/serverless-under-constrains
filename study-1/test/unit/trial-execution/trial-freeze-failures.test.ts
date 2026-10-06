@@ -84,14 +84,18 @@ describe('freezeTrialEvidence', () => {
     );
     assert.equal(frozen.ok, false);
     const codes = frozen.error.map((reason) => reason.code);
-    assert.deepEqual(codes.slice(0, 5), [
+    // The tolerated problems in freeze order, then the oracle's refusal of a package with no
+    // execution manifest (WP-14) and the index's refusal of each absent core file (WP-13).
+    assert.deepEqual(codes, [
       'QUEUE_UNAVAILABLE',
       'COLLECTED',
       'COLLECTED_FILE_UNPLACED',
       'RECORD_NOT_REPRESENTABLE',
       'TRIAL_FILE_NOT_WRITTEN',
+      'TRIAL_EXECUTION_UNKNOWN',
+      ...Array.from({ length: 6 }, () => 'CORE_FILE_MISSING'),
     ]);
-    assert.ok(codes.length > 6, `evaluation and index refusals follow: ${codes.join(', ')}`);
+    assert.equal(frozen.error[4]?.artifact_path, samplesPath);
     assert.equal(
       [...storage.filesUnder(execution.package_directory).keys()].some((path) => path.endsWith('evidence-index.json')),
       false,

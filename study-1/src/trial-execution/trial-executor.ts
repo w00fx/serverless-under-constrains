@@ -5,8 +5,9 @@
 //   -> T7 observe -> T8 collect -> T9 recheck (activity: back to T7) -> T10 write, evaluate
 //   -> T11 index, trial_evidence_frozen
 // Everything before T6 is setup: a refusal there starts no trial. From T6 on the trial has
-// started and always freezes, settled or not (D-29). An interruption seen while observing records
-// `trial_interrupted` and freezes what can be collected, indeterminate (design §10.2).
+// started and always freezes, settled or not (D-29). An interruption seen while observing or
+// collecting, before the pre-freeze recheck, records `trial_interrupted` and freezes what can be
+// collected, indeterminate (design §10.2).
 
 import { collectTrialEvidence } from '../evidence-collection/trial-collection.ts';
 import type { TrialCollection } from '../evidence-collection/trial-collection.ts';
@@ -20,7 +21,7 @@ import { confirmExecutionConfiguration } from './execution-configuration.ts';
 import { RunnerTrialJournal } from './runner-trial-journal.ts';
 import { warmUpProvider } from './runner-warmup.ts';
 import { SettlementObserver } from './settlement-observer.ts';
-import type { ObservationPlan } from './settlement-observer.ts';
+import type { Observation, ObservationPlan } from './settlement-observer.ts';
 import type { SettlementReading } from './settlement-reading.ts';
 import { freezeTrialEvidence } from './trial-freeze.ts';
 import { freezeTrialInputs } from './trial-inputs.ts';
@@ -202,11 +203,15 @@ export class TrialExecutor {
     for (;;) {
       const observed = await this.#observer.observe({ ...observation, prior: rounds });
       if (observed.stop !== 'window_complete') {
-        const failures =
-          observed.interruption === undefined ? [] : await this.#recordInterruption(trial, observed.interruption);
-        return { ...observed, collection: await collect(), failures };
+        return this.#unsettled(trial, observed, await collect());
       }
       const collection = await collect();
+      // Design §10.2: a trial collecting its evidence is still active, so an interruption seen
+      // now freezes it without the recheck, unsettled (evidence/WP-26/decisions.md).
+      const interruption = trial.gate.interruption();
+      if (interruption !== undefined) {
+        return this.#unsettled(trial, { ...observed, interruption }, collection);
+      }
       const recheck = await this.#observer.recheckBeforeFreeze(
         { ...observation, prior: observed.rounds },
         observed.rounds,
@@ -216,6 +221,17 @@ export class TrialExecutor {
         return { collection, rounds, assessment: recheck.assessment, failures: [] };
       }
     }
+  }
+
+  // An observation that ends without a quiet recheck: the deadline passed, or the execution was
+  // interrupted, which the trial journals as `trial_interrupted` (design §10.2).
+  async #unsettled(trial: StartedTrial, observed: Observation, collection: TrialCollection): Promise<ObservedTrial> {
+    const { rounds, assessment, interruption } = observed;
+    if (interruption === undefined) {
+      return { collection, rounds, assessment, failures: [] };
+    }
+    const failures = await this.#recordInterruption(trial, interruption);
+    return { collection, rounds, assessment, interruption, failures };
   }
 
   async #recordInterruption(

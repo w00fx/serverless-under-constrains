@@ -7,12 +7,21 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
-import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
+import type { JsonObject, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { trialFilePath } from '../../../src/trial-execution/trial-inputs.ts';
 import { trialRegistryItemKey } from '../../../src/trial-message/trial-registry.ts';
 import { OfflineCloud } from '../../support/offline-cloud/offline-cloud.ts';
 import { queueTarget } from '../../support/offline-cloud/offline-execution.ts';
-import { recordTypes, runnerEvents, textField, trialFileBytes, trialRecord } from './support/frozen-trial-files.ts';
+import {
+  gateValue,
+  recordTypes,
+  ruleResult,
+  runnerEvents,
+  textField,
+  trialFileBytes,
+  trialLines,
+  trialRecord,
+} from './support/frozen-trial-files.ts';
 import { codesOf, frozenReport } from './support/trial-reports.ts';
 
 const SERVICE_FAULT = 'InternalServerError';
@@ -65,7 +74,12 @@ describe('frozen trials', () => {
     });
   });
 
-  it('a treatment trial after it arms its treatment, re-registers the variant and fails', async () => {
+  // Design §9.12 "Conventional COMMIT_THEN_TIMEOUT": receive 1 times out after the targeted commit
+  // and receive 2 commits again, so the ledger holds two transactions and BR-RUA-001, -002 and -009
+  // fail on a valid trial. Owner amendment A-13 asks WP-26 to recheck WP-14's BR-RUA-004 selection
+  // once the real caller writes attempt ids: the first ambiguous attempt is the caller's TIMED_OUT
+  // one, every later request state stays UNKNOWN (BR-RUA-004 "UNKNOWN is absorbing"), so it passes.
+  it('a treatment trial arms its treatment, re-registers the variant and fails as design §9.12 states', async () => {
     const cloud = await startedCloud();
     frozenReport(await cloud.runTrial(1));
     const running = cloud.start(3);
@@ -74,7 +88,44 @@ describe('frozen trials', () => {
     assert.equal(report.settlement.status, 'established');
     assert.ok(recordTypes(runnerEvents(cloud, trialId)).includes('treatment_armed'));
     assert.equal(cloud.store.peek('trial_registry', trialRegistryItemKey('conventional'))?.['registry_version'], 2);
-    assert.equal(verdictOf(cloud, trialId), 'fail');
+    const caller = trialLines(cloud, trialId, 'callerJournal');
+    const timedOut = caller.find(
+      (event) => event['record_type'] === 'attempt_outcome_recorded' && event['outcome'] === 'TIMED_OUT',
+    );
+    assert.ok(timedOut !== undefined, 'the caller records the first attempt as TIMED_OUT');
+    assert.deepEqual(
+      caller
+        .filter((event) => event['record_type'] === 'request_state_recorded')
+        .map((event) => event['effect_knowledge']),
+      ['UNKNOWN', 'UNKNOWN'],
+    );
+    const result = trialRecord(cloud, trialId, 'oracleResult');
+    const rules = ['BR-RUA-001', 'BR-RUA-002', 'BR-RUA-003', 'BR-RUA-004', 'BR-RUA-009'];
+    assert.deepEqual(
+      {
+        rules: rules.map((rule) => ruleResult(result, rule)),
+        treatment_fidelity: gateValue(result, 'treatment_fidelity'),
+        validity: result['trial_validity'],
+        verdict: result['preservation_verdict'],
+        terminal: result['processing_terminal_reason'],
+        correct_completion: result['correct_completion'],
+      },
+      {
+        rules: ['fail', 'fail', 'pass', 'pass', 'fail'],
+        treatment_fidelity: 'verified',
+        validity: 'valid',
+        verdict: 'fail',
+        terminal: 'SUCCEEDED',
+        correct_completion: false,
+      },
+    );
+    const unknownRule = (result['rule_results'] as readonly JsonObject[]).find(
+      (rule) => rule['rule_id'] === 'BR-RUA-004',
+    );
+    assert.deepEqual(unknownRule?.['expected'], {
+      effect_knowledge: 'UNKNOWN',
+      first_ambiguous_attempt_id: timedOut['attempt_id'],
+    });
   });
 
   it('a Durable trial that never settles freezes at its deadline, indeterminate', async () => {
@@ -111,18 +162,43 @@ describe('interrupted trials', () => {
     assert.equal(verdictOf(cloud, trialId), 'indeterminate');
   });
 
-  it('an interruption during collection stops the next observation before its first poll', async () => {
+  // Design §10.2: once an interruption source fires, "the active trial records trial_interrupted"
+  // and its available evidence is frozen indeterminate. A trial collecting its evidence (T8) is
+  // still active, so the pre-freeze recheck is not taken and settlement is not established.
+  it('an interruption during collection records trial_interrupted and freezes without the recheck', async () => {
     const cloud = await startedCloud();
     const running = cloud.start(1);
+    const trialId = running.plan.trial.trial_id;
     cloud.telemetry.onNextCollection(() => {
-      cloud.pump.pause();
-      cloud.injectSourceMessage();
       cloud.gate.interrupt(ABORT);
     });
     const report = frozenReport(await cloud.finish(running));
     assert.deepEqual(report.interruption, ABORT);
-    assert.equal(cloud.telemetry.collectionCount(), 2);
-    assert.ok(report.settlement.restarts.some((restart) => restart.cause === 'PRE_FREEZE_ACTIVITY'));
+    assert.equal(report.settlement.status, 'not_established');
+    assert.equal(cloud.telemetry.collectionCount(), 1);
+    const phases = trialLines(cloud, trialId, 'settlementSamples').map((sample) => sample['phase']);
+    assert.equal(phases.includes('pre_freeze_recheck'), false);
+    assert.equal(
+      runnerEvents(cloud, trialId).find((event) => event['record_type'] === 'trial_interrupted')?.['cause'],
+      ABORT.cause,
+    );
+    assert.equal(verdictOf(cloud, trialId), 'indeterminate');
+  });
+
+  it('an interruption during publication stops the observation before its first poll', async () => {
+    const cloud = await startedCloud();
+    const running = cloud.start(1);
+    const trialId = running.plan.trial.trial_id;
+    cloud.publisher.tamperNextBody((body) => {
+      cloud.gate.interrupt(ABORT);
+      return body;
+    });
+    const report = frozenReport(await cloud.finish(running));
+    assert.deepEqual(report.interruption, ABORT);
+    assert.equal(report.settlement.status, 'not_established');
+    assert.deepEqual(trialLines(cloud, trialId, 'settlementSamples'), []);
+    assert.equal(cloud.telemetry.collectionCount(), 1);
+    assert.equal(verdictOf(cloud, trialId), 'indeterminate');
   });
 
   it('an interruption the runner journal cannot record is reported', async () => {

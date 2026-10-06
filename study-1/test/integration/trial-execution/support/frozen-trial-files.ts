@@ -50,10 +50,29 @@ export function recordTypes(records: readonly JsonObject[]): readonly string[] {
 
 /** The value of one validity gate of an oracle result. */
 export function gateValue(result: JsonObject, gate: string): string | undefined {
+  const found = gateRecord(result, gate);
+  return found === undefined ? undefined : textField(found, 'value');
+}
+
+/** The reason codes of one validity gate of an oracle result, in order. */
+export function gateReasonCodes(result: JsonObject, gate: string): readonly string[] {
+  const reasons = gateRecord(result, gate)?.['reasons'];
+  assert.ok(Array.isArray(reasons), `the ${gate} gate lists its reasons`);
+  return (reasons as readonly JsonObject[]).map((reason) => textField(reason, 'code'));
+}
+
+/** The outcome of one rule of an oracle result's `rule_results`. */
+export function ruleResult(result: JsonObject, ruleId: string): string | undefined {
+  const rules = result['rule_results'];
+  assert.ok(Array.isArray(rules), 'the oracle result lists its rule results');
+  const found = (rules as readonly JsonObject[]).find((candidate) => candidate['rule_id'] === ruleId);
+  return found === undefined ? undefined : textField(found, 'result');
+}
+
+function gateRecord(result: JsonObject, gate: string): JsonObject | undefined {
   const gates = result['validity_gates'];
   assert.ok(Array.isArray(gates), 'the oracle result lists its validity gates');
-  const found = (gates as readonly JsonObject[]).find((candidate) => candidate['gate'] === gate);
-  return found === undefined ? undefined : textField(found, 'value');
+  return (gates as readonly JsonObject[]).find((candidate) => candidate['gate'] === gate);
 }
 
 function jsonLines(bytes: Uint8Array): readonly JsonObject[] {

@@ -10,7 +10,7 @@ import { describe, it } from 'node:test';
 
 import type { JsonObject, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { OfflineCloud } from '../../support/offline-cloud/offline-cloud.ts';
-import { gateValue, recordTypes, trialLines, trialRecord } from './support/frozen-trial-files.ts';
+import { gateReasonCodes, gateValue, recordTypes, trialLines, trialRecord } from './support/frozen-trial-files.ts';
 
 const OTHER_RUN_ID = '00000000-0000-4000-8000-0000000000ff';
 const OTHER_TRIAL_MANIFEST_SHA = 'f'.repeat(64);
@@ -43,16 +43,25 @@ function assertRejectedWithoutProviderCall(cloud: OfflineCloud, trialId: Uuid4, 
   assert.deepEqual(trialLines(cloud, trialId, 'providerJournal'), []);
 }
 
+// D-28 is the only cause: the tampered body also changes the MD5 the runner journals, so G2 must
+// be invalid because the consumer rejected the message, not because of another mismatch.
 function assertIndeterminateByTraceability(cloud: OfflineCloud, trialId: Uuid4): void {
   const result = trialRecord(cloud, trialId, 'oracleResult');
   assert.deepEqual(
     {
       traceability: gateValue(result, 'traceability'),
+      traceability_reasons: gateReasonCodes(result, 'traceability'),
       validity: result['trial_validity'],
       verdict: result['preservation_verdict'],
       correct_completion: result['correct_completion'],
     },
-    { traceability: 'invalid', validity: 'invalid', verdict: 'indeterminate', correct_completion: null },
+    {
+      traceability: 'invalid',
+      traceability_reasons: ['TRIAL_MESSAGE_REJECTED'],
+      validity: 'invalid',
+      verdict: 'indeterminate',
+      correct_completion: null,
+    },
   );
 }
 

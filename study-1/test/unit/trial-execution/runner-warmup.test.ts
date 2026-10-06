@@ -117,3 +117,45 @@ describe('warmupSettlementProblem', () => {
     assert.match(problemOf(response(validation)) ?? '', /names run_id absent, not "/);
   });
 });
+
+// Owner amendment A-05 policy 3: the warm-up response is untrusted bytes, so the check carries
+// boundary regressions for deep nesting (100,000 levels), non-finite numbers and inherited member
+// names. Each payload is refused, never thrown on, with a detail bounded by the kernel helpers.
+describe('warmupSettlementProblem on hostile payloads (A-05)', () => {
+  const DEPTH = 100_000;
+  const completion = JSON.stringify(warmupCompleted());
+  const arrayTower = `${'['.repeat(DEPTH)}${']'.repeat(DEPTH)}`;
+  const objectTower = `${'{"a":'.repeat(DEPTH)}1${'}'.repeat(DEPTH)}`;
+  const DETAIL_LIMIT = 400;
+
+  function hostile(text: string): string {
+    const detail = problemOf(response(encoder.encode(text)));
+    assert.ok(detail !== undefined, 'a hostile payload is refused');
+    assert.ok(detail.length <= DETAIL_LIMIT, `detail of ${String(detail.length)} characters; expected <= 400`);
+    return detail;
+  }
+
+  it('refuses a 100,000-level array or object tower as the payload', () => {
+    assert.match(hostile(arrayTower), /^the response is not a provider_warmup_completed \( got \[\[\[/);
+    assert.match(hostile(objectTower), /record_type absent is not catalogued/);
+  });
+
+  it('refuses a completion whose member holds a 100,000-level tower', () => {
+    const towered = completion.replace('"handler_elapsed_ns":"1000"', `"handler_elapsed_ns":${arrayTower}`);
+    assert.notEqual(towered, completion);
+    assert.match(hostile(towered), /\/handler_elapsed_ns must be string/);
+  });
+
+  it('refuses a completion with a number that overflows to Infinity', () => {
+    const overflowing = completion.replace('"source_sequence":1', '"source_sequence":1e400');
+    assert.notEqual(overflowing, completion);
+    assert.match(hostile(overflowing), /not one JSON document \(invalid_json\)/);
+  });
+
+  it('refuses a completion with inherited member names, naming each', () => {
+    for (const name of ['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty']) {
+      const extended = `${completion.slice(0, -1)},${JSON.stringify(name)}:{"x":1}}`;
+      assert.match(hostile(extended), new RegExp(`"additionalProperty":"${name}"`), name);
+    }
+  });
+});
