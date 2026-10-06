@@ -73,6 +73,15 @@ const RECEIVED_COPY_FIELDS = [
   'payment_id',
 ] as const;
 
+/**
+ * The controlled refund provider of one deployment: it judges each received refund call
+ * (BR-RUA-018), commits an accepted one, holds the targeted response at the treatment barrier,
+ * and serves the warm-up. Compose it with `composeRefundProvider` over a durable store.
+ *
+ * @example
+ * const provider = new RefundProvider({ deployment, state, openJournal, ids, wall, monotonic, sleeper });
+ * const response = await provider.handle(event); // a refund response or a warm-up completion
+ */
 export class RefundProvider {
   readonly #deps: RefundProviderDeps;
   readonly #warmup: ProviderWarmup;

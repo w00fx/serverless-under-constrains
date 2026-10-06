@@ -89,6 +89,14 @@ export function guardWarmupRequest(raw: JsonValue): Result<WarmupRequestView, st
   };
 }
 
+/**
+ * The provider's warm-up handler (addendum §2): records `provider_warmup_completed` in the
+ * execution-level warm-up partition and touches no trial state.
+ *
+ * @example
+ * const warmup = new ProviderWarmup({ deployment, openJournal, ids, wall, monotonic });
+ * const completed = await warmup.handle(request); // the recorded provider_warmup_completed
+ */
 export class ProviderWarmup {
   readonly #deps: ProviderWarmupDeps;
 
