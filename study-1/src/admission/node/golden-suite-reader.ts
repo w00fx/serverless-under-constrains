@@ -2,7 +2,10 @@
 // `npm run test:golden -- --report-json <report>` at the admitted HEAD through the injected
 // command runner, reads the report's exact bytes, and loads every committed trial-oracle golden
 // case's declaration (`test/golden/trial-oracle/**/cases/*.case.ts`, default export). The suite
-// only reads the source and writes its report outside the evidence root.
+// only reads the source and writes its report outside the evidence root. Nothing escapes the port
+// as a throw (A-05; WP-23 review): a previous report that cannot be removed fails the read, since
+// a stale report could otherwise be attested, and a case module that throws while loading
+// declares nothing, so it covers no rule.
 
 import { globSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,7 +44,11 @@ export class GoldenSuiteReader implements GoldenSuiteReadPort {
 
   async readGoldenSuiteRun(): PortResult<GoldenSuiteRun> {
     const args = ['run', 'test:golden', '--', '--report-json', this.#deps.reportPath];
-    rmSync(this.#deps.reportPath, { force: true });
+    try {
+      rmSync(this.#deps.reportPath, { force: true });
+    } catch (error: unknown) {
+      return { ok: false, error: { code: 'GOLDEN_REPORT_NOT_CLEARED', detail: String(error) } };
+    }
     const result = await this.#deps.runner.run({
       executable: this.#deps.npmExecutable,
       args,
@@ -72,14 +79,22 @@ export class GoldenSuiteReader implements GoldenSuiteReadPort {
     const files = globSync(CASE_FILE_PATTERN, { cwd: this.#deps.studyRoot }).toSorted();
     const declarations: GoldenCaseDeclaration[] = [];
     for (const file of files) {
-      const loaded = (await import(pathToFileURL(join(this.#deps.studyRoot, file)).href)) as {
-        readonly default?: unknown;
-      };
-      const declaration = caseDeclarationOf(loaded.default);
+      const declaration = caseDeclarationOf(await this.#defaultExport(file));
       if (declaration !== undefined) {
         declarations.push(declaration);
       }
     }
     return declarations;
+  }
+
+  async #defaultExport(file: string): Promise<unknown> {
+    try {
+      const loaded = (await import(pathToFileURL(join(this.#deps.studyRoot, file)).href)) as {
+        readonly default?: unknown;
+      };
+      return loaded.default;
+    } catch {
+      return undefined;
+    }
   }
 }

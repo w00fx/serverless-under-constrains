@@ -4,7 +4,7 @@
 // consistent with the lockfile. Every command runs without a shell; nothing is installed.
 
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { isJsonObject } from '../../record-contract/json-value.ts';
@@ -65,13 +65,10 @@ export class ToolchainReader implements ToolchainReadPort {
   }
 
   #installedVersion(name: string): string | undefined {
-    const manifest = join(this.#deps.studyRoot, 'node_modules', name, 'package.json');
-    if (!existsSync(manifest)) {
-      return undefined;
-    }
-    // An unreadable manifest reads as "not installed", which A6 rejects.
-    const parsed = parseJsonDocument(new Uint8Array(readFileSync(manifest)));
-    const version = parsed.ok && isJsonObject(parsed.value) ? ownField(parsed.value, 'version') : undefined;
+    // An absent or unreadable manifest reads as "not installed", which A6 rejects.
+    const bytes = manifestBytes(join(this.#deps.studyRoot, 'node_modules', name, 'package.json'));
+    const parsed = bytes === undefined ? undefined : parseJsonDocument(bytes);
+    const version = parsed?.ok === true && isJsonObject(parsed.value) ? ownField(parsed.value, 'version') : undefined;
     return typeof version === 'string' ? version : undefined;
   }
 
@@ -87,5 +84,15 @@ export class ToolchainReader implements ToolchainReadPort {
         },
       );
     });
+  }
+}
+
+// `readFileSync` throws on an absent, unreadable or directory path; each reads as no manifest
+// instead of escaping the port (A-05; WP-23 review).
+function manifestBytes(path: string): Uint8Array | undefined {
+  try {
+    return new Uint8Array(readFileSync(path));
+  } catch {
+    return undefined;
   }
 }
