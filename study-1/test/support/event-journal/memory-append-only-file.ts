@@ -1,11 +1,12 @@
 // In-memory emulator of the AppendOnlyFile port (design §12.2). It reproduces the behavior of
 // the file-system binding `NodeAppendOnlyFile` that the shared conformance suite proves on both:
 // files are created on first append, bytes accumulate in call order, a finalized file refuses
-// every append without writing, and a file whose last byte is not a newline (a torn line)
-// refuses appends that would merge two records.
+// every append without writing, and a file whose last byte is not a newline (a torn line) is
+// closed with a lone newline in the same write as the new bytes, so two records never merge.
 //
 // Fault injection: `failWriteAt(path, line, effect)` makes the append that would write line
-// `line` of `path` fail once, with one of the three fates a real write can have:
+// `line` of `path` fail once (a torn fragment counts as its own line), with one of the three
+// fates a real write can have:
 // - `nothing_written`: no byte reaches the file (`not_written`, for example EACCES on open);
 // - `torn_write`: the first half of the bytes reaches the file (`unknown`, a write cut short);
 // - `written_unacknowledged`: every byte reaches the file but the flush fails (`unknown`).
@@ -32,6 +33,7 @@ interface ScriptedFileFault {
 }
 
 const NEWLINE = 0x0a;
+const LINE_TERMINATOR = Uint8Array.of(NEWLINE);
 const decoder = new TextDecoder();
 
 export class MemoryAppendOnlyFile implements AppendOnlyFile {
@@ -43,14 +45,13 @@ export class MemoryAppendOnlyFile implements AppendOnlyFile {
     if (file.finalized) {
       return Promise.resolve({ kind: 'not_written', code: APPEND_FILE_CODES.finalized });
     }
-    if (file.bytes.length > 0 && file.bytes[file.bytes.length - 1] !== NEWLINE) {
-      return Promise.resolve({ kind: 'not_written', code: APPEND_FILE_CODES.tornTail });
-    }
-    const fault = this.#takeFault(path, countLines(file.bytes) + 1);
+    const torn = file.bytes.length > 0 && file.bytes[file.bytes.length - 1] !== NEWLINE;
+    const fault = this.#takeFault(path, countLines(file.bytes) + (torn ? 2 : 1));
     if (fault?.effect === 'nothing_written') {
       return Promise.resolve({ kind: 'not_written', code: fault.code });
     }
-    const written = fault?.effect === 'torn_write' ? bytes.slice(0, Math.floor(bytes.length / 2)) : bytes;
+    const payload = torn ? concat(LINE_TERMINATOR, bytes) : bytes;
+    const written = fault?.effect === 'torn_write' ? payload.slice(0, Math.floor(payload.length / 2)) : payload;
     this.#files.set(path, { bytes: concat(file.bytes, written), finalized: false });
     return Promise.resolve(fault === undefined ? { kind: 'appended' } : { kind: 'unknown', code: fault.code });
   }

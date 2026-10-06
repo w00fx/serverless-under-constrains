@@ -1,8 +1,8 @@
 // NodeAppendOnlyFile against the real file system (testing rule 2: file-system semantics are
 // an integration boundary). Finalization survives the process as file mode 0444; open, read
-// and directory failures are reported as `not_written`/`failed` with the OS code; and a writer
+// and directory failures are reported as `not_written`/`failed` with the OS code; a writer
 // over the JSONL port produces a journal that the BR-RUA-033 JSONL parser reads back as dense,
-// canonical events.
+// canonical events; and a restarted source instance keeps journaling after a torn write.
 
 import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -27,6 +27,9 @@ import {
 import { SequentialUuidSource } from '../../support/kernel/sequential-uuid-source.ts';
 import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-scheduler.ts';
 
+import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
+
+const RESTARTED_INSTANCE_ID = 'cccccccc-0000-4000-8000-000000000009' as Uuid4;
 const encoder = new TextEncoder();
 const root = mkdtempSync(join(tmpdir(), 'rua-node-append-'));
 
@@ -113,5 +116,46 @@ describe('NodeAppendOnlyFile on the local file system', () => {
     );
     const expected = appended.map((event) => `${canonicalJson(event as unknown as JsonValue)}\n`).join('');
     assert.equal(new TextDecoder().decode(bytes), expected);
+  });
+
+  it('a restarted instance appends after a torn write; the fragment stays its own malformed line', async () => {
+    // BR-RUA-033: "After an ambiguous append result, that source instance stops emitting
+    // events. A restart creates a new source instance." The torn bytes of the stopped instance
+    // must neither block the new instance nor merge into its first record.
+    const path = join(freshDirectory('torn-restart'), 'runner-journal.jsonl');
+    const fragment = '{"schema_version":1,"record_type":"dispatch_sta';
+    writeFileSync(path, fragment);
+    const time = new VirtualTimeScheduler({ wallEpochMs: EPOCH_MS });
+    const restarted = new JournalWriter({
+      port: createJsonlJournalPort(path, new NodeAppendOnlyFile()),
+      source: 'runner',
+      instanceId: RESTARTED_INSTANCE_ID,
+      scope: executionLevelScope(RUN, 'execution'),
+      clock: time,
+      ids: new SequentialUuidSource('88888888'),
+      maxDefinitiveRetries: 1,
+    });
+    const first = appendedEvent(await restarted.append('dispatch_started', dispatchStartedBody(1)));
+    const second = appendedEvent(await restarted.append('dispatch_started', dispatchStartedBody(2)));
+    const text = readFileSync(path, 'utf8');
+    assert.equal(
+      text,
+      `${fragment}\n${canonicalJson(first as unknown as JsonValue)}\n${canonicalJson(second as unknown as JsonValue)}\n`,
+    );
+    const report = parseJsonl(new Uint8Array(readFileSync(path)));
+    assert.deepEqual(
+      report.lines.map((line) => line.parsed.ok),
+      [false, true, true],
+    );
+    assert.deepEqual([first.source_sequence, second.source_sequence], [1, 2]);
+  });
+
+  it('a file that is only a torn fragment gets exactly one separating newline', async () => {
+    const path = join(freshDirectory('torn-only'), 'journal.jsonl');
+    writeFileSync(path, 'x');
+    const file = new NodeAppendOnlyFile();
+    assert.deepEqual(await file.append(path, encoder.encode('a\n')), { kind: 'appended' });
+    assert.deepEqual(await file.append(path, encoder.encode('b\n')), { kind: 'appended' });
+    assert.equal(readFileSync(path, 'utf8'), 'x\na\nb\n');
   });
 });
