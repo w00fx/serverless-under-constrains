@@ -1,6 +1,9 @@
 // Conformance of InterleavingItemStore: as a decorator it is transparent (writes, transactions,
 // reads and queries reach the wrapped store unchanged), and a scripted interleaving runs on the
 // wrapped store right after its read, which still returns the item as it was before.
+//
+// Sources (RK-17): [R-aws] §1.2, a conditional write fails with ConditionalCheckFailedException
+// when the item changed since it was read, so another writer may act between the two.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

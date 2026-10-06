@@ -1,5 +1,8 @@
 // Conformance of ThrowingLeakAuditRunner: it stands for a LeakAuditRunner whose audit rejects,
 // every time, with an Error naming the audited manifest, and counts its calls.
+//
+// Sources (RK-17): no AWS service is emulated; the contract is the project's LeakAuditRunner,
+// standing in for an audit that rejects so the orchestrator's not-audited path is exercised.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

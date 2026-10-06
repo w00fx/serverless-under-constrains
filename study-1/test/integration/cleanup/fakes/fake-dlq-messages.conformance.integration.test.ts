@@ -1,5 +1,10 @@
 // Conformance of FakeDlqMessages to the DlqMessagePort contract: each requested id is deleted,
 // already absent or failed, exactly once per request, and nothing outside the request is touched.
+//
+// Sources (RK-17): no [R-aws] section covers SQS `DeleteMessage`; the emulated contract is the
+// project's DlqMessagePort (design §10.4 step 8: delete captured run-owned DLQ messages only),
+// whose real adapter is not built yet (see the WP-19 review report). A message already gone is
+// reported already absent, matching the idempotent deletion AC-RUA-011 requires.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

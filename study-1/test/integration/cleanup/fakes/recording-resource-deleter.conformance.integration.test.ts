@@ -1,6 +1,10 @@
 // Conformance of RecordingResourceDeleter (design §12.2) to the ResourceDeleter contract: a
 // present resource is deleted from every surface, an absent one is already absent (idempotent
 // deletion, AC-RUA-011), a scripted failure is a value, and every request is recorded and logged.
+//
+// Sources (RK-17): [R-aws] §6.2-6.3, a missing resource answers not-found on its native API (e.g.
+// `GetFunction`/`DescribeTable` -> `ResourceNotFoundException`), which cleanup records as already
+// absent; the fake removes a deleted resource from every surface at once (no tag-index lag).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

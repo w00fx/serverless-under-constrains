@@ -2,6 +2,10 @@
 // UpdateEventSourceMapping and its asynchronous State): Enabled → Disabling on request, Disabled
 // after the scripted reads, a missing mapping absent on both calls, an idempotent repeat
 // request, and scripted failures as values.
+//
+// Sources (RK-17): [R-aws] §6.3, `ListEventSourceMappings` `State` is one of Creating, Enabling,
+// Enabled, Disabling, Disabled, Updating, Deleting; https://docs.aws.amazon.com/lambda/latest/api/API_UpdateEventSourceMapping.html
+// for `Enabled=false` taking effect asynchronously through Disabling.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

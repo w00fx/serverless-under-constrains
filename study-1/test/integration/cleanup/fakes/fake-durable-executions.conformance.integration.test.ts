@@ -2,6 +2,10 @@
 // returns only RUNNING executions of the function, sorted; stopping a running execution ends
 // it and removes it from the durable_executions surface; stopping an ended one is not_running;
 // scripted failures are values.
+//
+// Sources (RK-17): [R-durable] §5, `ListDurableExecutionsByFunction` (Statuses filter, Status
+// RUNNING|SUCCEEDED|FAILED|TIMED_OUT|STOPPED) and `StopDurableExecution`; [R-durable] §8 R8,
+// stack deletion waits for running executions, so they are stopped first.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

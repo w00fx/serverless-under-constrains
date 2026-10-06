@@ -2,6 +2,9 @@
 // answers a step report (succeeded unless scripted), DLQ capture adds the captured ids, the
 // freeze keeps what it was given, calls are recorded with their mode, and a scripted throw
 // rejects only its own operation.
+//
+// Sources (RK-17): no AWS service is emulated; the contract is the project's CleanupEvidencePort
+// (design §10.4 steps 1, 2, 4, 7 and 12).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

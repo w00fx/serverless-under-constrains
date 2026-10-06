@@ -3,6 +3,10 @@
 // execution runs (RK-10); DELETE_FAILED keeps the retained members and a retry deletes them;
 // DELETE_COMPLETE removes the stack and its members; a deleted stack described by name fails
 // while described by id it reads DELETE_COMPLETE; scripted failures are values.
+//
+// Sources (RK-17): [R-aws] §6.3, `DescribeStacks` needs the unique stack id for a deleted stack
+// and `DELETE_SKIPPED`/retained resources stay to audit; [R-durable] §8 R8, deletion waits while a
+// durable execution runs (up to 1 h).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

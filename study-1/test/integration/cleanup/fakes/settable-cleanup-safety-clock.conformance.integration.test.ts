@@ -1,5 +1,8 @@
 // Conformance of SettableCleanupSafetyClock to the CleanupSafetyClock contract: the total-time
 // verdict starts not exceeded and, once exceeded, stays exceeded (time only moves forward).
+//
+// Sources (RK-17): no AWS service is emulated; the contract is the project's CleanupSafetyClock
+// (BR-RUA-046 safety limits, AC-RUA-049 duration breach; design §10.4 step 11).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
