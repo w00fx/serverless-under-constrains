@@ -160,7 +160,7 @@ export function succeededCleanup(): CleanupResult {
         reasons: [],
       },
     ],
-    stopped_durable_execution_arns: ['arn:aws:lambda:eu-west-1:000000000000:function:durable:durable/0002'],
+    stopped_durable_execution_arns: ['arn:aws:lambda:us-east-1:000000000000:function:durable:durable/0002'],
     deleted_dlq_message_ids: ['dlq-message-0001'],
     duration_breach: false,
     started_at: at(5000),

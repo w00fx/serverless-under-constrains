@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/oracle_result.schema.json",
   "title": "oracle_result (catalogue group C, row 67)",
-  "description": "trials/<t>/derived/oracle-result.json: the oracle result of one trial of a run or variant validation (CTR-RUA-001 plus the D-04 transparency fields validity_gates, monetary_observations and treatment_condition_results). validity_gates lists the nine gates in G1-G8 order (G4a and G4b both listed); rule_results lists the ten rules in fixed order. Cross-field rules the schema enforces: trial_validity follows the BR-RUA-029 precedence over validity_gates; G4a is applicable exactly on CONTROL and G4b exactly on a treatment trial (design §8.3); the top-level identity_integrity, control_integrity and treatment_fidelity equal their gates (INV-RUA-001: identity_integrity is never not_applicable); the mirror rules BR-RUA-005, BR-RUA-008, INV-RUA-001 and BR-RUA-025 follow G1, G2, G3 and G4a/G4b (design §8.5); BR-RUA-007 is not_applicable per trial (D-04); a pass or fail rule or condition cites at least one evidence reference (BR-RUA-035); the verdict follows BR-RUA-006 over the business rules BR-RUA-001, -002, -003, -004 and -009; correct_completion follows the verdict (BR-RUA-030); a verified G6 and every pass or fail have a terminal reason (D-17: a pass or fail needs a valid trial, hence a verified G6, which needs a terminal reason); every gate other than G4a and G4b is always applicable. A control trial has no fidelity basis and no conditions; a treatment trial has six conditions (D-05). Monetary consistency between rule results and the ledger is the oracle's, not the schema's.",
+  "description": "trials/<t>/derived/oracle-result.json: the oracle result of one trial of a run or variant validation (CTR-RUA-001 plus the D-04 transparency fields validity_gates, monetary_observations and treatment_condition_results). validity_gates lists the nine gates in G1-G8 order (G4a and G4b both listed); rule_results lists the ten rules in fixed order. Cross-field rules the schema enforces: trial_validity follows the BR-RUA-029 precedence over validity_gates; G4a is applicable exactly on CONTROL and G4b exactly on a treatment trial (design §8.3); the top-level identity_integrity, control_integrity and treatment_fidelity equal their gates (INV-RUA-001: identity_integrity is never not_applicable); the mirror rules BR-RUA-005, BR-RUA-008, INV-RUA-001 and BR-RUA-025 follow G1, G2, G3 and G4a/G4b (design §8.5); BR-RUA-007 is not_applicable per trial (D-04); a pass or fail rule or condition cites at least one evidence reference (BR-RUA-035); the verdict follows BR-RUA-006 over the business rules BR-RUA-001, -002, -003, -004 and -009; correct_completion follows the verdict (BR-RUA-030); a verified G6 and every pass or fail have a terminal reason (D-17: a pass or fail needs a valid trial, hence a verified G6, which needs a terminal reason); every gate other than G4a and G4b is always applicable; BR-RUA-001, -002 and -009 are always applicable and conclude (pass or fail) only when G1, G5 and G6 are all verified (design §8.5, D-15); verified treatment fidelity has six passing conditions and the causal_plus_cross_source_clock_assumption basis with CA-1, and an unaffected failing condition makes it invalid (design §8.10, AC-RUA-002, D-05). A control trial has no fidelity basis and no conditions; a treatment trial has six conditions (D-05). Monetary consistency between rule results and the ledger is the oracle's, not the schema's.",
   "type": "object",
   "$defs": {
     "artifact_ref": {
@@ -2474,6 +2474,204 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "validity_gates": {
+            "anyOf": [
+              {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": "verified"
+                        }
+                      }
+                    },
+                    "required": ["value"]
+                  },
+                  {},
+                  {},
+                  {},
+                  {},
+                  {},
+                  {},
+                  {},
+                  {}
+                ],
+                "minItems": 9,
+                "maxItems": 9,
+                "items": false
+              },
+              {
+                "type": "array",
+                "prefixItems": [
+                  {},
+                  {},
+                  {},
+                  {},
+                  {},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": "verified"
+                        }
+                      }
+                    },
+                    "required": ["value"]
+                  },
+                  {},
+                  {},
+                  {}
+                ],
+                "minItems": 9,
+                "maxItems": 9,
+                "items": false
+              },
+              {
+                "type": "array",
+                "prefixItems": [
+                  {},
+                  {},
+                  {},
+                  {},
+                  {},
+                  {},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": "verified"
+                        }
+                      }
+                    },
+                    "required": ["value"]
+                  },
+                  {},
+                  {}
+                ],
+                "minItems": 9,
+                "maxItems": 9,
+                "items": false
+              }
+            ]
+          }
+        },
+        "required": ["validity_gates"]
+      },
+      "then": {
+        "properties": {
+          "rule_results": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "const": "indeterminate"
+                  }
+                },
+                "required": ["result"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "const": "indeterminate"
+                  }
+                },
+                "required": ["result"]
+              },
+              {},
+              {},
+              {},
+              {},
+              {},
+              {
+                "type": "object",
+                "properties": {
+                  "result": {
+                    "const": "indeterminate"
+                  }
+                },
+                "required": ["result"]
+              },
+              {},
+              {}
+            ],
+            "minItems": 10,
+            "maxItems": 10,
+            "items": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "treatment_fidelity": {
+            "const": "verified"
+          }
+        },
+        "required": ["treatment_fidelity"]
+      },
+      "then": {
+        "properties": {
+          "fidelity_basis": {
+            "const": "causal_plus_cross_source_clock_assumption"
+          },
+          "treatment_condition_results": {
+            "type": "array",
+            "minItems": 6,
+            "items": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "const": "pass"
+                }
+              },
+              "required": ["result"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "treatment_condition_results": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "const": "fail"
+                },
+                "affected_by": {
+                  "type": "array",
+                  "maxItems": 0
+                }
+              },
+              "required": ["result", "affected_by"]
+            }
+          }
+        },
+        "required": ["treatment_condition_results"]
+      },
+      "then": {
+        "properties": {
+          "treatment_fidelity": {
+            "const": "invalid"
+          }
+        }
+      }
     }
   ],
   "properties": {
@@ -2721,6 +2919,9 @@
               "properties": {
                 "rule_id": {
                   "const": "BR-RUA-001"
+                },
+                "result": {
+                  "enum": ["pass", "fail", "indeterminate"]
                 }
               }
             }
@@ -2736,6 +2937,9 @@
               "properties": {
                 "rule_id": {
                   "const": "BR-RUA-002"
+                },
+                "result": {
+                  "enum": ["pass", "fail", "indeterminate"]
                 }
               }
             }
@@ -2829,6 +3033,9 @@
               "properties": {
                 "rule_id": {
                   "const": "BR-RUA-009"
+                },
+                "result": {
+                  "enum": ["pass", "fail", "indeterminate"]
                 }
               }
             }

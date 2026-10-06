@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/run_summary.schema.json",
   "title": "run_summary (catalogue group C, row 72)",
-  "description": "summary/run-summary.json (CTR-RUA-002; design §6.3): exactly four trial results in the declared BR-RUA-019 order, each with its execution status and either an oracle-result reference or its incompletion reasons, never filtered, reordered or annotated (AC-RUA-012). It records the operational statuses separately and has no winner, aggregate, ranking or statistic.",
+  "description": "summary/run-summary.json (CTR-RUA-002; design §6.3): exactly four trial results in the declared BR-RUA-019 order, each with its execution status and either an oracle-result reference or its incompletion reasons, never filtered, reordered or annotated (AC-RUA-012). It records the operational statuses separately and has no winner, aggregate, ranking or statistic. An eligible comparison has an oracle result for each of the four trials and verified evidence integrity (BR-RUA-031).",
   "type": "object",
   "$defs": {
     "artifact_ref": {
@@ -180,6 +180,33 @@
           "comparison_ineligibility_reasons": {
             "type": "array",
             "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "eligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "trial_results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "oracle_result_ref": true
+              },
+              "required": ["oracle_result_ref"]
+            }
+          },
+          "evidence_integrity_status": {
+            "const": "verified"
           }
         }
       }

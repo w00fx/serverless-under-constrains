@@ -44,6 +44,7 @@
             "resource_manifest",
             "runner_journal",
             "provider_warmup_journal",
+            "caller_canary_journal",
             "controller_canary_journal",
             "trial_manifest",
             "payment",

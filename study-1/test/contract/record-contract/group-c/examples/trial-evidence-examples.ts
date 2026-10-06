@@ -26,6 +26,9 @@ import {
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';
 
+/** A Durable execution of the study account in us-east-1 (BR-RUA-046). */
+const DURABLE_EXECUTION_ARN = 'arn:aws:lambda:us-east-1:000000000000:function:durable:durable/0001';
+
 /**
  * A trial projection: one timed-out attempt joined to its commit, one rejected and one
  * unresolved provider call, and the ledger transaction by reference (design §8.9).
@@ -56,7 +59,8 @@ export function attemptProjection(): AttemptProjection {
         provider_call_id: COMMIT_TRIPLE.provider_call_id,
         provider_transaction_id: COMMIT_TRIPLE.provider_transaction_id,
         late_transport_settlement: { settlement_kind: 'resolved', observed_after_elapsed_ns: ns(250_000_000n) },
-        knowledge_after_derived: 'ONE_EFFECT_CONFIRMED',
+        // BR-RUA-022: an ambiguous outcome leaves UNKNOWN from every state.
+        knowledge_after_derived: 'UNKNOWN',
         knowledge_after_recorded: 'UNKNOWN',
       },
     ],
@@ -85,8 +89,9 @@ export function attemptProjection(): AttemptProjection {
 }
 
 /**
- * A probe projection: a Durable step that failed before dispatch (BR-RUA-021 proven
- * `NOT_DISPATCHED`), so no provider call and no transaction.
+ * A probe projection: the probe caller (a plain function the runner invokes once, never a
+ * Durable execution) failed before dispatch (BR-RUA-021 proven `NOT_DISPATCHED`), so there is no
+ * provider call, no transaction and no Durable metadata.
  *
  * @example
  * probeAttemptProjection().attempts[0]?.outcome_class; // 'PRE_DISPATCH_FAILURE'
@@ -101,12 +106,7 @@ export function probeAttemptProjection(): AttemptProjection {
       {
         ...ATTEMPT_CORRELATION,
         registered_event_id: uuid(0x511),
-        invocation: {
-          source: 'probe_caller',
-          source_instance_id: uuid(0x211),
-          durable_execution_arn: 'arn:aws:lambda:eu-west-1:000000000000:function:probe:durable/0001',
-          step_attempt: 1,
-        },
+        invocation: { source: 'probe_caller', source_instance_id: uuid(0x211) },
         dispatch_state: 'NOT_DISPATCHED',
         outcome: 'FAILED',
         outcome_class: 'PRE_DISPATCH_FAILURE',
@@ -115,13 +115,40 @@ export function probeAttemptProjection(): AttemptProjection {
     ],
     provider_calls: [],
     transactions: [],
-    durable_executions: [
+    durable_executions: [],
+    derived_at: at(910),
+  };
+}
+
+/**
+ * A Durable trial projection: one step attempt of a Durable execution that timed out, and the
+ * execution as the metadata lists it (design §8.9, AC-RUA-003).
+ *
+ * @example
+ * durableAttemptProjection().durable_executions.length; // 1
+ */
+export function durableAttemptProjection(): AttemptProjection {
+  const projection = attemptProjection();
+  const [attempt] = projection.attempts;
+  if (attempt === undefined) {
+    throw new Error('the trial projection lists no attempt; expected one timed-out attempt');
+  }
+  return {
+    ...projection,
+    attempts: [
       {
-        durable_execution_arn: 'arn:aws:lambda:eu-west-1:000000000000:function:probe:durable/0001',
-        status: 'SUCCEEDED',
+        ...attempt,
+        invocation: {
+          source: 'durable_caller',
+          source_instance_id: uuid(0x221),
+          message_id: 'message-0001',
+          receive_count: 1,
+          durable_execution_arn: DURABLE_EXECUTION_ARN,
+          step_attempt: 1,
+        },
       },
     ],
-    derived_at: at(910),
+    durable_executions: [{ durable_execution_arn: DURABLE_EXECUTION_ARN, status: 'SUCCEEDED' }],
   };
 }
 
@@ -173,6 +200,7 @@ export function probeEvidenceIndex(): EvidenceIndex {
 export const TRIAL_EVIDENCE_EXAMPLES: readonly GroupCExample[] = [
   groupCExample('attempt_projection', attemptProjection()),
   groupCExample('attempt_projection (probe)', probeAttemptProjection()),
+  groupCExample('attempt_projection (durable)', durableAttemptProjection()),
   groupCExample('evidence_index', trialEvidenceIndex()),
   groupCExample('evidence_index (probe)', probeEvidenceIndex()),
 ];

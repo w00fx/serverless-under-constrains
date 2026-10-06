@@ -9,6 +9,7 @@ import type {
   LateEvidenceStatus,
   LeakAuditStatus,
   LeaseStatus,
+  PostFreezeProbeTerminalReason,
   ProbeTerminalReason,
 } from './vocabulary.ts';
 
@@ -28,17 +29,19 @@ interface TransportProbeSummaryFields extends ExecutionScoped {
 
 /**
  * The probe-result digest (the exact bytes of `probe/derived/transport-probe-result.json`) is
- * present when the lifecycle `COMPLETED`. A probe that could not start or could not freeze its
- * result (for example `LEASE_ACQUISITION_FAILED`, `PROVISIONING_FAILED`, `PROBE_INCOMPLETE`;
- * design §10.2) omits it, because BR-RUA-033 omits unavailable optional properties.
+ * present when the lifecycle `COMPLETED`, and when it ended in `CLEANUP_INCOMPLETE` or
+ * `LEAK_AUDIT_NOT_CLEAN`: those arise only in normal cleanup, after phase P5 froze the result
+ * (design §10.2). A probe whose primary reason can come before P5 (for example
+ * `LEASE_ACQUISITION_FAILED`, `PROVISIONING_FAILED`, `PROBE_INCOMPLETE` or an interruption) omits
+ * it when no result was frozen, because BR-RUA-033 omits unavailable optional properties.
  */
 export type ProbeResultDigest =
   | {
-      readonly probe_terminal_reason: Extract<ProbeTerminalReason, 'COMPLETED'>;
+      readonly probe_terminal_reason: PostFreezeProbeTerminalReason;
       readonly probe_result_sha256: Sha256Hex;
     }
   | {
-      readonly probe_terminal_reason: Exclude<ProbeTerminalReason, 'COMPLETED'>;
+      readonly probe_terminal_reason: Exclude<ProbeTerminalReason, PostFreezeProbeTerminalReason>;
       readonly probe_result_sha256?: Sha256Hex;
     };
 

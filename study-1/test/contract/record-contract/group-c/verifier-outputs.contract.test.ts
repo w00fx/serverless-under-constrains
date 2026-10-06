@@ -86,6 +86,40 @@ describe('AC-RUA-046 variant_validation_verification rules (CTR-RUA-004)', () =>
     }
   });
 
+  it('recovery never turns one conclusive declared status into the other (BR-RUA-038, CTR-RUA-004)', () => {
+    const crossings: readonly (readonly [string, string])[] = [
+      ['failed', 'verified'],
+      ['verified', 'failed'],
+    ];
+    for (const [declared, effective] of crossings) {
+      assertRejected(
+        edited(verified, {
+          declared_implementation_validation_status: declared,
+          effective_implementation_validation_status: effective,
+        }),
+        `declared ${declared}, effective ${effective}`,
+        '/effective_implementation_validation_status enum',
+      );
+      assertAccepted(
+        edited(verified, {
+          declared_implementation_validation_status: declared,
+          effective_implementation_validation_status: declared,
+        }),
+        `declared ${declared} kept`,
+      );
+      assertAccepted(
+        edited(indeterminate, { declared_implementation_validation_status: declared }),
+        `declared ${declared}, effective indeterminate`,
+      );
+    }
+    // The verified example: recovery repaired the closure of a declared indeterminate validation.
+    assertAccepted(verified, 'declared indeterminate, effective verified after recovery');
+    assertAccepted(
+      edited(verified, { effective_implementation_validation_status: 'failed' }),
+      'declared indeterminate, effective failed after recovery',
+    );
+  });
+
   it('an indeterminate status states its reasons; no head means no recovery', () => {
     assertRejected(
       edited(indeterminate, { effective_status_reasons: [] }),

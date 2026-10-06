@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/comparison_assessment.schema.json",
   "title": "comparison_assessment (catalogue group C, row 73)",
-  "description": "summary/comparison-assessment.json (RUN only; BR-RUA-007, BR-RUA-031, BR-RUA-052; design §8.14): the eight equality projections computed from frozen manifests and the inventoried template, and the nine eligibility conditions. A projection fails only on an undeclared difference; the comparison is eligible exactly when every condition holds. A pass or fail verdict never affects eligibility.",
+  "description": "summary/comparison-assessment.json (RUN only; BR-RUA-007, BR-RUA-031, BR-RUA-052; design §8.14): the eight equality projections computed from frozen manifests and the inventoried template, and the nine eligibility conditions. A projection fails only on an undeclared difference; the comparison is eligible exactly when every condition holds. A pass or fail verdict never affects eligibility. An eligible comparison cites the four oracle results and its BR-RUA-007 equality passes (BR-RUA-031).",
   "type": "object",
   "$defs": {
     "artifact_ref": {
@@ -301,6 +301,27 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "eligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "oracle_result_refs": {
+            "type": "array",
+            "minItems": 4
+          },
+          "equality_result": {
+            "const": "pass"
           }
         }
       }

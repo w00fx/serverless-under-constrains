@@ -199,7 +199,7 @@ function billingLine(lineId: string, currency: string, cost: string): Attributed
     line_id: lineId,
     product_code: 'AWSLambda',
     operation: 'Invoke',
-    resource_id: 'arn:aws:lambda:eu-west-1:000000000000:function:rua-provider',
+    resource_id: 'arn:aws:lambda:us-east-1:000000000000:function:rua-provider',
     usage_start: at(100),
     usage_end: at(8000),
     currency,

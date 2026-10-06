@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/attempt_projection.schema.json",
   "title": "attempt_projection (catalogue group C, row 66)",
-  "description": "trials/<t>/derived/attempt-projection.json (a probe projection carries no trial identity): the derived per-attempt view of one trial, never fed back into a verdict (BR-RUA-037, BR-RUA-021, BR-RUA-022; design §8.9). Provider transaction ids are joined through the provider commit event, never through the caller; transactions reference the ledger snapshot and never copy it. Each attempt follows BR-RUA-021 (SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED) and the BR-RUA-022 outcome classes: SUCCEEDED is SUCCESS, REJECTED is REJECTION, TIMED_OUT and a FAILED that is DISPATCHED or UNKNOWN are AMBIGUOUS, a FAILED proven NOT_DISPATCHED is PRE_DISPATCH_FAILURE, and a DISPATCHED attempt with no recorded outcome counts as AMBIGUOUS (design §8.5).",
+  "description": "trials/<t>/derived/attempt-projection.json (a probe projection carries no trial identity): the derived per-attempt view of one trial, never fed back into a verdict (BR-RUA-037, BR-RUA-021, BR-RUA-022; design §8.9). Provider transaction ids are joined through the provider commit event, never through the caller; transactions reference the ledger snapshot and never copy it. Each attempt follows BR-RUA-021 (SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED) and the BR-RUA-022 outcome classes: SUCCEEDED is SUCCESS, REJECTED is REJECTION, TIMED_OUT and a FAILED that is DISPATCHED or UNKNOWN are AMBIGUOUS, a FAILED proven NOT_DISPATCHED is PRE_DISPATCH_FAILURE, and a DISPATCHED attempt with no recorded outcome counts as AMBIGUOUS (design §8.5). An attempt without a recorded outcome is never SUCCESS or REJECTION (BR-RUA-021), an AMBIGUOUS attempt derives UNKNOWN knowledge (BR-RUA-022), and only a durable_caller invocation carries Durable execution metadata.",
   "type": "object",
   "$defs": {
     "invocation": {
@@ -34,7 +34,27 @@
         }
       },
       "required": ["source", "source_instance_id"],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "not": {
+                  "const": "durable_caller"
+                }
+              }
+            },
+            "required": ["source"]
+          },
+          "then": {
+            "properties": {
+              "durable_execution_arn": false,
+              "step_attempt": false
+            }
+          }
+        }
+      ]
     },
     "late_settlement": {
       "type": "object",
@@ -92,7 +112,8 @@
             "ONE_EFFECT_CONFIRMED",
             "MULTIPLE_EFFECTS_CONFIRMED",
             "UNKNOWN"
-          ]
+          ],
+          "description": "The effect knowledge after this attempt, folded over the attempts in order through the BR-RUA-022 transition table from NOT_ATTEMPTED (design §8.9); an AMBIGUOUS attempt always leaves UNKNOWN."
         },
         "knowledge_after_recorded": {
           "enum": [
@@ -101,7 +122,8 @@
             "ONE_EFFECT_CONFIRMED",
             "MULTIPLE_EFFECTS_CONFIRMED",
             "UNKNOWN"
-          ]
+          ],
+          "description": "The effect_knowledge of the last request_state_recorded after this attempt, as the caller recorded it; omitted when none was recorded."
         }
       },
       "required": [
@@ -257,6 +279,37 @@
             "properties": {
               "dispatch_state": {
                 "const": "NOT_DISPATCHED"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["outcome"]
+            }
+          },
+          "then": {
+            "properties": {
+              "outcome_class": {
+                "enum": ["PRE_DISPATCH_FAILURE", "AMBIGUOUS"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome_class": {
+                "const": "AMBIGUOUS"
+              }
+            },
+            "required": ["outcome_class"]
+          },
+          "then": {
+            "properties": {
+              "knowledge_after_derived": {
+                "const": "UNKNOWN"
               }
             }
           }

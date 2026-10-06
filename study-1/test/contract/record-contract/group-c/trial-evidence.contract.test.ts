@@ -1,14 +1,11 @@
-// AC-RUA-046 (group C, rows 66, 68 and 69): the cross-field rules of the derived trial evidence
-// (the oracle result of row 67 has its own file, oracle-result.contract.test.ts). Each
+// AC-RUA-046 (group C, rows 66 and 68): the cross-field rules of the derived trial evidence
+// (the oracle result of row 67 and the probe result of row 69 have their own files). Each
 // case breaks one rule of a valid example and expects the rejection at the member that rule
 // governs; the accepted cases pin the branch the rule deliberately leaves open.
 
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { DEFAULT_SCHEMA_ROOT } from '../../../../src/record-contract/schema-registry.ts';
+import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import { assertAccepted, assertForbidden, assertRejected } from '../group-b/support/group-b-validation.ts';
 import { withValueAt } from '../group-b/support/json-paths.ts';
 import {
@@ -21,16 +18,17 @@ import {
 } from '../group-b/support/record-builders.ts';
 import {
   attemptProjection,
+  durableAttemptProjection,
   probeAttemptProjection,
   probeEvidenceIndex,
   trialEvidenceIndex,
 } from './examples/trial-evidence-examples.ts';
-import { invalidTransportProbeResult, passingTransportProbeResult } from './examples/probe-examples.ts';
-import { arrayAt, edited } from './support/json-edits.ts';
+import { arrayAt, edited, recordWithValueAt } from './support/json-edits.ts';
 
 describe('AC-RUA-046 attempt_projection rules', () => {
   const trial = toJson(attemptProjection());
   const probe = toJson(probeAttemptProjection());
+  const durable = toJson(durableAttemptProjection());
 
   it('a trial projection names its trial pair; a probe projection names none', () => {
     assertRejected(edited(trial, { trial_manifest_sha256: undefined }), 'trial without manifest', ' dependentRequired');
@@ -151,6 +149,73 @@ describe('AC-RUA-046 attempt_projection rules', () => {
     );
   });
 
+  it('an attempt without an outcome is never a success or a rejection (BR-RUA-021)', () => {
+    const attempt = ['attempts', 0];
+    const noOutcome = (dispatch: string, outcomeClass: string): JsonObject =>
+      recordWithValueAt(
+        recordWithValueAt(
+          recordWithValueAt(trial, [...attempt, 'outcome'], undefined),
+          [...attempt, 'dispatch_state'],
+          dispatch,
+        ),
+        [...attempt, 'outcome_class'],
+        outcomeClass,
+      );
+    for (const dispatch of ['DISPATCHED', 'UNKNOWN', 'NOT_DISPATCHED']) {
+      for (const outcomeClass of ['SUCCESS', 'REJECTION']) {
+        assertRejected(
+          noOutcome(dispatch, outcomeClass),
+          `${dispatch} without outcome as ${outcomeClass}`,
+          '/attempts/0/outcome_class enum',
+        );
+      }
+    }
+    assertAccepted(noOutcome('UNKNOWN', 'AMBIGUOUS'), 'UNKNOWN dispatch without outcome is AMBIGUOUS');
+  });
+
+  it('an ambiguous attempt derives UNKNOWN knowledge, the BR-RUA-022 Ambiguous column', () => {
+    const knowledge = ['attempts', 0, 'knowledge_after_derived'];
+    for (const derived of [
+      'NOT_ATTEMPTED',
+      'NO_EFFECT_CONFIRMED',
+      'ONE_EFFECT_CONFIRMED',
+      'MULTIPLE_EFFECTS_CONFIRMED',
+    ]) {
+      assertRejected(
+        recordWithValueAt(trial, knowledge, derived),
+        `AMBIGUOUS attempt deriving ${derived}`,
+        '/attempts/0/knowledge_after_derived const',
+      );
+    }
+    // A pre-dispatch failure from NOT_ATTEMPTED stays NOT_ATTEMPTED (the probe example).
+    assertAccepted(probe, 'pre-dispatch failure keeps NOT_ATTEMPTED');
+    assertAccepted(
+      recordWithValueAt(probe, knowledge, 'ONE_EFFECT_CONFIRMED'),
+      'later rows of the table are the oracle fold, not a per-attempt schema rule',
+    );
+  });
+
+  it('only a Durable caller invocation carries Durable execution metadata', () => {
+    const invocation = ['attempts', 0, 'invocation'];
+    assertAccepted(durable, 'Durable step attempt');
+    for (const source of ['conventional_caller', 'probe_caller']) {
+      assertForbidden(
+        recordWithValueAt(durable, [...invocation, 'source'], source),
+        `${source} with a Durable execution ARN`,
+        '/attempts/0/invocation/durable_execution_arn',
+      );
+      assertForbidden(
+        recordWithValueAt(
+          recordWithValueAt(durable, [...invocation, 'source'], source),
+          [...invocation, 'durable_execution_arn'],
+          undefined,
+        ),
+        `${source} with a step attempt`,
+        '/attempts/0/invocation/step_attempt',
+      );
+    }
+  });
+
   it('transactions reference the ledger snapshot and never copy it', () => {
     assertRejected(
       withValueAt(trial, ['transactions', 0, 'ledger_ref'], undefined),
@@ -220,7 +285,7 @@ describe('AC-RUA-046 evidence_index rules', () => {
   });
 
   it('classifies the addendum §2.2 readiness evidence (warm-up and canary partitions)', () => {
-    for (const artifactClass of ['provider_warmup_journal', 'controller_canary_journal']) {
+    for (const artifactClass of ['provider_warmup_journal', 'caller_canary_journal', 'controller_canary_journal']) {
       assertAccepted(withValueAt(trial, ['entries', 0, 'artifact_class'], artifactClass), artifactClass);
     }
     assertRejected(
@@ -228,85 +293,5 @@ describe('AC-RUA-046 evidence_index rules', () => {
       'unknown readiness class',
       '/entries/0/artifact_class enum',
     );
-  });
-});
-
-describe('AC-RUA-046 transport_probe_result rules', () => {
-  const passing = toJson(passingTransportProbeResult());
-  const invalid = toJson(invalidTransportProbeResult());
-
-  it('a pass needs a probe that is not invalid, verified evidence and six passing conditions (BR-RUA-027)', () => {
-    // BR-RUA-027 precedence; only BR-RUA-026 usability requires probe_validity = valid.
-    assertAccepted(edited(passing, { probe_validity: 'indeterminate' }), 'pass of an indeterminate-validity probe');
-    assertRejected(edited(passing, { probe_validity: 'invalid' }), 'pass of an invalid probe', '/probe_validity enum');
-    assertRejected(
-      edited(passing, { probe_validity: 'invalid' }),
-      'pass of an invalid probe',
-      '/transport_probe_verdict const',
-    );
-    assertRejected(
-      edited(passing, { evidence_integrity: 'unverified' }),
-      'pass of unverified evidence',
-      '/evidence_integrity const',
-    );
-    assertRejected(
-      withValueAt(passing, ['condition_results', 2, 'result'], 'fail'),
-      'pass with failed condition',
-      '/condition_results/2/result const',
-    );
-    assertAccepted(edited(passing, { transport_probe_verdict: 'fail' }), 'fail of a valid probe');
-    assertAccepted(
-      edited(passing, { transport_probe_verdict: 'fail', probe_validity: 'indeterminate' }),
-      'fail of an indeterminate-validity probe',
-    );
-  });
-
-  it('a pass or fail condition cites evidence (BR-RUA-035)', () => {
-    assertRejected(
-      withValueAt(passing, ['condition_results', 0, 'evidence_refs'], []),
-      'pass condition without reference',
-      '/condition_results/0/evidence_refs minItems',
-    );
-    assertRejected(
-      withValueAt(invalid, ['condition_results', 0, 'evidence_refs'], []),
-      'fail condition without reference',
-      '/condition_results/0/evidence_refs minItems',
-    );
-    assertAccepted(
-      withValueAt(invalid, ['condition_results', 1, 'evidence_refs'], []),
-      'indeterminate condition without reference',
-    );
-  });
-
-  it('an invalid probe is indeterminate', () => {
-    assertRejected(
-      edited(invalid, { transport_probe_verdict: 'fail' }),
-      'fail of invalid probe',
-      '/transport_probe_verdict const',
-    );
-    assertRejected(edited(invalid, { transport_probe_verdict: 'pass' }), 'pass of invalid probe');
-  });
-
-  it('orders by cross-source wall clock and never claims formal happened-before proof (AC-RUA-002)', () => {
-    assertRejected(edited(passing, { ordering_basis: 'happened_before' }), 'formal ordering', '/ordering_basis enum');
-    assertRejected(edited(passing, { happened_before_proven: true }), 'proof claim', ' additionalProperties');
-    const schema = readFileSync(join(DEFAULT_SCHEMA_ROOT, 'group-c', 'transport_probe_result.schema.json'), 'utf8');
-    assert.doesNotMatch(schema, /"happened_before|"formal_order|"proof/);
-    assertRejected(
-      edited(passing, { fidelity_basis: 'not_applicable' }),
-      'probe without basis',
-      '/fidelity_basis enum',
-    );
-    assertRejected(
-      edited(passing, { clock_assumption_refs: [] }),
-      'assumed without CA-1',
-      '/clock_assumption_refs minItems',
-    );
-  });
-
-  it('is the probe result: no run, validation or trial identity', () => {
-    assertForbidden(edited(passing, { run_id: RUN_ID }), 'run identity', '/run_id');
-    assertForbidden(edited(passing, { trial_id: TRIAL_ID }), 'trial identity', '/trial_id');
-    assertRejected(edited(passing, { transport_probe_id: undefined }), 'no probe', ' required');
   });
 });

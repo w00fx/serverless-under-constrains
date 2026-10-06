@@ -397,8 +397,8 @@ export function indeterminateOracleResult(): OracleResult {
     ...derivedFields(UNSETTLED_TREATMENT_GATES, { ...ONE_TRANSACTION, conclusive: false }, 'pass'),
     control_integrity: 'not_applicable',
     treatment_fidelity: 'unverified',
-    fidelity_basis: 'causal',
-    clock_assumption_refs: [],
+    fidelity_basis: 'causal_plus_cross_source_clock_assumption',
+    clock_assumption_refs: ['CA-1'],
     treatment_condition_results: sixConditions('pass', ['BR-RUA-013', 'indeterminate']),
   };
 }

@@ -127,6 +127,11 @@ export const VOCABULARY_SITES: readonly VocabularySite[] = [
   [groupC.ARTIFACT_DERIVATIONS, 'package_index', definitionEnum('index_entry', 'derivation')],
   [groupC.ARTIFACT_DERIVATIONS, 'amendment_index', definitionEnum('index_entry', 'derivation')],
   [groupC.PROBE_TERMINAL_REASONS, 'transport_probe_summary', propertyEnum('probe_terminal_reason')],
+  [
+    groupC.POST_FREEZE_PROBE_TERMINAL_REASONS,
+    'transport_probe_summary',
+    '/allOf/0/if/properties/probe_terminal_reason/enum',
+  ],
   [groupC.VALIDATION_TERMINAL_REASONS, 'validation_summary', propertyEnum('validation_terminal_reason')],
   [groupC.RUN_TERMINAL_REASONS, 'run_summary', propertyEnum('run_terminal_reason')],
   [groupC.RUN_TERMINAL_REASONS, 'study_completion_assessment', propertyEnum('run_terminal_reason')],
