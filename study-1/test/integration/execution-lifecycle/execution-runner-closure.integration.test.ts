@@ -74,6 +74,14 @@ describe('ExecutionRunner interruptions', () => {
     assert.equal(late['monitoring'], 'shortened');
     assert.equal(late['late_evidence_status'], 'unverified');
     assert.equal(world.record(EXECUTION_PATHS.cleanupResult)['cleanup_mode'], 'EMERGENCY');
+    const marked = world
+      .journal(EXECUTION_PATHS.runnerJournal)
+      .filter((event) => event['record_type'] === 'trial_interrupted');
+    assert.deepEqual(
+      marked.map((event) => [event['trial_id'], event['cause']]),
+      [[undefined, 'OPERATOR_ABORT']],
+      'the runner journals the interruption that shortened monitoring',
+    );
   });
 
   it('keeps cleaning up after a SIGINT during cleanup, and reports the interruption', async () => {

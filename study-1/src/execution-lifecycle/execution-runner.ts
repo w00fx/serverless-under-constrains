@@ -64,6 +64,9 @@ import type { ReadinessPorts } from './readiness.ts';
 import { buildSafetyAssessment } from './safety-assessment.ts';
 import { planDeclaredTrials } from './trial-plans.ts';
 
+/** How often the runner re-reads an uncertain lease before handing over the next trial. */
+export const LEASE_RECOVERY_POLL_MS = 5_000;
+
 /** Everything the runner acts through. */
 export interface ExecutionRunnerDeps {
   readonly lease: ExecutionLease;
@@ -132,7 +135,7 @@ export class ExecutionRunner {
     const provisioned = await this.#provision();
     const { targets } = provisioned;
     const mode =
-      targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned.resource_manifest_sha256, targets, safety);
+      targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned.resource_manifest_sha256, targets);
     safety.markActiveEnded();
     const cleanup = await this.#cleanUp(mode, provisioned, held);
     const leaseStatus = await this.#finalizeLease(cleanup);
@@ -173,20 +176,20 @@ export class ExecutionRunner {
     return outcome;
   }
 
-  // P3, P4 and P6; the cleanup mode they leave.
-  async #execute(
-    resourceManifestSha256: Sha256Hex,
-    targets: ExecutionTargets,
-    safety: ExecutionSafety,
-  ): Promise<CleanupMode> {
+  // P3, P4 and P6; the cleanup mode they leave. Monitoring is active time: the active-time
+  // deadline interrupts it like a trial, so the ACTIVE_TIME check measures it too (`run` ends
+  // active time just before cleanup).
+  async #execute(resourceManifestSha256: Sha256Hex, targets: ExecutionTargets): Promise<CleanupMode> {
     if (!(await this.#ready(targets)) || !(await this.#runTrials(resourceManifestSha256, targets))) {
       await this.#journal.phase('LATE_MONITORING', 'skipped', [this.#stopReason()]);
       return 'EMERGENCY';
     }
-    safety.markActiveEnded();
     await this.#journal.phase('LATE_MONITORING', 'started');
     const monitoring = await this.#monitor.observe(this.#gate);
-    if (monitoring.outcome !== 'complete' || (await this.#noteInterruption()) !== undefined) {
+    // Journaled before the outcome is judged: a shortened window means an interruption no trial
+    // recorded, and without its `trial_interrupted` the summary would read the run as COMPLETED.
+    const interruption = await this.#noteInterruption();
+    if (monitoring.outcome !== 'complete' || interruption !== undefined) {
       await this.#journal.phase('LATE_MONITORING', 'failed', [this.#stopReason()]);
       return 'EMERGENCY';
     }
@@ -234,7 +237,7 @@ export class ExecutionRunner {
       return false;
     }
     for (const plan of plans.value) {
-      if (!this.#gate.mayStartTrial()) {
+      if (!(await this.#awaitTrialStart())) {
         break;
       }
       const report = await this.#deps.trials.execute(plan, this.#gate);
@@ -255,6 +258,18 @@ export class ExecutionRunner {
       unfrozen.flatMap((report) => report.reasons),
     );
     return true;
+  }
+
+  // BR-RUA-045: lease uncertainty blocks new publication without ending the execution, and a
+  // recovery before staleness may resume scheduling. Handing a trial over while the lease is
+  // uncertain would consume it (its setup runs, then T5 refuses to publish), so the runner waits
+  // until the heartbeat confirms the lease again or loses it at the 300 s stale boundary (the loss
+  // latches the gate); the active-time deadline bounds the wait as well. False when no trial may start.
+  async #awaitTrialStart(): Promise<boolean> {
+    while (this.#gate.mayStartTrial() && !this.#gate.publicationAllowed()) {
+      await this.#deps.services.sleeper.sleep(LEASE_RECOVERY_POLL_MS);
+    }
+    return this.#gate.mayStartTrial();
   }
 
   // P7.

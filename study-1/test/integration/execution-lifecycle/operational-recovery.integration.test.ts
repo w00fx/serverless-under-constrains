@@ -18,7 +18,10 @@ import { AMENDMENT_PATHS, EXECUTION_PATHS, PACKAGE_LAYOUT } from '../../../src/e
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import type { JsonObject, JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { SettableCleanupSafetyClock } from '../../support/cleanup/settable-cleanup-safety-clock.ts';
+import { formatUtcMillis } from '../../../src/record-contract/timestamps.ts';
 import { FakeLeaseStore } from '../../support/coordination-lease/fake-lease-store.ts';
+import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
+import { FOREIGN_OWNER } from '../../support/coordination-lease/lease-fixtures.ts';
 import { OfflinePackageStorage } from '../../support/offline-cloud/offline-package-storage.ts';
 import { ScriptedTrialRunner } from './fakes/scripted-trial-runner.ts';
 import { RefusingPackageStorage } from './fakes/refusing-package-storage.ts';
@@ -33,9 +36,8 @@ interface LeakedExecution {
   readonly store: FakeLeaseStore;
 }
 
-// A finished execution whose stack deletion failed once, retaining the provider version: cleanup
-// ends partial, the audit finds the leak, and the real lease is left marked for recovery.
-async function leakedExecution(): Promise<LeakedExecution> {
+// An execution not run yet, over the real lease and its emulated coordination table.
+async function leasedExecution(): Promise<LeakedExecution> {
   let store: FakeLeaseStore | undefined;
   const world = await RunnerWorld.create({
     deps: (built) => {
@@ -53,6 +55,13 @@ async function leakedExecution(): Promise<LeakedExecution> {
     },
   });
   assert.ok(store !== undefined);
+  return { world, store };
+}
+
+// A finished execution whose stack deletion failed once, retaining the provider version: cleanup
+// ends partial, the audit finds the leak, and the real lease is left marked for recovery.
+async function leakedExecution(): Promise<LeakedExecution> {
+  const { world, store } = await leasedExecution();
   const manifest = JSON.parse(new TextDecoder().decode(world.resourceManifestBytes)) as {
     resources: readonly { physical_id: string }[];
   };
@@ -178,6 +187,21 @@ describe('recoverExecution', () => {
     assert.equal(second.value.record.recovered_closure.lease_status, 'released');
   });
 
+  it('keeps a lease the original closure released, whoever holds the lease item now', async () => {
+    const { world, store } = await leasedExecution();
+    const outcome = await world.run();
+    assert.equal(outcome.lease_status, 'released');
+    // The lease item is shared by every execution: a later one acquired it after the release.
+    store.takeOverBy(FOREIGN_OWNER, formatUtcMillis(world.cloud.time.now()), 9);
+    const foreign = store.current();
+    const recovered = await world.drive(recoverExecution(world.admitted, recoveryDeps(world, store)));
+    assert.ok(recovered.ok);
+    assert.equal(recovered.value.record.original_closure.lease_status, 'released');
+    assert.equal(recovered.value.record.recovered_closure.lease_status, 'released', 'recovery never degrades it');
+    assert.deepEqual(recovered.value.record.reasons, []);
+    assert.deepEqual(store.current(), foreign, 'the later execution keeps its lease');
+  });
+
   it('reports a lease it could not repair, and leaves it unverified', async () => {
     const { world, store } = await leakedExecution();
     store.failNextReads(10, 'ProvisionedThroughputExceededException');
@@ -249,6 +273,57 @@ describe('recoverExecution', () => {
     const recovered = await world.drive(recoverExecution(world.admitted, recoveryDeps(world, store, storage)));
     assert.ok(recovered.ok);
     assert.equal(recovered.value.record.recovered_closure.cleanup_status, 'succeeded');
+  });
+
+  // A-05: every package file recovery reads comes from disk; hostile ones degrade what recovery
+  // knows of the original closure, and never throw.
+  it('stays total on package files nested 100,000 levels deep, past the double range or with inherited names', async () => {
+    const { world, store } = await leakedExecution();
+    const hostile = [
+      towerText('mixed', DEEP_NESTING, '1'),
+      '{"schema_version":1e400}',
+      '{"__proto__":{"schema_version":1},"constructor":{"record_type":"cleanup_result"}}',
+    ];
+    const read = new Map<string, readonly JsonValue[]>();
+    for (const path of [
+      EXECUTION_PATHS.cleanupResult,
+      EXECUTION_PATHS.leakAuditResult,
+      EXECUTION_PATHS.coordinationJournal,
+      EXECUTION_PATHS.cleanupJournal,
+    ]) {
+      const closures: JsonValue[] = [];
+      for (const text of hostile) {
+        const storage = new OfflinePackageStorage();
+        await copyPackage(world, storage, [path]);
+        await storage.writeOnce(`${world.admitted.package_directory}/${path}`, new TextEncoder().encode(`${text}\n`));
+        const recovered = await world.drive(recoverExecution(world.admitted, recoveryDeps(world, store, storage)));
+        assert.ok(recovered.ok, `${path} holding hostile bytes is still recovered`);
+        closures.push(recovered.value.record.original_closure as unknown as JsonValue);
+      }
+      read.set(path, closures);
+    }
+    const original = {
+      cleanup_status: 'partial',
+      leak_audit_status: 'leaks_detected',
+      lease_status: 'recovery_required',
+    };
+    const each = (closure: Record<string, string>): readonly JsonValue[] =>
+      hostile.map(() => ({ ...original, ...closure }));
+    assert.deepEqual(read.get(EXECUTION_PATHS.cleanupResult), each({ cleanup_status: 'failed' }));
+    assert.deepEqual(read.get(EXECUTION_PATHS.leakAuditResult), each({ leak_audit_status: 'inconclusive' }));
+    assert.deepEqual(read.get(EXECUTION_PATHS.coordinationJournal), each({ lease_status: 'unverified' }));
+    assert.deepEqual(read.get(EXECUTION_PATHS.cleanupJournal), each({}));
+
+    for (const text of hostile) {
+      const storage = new OfflinePackageStorage();
+      await copyPackage(world, storage, [EXECUTION_PATHS.resourceManifest]);
+      await storage.writeOnce(
+        `${world.admitted.package_directory}/${EXECUTION_PATHS.resourceManifest}`,
+        new TextEncoder().encode(`${text}\n`),
+      );
+      const recovered = await recoverExecution(world.admitted, recoveryDeps(world, store, storage));
+      assert.equal(!recovered.ok && recovered.error[0]?.code, 'RESOURCE_MANIFEST_UNREADABLE');
+    }
   });
 
   it('keeps the lease marked for recovery when the recovered closure is still not clean', async () => {
