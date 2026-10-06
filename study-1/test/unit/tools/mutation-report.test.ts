@@ -134,7 +134,7 @@ describe('parseEquivalences', () => {
 describe('evaluateMutationGate', () => {
   it('passes files whose valid mutants are all killed or timed out', () => {
     const result = evaluateMutationGate(
-      [reported('src/a.ts', ['Killed', 'Killed', 'Timeout', 'CompileError', 'Ignored'])],
+      [reported('src/a.ts', ['Killed', 'Killed', 'Timeout', 'CompileError'])],
       [],
       ['src/a.ts'],
     );
@@ -151,9 +151,34 @@ describe('evaluateMutationGate', () => {
       CompileError: 1,
       RuntimeError: 0,
       Timeout: 1,
-      Ignored: 1,
+      Ignored: 0,
       Pending: 0,
     });
+  });
+
+  it('fails an Ignored mutant unless an approved equivalence covers it (review round 1)', () => {
+    // A `// Stryker disable` comment must not replace the human decision the equivalence file records.
+    const ignored = reported('src/a.ts', ['Killed', 'Ignored']);
+    const unresolved = evaluateMutationGate([ignored], [], ['src/a.ts']);
+    assert.equal(unresolved.passed, false);
+    assert.equal(unresolved.files[0]?.verdict, 'failed');
+    assert.deepEqual(unresolved.files[0].problems, ['Ignored NumericLiteral at 2:17 -> "0"']);
+    assert.equal(unresolved.files[0].valid, 1);
+    const covered = evaluateMutationGate([ignored], [approved], ['src/a.ts']);
+    assert.equal(covered.passed, true);
+    assert.equal(covered.files[0]?.verdict, 'passed');
+    assert.equal(covered.files[0].accepted_equivalent, 1);
+    assert.equal(evaluateMutationGate([ignored], [{ ...approved, approved_by: '' }], []).files[0]?.verdict, 'failed');
+  });
+
+  it('fails a file whose only mutants are Ignored, even a type-only one, instead of calling it unmeasured', () => {
+    const onlyIgnored = evaluateMutationGate([reported('src/a.ts', ['Ignored'])], [], []);
+    assert.equal(onlyIgnored.files[0]?.verdict, 'failed');
+    assert.deepEqual(onlyIgnored.files[0].problems, ['Ignored NumericLiteral at 1:17 -> "0"']);
+    const typeOnly = evaluateMutationGate([reported('src/t.ts', ['Ignored'], 'export type T = 1;')], [], []);
+    assert.equal(typeOnly.files[0]?.verdict, 'failed');
+    const approvedOnly = evaluateMutationGate([reported('src/a.ts', ['Ignored'])], [{ ...approved, line: 1 }], []);
+    assert.equal(approvedOnly.files[0]?.verdict, 'unmeasured');
   });
 
   it('fails survivors, no-coverage, runtime errors and pending mutants', () => {

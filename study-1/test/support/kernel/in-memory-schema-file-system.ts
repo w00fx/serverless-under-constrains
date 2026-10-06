@@ -4,6 +4,13 @@
 
 import type { SchemaFileSystem } from '../../../src/record-contract/schema-registry.ts';
 
+/**
+ * The schema registry's filesystem port in memory, listing names in insertion order.
+ *
+ * @example
+ * const fileSystem = new InMemorySchemaFileSystem().writeFile('/c/group-a/payment.schema.json', '{}');
+ * listSchemaFiles({ schemaRoot: '/c', fileSystem });
+ */
 export class InMemorySchemaFileSystem implements SchemaFileSystem {
   readonly #files = new Map<string, Uint8Array>();
   readonly #directories = new Map<string, string[]>();
@@ -28,11 +35,13 @@ export class InMemorySchemaFileSystem implements SchemaFileSystem {
     return this;
   }
 
+  /** Names in `path` in the order they were written, or undefined for an unknown directory. */
   readonly listDirectory = (path: string): readonly string[] | undefined => {
     const listed = this.#directories.get(path);
     return listed === undefined ? undefined : [...listed];
   };
 
+  /** The bytes of `path`, or undefined; every call is recorded for `readPaths()`. */
   readonly readFile = (path: string): Uint8Array | undefined => {
     this.#reads.push(path);
     return this.#files.get(path);

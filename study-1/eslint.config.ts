@@ -25,6 +25,9 @@ export default defineConfig(
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+      // `import { type X }` with only inline type specifiers still evaluates its module under
+      // verbatimModuleSyntax; type-only imports must be written `import type` (WP-00 review round 1).
+      '@typescript-eslint/no-import-type-side-effects': 'error',
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
       // A leading underscore marks a binding kept on purpose, such as a property removed by rest destructuring.

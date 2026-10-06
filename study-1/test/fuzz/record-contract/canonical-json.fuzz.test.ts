@@ -1,6 +1,9 @@
 // BR-RUA-033/034 fuzz: canonical JSON matches an independent oracle written from the rule text
 // (keys sorted by UTF-16 code units, no whitespace, JSON.stringify for scalars and keys), is
-// idempotent, ignores key order and keeps array order.
+// idempotent, ignores key order and keeps array order. Since WP-00 review round 1, 2% of the
+// oracle and idempotence cases are towers nested 2,500-10,000 levels deep (past the call stack,
+// where the recursive writer threw RangeError), whose canonical text the oracle builds without
+// recursion.
 //
 // Promoted counterexample (seed -1582680199, path 19:2:1:1:7:4:5): `{"0":null,"":[]}`. The first
 // oracle rebuilt objects with sorted keys and called JSON.stringify, but JavaScript enumerates
@@ -14,11 +17,33 @@ import fc from 'fast-check';
 import { canonicalJson, structurallyEqual } from '../../../src/record-contract/canonical-json.ts';
 import { isJsonObject } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
+import { parsedJson, towerText } from '../../support/kernel/deep-json.ts';
+import type { TowerShape } from '../../support/kernel/deep-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
 type MutableJson = null | boolean | number | string | MutableJson[] | { [key: string]: MutableJson };
 
 const jsonValue = fc.jsonValue() as fc.Arbitrary<JsonValue>;
+
+interface CanonicalCase {
+  readonly value: JsonValue;
+  readonly expected: string;
+}
+
+const towerCase: fc.Arbitrary<CanonicalCase> = fc
+  .record({
+    shape: fc.constantFrom<TowerShape>('array', 'object', 'mixed'),
+    depth: fc.integer({ min: 2_500, max: 10_000 }),
+    leaf: fc.jsonValue({ maxDepth: 1 }) as fc.Arbitrary<JsonValue>,
+  })
+  .map(({ shape, depth, leaf }) => ({
+    value: parsedJson(towerText(shape, depth, JSON.stringify(leaf))),
+    expected: towerText(shape, depth, oracleCanonical(leaf)),
+  }));
+const canonicalCase: fc.Arbitrary<CanonicalCase> = fc.oneof(
+  { arbitrary: jsonValue.map((value) => ({ value, expected: oracleCanonical(value) })), weight: 49 },
+  { arbitrary: towerCase, weight: 1 },
+);
 
 function oracleCanonical(value: JsonValue): string {
   if (isJsonObject(value)) {
@@ -55,18 +80,20 @@ function rebuildObjects(value: JsonValue, orderKeys: (keys: string[]) => string[
 describe('canonical JSON fuzz', () => {
   it('equals the oracle written from the serialization rule', () => {
     fc.assert(
-      fc.property(jsonValue, (value) => {
-        assert.equal(canonicalJson(value), oracleCanonical(value));
+      fc.property(canonicalCase, ({ value, expected }) => {
+        assert.equal(canonicalJson(value), expected);
       }),
       fuzzParameters(),
     );
   });
 
-  it('is idempotent through a parse', () => {
+  it('is idempotent through a parse and structurally equal to its parse', () => {
     fc.assert(
-      fc.property(jsonValue, (value) => {
+      fc.property(canonicalCase, ({ value }) => {
         const once = canonicalJson(value);
-        assert.equal(canonicalJson(JSON.parse(once) as JsonValue), once);
+        const reparsed = JSON.parse(once) as JsonValue;
+        assert.equal(canonicalJson(reparsed), once);
+        assert.ok(structurallyEqual(value, reparsed));
       }),
       fuzzParameters(),
     );

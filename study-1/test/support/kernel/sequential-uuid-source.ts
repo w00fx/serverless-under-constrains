@@ -6,6 +6,15 @@ import type { Uuid4, UuidSource } from '../../../src/record-contract/primitives.
 
 const NAMESPACE_PATTERN = /^[0-9a-f]{8}$/;
 
+/**
+ * Issues canonical lowercase UUIDv4 strings in sequence, and can repeat the last one.
+ *
+ * @example
+ * const ids = new SequentialUuidSource('0000000a');
+ * ids.next(); // '0000000a-0000-4000-8000-000000000001'
+ * ids.repeatNext();
+ * ids.next(); // '0000000a-0000-4000-8000-000000000001' again (a forced collision)
+ */
 export class SequentialUuidSource implements UuidSource {
   readonly #namespace: string;
   #counter = 0;
@@ -20,6 +29,7 @@ export class SequentialUuidSource implements UuidSource {
     this.#namespace = namespace;
   }
 
+  /** The next id, or the previous one again after `repeatNext()`. */
   next(): Uuid4 {
     if (this.#repeatPending && this.#last !== undefined) {
       this.#repeatPending = false;
@@ -39,6 +49,7 @@ export class SequentialUuidSource implements UuidSource {
     this.#repeatPending = true;
   }
 
+  /** How many distinct ids were issued (repeats are not counted). */
   issuedCount(): number {
     return this.#counter;
   }

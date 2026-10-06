@@ -15,19 +15,30 @@ export interface MutationRecord {
 
 export type MutationInput = Omit<MutationRecord, 'sequence'>;
 
+/**
+ * One ordered log shared by every fake AWS port; each mutating call appends one entry.
+ *
+ * @example
+ * const log = new RecordingMutationLog();
+ * log.record({ port: 'item-store', operation: 'PutItem', target: 'journal' });
+ * log.firstSequenceOf('item-store', 'PutItem'); // 1
+ */
 export class RecordingMutationLog {
   readonly #records: MutationRecord[] = [];
 
+  /** Appends one mutation and returns it with its 1-based sequence number. */
   record(input: MutationInput): MutationRecord {
     const entry = { ...input, sequence: this.#records.length + 1 };
     this.#records.push(entry);
     return entry;
   }
 
+  /** A copy of every mutation in call order. */
   entries(): readonly MutationRecord[] {
     return [...this.#records];
   }
 
+  /** True when no fake port mutated anything (AC-RUA-014). */
   isEmpty(): boolean {
     return this.#records.length === 0;
   }

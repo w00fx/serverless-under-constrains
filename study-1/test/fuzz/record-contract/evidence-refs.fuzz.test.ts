@@ -13,6 +13,8 @@ import {
 } from '../../../src/record-contract/evidence-refs.ts';
 import type { EvidenceRef, EvidenceRefViolation } from '../../../src/record-contract/evidence-refs.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
+import { deepTowerArbitrary } from '../../support/kernel/deep-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
 const segment = fc.stringMatching(/^[a-z0-9_-][a-z0-9_.-]{0,7}$/);
@@ -127,31 +129,49 @@ describe('AC-RUA-048 evidence reference fuzz', () => {
       'CROSS_PACKAGE_WITHOUT_INDEX_DIGEST',
       'MALFORMED_FIELD',
     ]);
+    // About 3% of containers hold a tower nested 2,500-20,000 levels deep (WP-00 review round 1)
+    // as the container, the list, an entry or a member.
+    const deepPlacements: readonly ((tower: JsonValue) => JsonValue)[] = [
+      (tower): JsonValue => tower,
+      (tower): JsonValue => ({ evidence_refs: tower }),
+      (tower): JsonValue => ({ evidence_refs: [tower] }),
+      (tower): JsonValue => ({ evidence_refs: [{ artifact_path: tower, artifact_sha256: 'a'.repeat(64) }] }),
+    ];
+    const deepContainer = fc
+      .tuple(deepTowerArbitrary(), fc.constantFrom(...deepPlacements))
+      .map(([tower, place]) => place(tower));
     const container = fc.oneof(
-      fc.jsonValue() as fc.Arbitrary<JsonValue>,
-      fc.record(
-        { evidence_refs: fc.array(fc.jsonValue({ maxDepth: 2 })) },
-        { noNullPrototype: true },
-      ) as fc.Arbitrary<JsonValue>,
-      fc.record(
-        {
-          evidence_refs: fc.array(
-            fc.dictionary(
-              fc.constantFrom(
-                'artifact_path',
-                'artifact_sha256',
-                'event_id',
-                'json_pointer',
-                'package_index_sha256',
-                'extra',
+      { arbitrary: fc.jsonValue() as fc.Arbitrary<JsonValue>, weight: 32 },
+      {
+        arbitrary: fc.record(
+          { evidence_refs: fc.array(fc.jsonValue({ maxDepth: 2 })) },
+          { noNullPrototype: true },
+        ) as fc.Arbitrary<JsonValue>,
+        weight: 32,
+      },
+      {
+        arbitrary: fc.record(
+          {
+            evidence_refs: fc.array(
+              fc.dictionary(
+                fc.constantFrom(
+                  'artifact_path',
+                  'artifact_sha256',
+                  'event_id',
+                  'json_pointer',
+                  'package_index_sha256',
+                  'extra',
+                ),
+                fc.jsonValue({ maxDepth: 1 }),
+                { noNullPrototype: true },
               ),
-              fc.jsonValue({ maxDepth: 1 }),
-              { noNullPrototype: true },
             ),
-          ),
-        },
-        { noNullPrototype: true },
-      ) as fc.Arbitrary<JsonValue>,
+          },
+          { noNullPrototype: true },
+        ) as fc.Arbitrary<JsonValue>,
+        weight: 32,
+      },
+      { arbitrary: deepContainer, weight: 3 },
     );
     fc.assert(
       fc.property(
@@ -161,6 +181,8 @@ describe('AC-RUA-048 evidence reference fuzz', () => {
           for (const finding of validateEvidenceRefList(value, 'evidence_refs', location)) {
             assert.ok(closed.has(finding.violation), finding.violation);
             assert.ok(finding.detail.length > 0);
+            // A detail quotes at most QUOTED_JSON_LIMIT characters of any one offending value.
+            assert.ok(finding.detail.length < 2 * QUOTED_JSON_LIMIT + 400, String(finding.detail.length));
           }
         },
       ),

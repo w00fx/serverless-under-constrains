@@ -21,7 +21,15 @@ const UUID = '3f1c2a9e-8b4d-4c1e-9f00-1a2b3c4d5e6f';
 describe('UUIDv4 identifiers', () => {
   it('accepts only canonical lowercase version-4 UUIDs', () => {
     assert.equal(isUuid4(UUID), true);
-    assert.equal(isUuid4(crypto.randomUUID()), true);
+    // Fixed literals, one per RFC 4122 variant digit, keep the case repeatable (review round 1).
+    for (const good of [
+      '00000000-0000-4000-8000-000000000000',
+      'ffffffff-ffff-4fff-9fff-ffffffffffff',
+      '0123abcd-4567-4890-a1b2-c3d4e5f60789',
+      'abcdef01-2345-4678-b9ab-cdef01234567',
+    ]) {
+      assert.equal(isUuid4(good), true, good);
+    }
     for (const bad of [
       UUID.toUpperCase(),
       UUID.replace('-4c1e-', '-1c1e-'),
