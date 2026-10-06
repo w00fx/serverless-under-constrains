@@ -189,7 +189,10 @@ export class ExecutionRunner {
     safety.markActiveEnded();
     await this.#journal.phase('LATE_MONITORING', 'started');
     const monitoring = await this.#monitor.observe(this.#gate);
-    if (monitoring.outcome !== 'complete' || (await this.#noteInterruption()) !== undefined) {
+    // Journaled before the outcome is judged: a shortened window means an interruption no trial
+    // recorded, and without its `trial_interrupted` the summary would read the run as COMPLETED.
+    const interruption = await this.#noteInterruption();
+    if (monitoring.outcome !== 'complete' || interruption !== undefined) {
       await this.#journal.phase('LATE_MONITORING', 'failed', [this.#stopReason()]);
       return 'EMERGENCY';
     }
