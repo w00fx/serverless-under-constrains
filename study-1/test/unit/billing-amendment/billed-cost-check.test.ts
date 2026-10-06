@@ -122,6 +122,22 @@ describe('deriveBilledCostCheck is unverified without a total', () => {
     );
   });
 
+  it('on mixed currencies, naming five of them and counting the rest (A-12)', () => {
+    const currencies = ['USD', 'AUD', 'BRL', 'CAD', 'EUR', 'GBP', 'JPY'];
+    const check = deriveBilledCostCheck(
+      attribution(currencies.map((currency, index) => line(`row:${String(index + 1)}`, '1', currency))),
+      CEILING,
+    );
+    assert.deepEqual(
+      check.reasons.map((reason) => reason.detail),
+      [
+        '6 line(s): row:2 (currency "AUD"), row:3 (currency "BRL"), row:4 (currency "CAD"), row:5 (currency "EUR"), ' +
+          'row:6 (currency "GBP"), and 1 more; expected every attributable line in USD; no exchange-rate conversion is made',
+        'attributable lines use AUD, BRL, CAD, EUR, GBP, and 2 more; expected one currency across attributable lines; no conversion is made',
+      ],
+    );
+  });
+
   it('on attribution reasons, even when the USD lines are below the ceiling', () => {
     const shared: BillingUnverifiedReason = { code: 'SHARED_OR_UNOWNED_CHARGE', subject: 'BR-RUA-047', detail: 'd2' };
     const incomplete: BillingUnverifiedReason = { code: 'INCOMPLETE_ATTRIBUTION', subject: 'BR-RUA-047', detail: 'd1' };

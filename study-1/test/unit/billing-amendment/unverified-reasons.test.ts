@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import {
   REASON_SAMPLE_LIMIT,
   quoteCell,
+  sampledList,
   unverifiedReason,
   unverifiedReasons,
 } from '../../../src/billing-amendment/unverified-reasons.ts';
@@ -58,6 +59,31 @@ describe('unverifiedReasons', () => {
         ['INCOMPLETE_ATTRIBUTION', '1 line(s): row:2 (c2)'],
         ['SHARED_OR_UNOWNED_CHARGE', '2 line(s): row:1 (c1), row:3 (c3)'],
       ],
+    );
+  });
+});
+
+describe('sampledList', () => {
+  it('names every item up to the sample limit', () => {
+    assert.equal(
+      sampledList([], (item: string) => item),
+      '',
+    );
+    assert.equal(
+      sampledList(['a', 'b', 'c', 'd', 'e'], (item) => item.toUpperCase()),
+      'A, B, C, D, E',
+    );
+  });
+
+  it('names the first five items and counts the rest', () => {
+    assert.equal(
+      sampledList(['a', 'b', 'c', 'd', 'e', 'f'], (item) => item),
+      'a, b, c, d, e, and 1 more',
+    );
+    const many = Array.from({ length: 17_576 }, (_, index) => String(index));
+    assert.equal(
+      sampledList(many, (item) => item),
+      '0, 1, 2, 3, 4, and 17571 more',
     );
   });
 });
