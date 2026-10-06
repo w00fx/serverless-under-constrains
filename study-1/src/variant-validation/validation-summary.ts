@@ -132,6 +132,7 @@ function trialEvidence(declared: DeclaredTrial, outcome: ValidationTrialOutcome)
       kind: 'frozen',
       declared,
       oracle_result: outcome.oracle_result,
+      oracle_result_ref: outcome.oracle_result_ref,
       trial_manifest_sha256: outcome.trial_manifest_sha256,
       anchor_problems: outcome.anchor_problems,
     };

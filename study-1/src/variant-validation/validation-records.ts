@@ -8,12 +8,13 @@
 import { boundedJsonText, boundedText } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
 import { err, ok } from '../record-contract/primitives.ts';
-import type { Result } from '../record-contract/primitives.ts';
+import type { Result, Sha256Hex, Uuid4 } from '../record-contract/primitives.ts';
 import type { ExecutionManifest } from '../record-contract/records/group-a/execution_manifest.ts';
 import type { SourceProvenance } from '../record-contract/records/group-a/source_provenance.ts';
 import type { TrialManifest } from '../record-contract/records/group-a/trial_manifest.ts';
 import type { BillingImport } from '../record-contract/records/group-c/billing_import.ts';
 import type { EvidenceIndex } from '../record-contract/records/group-c/evidence_index.ts';
+import type { LateEvidenceAssessment } from '../record-contract/records/group-c/late_evidence_assessment.ts';
 import type { OracleResult } from '../record-contract/records/group-c/oracle_result.ts';
 import type { OracleRevisionCheck } from '../record-contract/records/group-c/oracle_revision_check.ts';
 import type { SafetyAssessment } from '../record-contract/records/group-c/safety_assessment.ts';
@@ -31,6 +32,7 @@ export interface ValidationRecordByType {
   readonly oracle_result: OracleResult;
   readonly evidence_index: EvidenceIndex;
   readonly safety_assessment: SafetyAssessment;
+  readonly late_evidence_assessment: LateEvidenceAssessment;
   readonly validation_summary: ValidationSummary;
   readonly billing_import: BillingImport;
 }
@@ -82,5 +84,49 @@ export function readValidationRecord<K extends ValidationRecordType>(
     );
   }
   // validateAs checked the document against the schema of `recordType`, so it is that record type.
-  return ok({ record: checked.record as unknown as ValidationRecordByType[K], bytes: file.bytes });
+  const record = checked.record as unknown as ValidationRecordByType[K];
+  return ok({ record, bytes: file.bytes });
+}
+
+/** The execution an execution-level record must belong to: this validation, under this manifest. */
+export interface ValidationRecordOwner {
+  readonly variant_validation_id: Uuid4;
+  readonly execution_manifest_sha256: Sha256Hex;
+}
+
+/** The execution-level assessments a validation package holds once, outside its trials. */
+export type OwnedValidationRecordType = 'safety_assessment' | 'late_evidence_assessment';
+
+/**
+ * The execution-level record of `recordType` at `path`, read as `readValidationRecord` reads it,
+ * when it belongs to `owner`; an assessment of another execution or manifest says nothing about
+ * this validation, so it is a problem that names both identities, never a record.
+ *
+ * @example
+ * const late = readOwnValidationRecord(files, 'late-evidence/late-evidence-assessment.json',
+ *   'late_evidence_assessment', { variant_validation_id, execution_manifest_sha256 }, validator);
+ * late.ok ? late.value.late_evidence_status : 'unverified';
+ */
+export function readOwnValidationRecord<K extends OwnedValidationRecordType>(
+  files: readonly PackageFile[],
+  path: string,
+  recordType: K,
+  owner: ValidationRecordOwner,
+  validator: RecordValidator,
+): Result<ValidationRecordByType[K], string> {
+  const read = readValidationRecord(files, path, recordType, validator);
+  if (!read.ok) {
+    return err(read.error);
+  }
+  const { record } = read.value;
+  const validationId = 'variant_validation_id' in record ? record.variant_validation_id : undefined;
+  if (
+    validationId === owner.variant_validation_id &&
+    record.execution_manifest_sha256 === owner.execution_manifest_sha256
+  ) {
+    return ok(record);
+  }
+  return err(
+    `${path} belongs to validation ${validationId ?? 'none (another execution kind)'} under manifest ${record.execution_manifest_sha256}; expected validation ${owner.variant_validation_id} under manifest ${owner.execution_manifest_sha256}`,
+  );
 }

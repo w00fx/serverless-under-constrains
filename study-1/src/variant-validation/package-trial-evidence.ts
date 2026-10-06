@@ -118,6 +118,7 @@ function readTrial(
       kind: 'frozen',
       declared,
       oracle_result: result.value.record,
+      oracle_result_ref: { artifact_path: resultPath, artifact_sha256: resultDigest },
       trial_manifest_sha256: manifestRead.sha256,
       anchor_problems: [...refProblems, ...indexProblems(input, declared, resultPath, resultDigest, deps)],
     },

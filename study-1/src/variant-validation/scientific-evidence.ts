@@ -13,6 +13,7 @@
 import type { Sha256Hex, Uuid4, VariantId } from '../record-contract/primitives.ts';
 import type { DeclaredTrial } from '../record-contract/records/group-a/execution_manifest.ts';
 import type { OracleResult } from '../record-contract/records/group-c/oracle_result.ts';
+import type { ArtifactRef } from '../record-contract/records/group-c/shared-shapes.ts';
 import type { PreservationVerdict, TrialValidity } from '../record-contract/records/group-c/vocabulary.ts';
 import { validationReason } from './validation-reasons.ts';
 import type { ValidationReason, ValidationReasonCode } from './validation-reasons.ts';
@@ -31,6 +32,8 @@ export interface FrozenTrialEvidence {
   readonly kind: 'frozen';
   readonly declared: DeclaredTrial;
   readonly oracle_result: OracleResult;
+  /** Path and digest of the stored oracle-result bytes the result was read from. */
+  readonly oracle_result_ref: ArtifactRef;
   /** Digest of the stored trial-manifest bytes; `undefined` when the trial manifest is missing. */
   readonly trial_manifest_sha256: Sha256Hex | undefined;
   /** Why the result is not covered by its cryptographic anchors; empty when it is. */

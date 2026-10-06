@@ -67,6 +67,11 @@ describe('readPackageTrialEvidence', () => {
         trial.kind === 'frozen' && trial.anchor_problems.length === 0 && trial.trial_manifest_sha256 !== undefined,
       );
     }
+    assert.deepEqual(
+      evidence.trials.map((trial) => (trial.kind === 'frozen' ? trial.oracle_result_ref : undefined)),
+      FIXTURE.summary.trial_results.map((entry) => ('oracle_result_ref' in entry ? entry.oracle_result_ref : null)),
+      'each trial keeps the path and digest of the stored result it was read from',
+    );
   });
 
   it('reports a summary that names another manifest or variant as drift', () => {
@@ -117,6 +122,7 @@ describe('readPackageTrialEvidence', () => {
     const read = treatmentOf(evidence);
     assert.equal(read.kind, 'frozen');
     assert.match(read.anchor_problems[0] ?? '', /the summary's oracle_result_ref names/);
+    assert.deepEqual(read.oracle_result_ref, treatment.oracle_result_ref, 'the stored result, never the claimed one');
   });
 
   it('leaves the trial-manifest digest undefined when the trial manifest cannot be read', () => {
