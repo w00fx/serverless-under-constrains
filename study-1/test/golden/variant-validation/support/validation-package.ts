@@ -2,27 +2,22 @@
 // admission files, the two declared trials (each frozen with its evidence index unless the scenario
 // says it never froze), the closure and late-evidence records, the safety assessment, the summary
 // from `buildValidationSummary` and the final package index from `buildPackageIndex`. The terminal
-// reason comes from `deriveValidationTerminalReason` over the scenario's runner events. Recovery
-// amendments come from `buildAmendment`. Files the verifier never interprets (journals, ledger,
+// reason comes from `deriveValidationTerminalReason` over the scenario's runner events. Files the verifier never interprets (journals, ledger,
 // inputs, cleanup and leak-audit results) are small placeholders the references can pin.
 
-import { serializeRecordFile } from '../../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../../src/record-contract/digests.ts';
 import type { ExecutionIdentity, Sha256Hex, VariantId } from '../../../../src/record-contract/primitives.ts';
-import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import type { DeclaredTrial } from '../../../../src/record-contract/records/group-a/execution_manifest.ts';
 import type { PhaseTransitionRecorded } from '../../../../src/record-contract/records/group-b/phase_transition_recorded.ts';
 import type { LateEvidenceAssessment } from '../../../../src/record-contract/records/group-c/late_evidence_assessment.ts';
 import type { OperationalClosure } from '../../../../src/record-contract/records/group-c/operational_recovery_record.ts';
 import type { SafetyAssessment } from '../../../../src/record-contract/records/group-c/safety_assessment.ts';
 import type { ValidationSummary } from '../../../../src/record-contract/records/group-c/validation_summary.ts';
-import type { AmendmentSnapshot } from '../../../../src/evidence-package/amendment-snapshots.ts';
-import { buildAmendment } from '../../../../src/evidence-package/amendments.ts';
 import { inventoryAssembly } from '../../../../src/evidence-package/assembly-inventory.ts';
 import { buildEvidenceIndex } from '../../../../src/evidence-package/evidence-index.ts';
 import { buildPackageIndex } from '../../../../src/evidence-package/package-index.ts';
 import type { PackageFile } from '../../../../src/evidence-package/package-file-system.ts';
-import { AMENDMENT_PATHS, EXECUTION_PATHS, PACKAGE_LAYOUT } from '../../../../src/evidence-package/package-layout.ts';
+import { EXECUTION_PATHS, PACKAGE_LAYOUT } from '../../../../src/evidence-package/package-layout.ts';
 import { readAdmissionEvidence } from '../../../../src/variant-validation/admission-evidence.ts';
 import { buildValidationSummary } from '../../../../src/variant-validation/validation-summary.ts';
 import type { ValidationTrialOutcome } from '../../../../src/variant-validation/validation-summary.ts';
@@ -30,7 +25,7 @@ import { deriveValidationTerminalReason } from '../../../../src/variant-validati
 import { environmentInput } from '../../../contract/record-contract/group-a/support/input-examples.ts';
 import { validationResourceManifest } from '../../../contract/record-contract/group-a/support/branch-examples.ts';
 import { FIXTURE_DEPS, FIXTURE_VALIDATOR, unwrap } from '../../../support/evidence-package/probe-package-fixtures.ts';
-import { executionEnvelope, uuid } from '../../../support/record-contract/record-builders.ts';
+import { executionEnvelope } from '../../../support/record-contract/record-builders.ts';
 import {
   GOLDEN_VALIDATION_ID,
   controlOracleResult,
@@ -43,6 +38,7 @@ import {
   validated,
 } from './validation-records.ts';
 import type { ControlResultKind, TreatmentResultKind } from './validation-records.ts';
+import { encoder, fileAtPath, jsonFile, placeholder, recordFile, refTo, toJsonValue } from './golden-files.ts';
 
 export const GOLDEN_IDENTITY: ExecutionIdentity = {
   execution_kind: 'VARIANT_VALIDATION',
@@ -85,7 +81,6 @@ export interface GoldenPackage {
   readonly summary: ValidationSummary;
 }
 
-const encoder = new TextEncoder();
 const TRIAL_PLACEHOLDERS = [
   'inputs/payment.json',
   'inputs/approved-decision.json',
@@ -166,6 +161,26 @@ export function validationPackage(overrides: Partial<ValidationScenario> = {}): 
     recordFile(EXECUTION_PATHS.validationSummary, summary),
   ];
   validated(toJsonValue(summary), 'validation_summary', FIXTURE_VALIDATOR);
+  return indexedPackage(content, manifestDigest, summary);
+}
+
+/**
+ * The package with its files replaced by `files` and a final index rebuilt over them, as a writer
+ * that froze exactly these bytes would have written it; the summary stays the one given.
+ *
+ * @example
+ * const altered = reindexed(fixture, withoutFile(fixture.files, 'summary/safety-assessment.json'));
+ */
+export function reindexed(fixture: GoldenPackage, files: readonly PackageFile[]): GoldenPackage {
+  const content = files.filter((file) => file.path !== EXECUTION_PATHS.packageIndex);
+  return indexedPackage(content, fixture.manifest_sha256, fixture.summary);
+}
+
+function indexedPackage(
+  content: readonly PackageFile[],
+  manifestDigest: Sha256Hex,
+  summary: ValidationSummary,
+): GoldenPackage {
   const index = unwrap(buildPackageIndex({ files: content, identity: GOLDEN_IDENTITY, created_at: goldenAt(9100) }));
   const indexFile = recordFile(EXECUTION_PATHS.packageIndex, index);
   return {
@@ -173,76 +188,6 @@ export function validationPackage(overrides: Partial<ValidationScenario> = {}): 
     index_sha256: sha256Hex(indexFile.bytes),
     manifest_sha256: manifestDigest,
     summary,
-  };
-}
-
-/** One amendment of a golden chain, and the digest of its index. */
-export interface GoldenAmendment {
-  readonly snapshot: AmendmentSnapshot;
-  readonly index_sha256: Sha256Hex;
-}
-
-/**
- * An OPERATIONAL_RECOVERY amendment (sequence 1) that repairs the package's closure to `recovered`.
- *
- * @example
- * const recovery = recoveryAmendment(fixture, CLEAN_CLOSURE);
- */
-export function recoveryAmendment(fixture: GoldenPackage, recovered: OperationalClosure): GoldenAmendment {
-  const cleanupResult = placeholder(AMENDMENT_PATHS.cleanupResult);
-  const auditResult = placeholder(AMENDMENT_PATHS.leakAuditResult);
-  const record = {
-    schema_version: 1,
-    record_type: 'operational_recovery_record',
-    variant_validation_id: GOLDEN_VALIDATION_ID,
-    execution_manifest_sha256: fixture.manifest_sha256,
-    recovery_id: uuid(0x1710),
-    original_package_index_sha256: fixture.index_sha256,
-    original_closure: closureOf(fixture.summary),
-    recovered_closure: recovered,
-    steps_run: [3, 4, 11],
-    cleanup_result_ref: refTo(cleanupResult),
-    leak_audit_result_ref: refTo(auditResult),
-    reasons: [],
-    started_at: goldenAt(20_000),
-    completed_at: goldenAt(20_500),
-  } as const;
-  const payload = [cleanupResult, auditResult, recordFile(AMENDMENT_PATHS.operationalRecoveryRecord, record)];
-  validated(toJsonValue(record), 'operational_recovery_record', FIXTURE_VALIDATOR);
-  const built = unwrap(
-    buildAmendment({
-      identity: GOLDEN_IDENTITY,
-      execution_manifest_sha256: fixture.manifest_sha256,
-      amendment_id: uuid(0x1711),
-      amendment_kind: 'OPERATIONAL_RECOVERY',
-      sequence: 1,
-      original_package_index_sha256: fixture.index_sha256,
-      parent_amendment_index_sha256: null,
-      payload,
-      created_at: goldenAt(21_000),
-    }),
-  );
-  const directory = built.directory.slice(built.directory.lastIndexOf('/') + 1);
-  return {
-    snapshot: { directory, files: built.files, special_entries: [] },
-    index_sha256: sha256Hex(serializeRecordFile(built.index)),
-  };
-}
-
-/**
- * The closure a summary froze.
- *
- * @example
- * closureOf(fixture.summary).cleanup_status; // 'partial'
- */
-export function closureOf(summary: ValidationSummary): OperationalClosure {
-  if (summary.cleanup_status === 'not_started' || summary.cleanup_status === 'running') {
-    throw new Error(`golden summary cleanup_status ${summary.cleanup_status}; expected a terminal status`);
-  }
-  return {
-    cleanup_status: summary.cleanup_status,
-    leak_audit_status: summary.leak_audit_status,
-    lease_status: summary.lease_status,
   };
 }
 
@@ -419,33 +364,4 @@ function assemblyFiles(): readonly PackageFile[] {
     ...relative.map((file) => ({ path: `admission/deployment-assembly/${file.path}`, bytes: file.bytes })),
     recordFile(EXECUTION_PATHS.deploymentAssemblyInventory, inventory),
   ];
-}
-
-function fileAtPath(files: readonly PackageFile[], path: string): PackageFile {
-  const file = files.find((candidate) => candidate.path === path);
-  if (file === undefined) {
-    throw new Error(`golden package lacks ${path}; expected the builder to have stored it`);
-  }
-  return file;
-}
-
-function refTo(file: PackageFile): { readonly artifact_path: string; readonly artifact_sha256: Sha256Hex } {
-  return { artifact_path: file.path, artifact_sha256: sha256Hex(file.bytes) };
-}
-
-function placeholder(path: string): PackageFile {
-  const line = `${JSON.stringify({ golden_placeholder: path })}\n`;
-  return { path, bytes: encoder.encode(line) };
-}
-
-function recordFile(path: string, record: object): PackageFile {
-  return { path, bytes: serializeRecordFile(record as StudyRecord) };
-}
-
-function jsonFile(path: string, value: object): PackageFile {
-  return { path, bytes: encoder.encode(`${JSON.stringify(value)}\n`) };
-}
-
-function toJsonValue(record: object): Parameters<typeof validated>[0] {
-  return JSON.parse(JSON.stringify(record)) as Parameters<typeof validated>[0];
 }

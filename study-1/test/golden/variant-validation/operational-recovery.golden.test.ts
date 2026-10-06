@@ -10,7 +10,8 @@ import { describe, it } from 'node:test';
 import type { OperationalClosure } from '../../../src/record-contract/records/group-c/operational_recovery_record.ts';
 import { readPackageSnapshot } from '../../../src/evidence-package/package-snapshot.ts';
 import { unwrap } from '../../support/evidence-package/probe-package-fixtures.ts';
-import { CLEAN_CLOSURE, GOLDEN_IDENTITY, recoveryAmendment, validationPackage } from './support/validation-package.ts';
+import { recoveryAmendment } from './support/validation-amendments.ts';
+import { CLEAN_CLOSURE, GOLDEN_IDENTITY, validationPackage } from './support/validation-package.ts';
 import { verifyGolden } from './support/golden-verification.ts';
 
 interface RecoveryCase {

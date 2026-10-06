@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { VariantValidationVerification } from '../../../src/record-contract/records/group-c/variant_validation_verification.ts';
-import { CLEAN_CLOSURE, recoveryAmendment, validationPackage } from './support/validation-package.ts';
+import { recoveryAmendment } from './support/validation-amendments.ts';
+import { CLEAN_CLOSURE, validationPackage } from './support/validation-package.ts';
 import type { ValidationScenario } from './support/validation-package.ts';
 import { reasonCodesOf, verifyGolden } from './support/golden-verification.ts';
 

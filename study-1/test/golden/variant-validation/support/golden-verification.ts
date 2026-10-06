@@ -14,7 +14,8 @@ import { verifyVariantValidation } from '../../../../src/variant-validation/vari
 import { MemoryPackageFileSystem } from '../../../support/evidence-package/memory-package-file-system.ts';
 import { FIXTURE_DEPS, unwrap } from '../../../support/evidence-package/probe-package-fixtures.ts';
 import { GOLDEN_IDENTITY } from './validation-package.ts';
-import type { GoldenAmendment, GoldenPackage } from './validation-package.ts';
+import type { GoldenPackage } from './validation-package.ts';
+import type { GoldenAmendment } from './validation-amendments.ts';
 import { GOLDEN_VALIDATION_ID, goldenAt } from './validation-records.ts';
 
 /** What a golden verification run leaves behind. */

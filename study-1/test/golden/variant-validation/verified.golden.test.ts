@@ -55,9 +55,14 @@ const VERIFICATION_FIELDS = [
   'variant_validation_id',
 ];
 
-for (const treatment of ['pass', 'fail'] as const) {
+const CASES = [
+  { case_id: 'treatment-pass', treatment: 'pass' },
+  { case_id: 'treatment-fail', treatment: 'fail' },
+] as const;
+
+for (const { case_id: caseId, treatment } of CASES) {
   describe(`AC-RUA-025 control pass, treatment ${treatment}`, () => {
-    it(`treatment-${treatment}`, async () => {
+    it(caseId, async () => {
       const fixture = validationPackage({ control: 'pass', treatment });
       const { summary } = fixture;
       assert.equal(summary.implementation_validation_status, 'verified');
