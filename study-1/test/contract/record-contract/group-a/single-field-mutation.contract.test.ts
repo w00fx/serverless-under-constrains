@@ -151,12 +151,12 @@ function assertRejectedMutation(mutated: JsonValue, describeMutation: () => stri
 }
 
 describe('record validators (group A)', () => {
-  it('generates over every governed leaf and object of the 18 record types', () => {
-    assert.equal(new Set(EXAMPLES.map(({ record }) => record['record_type'])).size, 18);
-    assert.equal(EXAMPLES.length, 33);
-    assert.equal(LEAF_SITES.length, 737);
-    assert.equal(OBJECT_SITES.length, 148);
-    assert.equal(REMOVAL_SITES.length, 328);
+  it('generates over every governed leaf and object of the 19 record types', () => {
+    assert.equal(new Set(EXAMPLES.map(({ record }) => record['record_type'])).size, 19);
+    assert.equal(EXAMPLES.length, 36);
+    assert.equal(LEAF_SITES.length, 755);
+    assert.equal(OBJECT_SITES.length, 151);
+    assert.equal(REMOVAL_SITES.length, 343);
     // Nested sites are generated, not only top-level members.
     assert.ok(LEAF_SITES.some((site) => pointerOf(site.path) === '/timing/provider_client_deadline_ms'));
     assert.ok(LEAF_SITES.some((site) => pointerOf(site.path) === '/files/1/sha256'));

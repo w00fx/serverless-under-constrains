@@ -101,6 +101,18 @@ describe('journal events conform to their record schemas', () => {
     );
   });
 
+  it('provider partition: a causal-root provider_call_rejected without trial identity (A-09)', async () => {
+    const writer = writerFor(executionLevelScope(RUN, 'provider'), 'refund_provider');
+    const appended = await writer.append('provider_call_rejected', {
+      provider_call_id: 'ffffffff-0000-4000-8000-0000000000cc' as Uuid4,
+      reason: 'SCHEMA_INVALID',
+      detail: 'call is "x"; expected a provider_refund_call JSON object',
+    });
+    assertSchemaValid(appended);
+    const event = appendedEvent(appended);
+    assert.equal(Object.hasOwn(event, 'trial_id') || Object.hasOwn(event, 'causation_event_ids'), false);
+  });
+
   it('execution-level file journal: lease_event_recorded', async () => {
     const writer = writerFor(executionLevelScope(RUN, 'execution'), 'coordination_lease');
     assertSchemaValid(

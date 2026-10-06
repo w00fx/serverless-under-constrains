@@ -1,7 +1,9 @@
 // Where a journal event belongs: its execution, its partition, and the item key that orders it
 // (design §9.3). Table partitions are `<execution_id>#<trial_id>` for trials,
 // `<execution_id>#probe` for the transport probe, `<execution_id>#canary` for the controller
-// readiness canary (D-10) and `<execution_id>#warmup` for the provider warm-up (addendum §2).
+// readiness canary (D-10), `<execution_id>#warmup` for the provider warm-up (addendum §2) and
+// `<execution_id>#provider` for the provider calls that name no configured trial (Owner
+// amendment A-09, human decision: AC-RUA-042 journals every rejected call).
 // The `execution` partition names the execution-level file journals (runner, coordination,
 // provisioning, cleanup), which have no table partition. Its key `<execution_id>#execution` is
 // a WP-05 addition, not part of design §9.3: the writer orders file-journal events by item key
@@ -19,6 +21,7 @@ export type JournalPartition =
   | { readonly kind: 'probe' }
   | { readonly kind: 'canary' }
   | { readonly kind: 'warmup' }
+  | { readonly kind: 'provider' }
   | { readonly kind: 'execution' };
 
 /** The identity every event of one writer carries (BR-RUA-033 "execution identity and manifest digest"). */

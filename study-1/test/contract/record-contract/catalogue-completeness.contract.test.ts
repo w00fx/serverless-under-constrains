@@ -1,5 +1,5 @@
-// AC-RUA-046 catalogue completeness (design §6; addendum §3: 90 record types, the 88 catalogue
-// rows plus the warm-up pair): every catalogued record type, across groups A, B and C, has
+// AC-RUA-046 catalogue completeness (design §6; addendum §3; A-09: 91 record types, the 88
+// catalogue rows plus the warm-up pair and the execution-level provider configuration): every catalogued record type, across groups A, B and C, has
 // exactly one JSON Schema in its group directory, one TypeScript interface module in its group,
 // and one canonical example that the real validator accepts as that type. No schema file or
 // record module exists for a name outside the catalogue.
@@ -31,6 +31,8 @@ import { CANONICAL_EXAMPLES as GROUP_C_EXAMPLES } from './group-c/examples/group
 
 const RECORD_MODULE_ROOT = fileURLToPath(new URL('../../../src/record-contract/records/', import.meta.url));
 const SCHEMA_SUFFIX = '.schema.json';
+/** Member names every JSON object inherits; JSON.parse makes each one an own member (A-05, A-07). */
+const INHERITED_NAMES = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf'] as const;
 const SHARED_MODULES: Readonly<Record<string, readonly string[]>> = {
   'group-a': [],
   'group-b': ['record-map.ts', 'shared-shapes.ts', 'vocabulary.ts'],
@@ -70,6 +72,11 @@ const CANONICAL_EXAMPLES: ReadonlyMap<RecordType, () => JsonObject> = new Map<Re
   ),
 ]);
 
+/** `record` with `name` added as an own member, built the way a reader parses untrusted bytes. */
+function withParsedMember(record: JsonObject, name: string): JsonObject {
+  return JSON.parse(`{${JSON.stringify(name)}:1,${JSON.stringify(record).slice(1)}`) as JsonObject;
+}
+
 /** The canonical example of any catalogued type, as the JSON a reader would parse. */
 function canonicalExampleOf(recordType: RecordType): JsonObject {
   const build = CANONICAL_EXAMPLES.get(recordType);
@@ -79,13 +86,13 @@ function canonicalExampleOf(recordType: RecordType): JsonObject {
   return build();
 }
 
-describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
-  it('catalogues 90 distinct record types in three groups', () => {
-    assert.equal(RECORD_TYPES.length, 90);
-    assert.equal(new Set(RECORD_TYPES).size, 90);
+describe('AC-RUA-046 catalogue completeness over all 91 record types', () => {
+  it('catalogues 91 distinct record types in three groups', () => {
+    assert.equal(RECORD_TYPES.length, 91);
+    assert.equal(new Set(RECORD_TYPES).size, 91);
     assert.deepEqual(
       RECORD_GROUPS.map((group) => RECORD_TYPE_GROUPS[group].length),
-      [18, 49, 23],
+      [19, 49, 23],
     );
     assert.deepEqual(
       RECORD_GROUPS.flatMap((group) => RECORD_TYPE_GROUPS[group]),
@@ -120,7 +127,7 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
   });
 
   it('every type has a canonical example the validator accepts as that type', () => {
-    assert.equal(CANONICAL_EXAMPLES.size, 90);
+    assert.equal(CANONICAL_EXAMPLES.size, 91);
     const validator = createRecordValidator();
     for (const recordType of RECORD_TYPES) {
       const example = canonicalExampleOf(recordType);
@@ -147,6 +154,28 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
         checked += 1;
       }
     }
-    assert.equal(checked, 90 * 89);
+    assert.equal(checked, 91 * 90);
+  });
+
+  it('every type rejects each inherited member name added to its canonical example (A-07)', () => {
+    // Ajv's unevaluatedProperties counts inherited names as evaluated; additionalProperties: false
+    // at every root refuses them. The root rejection is the only finding.
+    const validator = createRecordValidator();
+    let checked = 0;
+    for (const recordType of RECORD_TYPES) {
+      const example = canonicalExampleOf(recordType);
+      for (const name of INHERITED_NAMES) {
+        const hostile = withParsedMember(example, name);
+        assert.ok(Object.hasOwn(hostile, name), `${recordType}: ${name} is an own member`);
+        const outcome = validator.validate(hostile);
+        assert.deepEqual(
+          outcome.valid ? [] : outcome.violations.map((violation) => [violation.instance_path, violation.keyword]),
+          [['', 'additionalProperties']],
+          `${recordType} with ${name}`,
+        );
+        checked += 1;
+      }
+    }
+    assert.equal(checked, 91 * INHERITED_NAMES.length);
   });
 });

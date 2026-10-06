@@ -1,17 +1,24 @@
-// Operational faults of the composed provider (design §9.9, D-20): a call it cannot attribute,
-// configure, read, commit or record ends with a thrown ProviderFault (a Lambda function error),
-// never with a business response, and the fault's phase says whether a commit may exist.
+// Operational faults of the composed provider (design §9.9, D-20): a call it cannot journal,
+// read, commit or record ends with a thrown ProviderFault (a Lambda function error), never with
+// a business response, and the fault's phase says whether a commit may exist. A call that names
+// no configured trial is journaled in `<execution_id>#provider` (A-09); it faults only in the
+// documented residual, before the runner wrote the execution configuration.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
   armedTreatmentItem,
+  executionConfigItem,
   field,
   ledgerItems,
   paymentItem,
   providerEventTypes,
   providerHarness,
+  OTHER_RUN_ID,
+  RUN,
+  RUN_ID,
+  seedExecutionConfiguration,
   seedRunTrial,
   treatmentItem,
   TRIAL_PK,
@@ -23,9 +30,10 @@ import { expectProviderFault } from './support/fault-assertions.ts';
 import { failJournalWritesAfter } from './support/provider-run.ts';
 
 const AMBIGUOUS = { kind: 'ambiguous', code: 'TimeoutError', applied: false } as const;
+const NOT_JOURNALED = `; no execution configuration at control ${RUN_ID}#execution/config, so the rejection cannot be journaled (A-09)`;
 
 describe('RefundProvider faults', () => {
-  it('cannot attribute a call without a trial partition, and journals nothing', async () => {
+  it('without the execution configuration, cannot journal an unattributable call (A-09 residual)', async () => {
     const harness = providerHarness();
     seedRunTrial(harness, 'CONTROL');
     const fault = await expectProviderFault(
@@ -33,21 +41,53 @@ describe('RefundProvider faults', () => {
       'UNATTRIBUTABLE_CALL',
       'before_commit',
     );
-    assert.match(fault.message, /\(trial_id absent\); expected a call object with a lowercase UUIDv4 trial_id$/u);
+    assert.equal(
+      fault.message,
+      `UNATTRIBUTABLE_CALL: call names no trial partition (trial_id absent); expected a call object with a lowercase UUIDv4 trial_id${NOT_JOURNALED}`,
+    );
     assert.ok(fault.providerCallId !== undefined);
     const scalar = await expectProviderFault(harness.provider.handle(42), 'UNATTRIBUTABLE_CALL', 'before_commit');
     assert.match(scalar.message, /\(payload number 42\)/u);
     assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
   });
 
-  it('faults CONFIGURATION_MISSING when the partition has no frozen configuration', async () => {
+  it('without the execution configuration, faults CONFIGURATION_MISSING for an unconfigured trial', async () => {
     const harness = providerHarness();
     const fault = await expectProviderFault(
       harness.provider.handle(validCall()),
       'CONFIGURATION_MISSING',
       'before_commit',
     );
-    assert.match(fault.message, new RegExp(`no provider configuration in partition ${TRIAL_PK}`, 'u'));
+    assert.equal(
+      fault.message,
+      `CONFIGURATION_MISSING: no provider configuration in partition ${TRIAL_PK}; expected the frozen config item${NOT_JOURNALED}`,
+    );
+    assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
+  });
+
+  it('faults STATE_UNREADABLE on a failed or undecodable execution configuration read (A-09)', async () => {
+    const failedRead = providerHarness();
+    seedExecutionConfiguration(failedRead);
+    failedRead.store.scriptReadFault('InternalServerError', { table: 'control' });
+    const fault = await expectProviderFault(failedRead.provider.handle(42), 'STATE_UNREADABLE', 'before_commit');
+    assert.equal(
+      fault.message,
+      `STATE_UNREADABLE: control read ${RUN_ID}#execution/config failed: InternalServerError; expected a consistent read of the execution configuration`,
+    );
+
+    const otherExecution = providerHarness();
+    otherExecution.store.seed('control', executionConfigItem(RUN, { run_id: OTHER_RUN_ID }));
+    await expectProviderFault(otherExecution.provider.handle(42), 'STATE_UNREADABLE', 'before_commit');
+    assert.deepEqual(otherExecution.store.itemsIn('experiment_journal'), []);
+  });
+
+  it('faults JOURNAL_STOPPED when an unattributed rejection cannot be recorded (A-09)', async () => {
+    const harness = providerHarness();
+    seedExecutionConfiguration(harness);
+    harness.store.scriptWriteFault(AMBIGUOUS, { operation: 'write' });
+    const fault = await expectProviderFault(harness.provider.handle(42), 'JOURNAL_STOPPED', 'before_commit');
+    assert.match(fault.message, /^JOURNAL_STOPPED: provider_call_rejected not recorded \(/u);
+    assert.deepEqual(ledgerItems(harness, TRIAL_PK), []);
   });
 
   it('faults STATE_UNREADABLE on a failed or undecodable control read', async () => {

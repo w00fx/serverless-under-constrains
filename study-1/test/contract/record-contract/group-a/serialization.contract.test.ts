@@ -29,7 +29,9 @@ import {
   probeExecutionManifest,
   runExecutionManifest,
   succeededResourceManifest,
+  probeProviderExecutionConfiguration,
   trialProviderConfiguration,
+  validationProviderExecutionConfiguration,
   trialRegistration,
   validationExecutionManifest,
 } from './support/manifest-examples.ts';
@@ -84,6 +86,7 @@ const TIMESTAMP_SITES: readonly FieldSite[] = [
   { type: 'resource_manifest', path: ['frozen_at'] },
   { type: 'trial_manifest', path: ['frozen_at'] },
   { type: 'provider_trial_configuration', path: ['written_at'] },
+  { type: 'provider_execution_configuration', path: ['written_at'] },
   { type: 'trial_registration', path: ['registered_at'] },
 ];
 
@@ -104,6 +107,11 @@ const VARIANT_VALIDATION_SITES: readonly FieldSite[] = [
     example: () => inVariantValidation(trialProviderConfiguration()),
   },
   { type: 'trial_registration', path: VARIANT_VALIDATION_ID, example: () => inVariantValidation(trialRegistration()) },
+  {
+    type: 'provider_execution_configuration',
+    path: VARIANT_VALIDATION_ID,
+    example: () => asJson(validationProviderExecutionConfiguration()),
+  },
 ];
 
 const UUID_SITES: readonly FieldSite[] = [
@@ -123,6 +131,12 @@ const UUID_SITES: readonly FieldSite[] = [
   { type: 'resource_manifest', path: ['run_id'] },
   { type: 'trial_manifest', path: ['trial_id'] },
   { type: 'provider_trial_configuration', path: ['trial_id'] },
+  { type: 'provider_execution_configuration', path: ['run_id'] },
+  {
+    type: 'provider_execution_configuration',
+    path: ['transport_probe_id'],
+    example: () => asJson(probeProviderExecutionConfiguration()),
+  },
   { type: 'trial_registration', path: ['trial_id'] },
   // BR-RUA-033 names the variant-validation identity too: every record that can carry it.
   ...VARIANT_VALIDATION_SITES,
@@ -242,7 +256,7 @@ describe('AC-RUA-046 serialization rules (group A)', () => {
   });
 
   it('lowercase UUIDv4', () => {
-    assert.equal(VARIANT_VALIDATION_SITES.length, 7);
+    assert.equal(VARIANT_VALIDATION_SITES.length, 8);
     for (const { type, path, example: branchExample } of UUID_SITES) {
       const example = (branchExample ?? CANONICAL_EXAMPLES[type])();
       for (const value of VALID_UUID4S) {

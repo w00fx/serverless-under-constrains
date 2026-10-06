@@ -1,7 +1,7 @@
 // Every record the provider emits conforms to its catalogue schema (WP-02 group A and group B):
 // each response and each journal event of every provider path goes through the serialization
 // kernel to bytes and back before the real Ajv validator reads it, as ingestion will. The test
-// fixtures the provider reads (calls, configuration, payment, warm-up request) are checked too,
+// fixtures the provider reads (calls, configurations, payment, warm-up request) are checked too,
 // so the suites above exercise schema-valid inputs.
 
 import assert from 'node:assert/strict';
@@ -16,13 +16,17 @@ import { createRecordValidator } from '../../../src/record-contract/schema-regis
 import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
 import {
   cleanupRelease,
+  executionConfigItem,
   MANIFEST_SHA,
   paymentItem,
   PROBE,
   PROBE_ID,
   probeConfigItem,
+  VALIDATION,
   providerHarness,
+  OTHER_TRIAL_ID,
   RUN_ID,
+  seedExecutionConfiguration,
   seedProbe,
   seedRunTrial,
   signalTimeout,
@@ -76,6 +80,9 @@ describe('provider records conform to their schemas', () => {
     assertConforms('provider_refund_call', validProbeCall());
     assertConforms('provider_trial_configuration', withoutKey(trialConfigItem('COMMIT_THEN_TIMEOUT')));
     assertConforms('provider_trial_configuration', withoutKey(probeConfigItem()));
+    for (const execution of [undefined, PROBE, VALIDATION]) {
+      assertConforms('provider_execution_configuration', withoutKey(executionConfigItem(execution)));
+    }
     assertConforms('payment', withoutKey(paymentItem(TRIAL_PK)));
     assertConforms('provider_warmup_request', {
       schema_version: 1,
@@ -94,6 +101,14 @@ describe('provider records conform to their schemas', () => {
     assertConforms('provider_refund_response', await harness.provider.handle(validCall({ currency: 'USD' })));
     assertConforms('provider_refund_response', await harness.provider.handle(validCall({ attempt_id: 'x' })));
     assert.equal(assertJournalConforms(harness), 9);
+  });
+
+  it('unattributed rejections in the execution-level provider partition (A-09)', async () => {
+    const harness = providerHarness();
+    seedExecutionConfiguration(harness);
+    assertConforms('provider_refund_response', await harness.provider.handle(42));
+    assertConforms('provider_refund_response', await harness.provider.handle(validCall({ trial_id: OTHER_TRIAL_ID })));
+    assert.equal(assertJournalConforms(harness), 2);
   });
 
   it('a targeted commit released by the signal, by the deadline and by cleanup', async () => {

@@ -5,7 +5,9 @@ import { describe, it } from 'node:test';
 
 import {
   MUTANT_STATUSES,
+  TYPE_ONLY_EXCLUSION,
   evaluateMutationGate,
+  formatGateReport,
   parseEquivalences,
   parseMutationReport,
 } from '../../../tools/lib/mutation-report.ts';
@@ -278,14 +280,33 @@ describe('evaluateMutationGate', () => {
     assert.deepEqual(unmeasured.files[0].problems, [
       'zero valid mutants in a file with runtime code; zero valid sites is unmeasured',
     ]);
+    // Human decision A-10: a type-only module is excluded, never unmeasured, and is no measured file.
     const typeOnly = evaluateMutationGate(
-      [reported('src/t.ts', [], 'export interface T { readonly a: 1 }')],
+      [reported('src/a.ts', ['Killed']), reported('src/t.ts', [], 'export interface T { readonly a: 1 }')],
       [],
-      runtimeTargets('src/t.ts'),
+      runtimeTargets('src/a.ts'),
     );
     assert.equal(typeOnly.passed, true);
-    assert.equal(typeOnly.files[0]?.verdict, 'type_only');
-    assert.deepEqual(typeOnly.files[0].problems, []);
+    assert.equal(typeOnly.files[1]?.verdict, 'excluded');
+    assert.equal(typeOnly.files[1].exclusion, TYPE_ONLY_EXCLUSION);
+    assert.deepEqual(typeOnly.files[1].problems, []);
+    assert.equal(typeOnly.files[0]?.exclusion, undefined);
+  });
+
+  it('never passes a gate whose every target is excluded by A-10', () => {
+    const onlyExcluded = evaluateMutationGate(
+      [reported('src/t.ts', [], 'export interface T { readonly a: 1 }')],
+      [],
+      [{ path: 'src/u.ts', source: 'export type U = 1;\n' }],
+    );
+    assert.equal(onlyExcluded.passed, false);
+    assert.deepEqual(
+      onlyExcluded.files.map((file) => file.verdict),
+      ['excluded', 'excluded'],
+    );
+    assert.deepEqual(onlyExcluded.problems, [
+      'every target is excluded by human decision A-10; zero measured files is not verification',
+    ]);
   });
 
   it('fails an expected target that the report lacks, and an empty report', () => {
@@ -318,7 +339,8 @@ describe('evaluateMutationGate', () => {
 
   // WP-00 review round 2: Stryker never lists a file without mutants, so an absent type-only
   // target was judged missing while a listed one was type_only, and the gate could not pass.
-  it('judges an absent type-only target exactly as a listed one: type_only, not missing', () => {
+  // Both are now excluded by the human decision A-10.
+  it('judges an absent type-only target exactly as a listed one: excluded, not missing', () => {
     const typeOnlySource =
       "import type { A } from './a.ts';\nexport interface T { readonly a: A }\nexport type U = T;\n";
     const absent = evaluateMutationGate(
@@ -333,10 +355,12 @@ describe('evaluateMutationGate', () => {
     );
     assert.equal(absent.passed, true);
     assert.deepEqual(absent.files[1], listed.files[1]);
-    assert.equal(absent.files[1]?.verdict, 'type_only');
-    // A value export or a side-effect import is runtime code, so its absence is still missing.
+    assert.equal(absent.files[1]?.verdict, 'excluded');
+    // A value export, an `as const` value array or a side-effect import is runtime code, so it
+    // stays a target and its absence is still missing (A-10 excludes only type-only modules).
     for (const source of [
       'export const a = 1;\n',
+      "export const KINDS = ['a', 'b'] as const;\nexport type Kind = (typeof KINDS)[number];\n",
       "import './a.ts';\nexport type T = 1;\n",
       "import { type A } from './a.ts';\n",
     ]) {
@@ -344,5 +368,36 @@ describe('evaluateMutationGate', () => {
       assert.equal(result.passed, false, source);
       assert.equal(result.files[1]?.verdict, 'missing', source);
     }
+  });
+});
+
+describe('formatGateReport', () => {
+  it('prints counts per measured file, the exclusion per excluded file and the A-10 summary', () => {
+    const result = evaluateMutationGate(
+      [reported('src/a.ts', ['Killed', 'Survived', 'Timeout'])],
+      [],
+      [{ path: 'src/t.ts', source: 'export type T = 1;\n' }],
+    );
+    assert.deepEqual(formatGateReport(result), [
+      'failed     src/a.ts: valid 3, killed 1, timeout 1, survived 1 (accepted 0), no-coverage 0, runtime-error 0, compile-error 0, ignored 0, pending 0',
+      '    Survived NumericLiteral at 2:17 -> "0"',
+      '    review timeout: NumericLiteral at 3:17',
+      `excluded   src/t.ts: ${TYPE_ONLY_EXCLUSION}`,
+      'type-only targets excluded by human decision A-10 (no runtime code; never missing or unmeasured): 1',
+      'mutation gate: FAILED over 1 measured file(s), 1 excluded (A-10)',
+    ]);
+  });
+
+  it('prints the gate problems and a passing verdict', () => {
+    const passing = evaluateMutationGate([reported('src/a.ts', ['Killed'])], [], []);
+    assert.deepEqual(formatGateReport(passing).slice(-2), [
+      'type-only targets excluded by human decision A-10 (no runtime code; never missing or unmeasured): 0',
+      'mutation gate: PASSED over 1 measured file(s), 0 excluded (A-10)',
+    ]);
+    assert.deepEqual(formatGateReport(evaluateMutationGate([], [], [])), [
+      'gate: the report holds no target file; zero files is not verification',
+      'type-only targets excluded by human decision A-10 (no runtime code; never missing or unmeasured): 0',
+      'mutation gate: FAILED over 0 measured file(s), 0 excluded (A-10)',
+    ]);
   });
 });

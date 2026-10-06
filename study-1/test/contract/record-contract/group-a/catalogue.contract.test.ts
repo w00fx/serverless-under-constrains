@@ -92,7 +92,7 @@ describe('AC-RUA-046 group A catalogue', () => {
       groupA.map((file) => file.relative_path),
       GROUP_A.map((type) => `group-a/${type}.schema.json`).toSorted(),
     );
-    assert.equal(GROUP_A.length, 18);
+    assert.equal(GROUP_A.length, 19);
   });
 
   it('every group A schema follows the catalogue conventions', () => {

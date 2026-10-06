@@ -145,13 +145,13 @@ const EVENT_WRITERS: Readonly<Partial<Record<GroupBRecordType, readonly string[]
 };
 
 describe('AC-RUA-046 group B catalogue', () => {
-  it('lists exactly the 49 group-B record types, one schema each, within 90 catalogued names', () => {
+  it('lists exactly the 49 group-B record types, one schema each, within 91 catalogued names', () => {
     const listed = listSchemaFiles()
       .filter((file) => file.relative_path.startsWith('group-b/'))
       .map((file) => file.record_type);
     assert.deepEqual(listed, GROUP_B.toSorted());
     assert.equal(GROUP_B.length, 49);
-    assert.equal(RECORD_TYPES.length, 90);
+    assert.equal(RECORD_TYPES.length, 91);
     assert.ok(GROUP_B.includes('provider_warmup_request') && GROUP_B.includes('provider_warmup_completed'));
     const mapMatchesCatalogue: Equal<GroupBRecordType, (typeof RECORD_TYPE_GROUPS)['group-b'][number]> = true;
     assert.equal(mapMatchesCatalogue, true);

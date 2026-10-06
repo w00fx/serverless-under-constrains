@@ -1,5 +1,5 @@
 {
-  "$comment": "Mutation-target policy D-13 (design §15.4), issued by the human on 2026-10-05 (addendum §1). Targets are every src/**/*.ts and tools/lib/**/*.ts minus the thin adapters, Lambda shells, CLI wiring and declarative infra. Globs recompute added or moved logic automatically; tools/generate-quality-config.ts copies them into .c8rc.json and stryker.config.json and --check fails on drift. Shrinking this list needs a human decision.",
+  "$comment": "Mutation-target policy D-13 (design §15.4), issued by the human on 2026-10-05 (addendum §1). Targets are every src/**/*.ts and tools/lib/**/*.ts minus the thin adapters, Lambda shells, CLI wiring and declarative infra. Globs recompute added or moved logic automatically; tools/generate-quality-config.ts copies them into .c8rc.json and stryker.config.json and --check fails on drift. Shrinking this list needs a human decision. Type-only modules (no runtime code under type stripping: interfaces, type aliases, type-only imports and exports) are excluded from the targets by the human decision A-10 of 2026-10-05; type_only records it, and the gate reports them as excluded, never as missing or unmeasured. A file with any runtime statement stays a target.",
   "include": ["src/**/*.ts", "tools/lib/**/*.ts"],
   "exclude": [
     "src/**/aws/**",
@@ -8,5 +8,6 @@
     "src/operator-cli/main.ts",
     "src/operator-cli/composition-root.ts",
     "infra/**"
-  ]
+  ],
+  "type_only": "excluded"
 }

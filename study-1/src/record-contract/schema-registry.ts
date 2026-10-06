@@ -17,7 +17,7 @@ import { parseJsonDocument } from './parsing.ts';
 import type { JsonObject, JsonValue, Sha256Hex } from './primitives.ts';
 import { RECORD_GROUPS, RECORD_TYPE_GROUPS, isRecordType, recordGroupOf } from './record-types.ts';
 import type { RecordType } from './record-types.ts';
-import { findSchemaConventionViolations } from './schema-conventions.ts';
+import { findSchemaConventionViolations, findUnevaluatedPropertiesViolations } from './schema-conventions.ts';
 import { registerRecordVocabulary } from './schema-vocabulary.ts';
 import type { StudyRecord } from './records/index.ts';
 
@@ -195,7 +195,13 @@ function createAjv(fileSystem: SchemaFileSystem, defsPath: string): Ajv2020 {
   if (defs === undefined) {
     throw new Error(`shared definitions ${defsPath} do not exist; expected _defs.schema.json`);
   }
-  ajv.addSchema(readSchemaObject(defsPath, defs));
+  const shared = readSchemaObject(defsPath, defs);
+  // Every record schema references these definitions, so they obey the same closure rule (A-07).
+  const violations = findUnevaluatedPropertiesViolations(shared);
+  if (violations.length > 0) {
+    throw new Error(`shared definitions ${defsPath} break the catalogue conventions: ${violations.join('; ')}`);
+  }
+  ajv.addSchema(shared);
   return ajv;
 }
 

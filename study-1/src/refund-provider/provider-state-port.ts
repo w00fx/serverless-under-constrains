@@ -8,15 +8,17 @@ import type { DurableItemStore, StoredItem, WriteOutcome } from '../durable-stor
 import { STORE_CODES } from '../durable-store/item-store-port.ts';
 import { journalPutAction } from '../event-journal/journal-entry.ts';
 import type { PreparedJournalPut } from '../event-journal/journal-writer.ts';
-import type { JsonValue, Result, Uuid4 } from '../record-contract/primitives.ts';
+import type { ExecutionIdentity, JsonValue, Result, Uuid4 } from '../record-contract/primitives.ts';
 import type { TreatmentItem } from '../record-contract/records/group-b/treatment_state_snapshot.ts';
 import type { TreatmentState } from '../record-contract/records/group-b/vocabulary.ts';
 import type { CommitPlan } from './commit-plan.ts';
 import { commitToken } from './commit-plan.ts';
-import type { PaymentView, ProviderConfigView } from './control-items.ts';
+import type { PaymentView, ProviderConfigView, ProviderExecutionConfigView } from './control-items.ts';
 import {
   CONFIG_SORT_KEY,
   decodeConfigItem,
+  decodeExecutionConfigItem,
+  executionConfigPartition,
   decodePaymentItem,
   decodeTreatmentItem,
   paymentSortKey,
@@ -53,6 +55,8 @@ export interface TreatmentTransition {
 
 export interface ProviderStatePort {
   loadTrialConfiguration(partition: CallPartition): Promise<ProviderStateRead<ProviderConfigView>>;
+  /** The execution `config` item (A-09), read only for a call no trial partition can take. */
+  loadExecutionConfiguration(deployment: ExecutionIdentity): Promise<ProviderStateRead<ProviderExecutionConfigView>>;
   loadPayment(partition: string, paymentId: string): Promise<ProviderStateRead<PaymentView>>;
   loadTreatment(partition: string): Promise<ProviderStateRead<TreatmentItem>>;
   /** TransactWriteItems with ClientRequestToken = `commitToken(plan)` (D-23). */
@@ -72,6 +76,10 @@ export function createProviderStatePort(store: DurableItemStore): ProviderStateP
   return {
     loadTrialConfiguration: (partition) =>
       readControl(store, partition.key, CONFIG_SORT_KEY, (item) => decodeConfigItem(item, partition.trial_id)),
+    loadExecutionConfiguration: (deployment) =>
+      readControl(store, executionConfigPartition(deployment), CONFIG_SORT_KEY, (item) =>
+        decodeExecutionConfigItem(item, deployment),
+      ),
     loadPayment: (partition, paymentId) => readControl(store, partition, paymentSortKey(paymentId), decodePaymentItem),
     loadTreatment: (partition) => readControl(store, partition, TREATMENT_SORT_KEY, decodeTreatmentItem),
     commit: (plan) => store.transact(plan.actions, commitToken(plan)),

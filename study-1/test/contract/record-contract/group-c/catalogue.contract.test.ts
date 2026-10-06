@@ -36,13 +36,13 @@ const RESTATED_DEFINITIONS: readonly (readonly [string, number])[] = [
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 describe('AC-RUA-046 group C catalogue', () => {
-  it('lists exactly the 23 group-C record types, one schema each, within 90 catalogued names', () => {
+  it('lists exactly the 23 group-C record types, one schema each, within 91 catalogued names', () => {
     const listed = listSchemaFiles()
       .filter((file) => file.relative_path.startsWith('group-c/'))
       .map((file) => file.record_type);
     assert.deepEqual(listed, GROUP_C.toSorted());
     assert.equal(GROUP_C.length, 23);
-    assert.equal(RECORD_TYPES.length, 90);
+    assert.equal(RECORD_TYPES.length, 91);
     const mapMatchesCatalogue: Equal<GroupCRecordType, (typeof RECORD_TYPE_GROUPS)['group-c'][number]> = true;
     assert.equal(mapMatchesCatalogue, true);
   });

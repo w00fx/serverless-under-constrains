@@ -5,7 +5,7 @@
 // identity-structure and amount checks accept exactly what `provider_refund_call` accepts, and
 // the warm-up guard accepts exactly what `provider_warmup_request` accepts. The judgement is
 // total over arbitrary JSON, and through the composed provider a call either commits one ledger
-// transaction or none, never anything in between.
+// transaction or none, never anything in between, and every rejection is journaled (A-09).
 //
 // The inputs include what the Lambda runtime's JSON.parse can deliver beyond fc.jsonValue():
 // ±Infinity (from literals such as `1e400`), nesting thousands of levels deep, oversized strings
@@ -44,6 +44,8 @@ import {
   ledgerItems,
   RUN,
   RUN_ID,
+  RUN_PROVIDER_PK,
+  seedExecutionConfiguration,
   seedRunTrial,
   TRIAL_ID,
   TRIAL_MANIFEST_SHA,
@@ -53,6 +55,7 @@ import {
   VALIDATION_ID,
   WARMUP_ID,
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
 
 const validator = createRecordValidator();
 
@@ -211,13 +214,7 @@ const warmupBase = fc.constantFrom<JsonObject>(
     warmup_id: WARMUP_ID,
   },
 );
-// The warm-up oracle, the group-B `provider_warmup_request` schema, still closes its root with
-// `unevaluatedProperties: false` on this branch, which accepts inherited names (Owner amendment
-// A-07; counterexample seed 1709518504 path "0:3": a valid request plus `"hasOwnProperty":0` is
-// schema-valid but refused by the guard). WP-02's A-07 fix (`wip/rua/wp-02-fix-r2`) closes it with
-// `additionalProperties: false`; once it is integrated this differential draws INHERITED_MEMBER_NAMES
-// too. Until then the guard's refusal of those names is pinned by hostile-payloads.integration.
-const nearValidWarmup = nearValid(warmupBase, WARMUP_REQUEST_PROPERTIES, boundaryValue, []);
+const nearValidWarmup = nearValid(warmupBase, WARMUP_REQUEST_PROPERTIES);
 
 function guardAccepts(raw: JsonValue): boolean {
   const shape = guardRefundCallShape(raw);
@@ -227,17 +224,25 @@ function guardAccepts(raw: JsonValue): boolean {
 }
 
 // A payload that declares itself a warm-up is routed to the warm-up and refused there when
-// malformed (seed -667107247, promoted to provider-warmup.integration.test.ts); any other fault
-// means the call named no configured trial partition. Both faults leave the call unjournaled,
-// which AC-RUA-042 does not provide for: WP-07 review round 1 raised it to the Owner as an open
-// plan-consistency item, and this expectation changes with the Owner's decision.
-function assertExpectedFault(fault: ProviderFault, call: JsonObject): void {
-  if (call['record_type'] === 'provider_warmup_request') {
-    assert.equal(fault.code, 'WARMUP_REQUEST_INVALID', fault.message);
+// malformed (seed -667107247, promoted to provider-warmup.integration.test.ts); that is the only
+// fault left once the execution configuration exists. A call that names no configured trial is
+// rejected and journaled in `<execution_id>#provider` (Owner amendment A-09, human decision).
+function assertWarmupFault(fault: ProviderFault, call: JsonObject): void {
+  assert.equal(call['record_type'], 'provider_warmup_request', fault.message);
+  assert.equal(fault.code, 'WARMUP_REQUEST_INVALID', fault.message);
+}
+
+/** A rejection is journaled once: in the call's trial partition, or else at execution level. */
+function assertRejectionJournaled(harness: ProviderHarness, call: JsonObject): void {
+  const inTrial = providerEventTypes(harness, TRIAL_PK);
+  const atExecutionLevel = providerEventTypes(harness, RUN_PROVIDER_PK);
+  if (atExecutionLevel.length === 0) {
+    assert.deepEqual(inTrial, ['provider_call_received', 'provider_call_rejected']);
     return;
   }
-  assert.ok(['UNATTRIBUTABLE_CALL', 'CONFIGURATION_MISSING'].includes(fault.code), fault.message);
   assert.notEqual(call['trial_id'], TRIAL_ID);
+  assert.deepEqual(atExecutionLevel, ['provider_call_rejected']);
+  assert.deepEqual(inTrial, []);
 }
 
 describe('refund-provider acceptance properties', () => {
@@ -287,17 +292,18 @@ describe('refund-provider acceptance properties', () => {
     );
   });
 
-  it('through the provider, a call commits one ledger transaction or none, or faults unattributed', async () => {
+  it('through the provider, a call commits one ledger transaction or none, and every rejection is journaled', async () => {
     await fc.assert(
       fc.asyncProperty(fc.oneof(nearValidCall, hostileCall), async (call) => {
         const harness = providerHarness();
+        seedExecutionConfiguration(harness);
         seedRunTrial(harness, 'CONTROL');
         let response: JsonValue;
         try {
           response = (await harness.provider.handle(call)) as unknown as JsonValue;
         } catch (error) {
           assert.ok(error instanceof ProviderFault, String(error));
-          assertExpectedFault(error, call);
+          assertWarmupFault(error, call);
           assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
           return;
         }
@@ -305,7 +311,7 @@ describe('refund-provider acceptance properties', () => {
         const ledger = ledgerItems(harness, TRIAL_PK);
         if (outcome === 'REJECTED') {
           assert.deepEqual(ledger, []);
-          assert.deepEqual(providerEventTypes(harness, TRIAL_PK), ['provider_call_received', 'provider_call_rejected']);
+          assertRejectionJournaled(harness, call);
           return;
         }
         assert.equal(outcome, 'SUCCEEDED');

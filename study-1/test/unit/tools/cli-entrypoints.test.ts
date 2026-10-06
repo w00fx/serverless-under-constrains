@@ -130,7 +130,7 @@ describe('mutation-gate', () => {
   it('passes a fully killed report and fails a survivor or a missing expected file', () => {
     const root = scratchTree({
       'quality/mutation-equivalences.json': '{"equivalences": []}',
-      'quality/mutation-targets.json': '{"include": ["src/**/*.ts"], "exclude": ["src/b.ts"]}',
+      'quality/mutation-targets.json': '{"include": ["src/**/*.ts"], "exclude": ["src/b.ts"], "type_only": "excluded"}',
       'killed.json': report('Killed'),
       'survived.json': report('Survived'),
       'src/a.ts': '',
@@ -139,7 +139,7 @@ describe('mutation-gate', () => {
     const killed = runTool(root, 'mutation-gate.ts', ['killed.json', '--expect', 'src/a.ts']);
     assert.equal(killed.status, 0, killed.stdout);
     assert.match(killed.stdout, /passed {5}src\/a\.ts: valid 1, killed 1/);
-    assert.match(killed.stdout, /mutation gate: PASSED over 1 file\(s\)/);
+    assert.match(killed.stdout, /mutation gate: PASSED over 1 measured file\(s\), 0 excluded \(A-10\)/);
     const survived = runTool(root, 'mutation-gate.ts', ['survived.json']);
     assert.equal(survived.status, 1);
     assert.match(survived.stdout, /Survived NumericLiteral at 1:18 -> "0"/);
@@ -153,7 +153,8 @@ describe('mutation-gate', () => {
   it('fails a policy target absent from the report without any --expect, and an Ignored mutant', () => {
     const root = scratchTree({
       'quality/mutation-equivalences.json': '{"equivalences": []}',
-      'quality/mutation-targets.json': '{"include": ["src/**/*.ts"], "exclude": ["src/aws/**"]}',
+      'quality/mutation-targets.json':
+        '{"include": ["src/**/*.ts"], "exclude": ["src/aws/**"], "type_only": "excluded"}',
       'killed.json': report('Killed'),
       'ignored.json': report('Ignored'),
       'src/a.ts': '',
@@ -165,10 +166,17 @@ describe('mutation-gate', () => {
     assert.equal(missing.status, 1);
     assert.match(missing.stdout, /missing {4}src\/c\/d\.ts/);
     // A target with no runtime code never appears in a Stryker report (review round 2).
-    assert.match(missing.stdout, /type_only {2}src\/c\/types\.ts/);
-    assert.match(missing.stdout, /type-only targets \(no runtime code, no mutants; verdict awaiting ratification\): 1/);
+    // Human decision A-10: it is excluded, never missing or unmeasured, and not a measured file.
+    assert.match(
+      missing.stdout,
+      /excluded {3}src\/c\/types\.ts: excluded by human decision A-10: a type-only module has no runtime code to mutate/,
+    );
+    assert.match(
+      missing.stdout,
+      /type-only targets excluded by human decision A-10 \(no runtime code; never missing or unmeasured\): 1/,
+    );
     assert.doesNotMatch(missing.stdout, /src\/aws\/adapter\.ts/);
-    assert.match(missing.stdout, /mutation gate: FAILED over 3 file\(s\)/);
+    assert.match(missing.stdout, /mutation gate: FAILED over 2 measured file\(s\), 1 excluded \(A-10\)/);
     const ignored = runTool(root, 'mutation-gate.ts', ['ignored.json']);
     assert.equal(ignored.status, 1);
     assert.match(ignored.stdout, /Ignored NumericLiteral at 1:18 -> "0"/);
