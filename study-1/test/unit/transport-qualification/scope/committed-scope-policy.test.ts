@@ -5,6 +5,7 @@
 // the transport packages. Oracle, reporting and orchestration features stay out of it.
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
@@ -101,5 +102,12 @@ describe('committed transport-scope policy', () => {
       'aws-cdk-lib',
       'esbuild',
     ]);
+  });
+
+  it('carries the digest an auditor reproduces from the committed file bytes (BR-RUA-033)', () => {
+    const bytes = readFileSync(new URL(TRANSPORT_SCOPE_POLICY_PATH, STUDY_ROOT));
+    const parsed = committedPolicy();
+    assert.ok(parsed.ok);
+    assert.equal(parsed.value.policy_sha256, createHash('sha256').update(bytes).digest('hex'));
   });
 });

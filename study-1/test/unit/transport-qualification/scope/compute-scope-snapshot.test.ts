@@ -105,16 +105,18 @@ describe('computeScopeSnapshot', () => {
       configuration_projections: [
         {
           projection_id: 'experiment_core__functions',
+          // A property path the resource does not set is omitted, never null (BR-RUA-033).
           values: [
-            { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': null, 'Properties.Timeout': 30 },
-            { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': null, 'Properties.Timeout': 30 },
+            { 'Properties.MemorySize': 512, 'Properties.Timeout': 30 },
+            { 'Properties.MemorySize': 512, 'Properties.Timeout': 30 },
           ],
         },
         {
           projection_id: 'experiment_core__tables',
+          // canonical order: `],"Properties.StreamSpecification"` sorts before `]}`
           values: [
-            { 'Properties.KeySchema': KEY_SCHEMA, 'Properties.StreamSpecification': null },
             { 'Properties.KeySchema': KEY_SCHEMA, 'Properties.StreamSpecification': { StreamViewType: 'NEW_IMAGE' } },
+            { 'Properties.KeySchema': KEY_SCHEMA },
           ],
         },
       ],
@@ -153,7 +155,7 @@ describe('computeScopeSnapshot', () => {
     assert.notEqual(scopeSnapshotSha256(changed), scopeSnapshotSha256(base));
     assert.deepEqual(changed.configuration_projections[0].values, [
       { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': 1, 'Properties.Timeout': 30 },
-      { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': null, 'Properties.Timeout': 30 },
+      { 'Properties.MemorySize': 512, 'Properties.Timeout': 30 },
     ]);
   });
 

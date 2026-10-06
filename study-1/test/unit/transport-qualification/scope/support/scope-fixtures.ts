@@ -41,8 +41,14 @@ export const SAMPLE_POLICY: TransportScopePolicy = {
   dependencies: ['@scope/declared-dep'],
 };
 
+/** The bytes the fixtures commit for a policy: its canonical record file. */
+export function policyBytes(policy: TransportScopePolicy = SAMPLE_POLICY): Uint8Array {
+  return serializeRecordFile(policy);
+}
+
+/** A loaded policy whose digest is that of the bytes `policyBytes` commits (BR-RUA-033). */
 export function loadedPolicy(policy: TransportScopePolicy = SAMPLE_POLICY): LoadedScopePolicy {
-  return { policy, policy_sha256: sha256Hex(serializeRecordFile(policy)) };
+  return { policy, policy_sha256: sha256Hex(policyBytes(policy)) };
 }
 
 export const SAMPLE_TIMING: ScopeTimingValues = {

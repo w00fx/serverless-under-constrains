@@ -22,6 +22,7 @@ export interface EsbuildBundleInputResolverDeps {
  * const [provider] = await resolver.resolve(['src/refund-provider/refund-provider.handler.ts']);
  */
 export class EsbuildBundleInputResolver implements BundleInputResolver {
+  readonly runtime_properties = SCOPE_BUNDLE_RUNTIME_PROPERTIES;
   readonly #projectRoot: string;
 
   constructor(deps: EsbuildBundleInputResolverDeps) {
@@ -44,10 +45,10 @@ export class EsbuildBundleInputResolver implements BundleInputResolver {
       write: false,
       metafile: true,
       logLevel: 'silent',
-      platform: SCOPE_BUNDLE_RUNTIME_PROPERTIES.bundle_platform,
-      format: SCOPE_BUNDLE_RUNTIME_PROPERTIES.bundle_format,
-      target: SCOPE_BUNDLE_RUNTIME_PROPERTIES.bundle_target,
-      mainFields: SCOPE_BUNDLE_RUNTIME_PROPERTIES.bundle_main_fields.split(','),
+      platform: this.runtime_properties.bundle_platform,
+      format: this.runtime_properties.bundle_format,
+      target: this.runtime_properties.bundle_target,
+      mainFields: this.runtime_properties.bundle_main_fields.split(','),
     });
     return classifyBundleInputs(entryPoint, Object.keys(result.metafile.inputs));
   }

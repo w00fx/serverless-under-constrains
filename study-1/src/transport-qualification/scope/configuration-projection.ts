@@ -1,26 +1,33 @@
 // Configuration projections of the transport scope (BR-RUA-028): for one policy projection,
 // the normalized values of its property paths on every selected template resource.
 //
-// Each selected resource contributes one object mapping every declared property path to its
-// normalized value, or to `null` when the resource does not set it: an absent property is
-// configuration too (for example "no reserved concurrency"), so setting it later is drift.
+// Each selected resource contributes one object mapping every declared property path the
+// resource sets to its normalized value. A path the resource does not set is omitted, never
+// written as `null` (BR-RUA-033 omission rule; design §6.1 null list): an absent property is
+// configuration too (for example "no reserved concurrency"), and setting it later adds a key,
+// which changes the canonical bytes and is drift.
 // The objects are sorted by their canonical form, because the logical ids and some construct
 // paths below the selector embed execution-specific hashes and cannot serve as keys.
+//
+// Selection needs the `aws:cdk:path` metadata (see cfn-template.ts). A resource of the
+// projection's type without it cannot be placed inside or outside the selector, so the
+// projection is refused instead of silently leaving that resource out of the scope.
 
 import { canonicalJson } from '../../record-contract/canonical-json.ts';
 import type { JsonObject, JsonValue, Result, StructuredReason } from '../../record-contract/primitives.ts';
 import type { ConfigurationProjectionPolicy } from '../../record-contract/records/group-a/transport_scope_policy.ts';
 import { compareCodeUnits } from './bundle-inputs.ts';
 import type { CfnTemplate, TemplateResource } from './cfn-template.ts';
-import { listTemplateResources, valueAtPath } from './cfn-template.ts';
+import { CDK_PATH_METADATA_CONTEXT_KEY, listTemplateResources, valueAtPath } from './cfn-template.ts';
 import { normalizeCfnValue } from './cfn-value-normalization.ts';
 import { projectionSelector } from './scope-policy.ts';
 import { scopeViolation } from './scope-reasons.ts';
 
 /**
  * Projects and normalizes one policy projection over a template. Fails when the template is
- * malformed or when the projection selects no resource (a renamed construct must never drop
- * configuration from the scope silently).
+ * malformed, when a resource of the projection's type carries no construct-path metadata, or
+ * when the projection selects no resource (a renamed construct must never drop configuration
+ * from the scope silently). Total: it never throws on a schema-valid projection.
  *
  * @example
  * normalizeConfigurationProjection(template, {
@@ -37,10 +44,19 @@ export function normalizeConfigurationProjection(
     return resources;
   }
   const resourceTypes = new Map(resources.value.map((resource) => [resource.logical_id, resource.type]));
+  const ofType = resources.value.filter((resource) => resource.type === projection.resource_type);
+  const placed = ofType.filter(isPlaced);
+  if (placed.length < ofType.length) {
+    return {
+      ok: false,
+      error: withoutPathMetadata(
+        projection,
+        ofType.filter((resource) => !isPlaced(resource)),
+      ),
+    };
+  }
   const selector = projectionSelector(projection.projection_id);
-  const selected = resources.value.filter(
-    (resource) => resource.type === projection.resource_type && constructPathMatches(resource.construct_path, selector),
-  );
+  const selected = placed.filter((resource) => constructPathMatches(resource.construct_path, selector));
   if (selected.length === 0) {
     return {
       ok: false,
@@ -91,12 +107,33 @@ function projectResource(
   propertyPaths: readonly string[],
   resourceTypes: ReadonlyMap<string, string>,
 ): JsonObject {
-  const projected: Record<string, JsonValue> = {};
+  const entries: [string, JsonValue][] = [];
   for (const path of propertyPaths) {
     const value = valueAtPath(resource.resource, path);
-    projected[path] = value === undefined ? null : normalizeCfnValue(value, resourceTypes);
+    if (value !== undefined) {
+      entries.push([path, normalizeCfnValue(value, resourceTypes)]);
+    }
   }
-  return projected;
+  return Object.fromEntries(entries);
+}
+
+type PlacedResource = TemplateResource & { readonly construct_path: readonly string[] };
+
+function isPlaced(resource: TemplateResource): resource is PlacedResource {
+  return resource.construct_path !== undefined;
+}
+
+function withoutPathMetadata(
+  projection: ConfigurationProjectionPolicy,
+  unplaced: readonly TemplateResource[],
+): StructuredReason {
+  const logicalIds = unplaced.map((resource) => resource.logical_id);
+  return scopeViolation(
+    'TEMPLATE_WITHOUT_PATH_METADATA',
+    `projection ${projection.projection_id}: ${projection.resource_type} resources ${JSON.stringify(logicalIds)} carry no ` +
+      `string Metadata["aws:cdk:path"]; expected a template synthesized with construct path metadata ` +
+      `(the cdk synth default, or context ${CDK_PATH_METADATA_CONTEXT_KEY}=true)`,
+  );
 }
 
 function sortCanonically(values: readonly JsonObject[]): readonly JsonValue[] {

@@ -1,6 +1,7 @@
 // Conformance of FixedBundleInputResolver with EsbuildBundleInputResolver (RK-17): seeded
 // with the closures esbuild computes, it answers the same requests identically, in request
-// order, and both reject an entry point they cannot resolve with esbuild's wording.
+// order, reports the same bundling runtime properties, and both reject an entry point they
+// cannot resolve with esbuild's wording.
 
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
@@ -40,6 +41,10 @@ describe('FixedBundleInputResolver conformance with EsbuildBundleInputResolver',
     });
   }
 
+  it('reports the same bundling runtime properties by default', () => {
+    assert.deepEqual(fixed.runtime_properties, esbuild.runtime_properties);
+  });
+
   it('rejects an unresolvable entry point the same way', async () => {
     const pattern = /Could not resolve "src\/absent\.handler\.ts"/;
     await assert.rejects(esbuild.resolve([PROBE_HANDLER, ABSENT]), pattern);
@@ -59,5 +64,11 @@ describe('FixedBundleInputResolver controls', () => {
     resolver.failWithNonError('plain');
     await assert.rejects(resolver.resolve(['b.ts']), (error: unknown) => error === 'plain');
     assert.deepEqual(resolver.requests(), [[], ['a.ts'], ['b.ts']]);
+  });
+
+  it('reports preset runtime properties', () => {
+    assert.deepEqual(new FixedBundleInputResolver([], { bundle_format: 'cjs' }).runtime_properties, {
+      bundle_format: 'cjs',
+    });
   });
 });

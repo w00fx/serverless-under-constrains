@@ -1,8 +1,10 @@
 // The committed transport-scope policy (BR-RUA-028): critical entry points, conservative
 // source roots, configuration projections, runtime properties and relevant dependencies.
 //
-// Its digest is taken over the canonical record bytes, so a reformatted but identical policy
-// keeps its digest while any change of content is drift (the snapshot carries the digest).
+// Its digest is a file digest: lowercase SHA-256 over the exact committed bytes (BR-RUA-033
+// "File digests are lowercase SHA-256 over the exact stored bytes"; BR-RUA-028 "the policy
+// digest"), so an auditor can reproduce it from the policy file at the admitted commit. A
+// reformat of the policy is therefore scoped drift too, which errs on the conservative side.
 //
 // Projection selector convention: the part of `projection_id` before an optional `__` names
 // a construct. It selects every template resource of `resource_type` whose stack-relative
@@ -11,7 +13,6 @@
 // `AWS::Lambda::Function` under the `ExperimentCore` construct, and the stack name (which
 // carries the execution id) never takes part in the match.
 
-import { serializeRecordFile } from '../../record-contract/canonical-json.ts';
 import { sha256Hex } from '../../record-contract/digests.ts';
 import { parseJsonDocument } from '../../record-contract/parsing.ts';
 import type { Result, Sha256Hex, StructuredReason } from '../../record-contract/primitives.ts';
@@ -24,7 +25,7 @@ export const TRANSPORT_SCOPE_POLICY_PATH = 'src/transport-qualification/transpor
 
 export interface LoadedScopePolicy {
   readonly policy: TransportScopePolicy;
-  /** SHA-256 of the canonical record bytes of the policy. */
+  /** Lowercase SHA-256 over the exact committed bytes of the policy file. */
   readonly policy_sha256: Sha256Hex;
 }
 
@@ -80,7 +81,7 @@ export function parseTransportScopePolicy(
       ),
     };
   }
-  return { ok: true, value: { policy, policy_sha256: sha256Hex(serializeRecordFile(policy)) } };
+  return { ok: true, value: { policy, policy_sha256: sha256Hex(bytes) } };
 }
 
 /**

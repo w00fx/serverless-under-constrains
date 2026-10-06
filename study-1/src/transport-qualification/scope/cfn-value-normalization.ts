@@ -82,11 +82,9 @@ function normalizeCfnObject(value: JsonObject, resourceTypes: ReadonlyMap<string
   if (keys.length === 1 && getAtt !== undefined) {
     return { 'Fn::GetAtt': normalizeGetAtt(getAtt, resourceTypes) };
   }
-  const normalized: Record<string, JsonValue> = {};
-  for (const key of keys) {
-    normalized[key] = normalizeCfnValue(value[key] as JsonValue, resourceTypes);
-  }
-  return normalized;
+  // `Object.fromEntries` defines each key as an own property, so a parsed `__proto__` key stays
+  // a key instead of replacing the prototype of the normalized object.
+  return Object.fromEntries(keys.map((key) => [key, normalizeCfnValue(value[key] as JsonValue, resourceTypes)]));
 }
 
 function normalizeGetAtt(value: JsonValue, resourceTypes: ReadonlyMap<string, string>): JsonValue {

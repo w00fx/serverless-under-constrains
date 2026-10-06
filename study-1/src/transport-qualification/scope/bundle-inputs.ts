@@ -29,6 +29,11 @@ export interface BundleInputs {
  * point or one of its imports cannot be resolved.
  */
 export interface BundleInputResolver {
+  /**
+   * The bundling options this resolver resolves with, as snapshot runtime properties. The
+   * snapshot binds these values, so it records the options that produced its closure.
+   */
+  readonly runtime_properties: Readonly<Record<string, string | number | boolean>>;
   resolve(entryPoints: readonly string[]): Promise<readonly BundleInputs[]>;
 }
 
