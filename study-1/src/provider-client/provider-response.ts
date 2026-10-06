@@ -13,6 +13,11 @@
 // | status other than 200, unparseable payload, or ids not echoed     | MALFORMED_RESPONSE         |
 // | AbortError without a timer win                                    | ABORTED_WITHOUT_DEADLINE   |
 // | any other transport error (throttle, not found, 5xx, network)     | TRANSPORT_ERROR            |
+//
+// The classification is total: every settlement, whatever its bytes, headers or error text,
+// yields a result and never a throw, because it runs after the dispatch boundary and the
+// attempt must still record its outcome. Untrusted values appear in a failure detail only in
+// the bounded renderings of `offending-value.ts`, so the outcome event stays storable.
 
 import { parseJsonDocument } from '../record-contract/parsing.ts';
 import type { StructuredReason, Uuid4 } from '../record-contract/primitives.ts';
@@ -20,6 +25,7 @@ import type { ProviderRefundResponse } from '../record-contract/records/group-a/
 import type { ProviderRejectionReason } from '../record-contract/records/group-b/vocabulary.ts';
 import type { ProviderResponseSettlement, ProviderTransportResult } from './provider-invocation-port.ts';
 import { ABORT_ERROR_NAME } from './provider-invocation-port.ts';
+import { boundedText, describeJsonValue } from './offending-value.ts';
 import { readProviderRefundResponse } from './provider-response-guard.ts';
 
 /** The status of a successful `RequestResponse` invocation (Lambda Invoke API, `StatusCode`). */
@@ -77,7 +83,7 @@ export function parseProviderResponse(
     return failed(
       'FUNCTION_ERROR',
       'BR-RUA-053',
-      `function error ${JSON.stringify(result.function_error)}; expected none`,
+      `function error ${describeJsonValue(result.function_error)}; expected none`,
       diagnostics,
     );
   }
@@ -85,7 +91,7 @@ export function parseProviderResponse(
     return failed(
       'VERSION_MISMATCH',
       'BR-RUA-053',
-      `executed version ${JSON.stringify(result.executed_version)}; expected the invoked version ${JSON.stringify(expected.qualifier)}`,
+      `executed version ${describeJsonValue(result.executed_version)}; expected the invoked version ${describeJsonValue(expected.qualifier)}`,
       diagnostics,
     );
   }
@@ -101,14 +107,14 @@ function classifyTransportError(
     return failed(
       'ABORTED_WITHOUT_DEADLINE',
       'BR-RUA-023',
-      `transport aborted (${message}) without a deadline timer win; expected an abort only after the timer won`,
+      `transport aborted (${boundedText(message)}) without a deadline timer win; expected an abort only after the timer won`,
     );
   }
   const status = httpStatus === undefined ? '' : ` (HTTP ${String(httpStatus)})`;
   return failed(
     'TRANSPORT_ERROR',
     'BR-RUA-053',
-    `transport_error:${errorName}${status}: ${message}; expected a provider response`,
+    `transport_error:${boundedText(errorName)}${status}: ${boundedText(message)}; expected a provider response`,
   );
 }
 
@@ -122,7 +128,7 @@ function classifyPayload(
   }
   const parsed = parseJsonDocument(result.payload);
   if (!parsed.ok) {
-    return malformed(`payload is not a JSON document (${JSON.stringify(parsed.error)})`, diagnostics);
+    return malformed(`payload is not a JSON document (${boundedText(JSON.stringify(parsed.error))})`, diagnostics);
   }
   const response = readProviderRefundResponse(parsed.value);
   if (!response.ok) {
@@ -145,7 +151,7 @@ function classifyPayload(
 function echoMismatch(response: ProviderRefundResponse, expected: ExpectedProviderResponse): string | undefined {
   for (const field of ['attempt_id', 'provider_request_id'] as const) {
     if (response[field] !== expected[field]) {
-      return `${field} ${JSON.stringify(response[field])}; expected the request's ${expected[field]}`;
+      return `${field} ${describeJsonValue(response[field])}; expected the request's ${expected[field]}`;
     }
   }
   return undefined;

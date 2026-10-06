@@ -56,7 +56,10 @@ describe('readProviderRefundResponse', () => {
 
   it('names the first broken rule with the offending value and the expected shape', () => {
     const cases: readonly (readonly [JsonValue, string])[] = [
-      [[1], 'payload [1]; expected a JSON object'],
+      [[1], 'payload an array of length 1; expected a JSON object'],
+      ['refund', 'payload "refund"; expected a JSON object'],
+      [{ ...SUCCEEDED, schema_version: { v: 1, w: 2 } }, 'schema_version an object with 2 key(s); expected 1'],
+      [{ ...SUCCEEDED, record_type: [] }, 'record_type an array of length 0; expected "provider_refund_response"'],
       [null, 'payload null; expected a JSON object'],
       [
         { ...SUCCEEDED, extra: true },
@@ -100,6 +103,56 @@ describe('readProviderRefundResponse', () => {
     for (const [value, expected] of cases) {
       assert.equal(guardError(value), expected, JSON.stringify(value));
     }
+  });
+
+  // Regression (WP-06 review round 1): a recursive JSON.stringify of the offending value threw
+  // RangeError (Maximum call stack size exceeded) at a nesting depth of 10,000, about 20 KB.
+  it('rejects deeply nested payloads and fields without throwing', () => {
+    const deep = JSON.parse(`${'['.repeat(10_000)}${']'.repeat(10_000)}`) as JsonValue;
+    assert.equal(guardError(deep), 'payload an array of length 1; expected a JSON object');
+    assert.equal(guardError({ ...SUCCEEDED, schema_version: deep }), 'schema_version an array of length 1; expected 1');
+    assert.equal(
+      guardError({ ...REJECTED, rejection_reason: deep }),
+      `rejection_reason an array of length 1; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+    );
+    const deepObject = JSON.parse(`${'{"a":'.repeat(10_000)}1${'}'.repeat(10_000)}`) as JsonValue;
+    assert.equal(
+      guardError({ ...SUCCEEDED, outcome: deepObject }),
+      'outcome an object with 1 key(s); expected "SUCCEEDED" or "REJECTED"',
+    );
+  });
+
+  it('repeats at most 256 characters of an offending string', () => {
+    const huge = 'X'.repeat(1_000_000);
+    assert.equal(
+      guardError({ ...REJECTED, rejection_reason: huge }),
+      `rejection_reason "${'X'.repeat(255)}... (1000002 chars); expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+    );
+    assert.equal(
+      guardError({ ...SUCCEEDED, [huge]: 1 }),
+      `property "${'X'.repeat(255)}... (1000002 chars); expected only schema_version, record_type, outcome, provider_call_id, attempt_id, provider_request_id, provider_transaction_id, rejection_reason`,
+    );
+  });
+
+  it('is total over arbitrary JSON values, deep ones included, with bounded errors (property)', () => {
+    const value = fc.oneof(
+      fc.jsonValue({ depthSize: 'xlarge', maxDepth: 50 }) as fc.Arbitrary<JsonValue>,
+      fc
+        .tuple(
+          fc.constantFrom(...Object.keys(SUCCEEDED), 'rejection_reason'),
+          fc.jsonValue() as fc.Arbitrary<JsonValue>,
+        )
+        .map(([name, field]): JsonValue => ({ ...SUCCEEDED, [name]: field })),
+      fc.nat({ max: 20_000 }).map((depth) => JSON.parse(`${'['.repeat(depth)}1${']'.repeat(depth)}`) as JsonValue),
+    );
+    fc.assert(
+      fc.property(value, (candidate) => {
+        const result = readProviderRefundResponse(candidate);
+        // The longest message names one bounded value plus a fixed expected shape.
+        assert.ok(result.ok || result.error.length <= 600, result.ok ? '' : result.error.slice(0, 200));
+      }),
+      fuzzParameters(),
+    );
   });
 
   it('agrees with the Ajv schema on near-valid payloads (property)', () => {

@@ -1,7 +1,8 @@
 // Conformance of ScriptedProviderInvoker (design §12.2): its settlements have exactly the shapes
 // the real Lambda binding produces through a real LambdaClient, the aborted settlement included,
-// and each script settles at its virtual time. `rejectAfter` and `throwBeforeSend` have no real
-// counterpart (the real port never rejects): they emulate a defective port.
+// and each script settles at its virtual time. `rejectAfter`, `throwBeforeSend`,
+// `returnWithoutPromise` and `ignoreAbortForever` have no real counterpart (the real port never
+// rejects and settles at once on abort): they emulate a defective port.
 
 import assert from 'node:assert/strict';
 import { setImmediate as nextMacrotask } from 'node:timers/promises';
@@ -153,5 +154,38 @@ describe('ScriptedProviderInvoker conformance', () => {
       message: `unscripted invoke of attempt ${PROVIDER_CALL.attempt_id}; expected a script queued before the call`,
     });
     assert.equal(invoker.invocations().length, 2);
+  });
+
+  it('ignoreAbortForever never settles, before or after the abort (RK-04 at its worst)', async () => {
+    const { time, invoker } = scripted();
+    invoker.ignoreAbortForever();
+    const controller = new AbortController();
+    let settled = false;
+    void invoker.invoke(PROVIDER_CALL, controller.signal).finally(() => {
+      settled = true;
+    });
+    await time.advanceBy(5_000);
+    controller.abort();
+    await time.advanceBy(600_000);
+    await nextMacrotask();
+    assert.equal(settled, false);
+    assert.equal(time.pendingTimerCount(), 0);
+  });
+
+  it('rejectAfter rejects with any value and returnWithoutPromise returns the bare settlement', async () => {
+    const { time, invoker } = scripted();
+    const nullPrototype: unknown = Object.create(null);
+    invoker.rejectAfter(1n * MS, nullPrototype);
+    invoker.returnWithoutPromise(succeededResponder);
+    const signal = new AbortController().signal;
+    const rejected = invoker.invoke(PROVIDER_CALL, signal).then(
+      () => 'resolved',
+      (reason: unknown) => reason,
+    );
+    await time.advanceBy(1);
+    assert.equal(await rejected, nullPrototype);
+    const bare: unknown = invoker.invoke(PROVIDER_CALL, signal);
+    assert.equal(bare instanceof Promise, false);
+    assert.deepEqual(bare, succeededResponder(PROVIDER_CALL));
   });
 });
