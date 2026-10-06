@@ -30,7 +30,8 @@ import { INTEGRITY_CASES, INTEGRITY_VALIDATOR, caseExport } from './integrity-go
 /** When the late evidence is assessed: after monitoring ended in every case. */
 export const ASSESSED_AT = '2026-10-05T13:50:00.000Z' as UtcMillis;
 const LATE_DIRECTORY = 'late-evidence/';
-const LATE_CHECK_INDEX = 6;
+/** The BR-RUA-031 condition this golden judges, found by its id, never by its position. */
+const LATE_CHECK_ID = 'LATE_EVIDENCE_ACCEPTABLE';
 
 /**
  * Where a late-evidence case departs from its contracts and its expectation; empty when it holds.
@@ -141,5 +142,9 @@ function lateEvidenceAcceptable(assessment: LateEvidenceAssessment): boolean {
     contradictory_amendments: [],
     leak_audit: undefined,
   } as unknown as ComparisonEligibilityInput;
-  return deriveComparisonEligibility(input).checks[LATE_CHECK_INDEX].holds;
+  const late = deriveComparisonEligibility(input).checks.find((check) => check.check_id === LATE_CHECK_ID);
+  if (late === undefined) {
+    throw new Error(`comparison eligibility has no ${LATE_CHECK_ID} check; expected the BR-RUA-031 late condition`);
+  }
+  return late.holds;
 }
