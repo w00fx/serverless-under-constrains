@@ -11,12 +11,16 @@
 // journal writer (source `coordination_lease`, execution partition). A stopped writer keeps
 // its own stop reason (`isStopped()`); the lease logic does not depend on journal success.
 // Operations are serialized, so a heartbeat in flight finishes before finalization starts.
+// The store is used through `guardLeaseStore`: a store call that throws counts as an ambiguous
+// write or a failed read, so `heartbeatOnce` never rejects while the lease is held (the
+// heartbeat loop relies on that to end quietly only once nothing is held).
 
 import type { JournalWriter } from '../event-journal/journal-writer.ts';
 import type { MonotonicClock, StructuredReason, UtcMillis, WallClock } from '../record-contract/primitives.ts';
 import type { LeaseEvent, LeaseHealth } from '../record-contract/records/group-b/vocabulary.ts';
 import type { LeaseStatus } from '../record-contract/records/group-c/vocabulary.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
+import { guardLeaseStore } from './guarded-lease-store.ts';
 import type { HeartbeatJudgement } from './heartbeat-judgement.ts';
 import { judgeHeartbeat } from './heartbeat-judgement.ts';
 import { resolveAcquisition } from './lease-acquisition.ts';
@@ -83,6 +87,7 @@ type HeldPhase = Extract<SessionPhase, { readonly kind: 'held' }>;
  */
 export class LeaseSession {
   readonly #deps: LeaseSessionDeps;
+  readonly #store: LeaseStorePort;
   readonly #events: LeaseEvent[] = [];
   #phase: SessionPhase = { kind: 'idle' };
   #loss: LeaseLoss | undefined;
@@ -90,6 +95,7 @@ export class LeaseSession {
 
   constructor(deps: LeaseSessionDeps) {
     this.#deps = deps;
+    this.#store = guardLeaseStore(deps.store);
   }
 
   /**
@@ -164,7 +170,7 @@ export class LeaseSession {
     }
     const issuedNs = this.#deps.monotonic.nowNs();
     const at = this.#now();
-    const resolution = await resolveAcquisition(this.#deps.store, owner, at, await this.#deps.store.acquire(owner, at));
+    const resolution = await resolveAcquisition(this.#store, owner, at, await this.#store.acquire(owner, at));
     if (resolution.kind === 'acquired') {
       const state: LeaseHealthState = {
         health: 'CONFIRMED',
@@ -200,9 +206,9 @@ export class LeaseSession {
       return this.#settleBeat(held, beforeWrite, reason, reason.detail, undefined);
     }
     const at = this.#now();
-    const outcome = await this.#deps.store.heartbeat(owner, state.lease_version, at);
+    const outcome = await this.#store.heartbeat(owner, state.lease_version, at);
     const attempt = { owner, expected_version: state.lease_version, issued_ns: issuedNs, at };
-    const judged = await judgeHeartbeat(outcome, attempt, this.#deps);
+    const judged = await judgeHeartbeat(outcome, attempt, { store: this.#store, monotonic: this.#deps.monotonic });
     const next = nextLeaseHealth(state, judged.observation);
     const reason = lossReasonOf(state, next, judged);
     return this.#settleBeat(held, next, reason, reason?.detail ?? judged.detail, judged.observed);
@@ -256,7 +262,7 @@ export class LeaseSession {
   ): Promise<void> {
     const state = phase.kind === 'held' ? phase.state : undefined;
     const verdict = await finalizeLease({
-      store: this.#deps.store,
+      store: this.#store,
       owner: phase.owner,
       closure,
       known_version: state?.lease_version ?? 1,
