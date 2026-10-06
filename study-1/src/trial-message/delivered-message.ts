@@ -10,12 +10,20 @@
 // The checks run in a fixed order, and the first failure is the reason:
 // 1. no active registration: `NO_ACTIVE_TRIAL`;
 // 2. not a JSON object: `SCHEMA_INVALID`;
-// 3. an absent correlation field (no execution identity, `trial_id` or digest): `CORRELATION_MISSING`;
-// 4. any other `trial_message` schema violation: `SCHEMA_INVALID`;
-// 5. another run or variant validation: `EXECUTION_IDENTITY_MISMATCH`;
-// 6. another trial-manifest digest, or another `trial_id` under the registered digest:
-//    `TRIAL_MANIFEST_DIGEST_MISMATCH`, because the frozen manifest the digest names fixes the
-//    trial id (the closed reason enum has no trial-id code; WP-20 decision log row 4).
+// 3. a well-formed `run_id` or `variant_validation_id` naming another run or variant validation:
+//    `EXECUTION_IDENTITY_MISMATCH`;
+// 4. a well-formed trial-manifest digest other than the registered one, or a well-formed
+//    `trial_id` other than the registered one: `TRIAL_MANIFEST_DIGEST_MISMATCH`, because the
+//    frozen manifest the digest names fixes the trial id (the closed reason enum has no trial-id
+//    code; WP-20 decision log row 4);
+// 5. an absent correlation field (no execution identity, `trial_id` or digest): `CORRELATION_MISSING`;
+// 6. any other `trial_message` schema violation: `SCHEMA_INVALID`.
+//
+// Steps 3 and 4 come before the schema check: a message that names another execution, digest or
+// trial is a mismatch even when another of its properties breaks the schema. Design D-28 makes
+// exactly those two reasons G2 `invalid` (and a missing correlation G2 `unverified`), and
+// BR-RUA-036 makes every post-publication mismatch leave the trial indeterminate, so reporting
+// such a message as SCHEMA_INVALID would hide the mismatch from the oracle (WP-20 review).
 
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
@@ -28,6 +36,7 @@ import type { TrialRegistration } from '../record-contract/records/group-a/trial
 import type { TrialMessageRejectionReason } from '../record-contract/records/group-b/vocabulary.ts';
 import type { TrialExecutionRef } from './trial-message-fields.ts';
 import {
+  TRIAL_EXECUTION_FIELDS,
   describeParseFailure,
   executionRefOf,
   isNonemptyTrimmed,
@@ -106,11 +115,17 @@ export function validateDeliveredMessage(
   return validateMessageObject(object, registration, identity);
 }
 
+// A message that passes steps 3 to 6 holds well-formed identity fields that equal the
+// registration's, so the schema-valid message is the accepted one.
 function validateMessageObject(
   object: JsonObject,
   registration: TrialRegistration,
   identity: BusinessIdentity,
 ): ConsumerValidation {
+  const mismatch = registrationMismatch(object, registration, identity);
+  if (mismatch !== undefined) {
+    return mismatch;
+  }
   const missing = missingCorrelationField(object);
   if (missing !== undefined) {
     return rejection(
@@ -120,10 +135,9 @@ function validateMessageObject(
     );
   }
   const checked = checkTrialMessage(object);
-  if (!checked.ok) {
-    return rejection('SCHEMA_INVALID', checked.error, identity);
-  }
-  return matchRegistration(checked.value, registration, identity);
+  return checked.ok
+    ? { kind: 'accepted', message: checked.value }
+    : rejection('SCHEMA_INVALID', checked.error, identity);
 }
 
 function missingCorrelationField(object: JsonObject): string | undefined {
@@ -194,39 +208,51 @@ function toTrialMessage(object: JsonObject, execution: TrialExecutionRef): Trial
     : { ...fields, variant_validation_id: execution.id };
 }
 
-function matchRegistration(
-  message: TrialMessage,
+// Steps 3 and 4: only well-formed values count as naming something, so a malformed or absent
+// identity field is left to the correlation and schema steps.
+function registrationMismatch(
+  object: JsonObject,
   registration: TrialRegistration,
   identity: BusinessIdentity,
-): ConsumerValidation {
-  const offered = executionRefOf(message);
+): ConsumerRejection | undefined {
   const expected = executionRefOf(registration);
-  if (offered.field !== expected.field || offered.id !== expected.id) {
+  const offered = foreignExecution(object, expected);
+  if (offered !== undefined) {
     return rejection(
       'EXECUTION_IDENTITY_MISMATCH',
       `message ${offered.field} ${offered.id}; expected ${expected.field} ${expected.id} of the active trial registration`,
       { offending_value: offered.id, expected_value: expected.id, ...identity },
     );
   }
-  if (message.trial_manifest_sha256 !== registration.trial_manifest_sha256) {
+  const digest = ownField(object, 'trial_manifest_sha256');
+  if (isSha256Hex(digest) && digest !== registration.trial_manifest_sha256) {
     return rejection(
       'TRIAL_MANIFEST_DIGEST_MISMATCH',
-      `message trial_manifest_sha256 ${message.trial_manifest_sha256}; expected ${registration.trial_manifest_sha256} of the active trial`,
-      {
-        offending_value: message.trial_manifest_sha256,
-        expected_value: registration.trial_manifest_sha256,
-        ...identity,
-      },
+      `message trial_manifest_sha256 ${digest}; expected ${registration.trial_manifest_sha256} of the active trial`,
+      { offending_value: digest, expected_value: registration.trial_manifest_sha256, ...identity },
     );
   }
-  if (message.trial_id !== registration.trial_id) {
+  const trialId = ownField(object, 'trial_id');
+  if (isUuid4(trialId) && trialId !== registration.trial_id) {
     return rejection(
       'TRIAL_MANIFEST_DIGEST_MISMATCH',
-      `message trial_id ${message.trial_id} under trial_manifest_sha256 ${message.trial_manifest_sha256}; expected trial_id ${registration.trial_id}, which that frozen trial manifest names`,
-      { offending_value: message.trial_id, expected_value: registration.trial_id, ...identity },
+      `message trial_id ${trialId}; expected trial_id ${registration.trial_id}, which the frozen trial manifest ${registration.trial_manifest_sha256} of the active trial names`,
+      { offending_value: trialId, expected_value: registration.trial_id, ...identity },
     );
   }
-  return { kind: 'accepted', message };
+  return undefined;
+}
+
+// The first execution identity the message names that is not the registered one: a well-formed
+// id under the other identity field, or another id under the registered field.
+function foreignExecution(object: JsonObject, expected: TrialExecutionRef): TrialExecutionRef | undefined {
+  for (const field of TRIAL_EXECUTION_FIELDS) {
+    const id = ownField(object, field);
+    if (isUuid4(id) && (field !== expected.field || id !== expected.id)) {
+      return { field, id };
+    }
+  }
+  return undefined;
 }
 
 function readableBusinessIdentity(object: JsonObject): BusinessIdentity {
