@@ -1,6 +1,7 @@
 // BR-RUA-007 equality (design §8.14, AC-RUA-009): every projection compares the same fields across
-// the trials it covers. A difference is declared only when it is one of the manifest's declared
-// variant differences and every trial shows exactly its variant's declared value; any other
+// the trials it covers. A difference is declared only when it lies in a projection whose §8.14 row
+// lists declared variant differences, is one of the manifest's declared variant differences, and
+// every trial shows exactly its variant's declared value; any other
 // difference is `UNDECLARED_DIFFERENCE: <projection>.<field>`, fails the projection and later makes
 // the comparison ineligible. It never touches an individual verdict: this module reads no oracle
 // result.
@@ -50,6 +51,14 @@ const PROJECTION_SCENARIO: Readonly<Partial<Record<EqualityProjectionId, Scenari
   control_parameters: 'CONTROL',
   treatment_parameters: 'COMMIT_THEN_TIMEOUT',
 };
+
+/**
+ * The projections whose design §8.14 row lists declared variant differences (source visibility
+ * timeout; Durable execution strategy). BR-RUA-007 excuses only "differences explicitly declared as
+ * part of the variants' execution strategies", so a manifest declaration never excuses a difference
+ * in financial inputs, scenario parameters, provider, controller or observation settings.
+ */
+const DECLARABLE_PROJECTIONS: ReadonlySet<EqualityProjectionId> = new Set(['message_source_protocol', 'caller_timing']);
 
 /** What a difference lists for a trial that lacks the field, or holds JSON null (values are never null). */
 const ABSENT_VALUE = '<absent>';
@@ -123,8 +132,8 @@ function evaluateProjection(
     }
   }
   const differences = [
-    ...fieldDifferences(sheets, 'common', declared),
-    ...variantGroups(sheets).flatMap((group) => fieldDifferences(group, 'within_variant', declared)),
+    ...fieldDifferences(id, sheets, 'common', declared),
+    ...variantGroups(sheets).flatMap((group) => fieldDifferences(id, group, 'within_variant', declared)),
   ];
   const undeclared = differences
     .filter((difference) => !difference.declared)
@@ -149,6 +158,7 @@ function evaluateProjection(
 // Every field named by any sheet, compared across the given sheets; one difference per field whose
 // values are not all structurally equal.
 function fieldDifferences(
+  id: EqualityProjectionId,
   sheets: readonly CoveredSheet[],
   part: 'common' | 'within_variant',
   declared: readonly DeclaredVariantDifference[],
@@ -163,7 +173,7 @@ function fieldDifferences(
     return [
       {
         field,
-        declared: isDeclaredDifference(field, values, declared),
+        declared: isDeclaredDifference(id, field, values, declared),
         values: values.map(({ trial, value }): ProjectedFieldValue => ({
           trial_id: trial.trial_id,
           value: reported(value),
@@ -179,14 +189,17 @@ function variantGroups(sheets: readonly CoveredSheet[]): readonly (readonly Cove
   return variants.map((variant) => sheets.filter(({ trial }) => trial.variant_id === variant));
 }
 
-// Declared only when the manifest declares this field and each trial shows its variant's declared value.
+// Declared only in a declarable projection, when the manifest declares this field and each trial shows
+// its variant's declared value.
 function isDeclaredDifference(
+  id: EqualityProjectionId,
   field: string,
   values: readonly { readonly trial: ComparisonTrialInputs; readonly value: JsonValue | undefined }[],
   declared: readonly DeclaredVariantDifference[],
 ): boolean {
   const declaration = declared.find((difference) => difference.parameter === field);
   return (
+    DECLARABLE_PROJECTIONS.has(id) &&
     declaration !== undefined &&
     values.every(({ trial, value }) => value !== undefined && structurallyEqual(value, declaration[trial.variant_id]))
   );
