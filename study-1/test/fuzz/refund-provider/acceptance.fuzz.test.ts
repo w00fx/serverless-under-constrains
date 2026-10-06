@@ -6,6 +6,10 @@
 // the warm-up guard accepts exactly what `provider_warmup_request` accepts. The judgement is
 // total over arbitrary JSON, and through the composed provider a call either commits one ledger
 // transaction or none, never anything in between.
+//
+// The inputs include what the Lambda runtime's JSON.parse can deliver beyond fc.jsonValue():
+// ±Infinity (from literals such as `1e400`), nesting thousands of levels deep and oversized
+// strings (WP-07 review round 1: these made the digest and the guards' details throw).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -13,6 +17,8 @@ import { describe, it } from 'node:test';
 import fc from 'fast-check';
 
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
+import { canonicalJson } from '../../../src/record-contract/canonical-json.ts';
+import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import type { AcceptanceContext } from '../../../src/refund-provider/acceptance.ts';
 import { evaluateAcceptance } from '../../../src/refund-provider/acceptance.ts';
@@ -24,6 +30,12 @@ import {
   identityStructureViolation,
   REFUND_CALL_PROPERTIES,
 } from '../../../src/refund-provider/refund-call-shape.ts';
+import {
+  DESCRIBED_VALUE_MAX_CHARS,
+  describeUntrusted,
+  requestDigest,
+  TRUNCATION_MARKER,
+} from '../../../src/refund-provider/untrusted-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 import {
   ATTEMPT_ID,
@@ -59,8 +71,42 @@ const TRIAL_CONTEXT: AcceptanceContext = {
   payment: { payment_id: PAYMENT_ID, currency: 'BRL' },
 };
 
+/** A value nested `depth` levels deep in arrays or single-member objects, built without recursion. */
+function nestedValue(depth: number, asObject: boolean, leaf: JsonValue): JsonValue {
+  let value = leaf;
+  for (let level = 0; level < depth; level += 1) {
+    value = asObject ? { a: value } : [value];
+  }
+  return value;
+}
+
+/** What JSON.parse delivers that fc.jsonValue() never generates: non-finite numbers, deep nesting, long strings. */
+function runtimeOnlyValues(maxDepth: number): fc.Arbitrary<JsonValue> {
+  return fc.oneof(
+    fc.constantFrom<JsonValue>(Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY),
+    fc
+      .tuple(
+        fc.integer({ min: 1_000, max: maxDepth }),
+        fc.boolean(),
+        fc.constantFrom<JsonValue>(1, Number.POSITIVE_INFINITY, 'x', null, []),
+      )
+      .map(([depth, asObject, leaf]) => nestedValue(depth, asObject, leaf)),
+    fc.integer({ min: 1_000, max: 100_000 }).map((length) => 'z'.repeat(length)),
+  );
+}
+
+/** Runtime-only values for the totality properties: nesting up to 20,000 levels. */
+const runtimeOnlyValue = runtimeOnlyValues(20_000);
+// The Ajv oracle of the differential properties is the kernel validator, which itself throws
+// RangeError on a `record_type` nested about 7,000 levels deep (schema-registry.ts
+// `JSON.stringify(declared)`; reported to the Owner as a kernel item by WP-07 review round 1).
+// The differential therefore draws nesting from the depth where its oracle is total; the
+// provider's own totality is held to 20,000 levels by the properties below.
+const oracleSafeRuntimeValue = runtimeOnlyValues(2_000);
+
 /** Values at the edges of every rule the call and warm-up schemas state. */
 const boundaryValue: fc.Arbitrary<JsonValue> = fc.oneof(
+  oracleSafeRuntimeValue,
   fc.constantFrom<JsonValue>(
     0,
     1,
@@ -129,16 +175,22 @@ function mutated(base: JsonObject, mutations: readonly Mutation[]): JsonObject {
   return call;
 }
 
-function nearValid(base: fc.Arbitrary<JsonObject>, properties: readonly string[]): fc.Arbitrary<JsonObject> {
+function nearValid(
+  base: fc.Arbitrary<JsonObject>,
+  properties: readonly string[],
+  values: fc.Arbitrary<JsonValue> = boundaryValue,
+): fc.Arbitrary<JsonObject> {
   const mutation: fc.Arbitrary<Mutation> = fc.tuple(
     fc.constantFrom(...properties, 'unexpected_property'),
-    fc.option(boundaryValue, { nil: undefined, freq: 4 }),
+    fc.option(values, { nil: undefined, freq: 4 }),
   );
   return fc.tuple(base, fc.array(mutation, { maxLength: 3 })).map(([call, mutations]) => mutated(call, mutations));
 }
 
 const callBase = fc.constantFrom(validCall(), validProbeCall(), validCall({ caller_id: 'durable' }));
 const nearValidCall = nearValid(callBase, REFUND_CALL_PROPERTIES);
+/** Near-valid calls whose replaced members also reach the full 20,000-level nesting. */
+const hostileCall = nearValid(callBase, REFUND_CALL_PROPERTIES, fc.oneof(boundaryValue, runtimeOnlyValue));
 const warmupBase = fc.constantFrom<JsonObject>(
   {
     schema_version: 1,
@@ -167,7 +219,9 @@ function guardAccepts(raw: JsonValue): boolean {
 
 // A payload that declares itself a warm-up is routed to the warm-up and refused there when
 // malformed (seed -667107247, promoted to provider-warmup.integration.test.ts); any other fault
-// means the call named no configured trial partition.
+// means the call named no configured trial partition. Both faults leave the call unjournaled,
+// which AC-RUA-042 does not provide for: WP-07 review round 1 raised it to the Owner as an open
+// plan-consistency item, and this expectation changes with the Owner's decision.
 function assertExpectedFault(fault: ProviderFault, call: JsonObject): void {
   if (call['record_type'] === 'provider_warmup_request') {
     assert.equal(fault.code, 'WARMUP_REQUEST_INVALID', fault.message);
@@ -184,7 +238,7 @@ describe('refund-provider acceptance properties', () => {
         assert.equal(
           guardAccepts(call),
           validator.validateAs('provider_refund_call', call).valid,
-          JSON.stringify(call),
+          describeUntrusted(call),
         );
       }),
       fuzzParameters(),
@@ -197,7 +251,7 @@ describe('refund-provider acceptance properties', () => {
         assert.equal(
           guardWarmupRequest(request).ok,
           validator.validateAs('provider_warmup_request', request).valid,
-          JSON.stringify(request),
+          describeUntrusted(request),
         );
       }),
       fuzzParameters(),
@@ -206,24 +260,27 @@ describe('refund-provider acceptance properties', () => {
 
   it('judges any JSON value without throwing, and accepts only schema-valid calls', () => {
     fc.assert(
-      fc.property(fc.oneof(nearValidCall, fc.jsonValue() as fc.Arbitrary<JsonValue>), (raw) => {
-        const decision = evaluateAcceptance(raw, TRIAL_CONTEXT);
-        if (decision.accepted) {
-          assert.equal(validator.validateAs('provider_refund_call', raw).valid, true, JSON.stringify(raw));
-          return;
-        }
-        assert.ok(decision.detail.length > 0);
-        if (!guardRefundCallShape(raw).ok) {
-          assert.ok(['AUTHORIZATION_FAILED', 'SCHEMA_INVALID'].includes(decision.reason), decision.reason);
-        }
-      }),
+      fc.property(
+        fc.oneof(nearValidCall, hostileCall, fc.jsonValue() as fc.Arbitrary<JsonValue>, runtimeOnlyValue),
+        (raw) => {
+          const decision = evaluateAcceptance(raw, TRIAL_CONTEXT);
+          if (decision.accepted) {
+            assert.equal(validator.validateAs('provider_refund_call', raw).valid, true, describeUntrusted(raw));
+            return;
+          }
+          assert.ok(decision.detail.length > 0);
+          if (!guardRefundCallShape(raw).ok) {
+            assert.ok(['AUTHORIZATION_FAILED', 'SCHEMA_INVALID'].includes(decision.reason), decision.reason);
+          }
+        },
+      ),
       fuzzParameters(),
     );
   });
 
   it('through the provider, a call commits one ledger transaction or none, or faults unattributed', async () => {
     await fc.assert(
-      fc.asyncProperty(nearValidCall, async (call) => {
+      fc.asyncProperty(fc.oneof(nearValidCall, hostileCall), async (call) => {
         const harness = providerHarness();
         seedRunTrial(harness, 'CONTROL');
         let response: JsonValue;
@@ -245,6 +302,32 @@ describe('refund-provider acceptance properties', () => {
         assert.equal(outcome, 'SUCCEEDED');
         assert.equal(ledger.length, 1);
         assert.equal(validator.validateAs('provider_refund_call', call).valid, true);
+      }),
+      fuzzParameters(),
+    );
+  });
+
+  it('digests any parsed payload without throwing, equal to the canonical-JSON digest when finite', () => {
+    fc.assert(
+      fc.property(fc.jsonValue() as fc.Arbitrary<JsonValue>, (raw) => {
+        assert.equal(requestDigest(raw), sha256Hex(new TextEncoder().encode(canonicalJson(raw))));
+      }),
+      fuzzParameters(),
+    );
+    fc.assert(
+      fc.property(fc.oneof(runtimeOnlyValue, hostileCall), (raw) => {
+        assert.match(requestDigest(raw), /^[0-9a-f]{64}$/u);
+      }),
+      fuzzParameters(),
+    );
+  });
+
+  it('describes any parsed value within the bound', () => {
+    fc.assert(
+      fc.property(fc.oneof(runtimeOnlyValue, fc.jsonValue() as fc.Arbitrary<JsonValue>, hostileCall), (raw) => {
+        const described = describeUntrusted(raw);
+        assert.ok(described.length <= 'boolean '.length + DESCRIBED_VALUE_MAX_CHARS + TRUNCATION_MARKER.length);
+        assert.equal(described.isWellFormed(), true);
       }),
       fuzzParameters(),
     );

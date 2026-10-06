@@ -13,7 +13,7 @@
 
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { describeJson, isJsonObject } from '../record-contract/json-value.ts';
+import { isJsonObject } from '../record-contract/json-value.ts';
 import type {
   ExecutionIdentity,
   JsonObject,
@@ -25,6 +25,7 @@ import type {
 import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
 import { PROVIDER_CALLER_IDS } from '../record-contract/records/group-a/provider_refund_call.ts';
 import { parseExecutionIdentityFields } from './execution-identity-fields.ts';
+import { describeUntrusted, excerptUntrusted } from './untrusted-json.ts';
 
 /** Every property the call schema declares; any other property makes the call schema-invalid. */
 export const REFUND_CALL_PROPERTIES = [
@@ -83,7 +84,7 @@ export interface RefundCallShape {
  */
 export function guardRefundCallShape(raw: JsonValue): Result<RefundCallShape, string> {
   if (!isJsonObject(raw)) {
-    return failure(`call is ${describeJson(raw)}; expected a provider_refund_call JSON object`);
+    return failure(`call is ${describeUntrusted(raw)}; expected a provider_refund_call JSON object`);
   }
   const problem = envelopeProblem(raw) ?? businessFieldProblem(raw);
   if (problem !== undefined) {
@@ -110,12 +111,12 @@ export function guardRefundCallShape(raw: JsonValue): Result<RefundCallShape, st
 export function identityStructureViolation(shape: RefundCallShape): string | undefined {
   for (const field of ['attempt_id', 'provider_request_id'] as const) {
     if (!isUuid4(shape[field])) {
-      return `${field} ${JSON.stringify(shape[field])}; expected a lowercase RFC 4122 version-4 UUID`;
+      return `${field} ${excerptUntrusted(shape[field])}; expected a lowercase RFC 4122 version-4 UUID`;
     }
   }
   for (const field of ['refund_request_id', 'payment_id'] as const) {
     if (!NONEMPTY_TRIMMED_PATTERN.test(shape[field])) {
-      return `${field} ${JSON.stringify(shape[field])}; expected a string that is non-empty after trimming`;
+      return `${field} ${excerptUntrusted(shape[field])}; expected a string that is non-empty after trimming`;
     }
   }
   return undefined;
@@ -137,19 +138,19 @@ export function amountViolation(shape: RefundCallShape): string | undefined {
 function envelopeProblem(raw: JsonObject): string | undefined {
   const unknown = Object.keys(raw).find((key) => !(REFUND_CALL_PROPERTIES as readonly string[]).includes(key));
   if (unknown !== undefined) {
-    return `property ${JSON.stringify(unknown)} is not part of provider_refund_call; expected only ${REFUND_CALL_PROPERTIES.join(', ')}`;
+    return `property ${excerptUntrusted(unknown)} is not part of provider_refund_call; expected only ${REFUND_CALL_PROPERTIES.join(', ')}`;
   }
   if (raw['schema_version'] !== 1) {
-    return `schema_version is ${describeJson(raw['schema_version'])}; expected the number 1`;
+    return `schema_version is ${describeUntrusted(raw['schema_version'])}; expected the number 1`;
   }
   if (raw['record_type'] !== 'provider_refund_call') {
-    return `record_type is ${describeJson(raw['record_type'])}; expected "provider_refund_call"`;
+    return `record_type is ${describeUntrusted(raw['record_type'])}; expected "provider_refund_call"`;
   }
   if (!(PROVIDER_CALLER_IDS as readonly JsonValue[]).includes(raw['caller_id'] ?? null)) {
-    return `caller_id is ${describeJson(raw['caller_id'])}; expected one of ${PROVIDER_CALLER_IDS.join(', ')}`;
+    return `caller_id is ${describeUntrusted(raw['caller_id'])}; expected one of ${PROVIDER_CALLER_IDS.join(', ')}`;
   }
   if (!isSha256Hex(raw['execution_manifest_sha256'])) {
-    return `execution_manifest_sha256 is ${describeJson(raw['execution_manifest_sha256'])}; expected 64 lowercase hex digits`;
+    return `execution_manifest_sha256 is ${describeUntrusted(raw['execution_manifest_sha256'])}; expected 64 lowercase hex digits`;
   }
   return undefined;
 }
@@ -157,14 +158,14 @@ function envelopeProblem(raw: JsonObject): string | undefined {
 function businessFieldProblem(raw: JsonObject): string | undefined {
   const missing = STRING_FIELDS.find((field) => typeof raw[field] !== 'string');
   if (missing !== undefined) {
-    return `${missing} is ${describeJson(raw[missing])}; expected a string`;
+    return `${missing} is ${describeUntrusted(raw[missing])}; expected a string`;
   }
   if (typeof raw['amount_minor'] !== 'number') {
-    return `amount_minor is ${describeJson(raw['amount_minor'])}; expected a JSON number`;
+    return `amount_minor is ${describeUntrusted(raw['amount_minor'])}; expected a JSON number`;
   }
   const currency = raw['currency'];
   if (typeof currency !== 'string' || !CURRENCY_PATTERN.test(currency)) {
-    return `currency is ${describeJson(currency)}; expected three uppercase ASCII letters`;
+    return `currency is ${describeUntrusted(currency)}; expected three uppercase ASCII letters`;
   }
   return undefined;
 }
@@ -178,18 +179,18 @@ function trialOf(raw: JsonObject, execution: ExecutionIdentity): Result<CallTria
   }
   const trialId = raw['trial_id'];
   if (!isUuid4(trialId)) {
-    return failure(`trial_id is ${describeJson(trialId)}; expected a lowercase RFC 4122 version-4 UUID`);
+    return failure(`trial_id is ${describeUntrusted(trialId)}; expected a lowercase RFC 4122 version-4 UUID`);
   }
   const digest = raw['trial_manifest_sha256'];
   if (!isSha256Hex(digest)) {
-    return failure(`trial_manifest_sha256 is ${describeJson(digest)}; expected 64 lowercase hex digits`);
+    return failure(`trial_manifest_sha256 is ${describeUntrusted(digest)}; expected 64 lowercase hex digits`);
   }
   return { ok: true, value: { trial_id: trialId, trial_manifest_sha256: digest } };
 }
 
 function probeBranch(raw: JsonObject): Result<undefined, string> {
   if (raw['caller_id'] !== 'probe') {
-    return failure(`caller_id is ${describeJson(raw['caller_id'])} on a transport-probe call; expected "probe"`);
+    return failure(`caller_id is ${describeUntrusted(raw['caller_id'])} on a transport-probe call; expected "probe"`);
   }
   const trialField = (['trial_id', 'trial_manifest_sha256'] as const).find((field) => Object.hasOwn(raw, field));
   if (trialField !== undefined) {

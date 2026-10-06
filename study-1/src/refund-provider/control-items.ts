@@ -10,7 +10,6 @@
 
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { describeJson } from '../record-contract/json-value.ts';
 import type { JsonValue, Result, Scenario, Sha256Hex, Uuid4 } from '../record-contract/primitives.ts';
 import { SCENARIOS } from '../record-contract/primitives.ts';
 import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
@@ -20,6 +19,7 @@ import type { SafetyReleaseCause, TreatmentState } from '../record-contract/reco
 import { SAFETY_RELEASE_CAUSES, TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.ts';
 import type { StoredItem } from '../durable-store/item-store-port.ts';
 import type { CallTrial } from './refund-call-shape.ts';
+import { describeUntrusted } from './untrusted-json.ts';
 
 export const CONFIG_SORT_KEY = 'config';
 export const TREATMENT_SORT_KEY = 'treatment';
@@ -85,19 +85,19 @@ export function decodeConfigItem(
   const scenario = item['scenario'];
   const paymentId = item['payment_id'];
   if (!isSha256Hex(digest)) {
-    return refuse(item, `execution_manifest_sha256 ${describeJson(digest)}; expected 64 lowercase hex digits`);
+    return refuse(item, `execution_manifest_sha256 ${describeUntrusted(digest)}; expected 64 lowercase hex digits`);
   }
   if (!isOneOf(PROVIDER_CALLER_IDS, caller)) {
     return refuse(
       item,
-      `registered_caller_id ${describeJson(caller)}; expected one of ${PROVIDER_CALLER_IDS.join(', ')}`,
+      `registered_caller_id ${describeUntrusted(caller)}; expected one of ${PROVIDER_CALLER_IDS.join(', ')}`,
     );
   }
   if (!isOneOf(SCENARIOS, scenario)) {
-    return refuse(item, `scenario ${describeJson(scenario)}; expected one of ${SCENARIOS.join(', ')}`);
+    return refuse(item, `scenario ${describeUntrusted(scenario)}; expected one of ${SCENARIOS.join(', ')}`);
   }
   if (typeof paymentId !== 'string') {
-    return refuse(item, `payment_id ${describeJson(paymentId)}; expected a string`);
+    return refuse(item, `payment_id ${describeUntrusted(paymentId)}; expected a string`);
   }
   const view = { execution_manifest_sha256: digest, registered_caller_id: caller, scenario, payment_id: paymentId };
   return { ok: true, value: partitionTrial === undefined ? view : { ...view, trial: trialOf(item, partitionTrial) } };
@@ -113,10 +113,10 @@ export function decodePaymentItem(item: StoredItem): Result<PaymentView, string>
   const paymentId = item['payment_id'];
   const currency = item['currency'];
   if (typeof paymentId !== 'string' || item.sk !== paymentSortKey(paymentId)) {
-    return refuse(item, `payment_id ${describeJson(paymentId)}; expected the string that names the item key`);
+    return refuse(item, `payment_id ${describeUntrusted(paymentId)}; expected the string that names the item key`);
   }
   if (typeof currency !== 'string') {
-    return refuse(item, `currency ${describeJson(currency)}; expected a string`);
+    return refuse(item, `currency ${describeUntrusted(currency)}; expected a string`);
   }
   return { ok: true, value: { payment_id: paymentId, currency } };
 }
@@ -133,19 +133,22 @@ export function decodeTreatmentItem(item: StoredItem): Result<TreatmentItem, str
   const version = item['version'];
   const cause = item['safety_release_cause'];
   if (!isOneOf(TREATMENT_STATES, state)) {
-    return refuse(item, `state ${describeJson(state)}; expected one of ${TREATMENT_STATES.join(', ')}`);
+    return refuse(item, `state ${describeUntrusted(state)}; expected one of ${TREATMENT_STATES.join(', ')}`);
   }
   if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
-    return refuse(item, `version ${describeJson(version)}; expected a safe integer >= 1`);
+    return refuse(item, `version ${describeUntrusted(version)}; expected a safe integer >= 1`);
   }
   const malformed = TREATMENT_ID_FIELDS.find((field) => item[field] !== undefined && !isUuid4(item[field]));
   if (malformed !== undefined) {
-    return refuse(item, `${malformed} ${describeJson(item[malformed])}; expected a lowercase RFC 4122 version-4 UUID`);
+    return refuse(
+      item,
+      `${malformed} ${describeUntrusted(item[malformed])}; expected a lowercase RFC 4122 version-4 UUID`,
+    );
   }
   if (cause !== undefined && !isOneOf(SAFETY_RELEASE_CAUSES, cause)) {
     return refuse(
       item,
-      `safety_release_cause ${describeJson(cause)}; expected one of ${SAFETY_RELEASE_CAUSES.join(', ')}`,
+      `safety_release_cause ${describeUntrusted(cause)}; expected one of ${SAFETY_RELEASE_CAUSES.join(', ')}`,
     );
   }
   return { ok: true, value: treatmentOf(state, version, item, cause) };
@@ -159,10 +162,10 @@ function configScopeProblem(item: StoredItem, partitionTrial: Uuid4 | undefined)
       : `${trialField} present on a transport-probe configuration; expected none`;
   }
   if (item['trial_id'] !== partitionTrial) {
-    return `trial_id ${describeJson(item['trial_id'])}; expected the partition trial ${partitionTrial}`;
+    return `trial_id ${describeUntrusted(item['trial_id'])}; expected the partition trial ${partitionTrial}`;
   }
   if (!isSha256Hex(item['trial_manifest_sha256'])) {
-    return `trial_manifest_sha256 ${describeJson(item['trial_manifest_sha256'])}; expected 64 lowercase hex digits`;
+    return `trial_manifest_sha256 ${describeUntrusted(item['trial_manifest_sha256'])}; expected 64 lowercase hex digits`;
   }
   return undefined;
 }
