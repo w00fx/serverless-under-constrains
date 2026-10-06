@@ -5,6 +5,7 @@
 // package; this module only checks them and fixes their lookup form, so correlation is pure set
 // membership and never interprets an identity.
 
+import { executionIdOf } from '../event-journal/journal-scope.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
 import { boundedJsonText } from '../record-contract/json-value.ts';
 import { NONEMPTY_TRIMMED_PATTERN, err, ok } from '../record-contract/primitives.ts';
@@ -58,7 +59,8 @@ const LATEST_CLEANUP_TERMINAL_AT = Date.parse('9999-12-31T23:00:00.000Z');
 export function parseAttributionContext(
   input: AttributionContextInput,
 ): Result<AttributionContext, readonly StructuredReason[]> {
-  const tagValue = ownershipTagValue(input.identity);
+  // D-07: the tag carries the execution id; it is checked, since the caller's identity is not.
+  const tagValue: string = executionIdOf(input.identity);
   const problems = [
     ...(ACCOUNT_ID_PATTERN.test(input.account_id)
       ? []
@@ -79,17 +81,6 @@ export function parseAttributionContext(
     charge_allowlist: allowlistMap(input.charge_allowlist),
     window: attributionWindow(input.first_mutation_at as UtcMillis, input.cleanup_terminal_at as UtcMillis),
   });
-}
-
-function ownershipTagValue(identity: ExecutionIdentity): string {
-  switch (identity.execution_kind) {
-    case 'RUN':
-      return identity.run_id;
-    case 'TRANSPORT_PROBE':
-      return identity.transport_probe_id;
-    case 'VARIANT_VALIDATION':
-      return identity.variant_validation_id;
-  }
 }
 
 function nonEmptyProblems(field: string, values: readonly string[]): readonly string[] {

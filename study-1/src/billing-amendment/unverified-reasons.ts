@@ -73,8 +73,21 @@ export function quoteCell(cell: string): string {
   return boundedJsonText(cell);
 }
 
+/**
+ * Names the first `REASON_SAMPLE_LIMIT` items and counts the rest, so a detail never grows with the
+ * export (A-12).
+ *
+ * @example
+ * sampledList(['BRL', 'EUR', 'USD'], (code) => code); // 'BRL, EUR, USD'
+ * sampledList(sevenLines, (line) => line.line_id); // 'row:1, row:2, row:3, row:4, row:5, and 2 more'
+ */
+export function sampledList<T>(items: readonly T[], describe: (item: T) => string): string {
+  const listed = items.slice(0, REASON_SAMPLE_LIMIT).map(describe).join(', ');
+  const unlisted = items.length - REASON_SAMPLE_LIMIT;
+  return unlisted > 0 ? `${listed}, and ${String(unlisted)} more` : listed;
+}
+
 function aggregatedReason(code: BillingUnverifiedCode, lines: readonly UnattributableLine[]): BillingUnverifiedReason {
-  const samples = lines.slice(0, REASON_SAMPLE_LIMIT).map((line) => `${line.line_id} (${line.cause})`);
-  const more = lines.length > REASON_SAMPLE_LIMIT ? `, and ${String(lines.length - REASON_SAMPLE_LIMIT)} more` : '';
-  return unverifiedReason(code, `${String(lines.length)} line(s): ${samples.join(', ')}${more}`);
+  const samples = sampledList(lines, (line) => `${line.line_id} (${line.cause})`);
+  return unverifiedReason(code, `${String(lines.length)} line(s): ${samples}`);
 }

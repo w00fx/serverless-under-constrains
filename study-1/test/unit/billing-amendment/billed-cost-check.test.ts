@@ -72,6 +72,16 @@ describe('deriveBilledCostCheck compares the exact USD sum with the ceiling', ()
     });
   });
 
+  it('sums 150,000 attributed lines exactly (A-05: no argument spread per line)', () => {
+    const lines = Array.from({ length: 150_000 }, (_, index) => line(`row:${String(index + 1)}`, '0.0001'));
+    // 150,000 x 0.0001 = 15 > 5.00.
+    assert.deepEqual(deriveBilledCostCheck(attribution(lines), CEILING), {
+      billed_cost_check: 'breached',
+      attributed_total_usd: '15',
+      reasons: [],
+    });
+  });
+
   it('is within_limit with total 0 when nothing is attributable and nothing is missing', () => {
     assert.deepEqual(deriveBilledCostCheck(attribution([]), CEILING), {
       billed_cost_check: 'within_limit',
@@ -108,6 +118,22 @@ describe('deriveBilledCostCheck is unverified without a total', () => {
       [
         '2 line(s): row:2 (currency "BRL"), row:3 (currency "EUR"); expected every attributable line in USD; no exchange-rate conversion is made',
         'attributable lines use BRL, EUR, USD; expected one currency across attributable lines; no conversion is made',
+      ],
+    );
+  });
+
+  it('on mixed currencies, naming five of them and counting the rest (A-12)', () => {
+    const currencies = ['USD', 'AUD', 'BRL', 'CAD', 'EUR', 'GBP', 'JPY'];
+    const check = deriveBilledCostCheck(
+      attribution(currencies.map((currency, index) => line(`row:${String(index + 1)}`, '1', currency))),
+      CEILING,
+    );
+    assert.deepEqual(
+      check.reasons.map((reason) => reason.detail),
+      [
+        '6 line(s): row:2 (currency "AUD"), row:3 (currency "BRL"), row:4 (currency "CAD"), row:5 (currency "EUR"), ' +
+          'row:6 (currency "GBP"), and 1 more; expected every attributable line in USD; no exchange-rate conversion is made',
+        'attributable lines use AUD, BRL, CAD, EUR, GBP, and 2 more; expected one currency across attributable lines; no conversion is made',
       ],
     );
   });

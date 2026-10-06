@@ -10,7 +10,13 @@ import type { BilledCostOutcome, BillingUnverifiedReason } from '../record-contr
 import type { ExportBillingPeriod } from './cur-export.ts';
 import type { AttributionResult } from './line-attribution.ts';
 import { compareMoney, sumMoney } from './money-decimal.ts';
-import { quoteCell, sortUnverifiedReasons, unverifiedReason, unverifiedReasons } from './unverified-reasons.ts';
+import {
+  quoteCell,
+  sampledList,
+  sortUnverifiedReasons,
+  unverifiedReason,
+  unverifiedReasons,
+} from './unverified-reasons.ts';
 import { isContained } from './usage-window.ts';
 import type { UsageInterval } from './usage-window.ts';
 
@@ -64,9 +70,10 @@ function currencyReasons(a: AttributionResult): readonly BillingUnverifiedReason
       cause: `currency ${quoteCell(line.currency)}`,
     }));
   const currencies = [...new Set(a.lines_used.map((line) => line.currency))].sort();
+  // Each code is three letters, but an export can name thousands of them (A-12).
   const mixed =
     currencies.length > 1
-      ? [unverifiedReason('MIXED_CURRENCY', `attributable lines use ${currencies.join(', ')}`)]
+      ? [unverifiedReason('MIXED_CURRENCY', `attributable lines use ${sampledList(currencies, (code) => code)}`)]
       : [];
   return [...unverifiedReasons(nonUsd), ...mixed];
 }

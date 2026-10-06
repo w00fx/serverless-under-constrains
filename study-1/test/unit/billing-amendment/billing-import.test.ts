@@ -147,6 +147,65 @@ describe('buildBillingImport writes the billing_import record', () => {
     );
   });
 
+  it('is unverified, never within_limit, when a Savings Plan covers run usage (BR-RUA-047)', () => {
+    // USD 9.00 of run Lambda usage paid by the account's Savings Plan, offset by its negation line:
+    // excluding both would report within_limit with total 0 although the run used compute.
+    const covered = csvBytes(
+      curCsv([
+        curRecord({ [CUR_LINE_COLUMNS.line_item_type]: 'SavingsPlanCoveredUsage', [CUR_LINE_COLUMNS.cost]: '9.00' }),
+        curRecord({ [CUR_LINE_COLUMNS.line_item_type]: 'SavingsPlanNegation', [CUR_LINE_COLUMNS.cost]: '-9.00' }),
+        curRecord({ [CUR_LINE_COLUMNS.cost]: '0.25' }),
+      ]),
+    );
+    const record = imported(runImport(covered));
+    assert.equal(record.billed_cost_check, 'unverified');
+    assert.equal('attributed_total_usd' in record, false);
+    assert.deepEqual(
+      record.reasons.map((reason) => [reason.code, reason.detail.split(';')[0]]),
+      [
+        [
+          'SHARED_OR_UNOWNED_CHARGE',
+          '1 line(s): row:1 (line type "SavingsPlanCoveredUsage" is usage covered by a shared commitment)',
+        ],
+      ],
+    );
+    assert.deepEqual(
+      record.exclusions.map((line) => [line.line_id, line.exclusion]),
+      [['row:2', 'SAVINGS_PLAN']],
+    );
+    assert.deepEqual(
+      record.lines_used.map((line) => [line.line_id, line.cost]),
+      [['row:3', '0.25']],
+    );
+  });
+
+  it('is unverified when a run-owned line has a blank usage account (a missing identity)', () => {
+    const blank = csvBytes(
+      curCsv([curRecord({ [CUR_LINE_COLUMNS.usage_account_id]: '', [CUR_LINE_COLUMNS.cost]: '9.00' })]),
+    );
+    const record = imported(runImport(blank));
+    assert.equal(record.billed_cost_check, 'unverified');
+    assert.deepEqual(
+      record.reasons.map((reason) => [reason.code, reason.detail.split(';')[0]]),
+      [['INCOMPLETE_ATTRIBUTION', '1 line(s): row:1 (blank usage account)']],
+    );
+    assert.deepEqual(record.exclusions, []);
+  });
+
+  it('imports 150,000 attributable lines without throwing (A-05)', () => {
+    const header = CUR_HEADER.join(',');
+    const row = CUR_HEADER.map((column) => curRecord()[column] ?? '').join(',');
+    // Built directly: the property under test is totality, and schema validation of 150,000 lines
+    // would double the case's time without proving more than the smaller cases above.
+    const built = buildBillingImport(runImport(csvBytes(`${header}\n${`${row}\n`.repeat(150_000)}`)));
+    assert.ok(built.ok, 'the import must not refuse an export of well-formed lines');
+    const record = built.value;
+    // 150,000 x 0.5 = 75000 > 5.00.
+    assert.equal(record.billed_cost_check, 'breached');
+    assert.equal('attributed_total_usd' in record ? record.attributed_total_usd : undefined, '75000');
+    assert.equal(record.lines_used.length, 150_000);
+  });
+
   it('records the AC-RUA-034 non-USD fixture as a valid BILLING amendment payload', () => {
     const exportBytes = billingExportFixture('non-usd-line.csv');
     const record = imported(runImport(exportBytes));

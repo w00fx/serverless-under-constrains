@@ -29,7 +29,11 @@ export interface BillingImportInput {
   readonly context: AttributionContextInput;
   readonly execution_manifest_sha256: string;
   readonly original_package_index_sha256: string;
-  /** The export file as stored in the amendment (gzip or plain CSV); its digest is recorded. */
+  /**
+   * The export's only data file as stored in the amendment (gzip or plain CSV); its digest is
+   * recorded. Lines of a delivery split across several files cannot be seen here, so the caller
+   * imports only a delivery whose Data Exports manifest lists this one file (WP-18 review residual).
+   */
   readonly export_bytes: Uint8Array;
   /** The execution manifest's declared `safety.ceiling_usd` (OR-RUA-003..005). */
   readonly ceiling_usd: string;

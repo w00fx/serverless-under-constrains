@@ -27,7 +27,7 @@ export interface CurTable {
 }
 
 const GZIP_MAGIC = [0x1f, 0x8b] as const;
-const BYTE_ORDER_MARK = '﻿';
+const BYTE_ORDER_MARK = '\uFEFF';
 const QUOTE = 0x22;
 const COMMA = 0x2c;
 const CR = 0x0d;

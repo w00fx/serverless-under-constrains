@@ -75,7 +75,9 @@ export function parseCurCost(text: string): MoneyDecimal | undefined {
  */
 export function sumMoney(amounts: readonly MoneyDecimal[]): MoneyDecimal {
   const scaled = amounts.map(toScaled);
-  const scale = Math.max(0, ...scaled.map((amount) => amount.scale));
+  // A fold, never `Math.max(...list)`: spreading one argument per export line overflows the stack
+  // from about 125,000 lines (A-05; WP-18 single-pass review).
+  const scale = scaled.reduce((widest, amount) => Math.max(widest, amount.scale), 0);
   const units = scaled.reduce((total, amount) => total + rescale(amount, scale), 0n);
   return formatScaled({ units, scale });
 }

@@ -8,7 +8,11 @@ import { describe, it } from 'node:test';
 import { parseAttributionContext } from '../../../src/billing-amendment/attribution-context.ts';
 import type { AttributionContext } from '../../../src/billing-amendment/attribution-context.ts';
 import type { CurLine } from '../../../src/billing-amendment/cur-export.ts';
-import { EXCLUDED_LINE_TYPES, correlateBillingLines } from '../../../src/billing-amendment/line-attribution.ts';
+import {
+  COMMITMENT_COVERED_LINE_TYPES,
+  EXCLUDED_LINE_TYPES,
+  correlateBillingLines,
+} from '../../../src/billing-amendment/line-attribution.ts';
 import type { AttributionResult } from '../../../src/billing-amendment/line-attribution.ts';
 import {
   COORDINATION_ARN,
@@ -130,10 +134,10 @@ describe('correlateBillingLines excludes and lists non-attributable lines', () =
         ['RIFee', 'FEE'],
         ['SavingsPlanUpfrontFee', 'SAVINGS_PLAN'],
         ['SavingsPlanRecurringFee', 'SAVINGS_PLAN'],
-        ['SavingsPlanCoveredUsage', 'SAVINGS_PLAN'],
         ['SavingsPlanNegation', 'SAVINGS_PLAN'],
       ],
     );
+    assert.equal(EXCLUDED_LINE_TYPES.has('SavingsPlanCoveredUsage'), false, 'covered usage is run usage, not a fee');
     for (const [lineType, exclusion] of EXCLUDED_LINE_TYPES) {
       assert.deepEqual(exclusionOf({ line_item_type: lineType, usage_account_id: '210987654321' }), [
         exclusion,
@@ -170,6 +174,28 @@ describe('correlateBillingLines excludes and lists non-attributable lines', () =
       `resource "${COORDINATION_ARN}" carries no run identity`,
     ]);
     assert.deepEqual(exclusionOf({ resource_id: COORDINATION_ARN, run_tag: OTHER_RUN_ID })[0], 'NOT_RUN_OWNED');
+  });
+
+  it('excludes a blank usage account that carries no run identity', () => {
+    const expected = ['NOT_RUN_OWNED', 'blank usage account and no run identity'];
+    assert.deepEqual(exclusionOf({ usage_account_id: '', resource_id: COORDINATION_ARN, run_tag: '' }), expected);
+    assert.deepEqual(
+      exclusionOf({ usage_account_id: ' ', resource_id: '', run_tag: '', product_code: 'AmazonS3' }),
+      expected,
+    );
+  });
+
+  it('excludes commitment-covered usage that carries no run identity', () => {
+    for (const lineType of COMMITMENT_COVERED_LINE_TYPES) {
+      assert.deepEqual(exclusionOf({ line_item_type: lineType, resource_id: COORDINATION_ARN, run_tag: '' }), [
+        'NOT_RUN_OWNED',
+        `"${lineType}" line carries no run identity`,
+      ]);
+      assert.equal(
+        exclusionOf({ line_item_type: lineType, resource_id: '', run_tag: '', product_code: 'AmazonS3' })[0],
+        'NOT_RUN_OWNED',
+      );
+    }
   });
 
   it('excludes blank-resource usage of a service or operation the run does not own', () => {
@@ -222,8 +248,43 @@ describe('correlateBillingLines reports what it cannot attribute', () => {
 
   it('a line type this import cannot classify in the run account and window', () => {
     assert.equal(
-      unattributedDetail({ line_item_type: 'DiscountedUsage' }, 'SHARED_OR_UNOWNED_CHARGE'),
-      '1 line(s): row:1 (line type "DiscountedUsage" cannot be assigned)',
+      unattributedDetail({ line_item_type: 'FlatRateSubscription', run_tag: '' }, 'SHARED_OR_UNOWNED_CHARGE'),
+      '1 line(s): row:1 (line type "FlatRateSubscription" cannot be assigned)',
+    );
+  });
+
+  it('run usage a Savings Plan or Reserved Instance covers, never excluded nor priced (BR-RUA-047)', () => {
+    assert.deepEqual([...COMMITMENT_COVERED_LINE_TYPES], ['SavingsPlanCoveredUsage', 'DiscountedUsage']);
+    const runIdentities: readonly Partial<CurLine>[] = [
+      {},
+      { run_tag: '' },
+      { resource_id: COORDINATION_ARN },
+      { resource_id: '', run_tag: '' },
+    ];
+    for (const lineType of COMMITMENT_COVERED_LINE_TYPES) {
+      for (const identity of runIdentities) {
+        assert.equal(
+          unattributedDetail({ ...identity, line_item_type: lineType }, 'SHARED_OR_UNOWNED_CHARGE'),
+          `1 line(s): row:1 (line type "${lineType}" is usage covered by a shared commitment)`,
+        );
+      }
+    }
+  });
+
+  it('a blank usage account on possible run usage (a missing identity)', () => {
+    for (const overrides of [{}, { usage_account_id: '  ' }, { resource_id: COORDINATION_ARN }, { run_tag: '' }]) {
+      assert.equal(
+        unattributedDetail({ usage_account_id: '', ...overrides }, 'INCOMPLETE_ATTRIBUTION'),
+        '1 line(s): row:1 (blank usage account)',
+      );
+    }
+    assert.equal(
+      unattributedDetail({ usage_account_id: '', resource_id: '', run_tag: '' }, 'INCOMPLETE_ATTRIBUTION'),
+      '1 line(s): row:1 (blank usage account)',
+    );
+    assert.equal(
+      exclusionOf({ usage_account_id: '', usage_start: '2026-10-05T12:00:00Z', usage_end: '2026-10-05T13:00:00Z' })[0],
+      'OUTSIDE_USAGE_WINDOW',
     );
   });
 
@@ -281,7 +342,7 @@ describe('correlateBillingLines reports what it cannot attribute', () => {
       result.reasons.map((reason) => reason.detail.split(';')[0]),
       [
         '2 line(s): row:2 (no matching suc:run_id tag), row:4 (blank resource id)',
-        '1 line(s): row:1 (line type "DiscountedUsage" cannot be assigned)',
+        '1 line(s): row:1 (line type "DiscountedUsage" is usage covered by a shared commitment)',
       ],
     );
     assert.deepEqual(
