@@ -3,7 +3,7 @@
 // package parsers never crash on malformed input"): it goes through the kernel's strict UTF-8 and
 // JSON parser and the catalogue validator, and reports a reason instead of throwing.
 
-import { boundedText } from '../record-contract/json-value.ts';
+import { boundedJsonText, boundedText } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, StructuredReason } from '../record-contract/primitives.ts';
@@ -78,7 +78,7 @@ export function parsePackageRecord<K extends PackageRecordType>(
 function describeViolations(violations: readonly SchemaViolation[]): string {
   const quoted = violations
     .slice(0, QUOTED_VIOLATIONS)
-    .map((violation) => `${violation.keyword} at ${JSON.stringify(violation.instance_path)}: ${violation.detail}`);
+    .map((violation) => `${violation.keyword} at ${boundedJsonText(violation.instance_path)}: ${violation.detail}`);
   const more = violations.length - quoted.length;
   return `${String(violations.length)} schema violation(s): ${quoted.join('; ')}${more > 0 ? ` and ${String(more)} more` : ''}`;
 }
