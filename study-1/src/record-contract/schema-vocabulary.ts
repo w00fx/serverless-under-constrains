@@ -1,7 +1,8 @@
 // Code-level rules of BR-RUA-033/035 that plain JSON Schema cannot state, registered on Ajv
 // as formats and keywords so every record schema enforces them through `$defs`:
 // - `utc-millis`: the timestamp pattern plus a Date round trip (rejects 2026-02-30);
-// - `package-relative-path`: normalized POSIX path, no absolute path, no traversal;
+// - `package-relative-path`: normalized POSIX path, no absolute path, no traversal, no NUL
+//   character and no whitespace at either end;
 // - `x-rua-ascending-unique`: causation ids lexicographically sorted and unique;
 // - `x-rua-evidence-ref-order`: evidence references in canonical order without duplicates.
 // It also replaces Ajv's built-in `uniqueItems` with a total comparison (see below).

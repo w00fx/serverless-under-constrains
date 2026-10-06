@@ -184,6 +184,21 @@ describe('artifact path classification', () => {
     ['a/./b', 'NON_NORMALIZED_PATH'],
     ['a\\b', 'NON_NORMALIZED_PATH'],
     ['1:/x', undefined],
+    // M0 chores kernel defect: a NUL character anywhere, or whitespace at either end, was
+    // accepted as a normalized path. Interior spaces stay legal POSIX names.
+    ['a\u0000b', 'NON_NORMALIZED_PATH'],
+    ['\u0000', 'NON_NORMALIZED_PATH'],
+    ['a/b.json\u0000', 'NON_NORMALIZED_PATH'],
+    [' a', 'NON_NORMALIZED_PATH'],
+    ['a ', 'NON_NORMALIZED_PATH'],
+    ['\ta/b', 'NON_NORMALIZED_PATH'],
+    ['a/b\n', 'NON_NORMALIZED_PATH'],
+    ['\u00a0a', 'NON_NORMALIZED_PATH'],
+    ['a\u3000', 'NON_NORMALIZED_PATH'],
+    ['\ufeffa', 'NON_NORMALIZED_PATH'],
+    [' /abs', 'NON_NORMALIZED_PATH'],
+    [' ../x', 'NON_NORMALIZED_PATH'],
+    ['a b/c d.json', undefined],
   ];
   for (const [path, expected] of cases) {
     it(`classifies ${JSON.stringify(path)} as ${String(expected)}`, () => {
