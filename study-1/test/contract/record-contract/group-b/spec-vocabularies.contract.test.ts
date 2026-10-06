@@ -7,13 +7,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
-import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
+import { isJsonArray } from '../../../../src/record-contract/json-value.ts';
+import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { assertRejected, violationsOf } from './support/group-b-validation.ts';
-import { pointerOf, withValueAt } from './support/json-paths.ts';
-import type { JsonPath } from './support/json-paths.ts';
+import { pathsMatching, pointerOf, withValueAt } from './support/json-paths.ts';
 import { toJson } from './support/record-builders.ts';
 import { resolvePointer, schemaOf } from './support/schema-reading.ts';
 
@@ -114,22 +113,6 @@ function site(rule: string, values: readonly string[], recordType: GroupBRecordT
     schemaPointer: `/properties/${property}/enum`,
     recordPattern: `/${property}`,
   };
-}
-
-/** Every concrete path in `json` that a `/a/*\/b` pattern names. */
-function pathsMatching(json: JsonValue, pattern: string): readonly JsonPath[] {
-  const expand = (node: JsonValue, segments: readonly string[], path: JsonPath): readonly JsonPath[] => {
-    const [head, ...rest] = segments;
-    if (head === undefined) {
-      return [path];
-    }
-    if (head === '*') {
-      return isJsonArray(node) ? node.flatMap((child, index) => expand(child, rest, [...path, index])) : [];
-    }
-    const child = isJsonObject(node) ? node[head] : undefined;
-    return child === undefined ? [] : expand(child, rest, [...path, head]);
-  };
-  return expand(json, pattern.split('/').slice(1), []);
 }
 
 /** The value in the other case (BR-RUA-033 fixes the case of each list, so a flip is foreign). */

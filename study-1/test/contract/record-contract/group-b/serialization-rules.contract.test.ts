@@ -6,14 +6,22 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { isDecimalString } from '../../../../src/record-contract/decimal.ts';
-import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
 import { isSha256Hex } from '../../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { isUtcMillis } from '../../../../src/record-contract/timestamps.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { assertAccepted, assertRejected } from './support/group-b-validation.ts';
-import { leavesOf, objectPathsOf, pointerOf, textOf, withMember, withValueAt } from './support/json-paths.ts';
+import {
+  leavesOf,
+  objectAt,
+  objectPathsOf,
+  patternOf,
+  pointerOf,
+  textOf,
+  withMember,
+  withValueAt,
+} from './support/json-paths.ts';
 import type { JsonLeaf, JsonPath } from './support/json-paths.ts';
 import type { RecordExample } from './support/record-example.ts';
 import { toJson } from './support/record-builders.ts';
@@ -74,34 +82,11 @@ function assertOmission(example: RecordExample, json: JsonObject, key: string): 
   assertRejected(withMember(json, key, undefined), label);
 }
 
-/** A member path as its pattern: every array index becomes `*`. */
-function patternOf(path: JsonPath): string {
-  return path.map((segment) => (typeof segment === 'number' ? '/*' : `/${segment}`)).join('');
-}
-
 /** The members of every nested object (the root excluded), each with its full path. */
 function nestedMemberPathsOf(json: JsonObject): readonly JsonPath[] {
   return objectPathsOf(json)
     .filter((path) => path.length > 0)
     .flatMap((path) => Object.keys(objectAt(json, path)).map((key) => [...path, key]));
-}
-
-function objectAt(json: JsonValue, path: JsonPath): JsonObject {
-  const node = path.reduce<JsonValue | undefined>(
-    (parent, segment) => (isJsonArray(parent) || isJsonObject(parent) ? childOf(parent, segment) : undefined),
-    json,
-  );
-  if (!isJsonObject(node)) {
-    throw new Error(`path ${pointerOf(path)} addresses ${JSON.stringify(node)}; expected an object`);
-  }
-  return node;
-}
-
-function childOf(parent: JsonValue, segment: string | number): JsonValue | undefined {
-  if (isJsonArray(parent) && typeof segment === 'number') {
-    return parent[segment];
-  }
-  return isJsonObject(parent) && typeof segment === 'string' ? parent[segment] : undefined;
 }
 
 /**
