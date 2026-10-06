@@ -4,9 +4,13 @@
 // 64 KiB, which bounds memory for a chatty CLI while keeping the error at the end of stderr.
 // Node facts (https://nodejs.org/docs/latest-v24.x/api/child_process.html): a process that cannot
 // start emits `error` (and may never emit `close`); a started one emits `close` with an exit code
-// or the signal that ended it.
+// or the signal that ended it. `spawn` itself throws for arguments it refuses, such as a NUL byte
+// in an argument or an environment value; that throw is a `spawn_failed` value too (WP-24 review,
+// 2026-10-06), so the promise never rejects.
 
 import { spawn } from 'node:child_process';
+import type { ChildProcessByStdio } from 'node:child_process';
+import type { Readable } from 'node:stream';
 
 import type { CommandInvocation, CommandResult, CommandRunner } from '../command-runner.ts';
 
@@ -30,12 +34,11 @@ export class ChildProcessCommandRunner implements CommandRunner {
     return new Promise((resolve) => {
       let stdout = '';
       let stderr = '';
-      const child = spawn(invocation.executable, [...invocation.args], {
-        cwd: invocation.cwd,
-        env: { ...invocation.env },
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+      const child = startChild(invocation);
+      if (child instanceof Error) {
+        resolve(spawnFailed(invocation, child));
+        return;
+      }
       child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
         stdout = tail(stdout + chunk);
       });
@@ -43,7 +46,7 @@ export class ChildProcessCommandRunner implements CommandRunner {
         stderr = tail(stderr + chunk);
       });
       child.once('error', (error: Error) => {
-        resolve({ kind: 'spawn_failed', detail: `${invocation.executable}: ${error.message}` });
+        resolve(spawnFailed(invocation, error));
       });
       child.once('close', (code: number | null, signal: NodeJS.Signals | null) => {
         resolve(
@@ -54,6 +57,26 @@ export class ChildProcessCommandRunner implements CommandRunner {
       });
     });
   }
+}
+
+type PipedChild = ChildProcessByStdio<null, Readable, Readable>;
+
+// The started child, or the error `spawn` threw while validating the invocation.
+function startChild(invocation: CommandInvocation): PipedChild | Error {
+  try {
+    return spawn(invocation.executable, [...invocation.args], {
+      cwd: invocation.cwd,
+      env: { ...invocation.env },
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (thrown: unknown) {
+    return thrown instanceof Error ? thrown : new Error(String(thrown));
+  }
+}
+
+function spawnFailed(invocation: CommandInvocation, error: Error): CommandResult {
+  return { kind: 'spawn_failed', detail: `${invocation.executable}: ${error.message}` };
 }
 
 function tail(text: string): string {
