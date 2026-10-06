@@ -211,13 +211,7 @@ const warmupBase = fc.constantFrom<JsonObject>(
     warmup_id: WARMUP_ID,
   },
 );
-// The warm-up oracle, the group-B `provider_warmup_request` schema, still closes its root with
-// `unevaluatedProperties: false` on this branch, which accepts inherited names (Owner amendment
-// A-07; counterexample seed 1709518504 path "0:3": a valid request plus `"hasOwnProperty":0` is
-// schema-valid but refused by the guard). WP-02's A-07 fix (`wip/rua/wp-02-fix-r2`) closes it with
-// `additionalProperties: false`; once it is integrated this differential draws INHERITED_MEMBER_NAMES
-// too. Until then the guard's refusal of those names is pinned by hostile-payloads.integration.
-const nearValidWarmup = nearValid(warmupBase, WARMUP_REQUEST_PROPERTIES, boundaryValue, []);
+const nearValidWarmup = nearValid(warmupBase, WARMUP_REQUEST_PROPERTIES);
 
 function guardAccepts(raw: JsonValue): boolean {
   const shape = guardRefundCallShape(raw);
