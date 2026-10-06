@@ -3,7 +3,8 @@
 // path in code-point order, with its byte count, permission bits and digest; `inventory_sha256` is
 // the digest of the canonical JSON of that list. The PoC rejects symlinks, special files and
 // container-image assets, and (RK-12) any bundled `.mjs` that imports `@aws-sdk/*` from the
-// runtime instead of bundling the lockfile version.
+// runtime instead of bundling the lockfile version. The bundle is read as JavaScript tokens, never
+// as text, because the SDK's own error messages quote such imports (A-14 fix, 2026-10-06).
 
 import { canonicalJson } from '../record-contract/canonical-json.ts';
 import { sha256Hex } from '../record-contract/digests.ts';
@@ -15,6 +16,7 @@ import type {
   DeploymentAssemblyInventory,
 } from '../record-contract/records/group-a/deployment_assembly_inventory.ts';
 import { invalidPathReason } from './artifact-classification.ts';
+import { loadsBareAwsSdk } from './bundle-module-loads.ts';
 import { containerAssetFindings } from './container-assets.ts';
 import { duplicatePathReasons } from './index-entries.ts';
 import type { FsEntry, PackageFile } from './package-file-system.ts';
@@ -33,8 +35,6 @@ const PERMISSION_BITS = 0o7777;
 const SURROGATE_START = 0xd800;
 const PRIVATE_USE_START = 0xe000;
 const BUNDLE_SUFFIX = '.mjs';
-// A static import, a re-export, a dynamic import or a require of a bare `@aws-sdk/` specifier.
-const BARE_AWS_SDK_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*|\brequire\s*\(\s*)["']@aws-sdk\//;
 const textDecoder = new TextDecoder('utf-8');
 
 /**
@@ -163,7 +163,7 @@ function entryReasons(input: AssemblyInventoryInput): readonly StructuredReason[
 }
 
 function bareSdkImportReason(file: PackageFile): readonly StructuredReason[] {
-  if (!file.path.endsWith(BUNDLE_SUFFIX) || !BARE_AWS_SDK_IMPORT.test(textDecoder.decode(file.bytes))) {
+  if (!file.path.endsWith(BUNDLE_SUFFIX) || !loadsBareAwsSdk(textDecoder.decode(file.bytes))) {
     return [];
   }
   return [

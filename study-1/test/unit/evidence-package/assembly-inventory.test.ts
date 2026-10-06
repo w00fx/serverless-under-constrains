@@ -121,6 +121,37 @@ describe('inventoryAssembly', () => {
     }
   });
 
+  // Regression (A-14, found by WP-24 on 2026-10-06): every real synthesized bundle quotes SDK
+  // loads inside its error messages, and the text scan refused them as imports, so admission
+  // could inventory no real assembly. The first source is the SDK's message as esbuild emits it.
+  it('accepts a bundle whose strings, templates, comments and regular expressions only quote an SDK load', () => {
+    for (const source of [
+      'throw new Error(`register the package by calling [require("@aws-sdk/signature-v4-crt");] or an ESM equivalent such as [import "@aws-sdk/signature-v4-crt";]`);',
+      "throw new Error(\"calling [require('@aws-sdk/signature-v4a');] or [import '@aws-sdk/signature-v4a';]\");",
+      'const hint = \'export * from "@aws-sdk/client-sqs"\';',
+      '// const m = await import("@aws-sdk/client-lambda");',
+      '/* import { S3 } from "@aws-sdk/client-s3"; */ export const a = 1;',
+      'const set = /[from "@aws-sdk/]/u;',
+      'client.require("@aws-sdk/client-sts");',
+    ]) {
+      const built = inventoryAssembly(input([MANIFEST, textFile('asset.1/index.mjs', source)]));
+      assert.ok(built.ok, source);
+    }
+  });
+
+  it("still rejects a real load next to a quoted one, and esbuild's __require form", () => {
+    for (const source of [
+      'throw new Error(`[require("@aws-sdk/x");]`);\nimport { S3 } from "@aws-sdk/client-s3";',
+      'const re = /["`]/g;\nconst m = await import("@aws-sdk/client-lambda");',
+      'const a = `${require("@aws-sdk/client-sts")}`;',
+      'var sts = __require("@aws-sdk/client-sts");',
+    ]) {
+      const built = inventoryAssembly(input([MANIFEST, textFile('asset.1/index.mjs', source)]));
+      assert.ok(!built.ok, source);
+      assert.deepEqual(reasonCodes(built.error), ['BARE_AWS_SDK_IMPORT'], source);
+    }
+  });
+
   it('accepts a bundled SDK and a non-.mjs file that mentions the SDK', () => {
     const built = inventoryAssembly(
       input([
