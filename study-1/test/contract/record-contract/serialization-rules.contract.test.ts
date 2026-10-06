@@ -36,12 +36,6 @@ const REFERENCE_MEMBERS = [
 
 /** Member names every JSON object inherits; JSON.parse makes each one an own member (A-05, A-07). */
 const INHERITED_NAMES = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf'] as const;
-/**
- * The root closure finding of an unknown member. Group B closes its roots with
- * `unevaluatedProperties` until WP-02's Owner amendment A-07 fix merges; the A-07 integration
- * step then leaves only `additionalProperties` (design §6) and the registry refuses the other.
- */
-const ROOT_CLOSURE_FINDINGS: readonly string[] = [' additionalProperties', ' unevaluatedProperties'];
 
 const payment = (): JsonObject => GROUP_A.payment();
 const dispatchStarted = (): JsonObject => toJson(GROUP_B.dispatch_started());
@@ -87,11 +81,7 @@ describe('AC-RUA-046 serialization rules', () => {
   it('casing', () => {
     assertAccepted(payment(), 'snake_case record');
     assertRejected({ ...payment(), paymentId: 'pay-poc-001' }, ' additionalProperties', 'camelCase field');
-    const camelEvent = violationsOf({ ...dispatchStarted(), attemptId: LOWER_V4 });
-    assert.ok(
-      camelEvent.some((found) => ROOT_CLOSURE_FINDINGS.includes(found)),
-      `camelCase event field: expected a root closure finding, got ${JSON.stringify(camelEvent)}`,
-    );
+    assertRejected({ ...dispatchStarted(), attemptId: LOWER_V4 }, ' unevaluatedProperties', 'camelCase event field');
     assert.deepEqual(violationsOf({ ...payment(), record_type: 'Payment' }), ['/record_type record_type']);
     // Domain and lifecycle enum values stay uppercase.
     assertRejected({ ...payment(), currency: 'brl' }, '/currency const', 'lowercase currency');
