@@ -1,9 +1,9 @@
 // A real LambdaClient, built by the collector's production factory, over a scripted HTTP layer
 // (design §12.2 `ScriptedDurableExecutionClient`). The SDK's restJson1 serializer, signer and error
 // deserializer run; only the network is replaced by a model of durable executions. Listing honours
-// `Qualifier`, `StartedAfter` and `Marker`; history pages by `Marker`; and a RUNNING execution ends
-// only when StopDurableExecution stops it (RK-10), at the injected clock's instant. Timestamps go
-// on the wire as epoch seconds, as the service writes them.
+// `Qualifier`, `StartedAfter` and `Marker`, and history pages by `Marker`. The collector only reads,
+// so the model serves the three read operations and refuses anything else. Timestamps go on the
+// wire as epoch seconds, as the service writes them.
 
 import { Readable } from 'node:stream';
 
@@ -12,7 +12,7 @@ import type { HttpRequest, HttpResponse } from '@smithy/types';
 
 import { createCollectorLambdaClient } from '../../../src/evidence-collection/aws/durable-execution-reader.ts';
 import type { CollectorLambdaClientSettings } from '../../../src/evidence-collection/aws/durable-execution-reader.ts';
-import type { JsonObject, JsonValue, WallClock } from '../../../src/record-contract/primitives.ts';
+import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 
 const API_PREFIX = '/2025-12-01/';
 
@@ -22,9 +22,9 @@ export interface ModelledDurableExecution {
   readonly name: string;
   readonly function_arn: string;
   readonly qualifier: string;
-  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT' | 'STOPPED';
+  readonly status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT' | 'STOPPED';
   readonly started_ms: number;
-  ended_ms?: number;
+  readonly ended_ms?: number;
   readonly version?: string;
   readonly history: readonly JsonObject[];
 }
@@ -39,7 +39,7 @@ export interface RecordedLambdaCall {
  * Production-built Lambda client over a durable-execution model.
  *
  * @example
- * const lambda = new ScriptedDurableExecutionClient(clock, 1);
+ * const lambda = new ScriptedDurableExecutionClient(1);
  * lambda.addExecution({ arn, name, function_arn, qualifier: '3', status: 'RUNNING', started_ms, history: [] });
  * await createLambdaDurableExecutionReader(lambda.client).listPage(request);
  */
@@ -48,11 +48,9 @@ export class ScriptedDurableExecutionClient {
   readonly #executions: ModelledDurableExecution[] = [];
   readonly #errors: { readonly type: string; readonly status: number }[] = [];
   readonly #calls: RecordedLambdaCall[] = [];
-  readonly #clock: WallClock;
   readonly #pageSize: number;
 
-  constructor(clock: WallClock, pageSize = 100, settings: CollectorLambdaClientSettings = {}) {
-    this.#clock = clock;
+  constructor(pageSize = 100, settings: CollectorLambdaClientSettings = {}) {
     this.#pageSize = pageSize;
     this.client = createCollectorLambdaClient({
       ...settings,
@@ -68,11 +66,6 @@ export class ScriptedDurableExecutionClient {
   /** The next request fails with this Lambda error type (HTTP 400 unless `status` says otherwise). */
   scriptError(type: string, status = 400): void {
     this.#errors.push({ type, status });
-  }
-
-  /** The current status of an execution, or undefined. */
-  statusOf(arn: string): ModelledDurableExecution['status'] | undefined {
-    return this.#executions.find((execution) => execution.arn === arn)?.status;
   }
 
   calls(): readonly RecordedLambdaCall[] {
@@ -97,10 +90,10 @@ export class ScriptedDurableExecutionClient {
     if (action === 'history') {
       return respond(200, this.#history(execution, request.query));
     }
-    if (action === 'stop' && request.method === 'POST') {
-      return respond(200, this.#stop(execution));
+    if (action === undefined && request.method === 'GET') {
+      return respond(200, executionJson(execution));
     }
-    return respond(200, executionJson(execution));
+    return respond(400, { message: `unsupported ${request.method} ${request.path}` }, 'InvalidRequestContentException');
   }
 
   #list(functionArn: string, query: HttpRequest['query']): JsonObject {
@@ -118,15 +111,6 @@ export class ScriptedDurableExecutionClient {
   #history(execution: ModelledDurableExecution, query: HttpRequest['query']): JsonObject {
     const page = pageOf(execution.history, queryText(query, 'Marker'), this.#pageSize);
     return { Events: [...page.items], ...page.next };
-  }
-
-  #stop(execution: ModelledDurableExecution): JsonObject {
-    const stoppedMs = this.#clock.now().getTime();
-    if (execution.status === 'RUNNING') {
-      execution.status = 'STOPPED';
-      execution.ended_ms = stoppedMs;
-    }
-    return { StopTimestamp: stoppedMs / 1000 };
   }
 }
 

@@ -103,7 +103,9 @@ export class ScriptedSqsClient {
       return respond(200, { Attributes: { ...queue.attributes } });
     }
     if (operation === 'ReceiveMessage') {
-      return respond(200, { Messages: receive(queue) });
+      // An empty receive carries no Messages member at all, as SQS answers it.
+      const messages = receive(queue);
+      return respond(200, messages.length === 0 ? {} : { Messages: messages });
     }
     return respond(400, { __type: 'com.amazonaws.sqs#UnsupportedOperation', message: operation });
   }
