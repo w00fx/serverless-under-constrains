@@ -15,6 +15,7 @@ import type { Stats } from 'node:fs';
 import { lstat, mkdir, open, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { boundedJsonText, boundedText } from '../../record-contract/json-value.ts';
 import { err, ok } from '../../record-contract/primitives.ts';
 import type { Result } from '../../record-contract/primitives.ts';
 import { invalidPathReason } from '../artifact-classification.ts';
@@ -52,8 +53,7 @@ export class NodePackageFileSystem implements PackageFileSystem {
       if (!listed.ok) {
         return listed;
       }
-      entries.push(...listed.value);
-      pending.push(...listed.value.filter((entry) => entry.type === 'directory').map((entry) => entry.path));
+      collectEntries(listed.value, entries, pending);
     }
     return ok(entries.toSorted((a, b) => (a.path < b.path ? -1 : 1)));
   }
@@ -125,6 +125,17 @@ async function listDirectory(base: string, relative: string): Promise<Result<rea
   return ok(entries);
 }
 
+// One push per entry: a spread push throws RangeError past the engine's argument limit, which a
+// directory with enough entries reaches (A-05 totality).
+function collectEntries(listed: readonly FsEntry[], entries: FsEntry[], pending: string[]): void {
+  for (const entry of listed) {
+    entries.push(entry);
+    if (entry.type === 'directory') {
+      pending.push(entry.path);
+    }
+  }
+}
+
 async function attempt<T>(operation: () => Promise<T>, path: string): Promise<Result<T, FileSystemFailure>> {
   try {
     return ok(await operation());
@@ -132,7 +143,7 @@ async function attempt<T>(operation: () => Promise<T>, path: string): Promise<Re
     const code = (error as NodeJS.ErrnoException).code;
     return err({
       code: failureCode(code),
-      detail: `${JSON.stringify(path)}: ${String(code)} ${(error as Error).message}`,
+      detail: `${boundedJsonText(path)}: ${String(code)} ${boundedText((error as Error).message)}`,
     });
   }
 }
