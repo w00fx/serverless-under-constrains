@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { parseSuiteMinimums } from '../../../tools/lib/suite-accounting.ts';
 
 const MINIMUMS_PATH = fileURLToPath(new URL('../../../quality/suite-minimums/trial-oracle.json', import.meta.url));
-/** The WP-14 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 168, golden: 20, fuzz: 5 } as const;
+/** The WP-14 counts at first delivery, with the unit count its single-pass review raised. */
+const RATIFIED_FLOOR = { unit: 178, golden: 20, fuzz: 5 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));
