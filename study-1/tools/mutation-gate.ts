@@ -4,13 +4,19 @@
 // globs, recomputed from the tree) must be in the report, as must every file matching an
 // --expect glob. Stryker's JSON report lists only files that have mutants, so without this a
 // target that was never mutated would pass unseen (WP-00 review round 1). A target with no
-// runtime code has no mutants and is never in the report; it is listed as type_only, the
-// verdict it gets when the report does list it (WP-00 review round 2).
+// runtime code has no mutants and is never in the report; it is listed as excluded by the human
+// decision A-10 (the policy's `type_only: "excluded"`), the verdict it gets when the report does
+// list it (WP-00 review round 2).
 
 import { globSync, readFileSync } from 'node:fs';
 import process from 'node:process';
 
-import { evaluateMutationGate, parseEquivalences, parseMutationReport } from './lib/mutation-report.ts';
+import {
+  evaluateMutationGate,
+  formatGateReport,
+  parseEquivalences,
+  parseMutationReport,
+} from './lib/mutation-report.ts';
 import { parseMutationTargetPolicy } from './lib/quality-config.ts';
 
 const [reportPath, ...rest] = process.argv.slice(2);
@@ -33,28 +39,7 @@ const result = evaluateMutationGate(
   expected.map((path) => ({ path, source: readFileSync(path, 'utf8') })),
 );
 
-for (const file of result.files) {
-  const c = file.counts;
-  process.stdout.write(
-    `${file.verdict.padEnd(10)} ${file.path}: valid ${String(file.valid)}, killed ${String(c.Killed)}, timeout ${String(c.Timeout)}, ` +
-      `survived ${String(c.Survived)} (accepted ${String(file.accepted_equivalent)}), no-coverage ${String(c.NoCoverage)}, ` +
-      `runtime-error ${String(c.RuntimeError)}, compile-error ${String(c.CompileError)}, ignored ${String(c.Ignored)}, pending ${String(c.Pending)}\n`,
-  );
-  for (const problem of file.problems) {
-    process.stdout.write(`    ${problem}\n`);
-  }
-  for (const timeout of file.timeouts) {
-    process.stdout.write(`    review timeout: ${timeout}\n`);
-  }
+for (const line of formatGateReport(result)) {
+  process.stdout.write(`${line}\n`);
 }
-for (const problem of result.problems) {
-  process.stdout.write(`gate: ${problem}\n`);
-}
-const typeOnly = result.files.filter((file) => file.verdict === 'type_only');
-process.stdout.write(
-  `type-only targets (no runtime code, no mutants; verdict awaiting ratification): ${String(typeOnly.length)}\n`,
-);
-process.stdout.write(
-  `mutation gate: ${result.passed ? 'PASSED' : 'FAILED'} over ${String(result.files.length)} file(s)\n`,
-);
 process.exitCode = result.passed ? 0 : 1;

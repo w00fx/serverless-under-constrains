@@ -10,26 +10,38 @@ import {
   strykerMutatePatterns,
 } from '../../../tools/lib/quality-config.ts';
 
-const policy = { include: ['src/**/*.ts', 'tools/lib/**/*.ts'], exclude: ['src/**/aws/**'] };
+const policy = {
+  include: ['src/**/*.ts', 'tools/lib/**/*.ts'],
+  exclude: ['src/**/aws/**'],
+  type_only: 'excluded',
+} as const;
 
 describe('parseMutationTargetPolicy', () => {
-  it('reads include and exclude glob lists', () => {
+  it('reads include and exclude glob lists and the A-10 type-only exclusion', () => {
     assert.deepEqual(parseMutationTargetPolicy({ ...policy, $comment: 'D-13' }), policy);
-    assert.deepEqual(parseMutationTargetPolicy({ include: ['a'], exclude: [] }), { include: ['a'], exclude: [] });
+    assert.deepEqual(parseMutationTargetPolicy({ include: ['a'], exclude: [], type_only: 'excluded' }), {
+      include: ['a'],
+      exclude: [],
+      type_only: 'excluded',
+    });
   });
 
-  it('refuses an empty include, non-string patterns and missing lists', () => {
+  it('refuses an empty include, non-string patterns, missing lists and any other type-only treatment', () => {
     for (const document of [
       null,
       {},
-      { include: [], exclude: [] },
-      { include: ['a'] },
-      { include: ['a'], exclude: [1] },
-      { include: [''], exclude: [] },
-      { include: 'a', exclude: [] },
+      { include: [], exclude: [], type_only: 'excluded' },
+      { include: ['a'], type_only: 'excluded' },
+      { include: ['a'], exclude: [1], type_only: 'excluded' },
+      { include: [''], exclude: [], type_only: 'excluded' },
+      { include: 'a', exclude: [], type_only: 'excluded' },
+      // Human decision A-10: the policy must record that type-only modules are excluded.
+      { include: ['a'], exclude: [] },
+      { include: ['a'], exclude: [], type_only: 'included' },
+      { include: ['a'], exclude: [], type_only: true },
     ]) {
       assert.throws(() => parseMutationTargetPolicy(document), {
-        message: `mutation-target policy is ${JSON.stringify(document)}; expected { include: [glob, ...] (non-empty), exclude: [glob, ...] }`,
+        message: `mutation-target policy is ${JSON.stringify(document)}; expected { include: [glob, ...] (non-empty), exclude: [glob, ...], type_only: "excluded" (human decision A-10) }`,
       });
     }
   });
