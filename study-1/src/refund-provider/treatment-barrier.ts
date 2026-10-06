@@ -26,6 +26,7 @@ import { decodeTreatmentItem } from './control-items.ts';
 import { ProviderFault } from './provider-fault.ts';
 import type { ProviderStatePort } from './provider-state-port.ts';
 import { TRANSITION_JOURNAL_ACTION_INDEX } from './provider-state-port.ts';
+import { describeWriteOutcome } from './untrusted-json.ts';
 
 export { BARRIER_TIMING } from './barrier-timing.ts';
 
@@ -215,7 +216,7 @@ export class TreatmentBarrier {
         'TRANSITION_AMBIGUOUS',
         'after_commit',
         commit.provider_call_id,
-        `${from} -> ${to} outcome ${JSON.stringify(outcome)}; expected applied or definitively not applied`,
+        `${from} -> ${to} outcome ${describeWriteOutcome(outcome)}; expected applied or definitively not applied`,
       );
     }
     if (confirmed.kind === 'appended') {

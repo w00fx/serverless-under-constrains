@@ -13,7 +13,7 @@ import { canonicalJson } from '../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
-import { DESCRIBED_VALUE_MAX_CHARS, TRUNCATION_MARKER } from '../../../src/refund-provider/untrusted-json.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
 import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
 import {
   armedTreatmentItem,
@@ -39,8 +39,10 @@ import { expectProviderFault } from './support/fault-assertions.ts';
 const DEEP = 50_000;
 const DEEP_ARRAY_TEXT = `${'['.repeat(DEEP)}${']'.repeat(DEEP)}`;
 const DEEP_OBJECT_TEXT = `${'{"a":'.repeat(DEEP)}1${'}'.repeat(DEEP)}`;
+/** The marker the kernel's `boundedJsonText` appends to a cut text. */
+const TRUNCATED = '…[truncated]';
 // Generous: the detail adds its field name and expected shape to one bounded excerpt.
-const DETAIL_BOUND = DESCRIBED_VALUE_MAX_CHARS + 200;
+const DETAIL_BOUND = QUOTED_JSON_LIMIT + 200;
 const UTF8 = new TextEncoder();
 
 /** `call` with `member` set to the literal JSON text `literal`, parsed as the runtime parses it. */
@@ -149,11 +151,8 @@ describe('RefundProvider over runtime-parsed hostile payloads', () => {
       parsedWith(validCall(), 'caller_id', DEEP_ARRAY_TEXT),
       'AUTHORIZATION_FAILED',
     );
-    const excerpt = '['.repeat(DESCRIBED_VALUE_MAX_CHARS);
-    assert.equal(
-      detail,
-      `caller_id array ${excerpt}${TRUNCATION_MARKER}; expected the registered caller "conventional"`,
-    );
+    const excerpt = '['.repeat(QUOTED_JSON_LIMIT);
+    assert.equal(detail, `caller_id array ${excerpt}${TRUNCATED}; expected the registered caller "conventional"`);
   });
 
   it('rejects deep nesting in amount_minor and in an unknown property as SCHEMA_INVALID', async () => {
@@ -165,7 +164,7 @@ describe('RefundProvider over runtime-parsed hostile payloads', () => {
       'SCHEMA_INVALID',
     );
     assert.match(amountDetail, /^amount_minor is object \{"a":\{"a":/u);
-    assert.match(amountDetail, /… \(truncated\); expected a JSON number$/u);
+    assert.match(amountDetail, /…\[truncated\]; expected a JSON number$/u);
     assert.ok(amountDetail.length <= DETAIL_BOUND, String(amountDetail.length));
 
     const inUnknown = armedTrial();
@@ -187,7 +186,7 @@ describe('RefundProvider over runtime-parsed hostile payloads', () => {
       parsedWith(validCall(), longKey, '1'),
       'SCHEMA_INVALID',
     );
-    assert.ok(detail.startsWith(`property "${'k'.repeat(DESCRIBED_VALUE_MAX_CHARS - 1)}${TRUNCATION_MARKER}`));
+    assert.ok(detail.startsWith(`property "${'k'.repeat(QUOTED_JSON_LIMIT - 1)}${TRUNCATED}`));
     assert.ok(detail.length <= DETAIL_BOUND + 300, String(detail.length));
   });
 
@@ -235,7 +234,7 @@ describe('RefundProvider over runtime-parsed hostile payloads', () => {
       'WARMUP_REQUEST_INVALID',
       'before_commit',
     );
-    assert.match(deep.message, /warmup_id is array \[{120}… \(truncated\); expected a lowercase/u);
+    assert.match(deep.message, /warmup_id is array \[{200}…\[truncated\]; expected a lowercase/u);
     assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
   });
 });

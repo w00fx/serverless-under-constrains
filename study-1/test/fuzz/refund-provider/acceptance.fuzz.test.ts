@@ -30,12 +30,8 @@ import {
   identityStructureViolation,
   REFUND_CALL_PROPERTIES,
 } from '../../../src/refund-provider/refund-call-shape.ts';
-import {
-  DESCRIBED_VALUE_MAX_CHARS,
-  describeUntrusted,
-  requestDigest,
-  TRUNCATION_MARKER,
-} from '../../../src/refund-provider/untrusted-json.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
+import { describeUntrusted, requestDigest } from '../../../src/refund-provider/untrusted-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 import {
   ATTEMPT_ID,
@@ -58,6 +54,9 @@ import {
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
 
 const validator = createRecordValidator();
+
+/** The marker the kernel's `boundedJsonText` appends to a cut text. */
+const TRUNCATED = '…[truncated]';
 
 const TRIAL_CONTEXT: AcceptanceContext = {
   deployment_execution: RUN,
@@ -326,7 +325,7 @@ describe('refund-provider acceptance properties', () => {
     fc.assert(
       fc.property(fc.oneof(runtimeOnlyValue, fc.jsonValue() as fc.Arbitrary<JsonValue>, hostileCall), (raw) => {
         const described = describeUntrusted(raw);
-        assert.ok(described.length <= 'boolean '.length + DESCRIBED_VALUE_MAX_CHARS + TRUNCATION_MARKER.length);
+        assert.ok(described.length <= 'boolean '.length + QUOTED_JSON_LIMIT + TRUNCATED.length);
         assert.equal(described.isWellFormed(), true);
       }),
       fuzzParameters(),

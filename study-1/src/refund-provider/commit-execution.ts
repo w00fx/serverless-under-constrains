@@ -16,6 +16,7 @@ import type { CommitKind, CommitPlan } from './commit-plan.ts';
 import { COMMIT_JOURNAL_ACTION_INDEX, commitEventBody, drawCommitIdentities, planCommit } from './commit-plan.ts';
 import { ProviderFault } from './provider-fault.ts';
 import type { ProviderStatePort } from './provider-state-port.ts';
+import { describeWriteOutcome } from './untrusted-json.ts';
 
 export interface CommitExecutionDeps {
   readonly state: ProviderStatePort;
@@ -118,7 +119,7 @@ async function attemptCommit(
       code,
       'commit_unknown',
       request.provider_call_id,
-      `commit ${plan.ids.provider_commit_id} outcome ${JSON.stringify(outcome)} stopped the instance (${confirmed.reason}); expected applied or definitively not applied`,
+      `commit ${plan.ids.provider_commit_id} outcome ${describeWriteOutcome(outcome)} stopped the instance (${confirmed.reason}); expected applied or definitively not applied`,
     );
   }
   if (outcome.kind === 'condition_failed' && outcome.failed_action_index === plan.treatment_action_index) {
@@ -136,7 +137,7 @@ async function recordCommitFailure(
   outcome: WriteOutcome,
 ): Promise<never> {
   const errorCode = outcome.kind === 'definitive_failure' ? outcome.code : 'TransactionConditionFailed';
-  const detail = `commit ${plan.ids.provider_commit_id} not applied: ${JSON.stringify(outcome)}; expected applied`;
+  const detail = `commit ${plan.ids.provider_commit_id} not applied: ${describeWriteOutcome(outcome)}; expected applied`;
   const failed = await deps.journal.append(
     'provider_commit_failed',
     {
