@@ -12,6 +12,10 @@ import type { Sha256Hex, Uuid4 } from '../../primitives.ts';
 export interface ProviderCallReceived extends EventEnvelope<'provider_call_received'> {
   readonly source: 'refund_provider';
   readonly provider_call_id: Uuid4;
+  /**
+   * SHA-256 of the canonical JSON of the parsed request: the Lambda runtime hands the provider a
+   * parsed payload, never the raw invocation bytes (refund-provider `receivedBody`).
+   */
   readonly raw_request_sha256: Sha256Hex;
   readonly caller_id?: string;
   readonly attempt_id?: string;
