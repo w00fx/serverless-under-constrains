@@ -10,6 +10,7 @@ import { EXECUTION_PATHS } from '../../../src/evidence-package/package-layout.ts
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
 import type { ExecutionManifest } from '../../../src/record-contract/records/group-a/execution_manifest.ts';
+import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 import { offlineExecution } from '../../support/offline-cloud/offline-execution.ts';
 import { lifecycleValidator } from '../../integration/execution-lifecycle/support/execution-fixtures.ts';
 
@@ -52,6 +53,38 @@ describe('readAdmittedExecution', () => {
       assert.ok(admitted.error.detail.length > 0);
     });
   }
+
+  // A-05: the manifest bytes come from disk; hostile ones are refused with a bounded reason.
+  it(`refuses manifests nested ${String(DEEP_NESTING)} levels deep without throwing`, () => {
+    const runText = new TextDecoder().decode(manifestBytes('run'));
+    const towers = [
+      ...(['array', 'object', 'mixed'] as const).map((shape) => towerText(shape, DEEP_NESTING, '1')),
+      runText.replace('"schema_version":1', `"schema_version":${towerText('mixed', DEEP_NESTING, '1')}`),
+    ];
+    for (const text of towers) {
+      const admitted = readAdmittedExecution(new TextEncoder().encode(text), lifecycleValidator());
+      assert.equal(admitted.ok, false);
+      assert.equal(admitted.error.artifact_path, EXECUTION_PATHS.executionManifest);
+      assert.ok(admitted.error.detail.length < 1_000, 'the reason stays bounded');
+    }
+  });
+
+  it('refuses a manifest holding a non-finite number (1e400)', () => {
+    const text = new TextDecoder().decode(manifestBytes('run')).replace('"schema_version":1', '"schema_version":1e400');
+    const admitted = readAdmittedExecution(new TextEncoder().encode(text), lifecycleValidator());
+    assert.equal(admitted.ok, false);
+    assert.equal(admitted.error.artifact_path, EXECUTION_PATHS.executionManifest);
+  });
+
+  it('refuses inherited member names at the manifest root (A-07 closed roots)', () => {
+    const runText = new TextDecoder().decode(manifestBytes('run'));
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+      const text = runText.replace('{', `{"${name}":{"execution_kind":"TRANSPORT_PROBE"},`);
+      const admitted = readAdmittedExecution(new TextEncoder().encode(text), lifecycleValidator());
+      assert.equal(admitted.ok, false, `${name} is refused`);
+      assert.ok(admitted.error.detail.includes(name), `the reason names ${name}: ${admitted.error.detail}`);
+    }
+  });
 
   it('refuses a manifest whose bytes were changed after the freeze', () => {
     const text = new TextDecoder().decode(manifestBytes('run'));

@@ -11,6 +11,7 @@ import { serializeRecordFile } from '../../../src/record-contract/canonical-json
 import type { JsonObject } from '../../../src/record-contract/primitives.ts';
 import type { StudyRecord } from '../../../src/record-contract/records/index.ts';
 import { dlqSnapshot } from '../../contract/record-contract/group-b/examples/observation-examples.ts';
+import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 import { ScriptedTrialRunner } from './fakes/scripted-trial-runner.ts';
 import { RunnerWorld } from './support/runner-world.ts';
 
@@ -51,6 +52,36 @@ describe('ExecutionCleanupEvidence', () => {
     assert.ok(reasons.every((reason) => reason['code'] === 'DLQ_SNAPSHOT_UNREADABLE'));
     // `cleanup_status` judges the deletion phase (step 9) alone; the failed capture stays on step 7.
     assert.equal(outcome.cleanup_status, 'succeeded');
+  });
+
+  // A-05: snapshots are read back from disk; hostile ones fail the capture, never the cleanup.
+  it('refuses DLQ snapshots nested 100,000 levels deep, past the double range or with inherited names', async () => {
+    const world = await RunnerWorld.create({ deps: () => ({ trials: new ScriptedTrialRunner() }) });
+    const directory = world.admitted.package_directory;
+    const valid = new TextDecoder().decode(serializeRecordFile(dlqSnapshot() satisfies StudyRecord));
+    const hostile = [
+      towerText('mixed', DEEP_NESTING, '1'),
+      valid.replace('"schema_version":1', `"schema_version":${towerText('array', DEEP_NESTING, '1')}`),
+      valid.replace('"schema_version":1', '"schema_version":1e400'),
+      valid.replace('{', '{"__proto__":{"messages":[]},'),
+    ];
+    const trials = world.admitted.manifest.trials;
+    for (const [index, text] of hostile.entries()) {
+      await world.cloud.storage.writeOnce(
+        `${directory}/trials/${trials[index]?.trial_id ?? ''}/${UNIT_PATHS.dlqSnapshot}`,
+        new TextEncoder().encode(`${text}\n`),
+      );
+    }
+    const outcome = await world.run();
+    const capture = stepOf(world, 7);
+    assert.equal(capture?.['status'], 'failed');
+    const reasons = capture['reasons'] as readonly JsonObject[];
+    assert.deepEqual(
+      reasons.map((reason) => reason['code']),
+      hostile.map(() => 'DLQ_SNAPSHOT_UNREADABLE'),
+    );
+    assert.ok(reasons.every((reason) => (reason['detail'] as string).length < 1_000));
+    assert.equal(outcome.package_finalized, true);
   });
 
   it('fails the snapshot step when the pre-cleanup snapshot cannot be written', async () => {
