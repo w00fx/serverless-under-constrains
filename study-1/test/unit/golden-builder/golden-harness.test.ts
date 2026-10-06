@@ -5,10 +5,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { JsonObject } from '../../../src/record-contract/primitives.ts';
-import { deriveSettlement } from '../../golden/_harness/fixture-observations.ts';
+import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
+import { deriveSettlement, observeSubject } from '../../golden/_harness/fixture-observations.ts';
 import { expectedMismatches, fixtureRecords } from '../../golden/_harness/golden-harness.ts';
-import { DEEP_NESTING, parsedTower } from '../../support/kernel/deep-json.ts';
+import { defineGoldenCase } from '../../support/golden-builder/golden-case.ts';
+import { DEEP_NESTING, parsedJson, parsedTower, towerText } from '../../support/kernel/deep-json.ts';
 
 const encoder = new TextEncoder();
 const T0 = Date.parse('2026-10-05T12:00:00.000Z');
@@ -71,6 +72,31 @@ describe('expectedMismatches', () => {
       1,
     );
   });
+
+  // A-05 regression (WP-09 single-pass review): JSON.stringify threw RangeError quoting a value
+  // nested past the call stack, wrote Infinity as null, and copied any length into the message.
+  it('quotes deep, long and non-finite values and long paths in bounded messages', () => {
+    const towerQuote = '\\[{200}…\\[truncated\\]';
+    const deep = parsedTower('array', DEEP_NESTING);
+    assert.match(expectedMismatches(1, deep).join('\n'), new RegExp(`^\\$: expected 1, got ${towerQuote}$`));
+    assert.match(
+      expectedMismatches([1, 2], deep).join('\n'),
+      new RegExp(`^\\$: expected an array of 2, got ${towerQuote}$`),
+    );
+    assert.match(
+      expectedMismatches({ a: 1 }, deep).join('\n'),
+      new RegExp(`^\\$: expected an object, got ${towerQuote}$`),
+    );
+    const [nested = ''] = expectedMismatches(deep, parsedTower('array', DEEP_NESTING - 1));
+    assert.match(nested, /^\$(\[0\]){66}\[…\[truncated\]: expected an array of 1, got 1$/);
+    assert.deepEqual(expectedMismatches({ a: 1 }, { a: Infinity }), ['$.a: expected 1, got Infinity']);
+    assert.deepEqual(expectedMismatches('x', 'y'.repeat(1000)), [
+      `$: expected "x", got "${'y'.repeat(199)}…[truncated]`,
+    ]);
+    assert.deepEqual(expectedMismatches({ ['k'.repeat(1000)]: 1 }, parsedJson('{"valueOf":1}')), [
+      `$.${'k'.repeat(198)}…[truncated]: expected 1, got undefined`,
+    ]);
+  });
 });
 
 describe('fixtureRecords', () => {
@@ -92,6 +118,42 @@ describe('fixtureRecords', () => {
     assert.throws(
       () => fixtureRecords(files, 'bad.jsonl'),
       /bad\.jsonl: a line or document is not a JSON object; expected a record/,
+    );
+  });
+});
+
+describe('observeSubject', () => {
+  const golden_case = defineGoldenCase({
+    case_id: 'x',
+    ac_ids: [],
+    rule_outcomes_reached: [],
+    base: 'probe',
+    expected: null,
+  });
+  const state = (version: string, reason: string): string =>
+    `{"record_type":"request_state_recorded","version":${version},"processing_state":"FINISHED","processing_terminal_reason":"${reason}"}\n`;
+  const lastReason = (journal: string): JsonValue | undefined =>
+    observeSubject({
+      golden_case,
+      case_file: '',
+      fixture_directory: '',
+      files: new Map([
+        ['probe/journals/caller-journal.jsonl', encoder.encode(journal)],
+        ['runner/runner-journal.jsonl', new Uint8Array()],
+      ]),
+      subject_directory: 'probe',
+    })['processing_terminal_reason'];
+
+  // A-05 regression (WP-09 single-pass review): ordering request states by `Number(version)` threw
+  // on a version that defeats coercion or is nested past the call stack, and a NaN version made
+  // the comparison inconsistent. A state without a numeric version now sorts first, in file order.
+  it('orders request states by numeric version, unversioned first, without throwing', () => {
+    const hostile = '{"valueOf":1,"toString":1}';
+    const deep = towerText('array', DEEP_NESTING, '1');
+    assert.equal(lastReason(state(hostile, 'first') + state(deep, 'last')), 'last');
+    assert.equal(
+      lastReason(state(hostile, 'a') + state('2', 'two') + state(deep, 'b') + state('1', 'one') + state('"3"', 'c')),
+      'two',
     );
   });
 });
@@ -166,6 +228,30 @@ describe('deriveSettlement (§8.12)', () => {
     const after = { correlated_dlq_message_ids: ['m'], dlq_captured_message_ids: ['m'] };
     const samples = [...quietRun(30, 5).map((sample) => ({ ...sample, ...before })), recheck(155, after)];
     assert.equal(deriveSettlement(samples, deadline).status, 'not_established');
+  });
+
+  // A-05 regression (WP-09 single-pass review): `Number()` threw on a counter or watermark that
+  // defeats coercion or is nested past the call stack. A counter that is not a number is not a
+  // count, so never quiet; a watermark that is not a number never advances, as an absent one.
+  it('reads non-number counters as never quiet and watermarks as no advance, without throwing', () => {
+    const hostile = [parsedJson('{"valueOf":1,"toString":1}'), parsedTower('array', DEEP_NESTING), '0'];
+    for (const value of hostile) {
+      const counter = { source_queue: { visible: value, in_flight: 0, delayed: 0 } };
+      const counted = [...quietRun(30, 5).map((sample) => ({ ...sample, ...counter })), recheck(155, counter)];
+      assert.deepEqual(deriveSettlement(counted, deadline), { status: 'not_established' });
+      const watermark = { correlated_event_watermark: value };
+      const watched = [...quietRun(30, 5).map((sample) => ({ ...sample, ...watermark })), recheck(155, watermark)];
+      assert.equal(deriveSettlement(watched, deadline).status, 'established');
+    }
+  });
+
+  // Fuzz regression (seed 20261006, path 9364:3:1:2:6:5:6:6:8:8:11:11:13:12:12:15:16:13:12:13:13,
+  // minimized): a sample whose observed_at is not an instant made the ordering inconsistent, so
+  // the recheck at 0 s sorted after the window that closed at 120 s and settlement was established.
+  it('drops samples without a readable instant before ordering the rest', () => {
+    const unreadable = { ...quietSample(60), observed_at: [] };
+    const samples = [quietSample(0), quietSample(120), unreadable, recheck(0)];
+    assert.deepEqual(deriveSettlement(samples, deadline), { status: 'not_established' });
   });
 
   it('ignores samples after the deadline', () => {

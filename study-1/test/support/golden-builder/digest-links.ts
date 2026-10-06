@@ -6,6 +6,7 @@
 // linked file therefore keeps every reference consistent, while a literal digest written by a case
 // stays as written: that is how a case states a core-file digest mismatch on purpose.
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import { createHash } from 'node:crypto';
 
 import { canonicalJson } from '../../../src/record-contract/canonical-json.ts';
@@ -101,7 +102,7 @@ class LinkResolver {
     if (content === undefined) {
       return {
         ok: false,
-        error: `a digest link names ${JSON.stringify(path)}, which the scenario does not hold; expected a fixture file path`,
+        error: `a digest link names ${boundedJsonText(path)}, which the scenario does not hold; expected a fixture file path`,
       };
     }
     const resolved = this.#encode(content, [...chain, path]);

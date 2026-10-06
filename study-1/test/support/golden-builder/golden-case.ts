@@ -6,6 +6,7 @@
 // The fixture generator and the harness accept a case only through `parseGoldenCase`, which is
 // total over whatever a module exports.
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue, Result } from '../../../src/record-contract/primitives.ts';
 import { PROVIDER_REJECTION_REASONS } from '../../../src/record-contract/records/group-b/vocabulary.ts';
 import type { Problems } from './case-reading.ts';
@@ -122,7 +123,7 @@ function parseAcIds(value: unknown, problems: Problems): readonly string[] | und
   }
   const unique = ids.filter((id): id is string => id !== undefined);
   if (new Set(unique).size !== unique.length) {
-    problems.push(`case.ac_ids ${JSON.stringify(unique)} repeats an id; expected unique ids`);
+    problems.push(`case.ac_ids ${boundedJsonText(unique)} repeats an id; expected unique ids`);
     return undefined;
   }
   return unique;

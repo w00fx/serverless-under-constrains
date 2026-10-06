@@ -11,6 +11,7 @@ import { materializeCase } from '../../support/golden-builder/fixture-materializ
 import { defineGoldenCase } from '../../support/golden-builder/golden-case.ts';
 import type { BaseScenarioId, TrialPlan } from '../../support/golden-builder/golden-plan.ts';
 import type { ScenarioOperation } from '../../support/golden-builder/operation-parsing.ts';
+import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 
 const validator = createRecordValidator();
 const encoder = new TextEncoder();
@@ -161,6 +162,53 @@ describe('fixtureIntegrityProblems', () => {
     assert.deepEqual(found, [
       'runner/runner-journal.jsonl: trial_message_published digests do not match the published message bytes',
     ]);
+  });
+
+  // A-05 regression (WP-09 single-pass review): a value nested past the call stack, or one that
+  // defeats coercion, made the sequence check throw and the causation and digest messages quote
+  // it through JSON.stringify; each is now a bounded problem. Causation or DLQ messages of the
+  // wrong JSON type read as empty, and a message that is not an object as one without a body.
+  it('reports hostile member values in bounded problems instead of throwing', () => {
+    const deep = towerText('array', DEEP_NESTING, '1');
+    const found = (members: string): readonly string[] =>
+      fixtureIntegrityProblems(
+        new Map([
+          ['runner/x.jsonl', encoder.encode(`{"event_id":"e1","source":"s","source_instance_id":"i",${members}}\n`)],
+        ]),
+        validator,
+      );
+    for (const sequence of [deep, '{"valueOf":1,"toString":1}', '"1"']) {
+      assert.ok(found(`"source_sequence":${sequence}`).includes('s#i: sequences [NaN]; expected 1..1'));
+    }
+    const truncated = '\\[{200}…\\[truncated\\]';
+    const causation = found(`"source_sequence":1,"causation_event_ids":[${deep}]`);
+    assert.ok(
+      causation.some((problem) =>
+        new RegExp(`^runner/x\\.jsonl: e1 names unresolved predecessor ${truncated}$`).test(problem),
+      ),
+      causation.join('\n'),
+    );
+    const digest = found(`"source_sequence":1,"execution_manifest_sha256":${deep}`);
+    assert.ok(
+      digest.some((problem) =>
+        new RegExp(`^runner/x\\.jsonl: execution_manifest_sha256 ${truncated}; expected the digest undefined`).test(
+          problem,
+        ),
+      ),
+      digest.join('\n'),
+    );
+    assert.ok(
+      found('"source_sequence":1,"causation_event_ids":"x"').includes(
+        'runner/x.jsonl: e1 causation is not sorted and unique',
+      ),
+    );
+    const dlq = (messages: string): readonly string[] =>
+      fixtureIntegrityProblems(
+        new Map([['runner/d.json', encoder.encode(`{"record_type":"dlq_snapshot","messages":${messages}}\n`)]]),
+        validator,
+      );
+    assert.ok(dlq('"x"').every((problem) => !problem.includes('body digests')));
+    assert.ok(dlq(`[1,${deep}]`).includes('runner/d.json: messages[1] body digests do not match its body bytes'));
   });
 
   it('reports a DLQ message whose body digests do not match its body', () => {

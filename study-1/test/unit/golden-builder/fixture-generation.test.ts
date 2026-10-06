@@ -9,6 +9,7 @@ import { describe, it } from 'node:test';
 import {
   compareFixture,
   generateFixtures,
+  handAuthoredFixtureDirectories,
   orphanFixtureDirectories,
   sameBytes,
   writeFixture,
@@ -180,6 +181,47 @@ describe('compareFixture and orphans', () => {
       { kind: 'extra', path: `${FIXTURE_A}/extra.json` },
     ]);
     assert.deepEqual(orphanFixtureDirectories(files, report.fixtures), ['test/golden/f/fixtures/deleted-case']);
+    assert.deepEqual(handAuthoredFixtureDirectories(files), []);
+  });
+
+  // Regression (M1 staging tip fc334f2): the WP-13 evidence-index tree
+  // `test/golden/evidence-package/fixtures/durable-run-trial` has no case beside it and failed
+  // `npm run test:golden` as an orphan.
+  it('leaves fixtures of a golden directory without cases to their author and lists them', async () => {
+    const committed = new Map(committedA());
+    committed.set('test/golden/f/fixtures/deleted-case/a.json', encoder.encode('{}\n'));
+    committed.set('test/golden/hand/fixtures/tree/package/a.json', encoder.encode('{}\n'));
+    committed.set('test/golden/fixtures/top/a.json', encoder.encode('{}\n'));
+    committed.set('test/golden/f/sub/fixtures/nested/a.json', encoder.encode('{}\n'));
+    const { files, loader } = setup(new Map([[CASE_A, probeCase('case-a')]]), committed);
+    const report = await generateFixtures(files.findCaseFiles(), loader);
+    assert.deepEqual(orphanFixtureDirectories(files, report.fixtures), ['test/golden/f/fixtures/deleted-case']);
+    assert.deepEqual(handAuthoredFixtureDirectories(files), [
+      'test/golden/f/sub/fixtures/nested',
+      'test/golden/fixtures/top',
+      'test/golden/hand/fixtures/tree',
+    ]);
+  });
+
+  it('counts a golden directory as managed when its only case fails to load', async () => {
+    const { files, loader } = setup(
+      new Map<string, StaticCaseModule>([[CASE_B, { kind: 'throws', message: 'syntax' }]]),
+      new Map([['test/golden/f/fixtures/case-b/a.json', encoder.encode('{}\n')]]),
+    );
+    const report = await generateFixtures(files.findCaseFiles(), loader);
+    assert.deepEqual(report.fixtures, []);
+    assert.deepEqual(orphanFixtureDirectories(files, report.fixtures), ['test/golden/f/fixtures/case-b']);
+    assert.deepEqual(handAuthoredFixtureDirectories(files), []);
+  });
+
+  it('manages a root-level cases/ directory and its fixtures', async () => {
+    const { files, loader } = setup(
+      new Map([['test/golden/cases/root.case.ts', probeCase('root')]]),
+      new Map([['test/golden/fixtures/stale/a.json', encoder.encode('{}\n')]]),
+    );
+    const report = await generateFixtures(files.findCaseFiles(), loader);
+    assert.deepEqual(orphanFixtureDirectories(files, report.fixtures), ['test/golden/fixtures/stale']);
+    assert.deepEqual(handAuthoredFixtureDirectories(files), []);
   });
 
   it('compares bytes exactly', () => {
@@ -262,6 +304,25 @@ describe('fixture command', () => {
     );
     assert.match(outcome.stderr, /^test\/golden\/f\/fixtures\/orphan: no case owns this fixture directory/m);
     assert.equal(dirty.files.listFiles(FIXTURE_A).length, 0, 'check never writes');
+  });
+
+  it('lists a hand-authored fixture in either mode without counting it as a problem', async () => {
+    const handMade = new Map([['test/golden/hand/fixtures/tree/a.json', encoder.encode('{}\n')]]);
+    const listed =
+      'test/golden/hand/fixtures/tree: hand-authored fixture, neither generated nor checked (no cases/ beside it)\n';
+    const checked = setup(new Map([[CASE_A, probeCase('case-a')]]), new Map([...committedA(), ...handMade]));
+    assert.deepEqual(await runFixtureCommand(['--check'], checked), {
+      stdout: `${listed}golden fixtures (check): 1 case(s), 0 problem(s)\n`,
+      stderr: '',
+      exit_code: 0,
+    });
+    const written = setup(new Map([[CASE_A, probeCase('case-a')]]), handMade);
+    assert.deepEqual(await runFixtureCommand([], written), {
+      stdout: `case-a: written\n${listed}golden fixtures (write): 1 case(s), 0 problem(s)\n`,
+      stderr: '',
+      exit_code: 0,
+    });
+    assert.deepEqual(written.files.listFiles('test/golden/hand/fixtures/tree'), ['a.json'], 'never written');
   });
 
   it('writes missing fixtures, refuses changed ones, and overwrites only named cases', async () => {

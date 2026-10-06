@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { NodeCaseModuleLoader } from '../../../tools/golden/lib/case-module-loader.ts';
 import { NodeFixtureFileSystem } from '../../../tools/golden/lib/fixture-file-system.ts';
-import { isJsonObject } from '../../../src/record-contract/json-value.ts';
+import { boundedJsonText, boundedText, isJsonObject } from '../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import type { FixtureBytes } from '../../support/golden-builder/digest-links.ts';
 import { locateCase } from '../../support/golden-builder/fixture-layout.ts';
@@ -90,7 +90,9 @@ export function fixtureRecords(files: FixtureBytes, path: string): readonly Json
 /**
  * Where `actual` departs from `expected`, as a partial match: every member an expected object
  * names must match, arrays match item by item and length, and scalars match exactly. Members the
- * expectation does not name are not compared. Iterative, so depth is not a concern.
+ * expectation does not name are not compared. Iterative, and every value and path in a message is
+ * rendered by the kernel's bounded helpers, so neither depth nor size can make it throw or flood
+ * the report (Owner amendment A-05).
  *
  * @example
  * expectedMismatches({ verdict: 'pass' }, { verdict: 'fail', extra: 1 }); // ['$.verdict: expected "pass", got "fail"']
@@ -121,7 +123,7 @@ function compareStep(
     return gotItems?.length === items.length
       ? { mismatches: [], children: items.map((item, index) => [`${at}[${String(index)}]`, item, gotItems[index]]) }
       : {
-          mismatches: [`${at}: expected an array of ${String(items.length)}, got ${JSON.stringify(got)}`],
+          mismatches: [`${boundedText(at)}: expected an array of ${String(items.length)}, got ${shown(got)}`],
           children: [],
         };
   }
@@ -131,11 +133,16 @@ function compareStep(
           mismatches: [],
           children: Object.entries(want).map(([key, value]) => [`${at}.${key}`, value, ownMember(got, key)]),
         }
-      : { mismatches: [`${at}: expected an object, got ${JSON.stringify(got)}`], children: [] };
+      : { mismatches: [`${boundedText(at)}: expected an object, got ${shown(got)}`], children: [] };
   }
   return want === got
     ? { mismatches: [], children: [] }
-    : { mismatches: [`${at}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`], children: [] };
+    : { mismatches: [`${boundedText(at)}: expected ${shown(want)}, got ${shown(got)}`], children: [] };
+}
+
+// An absent actual value reads as `undefined`, as the case author would write it.
+function shown(value: JsonValue | undefined): string {
+  return value === undefined ? 'undefined' : boundedJsonText(value);
 }
 
 function ownMember(object: JsonObject, key: string): JsonValue | undefined {

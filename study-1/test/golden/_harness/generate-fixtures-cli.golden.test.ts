@@ -61,9 +61,15 @@ describe('generate-fixtures command line', () => {
     );
   });
 
+  // Hand-authored fixture directories of the study tree (golden directories without cases) are
+  // listed before the summary; they are never problems.
   it('defaults the root to the working directory, as npm run test:golden runs it', async () => {
-    const { stdout } = await run(process.execPath, [CLI, '--check'], { cwd: STUDY_ROOT });
-    assert.match(stdout, /^golden fixtures \(check\): \d+ case\(s\), 0 problem\(s\)\n$/);
+    const { stdout, stderr } = await run(process.execPath, [CLI, '--check'], { cwd: STUDY_ROOT });
+    assert.equal(stderr, '');
+    assert.match(stdout, /(^|\n)golden fixtures \(check\): \d+ case\(s\), 0 problem\(s\)\n$/);
+    for (const line of stdout.split('\n').slice(0, -2)) {
+      assert.match(line, /^test\/golden\/\S+\/fixtures\/[^/\s]+: hand-authored fixture, neither generated nor checked/);
+    }
   });
 
   it('exits 2 on a usage error', async () => {
