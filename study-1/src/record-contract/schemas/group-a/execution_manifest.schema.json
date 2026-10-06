@@ -84,8 +84,8 @@
         "type": "object",
         "properties": {
           "parameter": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-          "conventional": {},
-          "durable": {},
+          "conventional": { "$ref": "#/$defs/declared_value" },
+          "durable": { "$ref": "#/$defs/declared_value" },
           "basis": { "type": "string", "minLength": 1 }
         },
         "required": ["parameter", "conventional", "durable", "basis"],
@@ -283,6 +283,14 @@
         "decision"
       ],
       "additionalProperties": false
+    },
+    "declared_value": {
+      "description": "One variant's value of a declared difference: a non-empty string, a safe integer or a boolean. Never null: a declared difference names a value on both sides.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+        { "type": "boolean" }
+      ]
     },
     "positive_ms": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "timing": {

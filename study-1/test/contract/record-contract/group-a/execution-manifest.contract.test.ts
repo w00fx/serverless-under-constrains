@@ -245,6 +245,17 @@ describe('execution_manifest (BR-RUA-040)', () => {
   });
 
   it('records the declared variant differences of BR-RUA-007', () => {
+    const conventional = ['declared_variant_differences', 0, 'conventional'] as const;
+    for (const value of ['STANDARD', true, 9007199254740991]) {
+      assertAccepted(withPath(runExecutionManifest(), conventional, value), `scalar ${JSON.stringify(value)}`);
+    }
+    for (const value of [{ VisibilityTimeout: 60 }, [60], '', 60.5, 9007199254740992]) {
+      assertRejected(
+        withPath(runExecutionManifest(), conventional, value),
+        '/declared_variant_differences/0/conventional anyOf',
+        `declared value ${JSON.stringify(value)}`,
+      );
+    }
     assertRejected(
       withPath(runExecutionManifest(), ['declared_variant_differences', 0, 'basis'], ''),
       '/declared_variant_differences/0/basis minLength',
