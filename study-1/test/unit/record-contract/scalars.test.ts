@@ -2,6 +2,8 @@
 // safe-integer amounts and decimal-string aggregates.
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import {
@@ -14,7 +16,9 @@ import {
 import { isSha256Hex, sha256Hex } from '../../../src/record-contract/digests.ts';
 import { UUID4_PATTERN, isUuid4, parseUuid4 } from '../../../src/record-contract/identifiers.ts';
 import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
+import { NONEMPTY_TRIMMED_PATTERN } from '../../../src/record-contract/primitives.ts';
 import type { DecimalString, UtcMillis } from '../../../src/record-contract/primitives.ts';
+import { DEFAULT_SCHEMA_ROOT } from '../../../src/record-contract/schema-registry.ts';
 import { formatUtcMillis, isUtcMillis, parseUtcMillis } from '../../../src/record-contract/timestamps.ts';
 
 const UUID = '3f1c2a9e-8b4d-4c1e-9f00-1a2b3c4d5e6f';
@@ -190,5 +194,26 @@ describe('decimal aggregates', () => {
       () => signedDifferenceMs(at('2026-10-05T00:00:02.000Z'), at('later')),
       /"later" is not a UTC millis timestamp/,
     );
+  });
+});
+
+// The one definition the hand-written guards of four packages share (M0 chores); it must stay
+// the catalogue's `nonempty_trimmed` pattern as Ajv compiles it.
+describe('nonempty-trimmed strings', () => {
+  it('is the _defs nonempty_trimmed pattern with the u flag', () => {
+    const defs = JSON.parse(readFileSync(join(DEFAULT_SCHEMA_ROOT, '_defs.schema.json'), 'utf8')) as {
+      readonly $defs: { readonly nonempty_trimmed: { readonly pattern: string } };
+    };
+    assert.equal(NONEMPTY_TRIMMED_PATTERN.source, defs.$defs.nonempty_trimmed.pattern);
+    assert.equal(NONEMPTY_TRIMMED_PATTERN.flags, 'u');
+  });
+
+  it('accepts a nonempty string without edge whitespace or inner line terminators', () => {
+    for (const good of ['a', 'provider-1', 'two words', 'tab\tinside', '\u{1F600}']) {
+      assert.equal(NONEMPTY_TRIMMED_PATTERN.test(good), true, JSON.stringify(good));
+    }
+    for (const bad of ['', ' ', ' a', 'a ', '\ta', 'a\n', 'a\nb', 'a\u2028b', '\u00a0a', 'a\ufeff']) {
+      assert.equal(NONEMPTY_TRIMMED_PATTERN.test(bad), false, JSON.stringify(bad));
+    }
   });
 });

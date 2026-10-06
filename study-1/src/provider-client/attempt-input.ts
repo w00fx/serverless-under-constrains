@@ -7,6 +7,7 @@
 
 import { isUuid4 } from '../record-contract/identifiers.ts';
 import { boundedJsonText } from '../record-contract/json-value.ts';
+import { NONEMPTY_TRIMMED_PATTERN } from '../record-contract/primitives.ts';
 import type { Uuid4 } from '../record-contract/primitives.ts';
 import type { CallerId } from '../record-contract/records/group-b/vocabulary.ts';
 
@@ -25,8 +26,6 @@ export interface AttemptInput {
   readonly causation_event_ids: readonly Uuid4[];
 }
 
-// The `_defs` `nonempty_trimmed` pattern; Ajv compiles schema patterns with the `u` flag.
-const NONEMPTY_TRIMMED_PATTERN = /^\S(.*\S)?$/u;
 // A Lambda version number: a positive integer without leading zeros.
 const PROVIDER_VERSION_PATTERN = /^[1-9][0-9]*$/u;
 

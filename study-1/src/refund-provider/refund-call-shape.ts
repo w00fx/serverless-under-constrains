@@ -22,6 +22,7 @@ import type {
   Sha256Hex,
   Uuid4,
 } from '../record-contract/primitives.ts';
+import { NONEMPTY_TRIMMED_PATTERN } from '../record-contract/primitives.ts';
 import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
 import { PROVIDER_CALLER_IDS } from '../record-contract/records/group-a/provider_refund_call.ts';
 import { parseExecutionIdentityFields } from './execution-identity-fields.ts';
@@ -46,8 +47,6 @@ export const REFUND_CALL_PROPERTIES = [
   'currency',
 ] as const;
 
-/** `_defs.schema.json#/$defs/nonempty_trimmed`, with the `u` flag Ajv compiles patterns with. */
-export const NONEMPTY_TRIMMED_PATTERN = /^\S(.*\S)?$/u;
 /** The call schema's ISO 4217-shaped currency pattern. */
 export const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
 
