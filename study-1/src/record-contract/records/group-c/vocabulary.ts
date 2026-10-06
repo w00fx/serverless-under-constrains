@@ -254,6 +254,10 @@ export const ARTIFACT_CLASSES = [
   'provider_warmup_journal',
   'caller_canary_journal',
   'controller_canary_journal',
+  // Owner amendment A-09 and decisions 58/65: the runner's execution-level configuration item
+  // (`<execution_id>#execution`/`config` in the control table), exported by the evidence collector.
+  // Supplementary like the readiness journals, never an execution-scope input (A-13).
+  'provider_execution_configuration',
   'trial_manifest',
   'payment',
   'approved_decision',
