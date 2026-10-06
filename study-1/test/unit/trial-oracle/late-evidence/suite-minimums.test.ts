@@ -41,6 +41,6 @@ function describeFloor(feature: string, floor: SuiteFloor): void {
   });
 }
 
-/** The WP-15 counts at first delivery. */
-describeFloor('trial-oracle-late-evidence', { unit: 90, fuzz: 7 });
+/** The WP-15 counts at first delivery, ratcheted by its single-pass review. */
+describeFloor('trial-oracle-late-evidence', { unit: 98, fuzz: 8 });
 describeFloor('trial-oracle-integrity', { golden: 36 });
