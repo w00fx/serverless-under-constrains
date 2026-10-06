@@ -69,3 +69,74 @@ export function transportErrorFromThrown(thrown: unknown): ProviderTransportErro
     };
   }
 }
+
+/** The error name of a port that resolved something other than a `ProviderTransportResult`. */
+export const MALFORMED_PORT_RESULT_NAME = 'MalformedPortResult';
+
+/**
+ * The settlement a port resolved, copied field by field when it has the shape of a
+ * `ProviderTransportResult`; otherwise a transport error named MALFORMED_PORT_RESULT_NAME that
+ * says what was resolved. A defective port that resolves `undefined`, a string or an object with
+ * mistyped fields (or with throwing getters) still settles the attempt after the dispatch
+ * boundary instead of making the classification throw (WP-06 review round 2). Each field is
+ * read once, so a getter cannot change a value between this check and its later use.
+ *
+ * @example
+ * transportResultOf(undefined);
+ * // { kind: 'transport_error', error_name: 'MalformedPortResult', message: 'the provider invocation port resolved undefined; ...' }
+ */
+export function transportResultOf(value: unknown): ProviderTransportResult {
+  try {
+    const result = responseSettlementOf(value) ?? transportErrorOf(value);
+    if (result !== undefined) {
+      return result;
+    }
+  } catch {
+    // A throwing getter is no better formed than a missing field: the value falls through to
+    // the malformed-result error below, which the attempt records as its outcome.
+  }
+  return {
+    kind: 'transport_error',
+    error_name: MALFORMED_PORT_RESULT_NAME,
+    message: `the provider invocation port resolved ${typeNameOf(value)}; expected a ProviderTransportResult (kind "response" or "transport_error" with typed fields)`,
+  };
+}
+
+// `typeof` never throws, not even for a revoked proxy, so the message is total.
+function typeNameOf(value: unknown): string {
+  return value === null ? 'null' : typeof value;
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === 'string';
+}
+
+function responseSettlementOf(value: unknown): ProviderResponseSettlement | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const fields = value as Partial<Record<keyof ProviderResponseSettlement, unknown>>;
+  const { kind, status_code, executed_version, function_error, payload } = fields;
+  const wellTyped =
+    kind === 'response' &&
+    typeof status_code === 'number' &&
+    isOptionalString(executed_version) &&
+    isOptionalString(function_error) &&
+    payload instanceof Uint8Array;
+  return wellTyped ? { kind, status_code, executed_version, function_error, payload } : undefined;
+}
+
+function transportErrorOf(value: unknown): ProviderTransportError | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const fields = value as Partial<Record<keyof ProviderTransportError, unknown>>;
+  const { kind, error_name, message, http_status } = fields;
+  if (kind !== 'transport_error' || typeof error_name !== 'string' || typeof message !== 'string') {
+    return undefined;
+  }
+  if (http_status === undefined) {
+    return { kind, error_name, message };
+  }
+  return typeof http_status === 'number' ? { kind, error_name, message, http_status } : undefined;
+}

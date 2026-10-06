@@ -4,8 +4,8 @@
 // outcome and journals it in bounded time, whatever the transport does:
 // - a payload nested 100,000 deep (Owner amendment A-05.3) is FAILED/MALFORMED_RESPONSE (design
 //   §9.9), not a thrown RangeError with no attempt_outcome_recorded;
-// - a rejection with a non-stringifiable value is a transport error at its own time, not a
-//   timer win at 3 s plus an unhandled rejection;
+// - a rejection with a non-stringifiable value, or a resolved value that is not a settlement,
+//   is a transport error at its own time, not a timer win at 3 s or a TypeError;
 // - a transport that ignores the abort and never settles (RK-04) cannot hold back TIMED_OUT,
 //   which depends only on the durable caller_timeout_recorded (BR-RUA-023);
 // - an outsized function error or executed version is kept bounded, so the outcome event stays
@@ -19,7 +19,10 @@ import { setImmediate as nextMacrotask } from 'node:timers/promises';
 import { describe, it } from 'node:test';
 
 import type { JournalEvent } from '../../../src/event-journal/journal-event.ts';
-import { UNREPRESENTABLE_THROWN_NAME } from '../../../src/provider-client/provider-invocation-port.ts';
+import {
+  MALFORMED_PORT_RESULT_NAME,
+  UNREPRESENTABLE_THROWN_NAME,
+} from '../../../src/provider-client/provider-invocation-port.ts';
 import { RESPONSE_DIAGNOSTIC_MAX_CHARS } from '../../../src/provider-client/provider-response.ts';
 import {
   attemptInput,
@@ -171,6 +174,21 @@ describe('ProviderClient with a hostile transport', () => {
     assert.equal(harness.time.pendingTimerCount(), 0);
     const attempted = harness.port.entries().map((entry) => entry.event.record_type);
     assert.deepEqual(attempted, ['caller_timeout_recorded']);
+  });
+
+  it('a port resolving a value that is not a settlement is TRANSPORT_ERROR at its own time', async () => {
+    const harness = clientHarness();
+    harness.invoker.resolveMalformedAfter(100n * MS, undefined);
+    const report = await settleAttempt(harness);
+    assert.equal(report.outcome, 'FAILED');
+    assert.equal(report.dispatch_state, 'DISPATCHED');
+    assert.equal(report.failure?.code, 'TRANSPORT_ERROR');
+    assert.ok(
+      report.failure.detail.startsWith(`transport_error:"${MALFORMED_PORT_RESULT_NAME}": `),
+      report.failure.detail,
+    );
+    assert.equal(report.dispatch_to_settlement_ns, '100000000');
+    assert.equal(report.outcome_event_id, onlyEvent(journalEvents(harness), 'attempt_outcome_recorded').event_id);
   });
 
   it('an outsized function error is kept bounded and the outcome event is stored', async () => {
