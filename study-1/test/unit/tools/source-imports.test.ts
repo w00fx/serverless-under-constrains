@@ -31,7 +31,8 @@ describe('extractImports', () => {
     assert.deepEqual(extractImports('src/x/y.ts', text), [
       { specifier: './a.ts', typeOnly: false },
       { specifier: './b.ts', typeOnly: true },
-      { specifier: './c.ts', typeOnly: true },
+      // Inline-only type specifiers keep a side-effect import under verbatimModuleSyntax.
+      { specifier: './c.ts', typeOnly: false },
       { specifier: './e.ts', typeOnly: false },
       { specifier: './g.ts', typeOnly: false },
       { specifier: './i.ts', typeOnly: false },
@@ -67,7 +68,11 @@ describe('isTypeOnlyModule', () => {
       ),
       true,
     );
-    assert.equal(isTypeOnlyModule("import { type A } from './a.ts';\nexport type B = A;"), true);
+  });
+
+  it('treats an inline-only type import as runtime code: it still evaluates its module', () => {
+    assert.equal(isTypeOnlyModule("import { type A } from './a.ts';\nexport type B = A;"), false);
+    assert.equal(isTypeOnlyModule("import type { A } from './a.ts';\nexport type B = A;"), true);
   });
 
   it('recognizes runtime code', () => {

@@ -1,12 +1,14 @@
 // Static import extraction for the module-boundary check (design §5.4). It parses the file
 // with the TypeScript compiler, so imports in comments or strings never count and type-only
-// imports are told apart from value imports.
+// imports are told apart from value imports. Only `import type` / `export type` is erased: under
+// verbatimModuleSyntax and Node's type stripping, `import { type X } from './m.ts'` is kept as
+// `import {} from './m.ts'`, which still evaluates the module (WP-00 review round 1).
 
 import ts from 'typescript';
 
 export interface ImportReference {
   readonly specifier: string;
-  /** True when the import is erased at runtime (`import type`, or every specifier type-only). */
+  /** True when the import is erased at runtime: `import type` or `export type` only. */
   readonly typeOnly: boolean;
 }
 
@@ -69,20 +71,7 @@ function isDynamicImport(node: ts.Node): node is ts.CallExpression {
 }
 
 function isTypeOnlyImportClause(clause: ts.ImportClause | undefined): boolean {
-  if (clause === undefined) {
-    return false;
-  }
-  if (clause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-    return true;
-  }
-  const bindings = clause.namedBindings;
-  return (
-    clause.name === undefined &&
-    bindings !== undefined &&
-    ts.isNamedImports(bindings) &&
-    bindings.elements.length > 0 &&
-    bindings.elements.every((element) => element.isTypeOnly)
-  );
+  return clause?.phaseModifier === ts.SyntaxKind.TypeKeyword;
 }
 
 function isTypeOnlyStatement(statement: ts.Statement): boolean {

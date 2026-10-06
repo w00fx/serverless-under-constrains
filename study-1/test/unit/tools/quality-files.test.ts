@@ -49,7 +49,11 @@ describe('committed quality files', () => {
       );
     const journal = 'src/event-journal/journal-port.ts';
     assert.deepEqual(rulesOf(journal, "import type { ItemKey } from '../durable-store/item-store-port.ts';"), []);
-    assert.deepEqual(rulesOf(journal, "import { type ItemKey } from '../durable-store/item-store-port.ts';"), []);
+    // `import { type X }` keeps `import {} from` under verbatimModuleSyntax, so durable-store is
+    // evaluated at runtime: that is a value edge (WP-00 review round 1).
+    assert.deepEqual(rulesOf(journal, "import { type ItemKey } from '../durable-store/item-store-port.ts';"), [
+      'EDGE_REQUIRES_TYPE_ONLY: ../durable-store/item-store-port.ts is a value import; the event-journal -> durable-store edge allows type-only imports',
+    ]);
     assert.deepEqual(
       rulesOf(journal, "import { type ItemKey, createItemStore } from '../durable-store/item-store-port.ts';"),
       [
