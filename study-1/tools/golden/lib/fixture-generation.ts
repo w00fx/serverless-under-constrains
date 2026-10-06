@@ -11,6 +11,7 @@
 // of d24f678, whose expected digests were computed with `shasum`); the generator neither writes
 // nor checks it, and lists it in its report instead of failing on it (WP-09 single-pass review).
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { FixtureBytes } from '../../../test/support/golden-builder/digest-links.ts';
 import { locateCase } from '../../../test/support/golden-builder/fixture-layout.ts';
 import { materializeCase } from '../../../test/support/golden-builder/fixture-materializer.ts';
@@ -87,7 +88,7 @@ async function generateOne(
     return {
       ok: false,
       error: [
-        `case_id ${JSON.stringify(parsed.value.case_id)}; expected the file name's ${JSON.stringify(location.case_id)}`,
+        `case_id ${boundedJsonText(parsed.value.case_id)}; expected the file name's ${boundedJsonText(location.case_id)}`,
       ],
     };
   }

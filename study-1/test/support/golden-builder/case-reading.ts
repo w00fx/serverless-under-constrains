@@ -5,7 +5,7 @@
 // never mistaken for a declared field; every reader returns problems instead of throwing.
 
 import { canonicalJsonIfRepresentable } from '../../../src/record-contract/canonical-json.ts';
-import { boundedText } from '../../../src/record-contract/json-value.ts';
+import { boundedJsonText, boundedText } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 
 /** Problems found so far, each prefixed with the location it was found at. */
@@ -42,7 +42,7 @@ export function readObject(
     if (!required.includes(key) && !optional.includes(key)) {
       const allowed = [...required, ...optional];
       problems.push(
-        `${at} has unknown member ${JSON.stringify(key)}; expected ${allowed.length === 0 ? 'no members' : `only ${allowed.join(', ')}`}`,
+        `${at} has unknown member ${boundedJsonText(key)}; expected ${allowed.length === 0 ? 'no members' : `only ${allowed.join(', ')}`}`,
       );
     } else if ('value' in descriptor) {
       fields.set(key, descriptor.value);

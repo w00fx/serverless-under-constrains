@@ -4,6 +4,7 @@
 // that real evidence could show but the architecture never produces belongs to the scenario
 // operations, which edit records after the build, not to the plan.
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { Scenario } from '../../../src/record-contract/primitives.ts';
 import { NONEMPTY_TRIMMED_PATTERN } from '../../../src/record-contract/primitives.ts';
 import type { AttemptPlan, DeliveryPlan, PlanCaller, TrialPlan } from './golden-plan.ts';
@@ -59,14 +60,14 @@ function attemptValueProblems(attempt: AttemptPlan, position: number): readonly 
     problems.push(`${label} amount_minor ${String(amount)}; expected a safe integer of at least 1`);
   }
   if (attempt.currency !== undefined && !CURRENCY_PATTERN.test(attempt.currency)) {
-    problems.push(`${label} currency ${JSON.stringify(attempt.currency)}; expected three uppercase letters`);
+    problems.push(`${label} currency ${boundedJsonText(attempt.currency)}; expected three uppercase letters`);
   }
   for (const [field, value] of [
     ['refund_request_id', attempt.refund_request_id],
     ['payment_id', attempt.payment_id],
   ] as const) {
     if (value !== undefined && !NONEMPTY_TRIMMED_PATTERN.test(value)) {
-      problems.push(`${label} ${field} ${JSON.stringify(value)}; expected text non-empty after trimming`);
+      problems.push(`${label} ${field} ${boundedJsonText(value)}; expected text non-empty after trimming`);
     }
   }
   if (attempt.rejection_reason !== undefined && attempt.behavior !== 'rejected') {

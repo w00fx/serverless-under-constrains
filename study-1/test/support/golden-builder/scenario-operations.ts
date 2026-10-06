@@ -6,7 +6,7 @@
 // expected shape instead of throwing.
 
 import { classifyArtifactPath } from '../../../src/record-contract/evidence-refs.ts';
-import { isJsonObject } from '../../../src/record-contract/json-value.ts';
+import { boundedJsonText, isJsonObject } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue, Result } from '../../../src/record-contract/primitives.ts';
 import type { FixtureFileContent, ScenarioFiles } from './digest-links.ts';
 import { mapStrings } from './digest-links.ts';
@@ -130,7 +130,7 @@ function applyOne(files: FileMap, operation: ModelOperation): Result<null, strin
   if (violation !== undefined) {
     return {
       ok: false,
-      error: `path ${JSON.stringify(operation.path)} is ${violation}; expected a normalized package-relative path`,
+      error: `path ${boundedJsonText(operation.path)} is ${violation}; expected a normalized package-relative path`,
     };
   }
   if (operation.op === 'put_file') {
@@ -141,7 +141,7 @@ function applyOne(files: FileMap, operation: ModelOperation): Result<null, strin
   if (content === undefined) {
     return {
       ok: false,
-      error: `the scenario holds no file ${JSON.stringify(operation.path)}; expected an existing fixture file`,
+      error: `the scenario holds no file ${boundedJsonText(operation.path)}; expected an existing fixture file`,
     };
   }
   const edited = editContent(content, operation);
@@ -226,7 +226,7 @@ export function selectRecord(records: readonly JsonValue[], select: RecordSelect
   const index = indexOfSelection(records, select);
   const record = records[index];
   return record === undefined
-    ? { ok: false, error: `no record matches selector ${JSON.stringify(select)}; expected exactly one match` }
+    ? { ok: false, error: `no record matches selector ${boundedJsonText(select)}; expected exactly one match` }
     : { ok: true, value: { index, record } };
 }
 

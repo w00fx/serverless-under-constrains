@@ -4,6 +4,7 @@
 // result instead of a stack overflow (Owner amendment A-05). Members are read only when they are
 // own properties, so `__proto__` or `constructor` name ordinary members, never inherited ones.
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue, Result } from '../../../src/record-contract/primitives.ts';
 import { defineMember } from './digest-links.ts';
 
@@ -20,11 +21,11 @@ export function parsePointer(pointer: string): Result<readonly string[], string>
     return { ok: true, value: [] };
   }
   if (!pointer.startsWith('/')) {
-    return { ok: false, error: `pointer ${JSON.stringify(pointer)}; expected '' or a string starting with '/'` };
+    return { ok: false, error: `pointer ${boundedJsonText(pointer)}; expected '' or a string starting with '/'` };
   }
   const tokens = pointer.slice(1).split('/');
   if (tokens.some((token) => /~(?![01])/.test(token))) {
-    return { ok: false, error: `pointer ${JSON.stringify(pointer)} has a bare '~'; expected '~0' or '~1' escapes` };
+    return { ok: false, error: `pointer ${boundedJsonText(pointer)} has a bare '~'; expected '~0' or '~1' escapes` };
   }
   return { ok: true, value: tokens.map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~')) };
 }
@@ -68,7 +69,7 @@ function editAtPointer(document: JsonValue, pointer: string, edit: ParentEdit): 
     if (child === undefined) {
       return {
         ok: false,
-        error: `pointer ${JSON.stringify(pointer)} has no member ${JSON.stringify(token)}; expected an existing parent`,
+        error: `pointer ${boundedJsonText(pointer)} has no member ${boundedJsonText(token)}; expected an existing parent`,
       };
     }
     parents.push({ container: current, token });
@@ -109,7 +110,7 @@ function replaceMember(parent: JsonValue, token: string, value: JsonValue, point
     if (index === undefined) {
       return {
         ok: false,
-        error: `pointer ${JSON.stringify(pointer)} index ${JSON.stringify(token)}; expected 0..${String(items.length)} or '-'`,
+        error: `pointer ${boundedJsonText(pointer)} index ${boundedJsonText(token)}; expected 0..${String(items.length)} or '-'`,
       };
     }
     items[index] = value;
@@ -118,7 +119,7 @@ function replaceMember(parent: JsonValue, token: string, value: JsonValue, point
   if (parent === null || typeof parent !== 'object') {
     return {
       ok: false,
-      error: `pointer ${JSON.stringify(pointer)} crosses a ${parent === null ? 'null' : typeof parent}; expected objects and arrays`,
+      error: `pointer ${boundedJsonText(pointer)} crosses a ${parent === null ? 'null' : typeof parent}; expected objects and arrays`,
     };
   }
   const copy = copyObject(parent as Readonly<Record<string, JsonValue>>);
@@ -128,7 +129,7 @@ function replaceMember(parent: JsonValue, token: string, value: JsonValue, point
 
 function deleteMember(parent: JsonValue, token: string, pointer: string): Result<JsonValue, string> {
   if (memberOf(parent, token) === undefined) {
-    return { ok: false, error: `pointer ${JSON.stringify(pointer)} names no existing member; expected one to remove` };
+    return { ok: false, error: `pointer ${boundedJsonText(pointer)} names no existing member; expected one to remove` };
   }
   if (Array.isArray(parent)) {
     return { ok: true, value: (parent as readonly JsonValue[]).filter((_item, index) => index !== Number(token)) };

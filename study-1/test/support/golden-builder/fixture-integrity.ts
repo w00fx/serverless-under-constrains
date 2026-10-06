@@ -7,12 +7,12 @@
 import { createHash } from 'node:crypto';
 
 import { isCanonicalCausation } from '../../../src/record-contract/envelope.ts';
-import { isJsonObject } from '../../../src/record-contract/json-value.ts';
+import { boundedJsonText, boundedText, isJsonObject } from '../../../src/record-contract/json-value.ts';
 import { parseJsonDocument, parseJsonl } from '../../../src/record-contract/parsing.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import type { RecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import type { FixtureBytes } from './digest-links.ts';
-import { recordText } from './golden-event-log.ts';
+import { recordNumber, recordText } from './golden-event-log.ts';
 
 /** One parsed record and the file it came from. */
 export interface LocatedRecord {
@@ -71,7 +71,7 @@ function schemaProblems(path: string, record: JsonObject, validator: RecordValid
   return validation.valid
     ? []
     : [
-        `${path}: ${recordText(record, 'record_type')} violates its schema: ${JSON.stringify(validation.violations.slice(0, 3))}`,
+        `${path}: ${boundedText(recordText(record, 'record_type'))} violates its schema: ${JSON.stringify(validation.violations.slice(0, 3))}`,
       ];
 }
 
@@ -81,7 +81,7 @@ function eventIdProblems(events: readonly LocatedRecord[]): readonly string[] {
     const eventId = recordText(record, 'event_id');
     const repeated = seen.has(eventId);
     seen.add(eventId);
-    return repeated ? [`${path}: event_id ${eventId} appears twice; expected unique event ids`] : [];
+    return repeated ? [`${path}: event_id ${boundedText(eventId)} appears twice; expected unique event ids`] : [];
   });
 }
 
@@ -90,12 +90,14 @@ function sequenceProblems(events: readonly LocatedRecord[]): readonly string[] {
   const byInstance = new Map<string, number[]>();
   for (const { record } of events) {
     const key = `${recordText(record, 'source')}#${recordText(record, 'source_instance_id')}`;
-    byInstance.set(key, [...(byInstance.get(key) ?? []), Number(record['source_sequence'])]);
+    byInstance.set(key, [...(byInstance.get(key) ?? []), recordNumber(record, 'source_sequence')]);
   }
   return [...byInstance].flatMap(([key, sequences]) => {
     const sorted = sequences.toSorted((a, b) => a - b);
     const dense = sorted.every((sequence, index) => sequence === index + 1);
-    return dense ? [] : [`${key}: sequences ${JSON.stringify(sorted)}; expected 1..${String(sorted.length)}`];
+    return dense
+      ? []
+      : [`${boundedText(key)}: sequences ${boundedJsonText(sorted)}; expected 1..${String(sorted.length)}`];
   });
 }
 
@@ -108,10 +110,10 @@ function causationProblems(events: readonly LocatedRecord[]): readonly string[] 
     }
     const ids: readonly JsonValue[] = Array.isArray(causation) ? causation : [];
     const unresolved = ids.filter((id) => typeof id !== 'string' || !known.has(id));
-    const eventId = recordText(record, 'event_id');
+    const eventId = boundedText(recordText(record, 'event_id'));
     return [
       ...(isCanonicalCausation(ids) ? [] : [`${path}: ${eventId} causation is not sorted and unique`]),
-      ...unresolved.map((id) => `${path}: ${eventId} names unresolved predecessor ${JSON.stringify(id)}`),
+      ...unresolved.map((id) => `${path}: ${eventId} names unresolved predecessor ${boundedJsonText(id)}`),
     ];
   });
 }
@@ -133,7 +135,9 @@ function digestProblems(files: FixtureBytes, records: readonly LocatedRecord[]):
   ): readonly string[] =>
     actual === undefined || actual === expected
       ? []
-      : [`${where}: ${field} ${JSON.stringify(actual)}; expected the digest ${String(expected)} of the bytes it names`];
+      : [
+          `${where}: ${field} ${boundedJsonText(actual)}; expected the digest ${String(expected)} of the bytes it names`,
+        ];
   const executionDigest = digestOf('admission/execution-manifest.json');
   return records.flatMap(({ path, record }) => {
     const trialDirectory = trialDirectoryOf(path, record);

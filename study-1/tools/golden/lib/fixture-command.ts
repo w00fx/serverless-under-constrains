@@ -2,6 +2,7 @@
 // (user-facing CLI output). Ports are injected, so the whole command runs against the in-memory
 // fakes in tests and against the study tree in `npm run test:golden`.
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { CaseModuleLoader } from './case-module-loader.ts';
 import type { FixtureFileSystem } from './fixture-file-system.ts';
 import {
@@ -44,17 +45,16 @@ export function parseFixtureArguments(
 ): { readonly ok: true; readonly value: FixtureCommandOptions } | { readonly ok: false; readonly error: string } {
   let check = false;
   const overwrite = new Set<string>();
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+  const pending = [...args];
+  for (let arg = pending.shift(); arg !== undefined; arg = pending.shift()) {
     if (arg === '--check') {
       check = true;
       continue;
     }
-    const value = args[index + 1];
+    const value = pending.shift();
     if ((arg !== '--overwrite' && arg !== '--root') || value === undefined || value.startsWith('--')) {
-      return { ok: false, error: `argument ${JSON.stringify(arg)} in ${JSON.stringify(args)}; ${USAGE}` };
+      return { ok: false, error: `argument ${boundedJsonText(arg)} in ${boundedJsonText(args)}; ${USAGE}` };
     }
-    index += 1;
     if (arg === '--overwrite') {
       overwrite.add(value);
     }

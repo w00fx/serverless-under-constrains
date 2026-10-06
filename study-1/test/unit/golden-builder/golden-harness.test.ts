@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import type { JsonObject } from '../../../src/record-contract/primitives.ts';
 import { deriveSettlement } from '../../golden/_harness/fixture-observations.ts';
 import { expectedMismatches, fixtureRecords } from '../../golden/_harness/golden-harness.ts';
-import { DEEP_NESTING, parsedTower } from '../../support/kernel/deep-json.ts';
+import { DEEP_NESTING, parsedJson, parsedTower } from '../../support/kernel/deep-json.ts';
 
 const encoder = new TextEncoder();
 const T0 = Date.parse('2026-10-05T12:00:00.000Z');
@@ -70,6 +70,31 @@ describe('expectedMismatches', () => {
       expectedMismatches(parsedTower('array', DEEP_NESTING), parsedTower('array', DEEP_NESTING - 1)).length,
       1,
     );
+  });
+
+  // A-05 regression (WP-09 single-pass review): JSON.stringify threw RangeError quoting a value
+  // nested past the call stack, wrote Infinity as null, and copied any length into the message.
+  it('quotes deep, long and non-finite values and long paths in bounded messages', () => {
+    const towerQuote = '\\[{200}…\\[truncated\\]';
+    const deep = parsedTower('array', DEEP_NESTING);
+    assert.match(expectedMismatches(1, deep).join('\n'), new RegExp(`^\\$: expected 1, got ${towerQuote}$`));
+    assert.match(
+      expectedMismatches([1, 2], deep).join('\n'),
+      new RegExp(`^\\$: expected an array of 2, got ${towerQuote}$`),
+    );
+    assert.match(
+      expectedMismatches({ a: 1 }, deep).join('\n'),
+      new RegExp(`^\\$: expected an object, got ${towerQuote}$`),
+    );
+    const [nested = ''] = expectedMismatches(deep, parsedTower('array', DEEP_NESTING - 1));
+    assert.match(nested, /^\$(\[0\]){66}\[…\[truncated\]: expected an array of 1, got 1$/);
+    assert.deepEqual(expectedMismatches({ a: 1 }, { a: Infinity }), ['$.a: expected 1, got Infinity']);
+    assert.deepEqual(expectedMismatches('x', 'y'.repeat(1000)), [
+      `$: expected "x", got "${'y'.repeat(199)}…[truncated]`,
+    ]);
+    assert.deepEqual(expectedMismatches({ ['k'.repeat(1000)]: 1 }, parsedJson('{"valueOf":1}')), [
+      `$.${'k'.repeat(198)}…[truncated]: expected 1, got undefined`,
+    ]);
   });
 });
 

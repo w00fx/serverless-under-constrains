@@ -173,3 +173,17 @@ export function recordText(record: JsonObject, key: string): string {
   const value = record[key];
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
+
+/**
+ * A number member of a record; `NaN` for any other value. `Number()` would call a parsed value's
+ * own `valueOf` or `toString` and throw on `{"valueOf":1,"toString":1}` or on an array nested past
+ * the call stack, so readers of fixture bytes use this instead (A-05, WP-09 single-pass review).
+ *
+ * @example
+ * recordNumber({ source_sequence: 3 }, 'source_sequence'); // 3
+ * recordNumber({ source_sequence: '3' }, 'source_sequence'); // NaN
+ */
+export function recordNumber(record: JsonObject, key: string): number {
+  const value = record[key];
+  return typeof value === 'number' ? value : Number.NaN;
+}

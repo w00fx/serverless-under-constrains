@@ -4,6 +4,7 @@
 // core-file digest mismatch, BR-RUA-034). Every operation returns a result naming the offending
 // value and the expected shape instead of throwing.
 
+import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import { classifyArtifactPath } from '../../../src/record-contract/evidence-refs.ts';
 import type { Result } from '../../../src/record-contract/primitives.ts';
 import type { FixtureBytes } from './digest-links.ts';
@@ -47,14 +48,14 @@ function applyOne(files: Map<string, Uint8Array>, operation: ByteOperation): Res
   if (violation !== undefined) {
     return {
       ok: false,
-      error: `path ${JSON.stringify(operation.path)} is ${violation}; expected a normalized package-relative path`,
+      error: `path ${boundedJsonText(operation.path)} is ${violation}; expected a normalized package-relative path`,
     };
   }
   const current = files.get(operation.path);
   if (current === undefined) {
     return {
       ok: false,
-      error: `the scenario holds no file ${JSON.stringify(operation.path)}; expected an existing fixture file`,
+      error: `the scenario holds no file ${boundedJsonText(operation.path)}; expected an existing fixture file`,
     };
   }
   const edited = editBytes(current, operation);

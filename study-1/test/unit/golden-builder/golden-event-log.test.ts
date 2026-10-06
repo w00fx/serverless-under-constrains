@@ -10,11 +10,13 @@ import type { Sha256Hex, Uuid4 } from '../../../src/record-contract/primitives.t
 import {
   compareCodeUnits,
   GoldenEventLog,
+  recordNumber,
   recordText,
   sortedJournal,
 } from '../../support/golden-builder/golden-event-log.ts';
 import type { EventLogScope } from '../../support/golden-builder/golden-event-log.ts';
 import { goldenUuid, instantAt, labelDigest, usd } from '../../support/golden-builder/golden-values.ts';
+import { DEEP_NESTING, parsedJson, parsedTower } from '../../support/kernel/deep-json.ts';
 
 const RUN_ID = goldenUuid('unit/run');
 const TRIAL_ID = goldenUuid('unit/trial');
@@ -155,5 +157,16 @@ describe('golden event log', () => {
     assert.equal(recordText({ c: true }, 'c'), '');
     assert.equal(recordText({ e: { f: 1 } }, 'e'), '');
     assert.equal(recordText({}, 'toString'), '');
+  });
+
+  // A-05 regression (WP-09 single-pass review): `Number()` threw on both hostile values below.
+  it('reads only number members as numbers, without coercing any other value', () => {
+    assert.equal(recordNumber({ n: 3 }, 'n'), 3);
+    assert.equal(recordNumber({ n: -1.5 }, 'n'), -1.5);
+    assert.ok(Number.isNaN(recordNumber({ n: '3' }, 'n')));
+    assert.ok(Number.isNaN(recordNumber({}, 'n')));
+    assert.ok(Number.isNaN(recordNumber({}, 'valueOf')));
+    assert.ok(Number.isNaN(recordNumber({ n: parsedJson('{"valueOf":1,"toString":1}') }, 'n')));
+    assert.ok(Number.isNaN(recordNumber({ n: parsedTower('array', DEEP_NESTING) }, 'n')));
   });
 });

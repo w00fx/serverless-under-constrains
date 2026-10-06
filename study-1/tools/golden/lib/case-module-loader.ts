@@ -6,6 +6,8 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { boundedText } from '../../../src/record-contract/json-value.ts';
+
 /** The outcome of loading one case module. */
 export type CaseModuleResult =
   { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: string };
@@ -43,7 +45,18 @@ export class NodeCaseModuleLoader implements CaseModuleLoader {
         ? { ok: false, error: `${caseFile} has no default export; expected export default defineGoldenCase({...})` }
         : { ok: true, value: exports.value };
     } catch (error: unknown) {
-      return { ok: false, error: `${caseFile} failed to load (${String(error)}); expected an importable module` };
+      return { ok: false, error: `${caseFile} failed to load (${thrownText(error)}); expected an importable module` };
     }
+  }
+}
+
+// `String()` throws on a thrown value without a callable `toString` (`throw Object.create(null)`),
+// which would stop the run this port exists to keep going, and a long message would flood the
+// report; the text is bounded by the kernel helper (A-05, WP-09 single-pass review).
+function thrownText(error: unknown): string {
+  try {
+    return boundedText(String(error));
+  } catch {
+    return 'a thrown value with no text form';
   }
 }
