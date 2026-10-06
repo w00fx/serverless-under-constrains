@@ -3,10 +3,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
 import {
   decodeControllerConfig,
   decodeControllerTreatment,
 } from '../../../src/treatment-controller/controller-control-items.ts';
+import {
+  DESCRIBED_DEEP_ARRAYS,
+  DESCRIBED_DEEP_OBJECTS,
+  HOSTILE_DEPTH,
+  nestedArrays,
+  nestedObjects,
+} from '../../support/transport-rehearsal/deep-values.ts';
 import {
   ATTEMPT_ID,
   CALLER_EVENT_ID,
@@ -145,6 +153,79 @@ describe('decodeControllerTreatment', () => {
     assert.deepEqual(decodeControllerTreatment(unsignalled), {
       ok: false,
       error: `${prefix}: signal_caller_event_id absent in state TIMEOUT_OBSERVED; expected a lowercase RFC 4122 version-4 UUID`,
+    });
+  });
+});
+
+describe('control item readers over hostile values (A-05)', () => {
+  const treatmentPrefix = `control item ${TRIAL_PK}/treatment`;
+  const configPrefix = `control item ${PROBE_PK}/config`;
+
+  it('refuse values nested 100,000 levels deep without throwing', () => {
+    assert.deepEqual(
+      decodeControllerConfig(probeConfigItem({ scenario: nestedObjects(HOSTILE_DEPTH) }), PROBE_PARTITION),
+      {
+        ok: false,
+        error: `${configPrefix}: scenario ${DESCRIBED_DEEP_OBJECTS}; expected one of CONTROL, COMMIT_THEN_TIMEOUT`,
+      },
+    );
+    assert.deepEqual(
+      decodeControllerTreatment(committedTreatmentItem(TRIAL_PK, { version: nestedArrays(HOSTILE_DEPTH) })),
+      {
+        ok: false,
+        error: `${treatmentPrefix}: version ${DESCRIBED_DEEP_ARRAYS}; expected a safe integer >= 1`,
+      },
+    );
+  });
+
+  it('refuse non-finite numbers', () => {
+    for (const version of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      assert.deepEqual(decodeControllerTreatment({ pk: TRIAL_PK, sk: 'treatment', state: 'ARMED', version }), {
+        ok: false,
+        error: `${treatmentPrefix}: version number null; expected a safe integer >= 1`,
+      });
+    }
+    assert.deepEqual(
+      decodeControllerConfig(probeConfigItem({ registered_caller_id: Number.POSITIVE_INFINITY }), PROBE_PARTITION),
+      {
+        ok: false,
+        error: `${configPrefix}: registered_caller_id number null; expected one of conventional, durable, probe`,
+      },
+    );
+  });
+
+  it('never read an inherited member as a field, and refuse inherited names as values', () => {
+    const { trial_id: _trial, ...noTrial } = trialConfigItem('CONTROL');
+    const inheritedTrial = Object.assign(Object.create({ trial_id: TRIAL_ID }) as StoredItem, noTrial);
+    assert.deepEqual(decodeControllerConfig(inheritedTrial, TRIAL_PARTITION), {
+      ok: false,
+      error: `control item ${TRIAL_PK}/config: trial_id absent; expected the partition trial ${TRIAL_ID}`,
+    });
+    const { signal_caller_event_id: _signal, ...unsignalled } = signalledTreatmentItem(TRIAL_PK, 'TIMEOUT_SIGNALLED');
+    const inheritedSignal = Object.assign(
+      Object.create({ signal_caller_event_id: CALLER_EVENT_ID }) as StoredItem,
+      unsignalled,
+    );
+    assert.deepEqual(decodeControllerTreatment(inheritedSignal), {
+      ok: false,
+      error: `${treatmentPrefix}: signal_caller_event_id absent in state TIMEOUT_SIGNALLED; expected a lowercase RFC 4122 version-4 UUID`,
+    });
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      assert.deepEqual(decodeControllerTreatment({ pk: TRIAL_PK, sk: 'treatment', state: name, version: 1 }), {
+        ok: false,
+        error: `${treatmentPrefix}: state string "${name}"; expected one of ARMED, COMMITTED_WAITING, TIMEOUT_SIGNALLED, TIMEOUT_OBSERVED, RESPONSE_RELEASED, SAFETY_RELEASED`,
+      });
+    }
+    const parsed = JSON.parse(
+      `{"__proto__":{"scenario":"CONTROL"},${JSON.stringify(probeConfigItem()).slice(1)}`,
+    ) as StoredItem;
+    assert.deepEqual(decodeControllerConfig(parsed, PROBE_PARTITION), {
+      ok: true,
+      value: {
+        execution_manifest_sha256: MANIFEST_SHA,
+        registered_caller_id: 'probe',
+        scenario: 'COMMIT_THEN_TIMEOUT',
+      },
     });
   });
 });

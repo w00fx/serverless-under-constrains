@@ -170,6 +170,14 @@ const fieldMutation: fc.Arbitrary<readonly [string, JsonValue | undefined]> = fc
     fc.constantFrom('transport_probe_id', 'run_id', 'variant_validation_id', 'trial_id'),
     fc.option(uuidLike, { nil: undefined }),
   ),
+  // Numbers a JSON parse can yield, non-finite ones included (A-05: `1e400` parses to Infinity).
+  fc.tuple(
+    fc.constantFrom('schema_version', 'source_sequence'),
+    fc.option(
+      fc.constantFrom<JsonValue>(1, 2, 0, 1.5, 2 ** 53, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN),
+      { nil: undefined, freq: 6 },
+    ),
+  ),
   fc.tuple(
     fc.constantFrom('elapsed_ns', 'timer_fired_at', 'recorded_at', 'causation_event_ids', 'arbiter_winner', 'extra'),
     fc.option(

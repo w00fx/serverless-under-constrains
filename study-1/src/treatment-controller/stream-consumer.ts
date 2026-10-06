@@ -9,6 +9,7 @@ import { ControllerFault } from './controller-fault.ts';
 import type { ControllerFaultLog } from './controller-fault.ts';
 import type { ControllerOutcome } from './treatment-controller.ts';
 import type { StreamInsertRecord } from './stream-record.ts';
+import { ownMember } from './own-members.ts';
 import { unmarshallStreamRecord } from './stream-record.ts';
 
 /** The controller as the consumer sees it. */
@@ -82,7 +83,9 @@ async function consumeRecord(raw: unknown, controller: StreamRecordHandler, log:
 
 function streamRecords(event: unknown): Result<readonly unknown[], string> {
   const records =
-    typeof event === 'object' && event !== null ? (event as { readonly Records?: unknown }).Records : undefined;
+    typeof event === 'object' && event !== null
+      ? ownMember(event as Readonly<Record<string, unknown>>, 'Records')
+      : undefined;
   return Array.isArray(records)
     ? { ok: true, value: records as readonly unknown[] }
     : { ok: false, error: `stream event Records is ${typeof records}; expected an array of stream records` };

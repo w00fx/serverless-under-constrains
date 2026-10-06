@@ -9,11 +9,10 @@ import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import {
   CALLER_TIMEOUT_RECORD_TYPE,
   CONTROLLER_STREAM_FILTER,
-  MAX_IMAGE_ATTRIBUTE_LEVELS,
   isConsumableInsert,
   unmarshallStreamRecord,
 } from '../../../src/treatment-controller/stream-record.ts';
-import { nestedMapAttribute } from '../../support/transport-rehearsal/deep-values.ts';
+import { nestedArrays, nestedMapAttribute } from '../../support/transport-rehearsal/deep-values.ts';
 import { callerTimeoutImage, streamInsert } from './support/controller-fixtures.ts';
 
 const IMAGE = callerTimeoutImage('probe');
@@ -82,43 +81,96 @@ function nestedImage(levels: number): JsonValue {
   return { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedMapAttribute(levels) };
 }
 
-const TOO_DEEP =
-  'dynamodb.NewImage of 5: nests deeper than 130 containers; expected at most 64 nested attribute levels';
+// DynamoDB stores at most 32 nested levels of lists and maps
+// (https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html, "Nested
+// attribute depth"); the store's decoder refuses anything deeper, naming the first path past it.
+const DYNAMODB_NESTED_LEVELS = 32;
+const TOO_DEEP = new RegExp(
+  `^dynamodb\\.NewImage of 5: \\$\\.deep(\\.a){${String(DYNAMODB_NESTED_LEVELS)}} nests deeper than 32 levels; expected at most 32 levels of lists and maps`,
+);
 
-describe('unmarshallStreamRecord nesting bound (review r1: decodeStoredItem overflowed at 1,563 levels)', () => {
-  it('reads an image at the bound, twice the 32 levels DynamoDB stores, and refuses one level deeper', () => {
-    assert.equal(MAX_IMAGE_ATTRIBUTE_LEVELS, 64);
-    const atBound = unmarshallStreamRecord(withImage(nestedImage(64)));
-    assert.equal(atBound.ok, true);
-    let leaf: unknown = atBound.value.new_image['deep'];
-    for (let level = 0; level < 64; level += 1) {
+function assertMalformed(result: ReturnType<typeof unmarshallStreamRecord>, detail: RegExp): void {
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'STREAM_RECORD_MALFORMED');
+  assert.equal(result.error.subject, 'caller_journal_stream_record');
+  assert.match(result.error.detail, detail);
+}
+
+describe('unmarshallStreamRecord nesting (A-05; review r1: decoding overflowed at 1,563 levels)', () => {
+  it("reads an image at DynamoDB's 32 nested levels and refuses one level deeper", () => {
+    const atLimit = unmarshallStreamRecord(withImage(nestedImage(DYNAMODB_NESTED_LEVELS)));
+    assert.equal(atLimit.ok, true);
+    let leaf: unknown = atLimit.value.new_image['deep'];
+    for (let level = 0; level < DYNAMODB_NESTED_LEVELS; level += 1) {
       leaf = (leaf as Readonly<Record<string, unknown>>)['a'];
     }
     assert.equal(leaf, 'leaf');
-    assert.deepEqual(unmarshallStreamRecord(withImage(nestedImage(65))), malformed(TOO_DEEP));
+    assertMalformed(unmarshallStreamRecord(withImage(nestedImage(DYNAMODB_NESTED_LEVELS + 1))), TOO_DEEP);
   });
 
-  it('refuses an image nested 20,000 levels deep without throwing', () => {
-    assert.deepEqual(unmarshallStreamRecord(withImage(nestedImage(20_000))), malformed(TOO_DEEP));
+  it('refuses an image nested 100,000 levels deep without throwing', () => {
+    assertMalformed(unmarshallStreamRecord(withImage(nestedImage(100_000))), TOO_DEEP);
+    assertMalformed(
+      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, deep: nestedArrays(100_000) })),
+      /^dynamodb\.NewImage of 5: \$\.deep is an array of length 1; expected an AttributeValue object$/,
+    );
   });
 
-  it('refuses an image that reuses a container, and still reads nulls inside an image', () => {
+  it('refuses a cyclic image without throwing, and reads equal attribute objects as equal values', () => {
+    const cyclic: Record<string, unknown> = { M: {} };
+    (cyclic['M'] as Record<string, unknown>)['a'] = cyclic;
+    assertMalformed(
+      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, c: cyclic } as unknown as JsonValue)),
+      /^dynamodb\.NewImage of 5: \$\.c(\.a){32} nests deeper than 32 levels/,
+    );
     const shared = { S: 'x' };
-    assert.deepEqual(
-      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, a: shared, b: shared })),
-      malformed('dynamodb.NewImage of 5: reuses a container; expected a tree of AttributeValues'),
-    );
-    assert.deepEqual(
-      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, a: { S: 'x' }, b: { S: 'x' } })),
-      {
-        ok: true,
-        value: { event_name: 'INSERT', new_image: { pk: 'p', sk: 's', a: 'x', b: 'x' }, sequence_number: '5' },
-      },
-    );
+    assert.deepEqual(unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, a: shared, b: shared })), {
+      ok: true,
+      value: { event_name: 'INSERT', new_image: { pk: 'p', sk: 's', a: 'x', b: 'x' }, sequence_number: '5' },
+    });
     assert.deepEqual(
       unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, n: { L: [null] } })),
       malformed('dynamodb.NewImage of 5: $.n[0] is null; expected an AttributeValue object'),
     );
+  });
+});
+
+describe('unmarshallStreamRecord hostile members (A-05)', () => {
+  it('refuses non-finite numbers: an image number DynamoDB cannot store, or a parsed 1e400 member', () => {
+    for (const text of ['1e400', '-1e400']) {
+      assertMalformed(
+        unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, n: { N: text } })),
+        /^dynamodb\.NewImage of 5: \$\.n\.N is "-?1e400"; expected a finite number/,
+      );
+    }
+    const overflowing: unknown = JSON.parse('{"eventName":"INSERT","dynamodb":{"SequenceNumber":1e400}}');
+    assert.deepEqual(
+      unmarshallStreamRecord(overflowing),
+      malformed('dynamodb.SequenceNumber is number; expected a string'),
+    );
+    assert.deepEqual(
+      unmarshallStreamRecord(rawRecord({ eventName: Number.NaN })),
+      malformed('eventName is number and dynamodb is object; expected a string and an object'),
+    );
+  });
+
+  it('reads only own members: inherited ones are absent, and own inherited names are plain data', () => {
+    assert.deepEqual(
+      unmarshallStreamRecord(Object.create(rawRecord()) as unknown),
+      malformed('eventName is undefined and dynamodb is undefined; expected a string and an object'),
+    );
+    const parsed: unknown = JSON.parse(
+      '{"__proto__":{"eventName":"MODIFY"},"eventName":"INSERT","dynamodb":{"SequenceNumber":"5","NewImage":' +
+        '{"pk":{"S":"p"},"sk":{"S":"s"},"__proto__":{"S":"x"},"constructor":{"M":{"toString":{"N":"1"}}}}}}',
+    );
+    const result = unmarshallStreamRecord(parsed);
+    assert.ok(result.ok);
+    assert.equal(result.value.event_name, 'INSERT');
+    assert.equal(Object.hasOwn(result.value.new_image, '__proto__'), true);
+    assert.equal(result.value.new_image['__proto__'], 'x');
+    assert.deepEqual(result.value.new_image.constructor, { toString: 1 });
+    assert.equal(Object.getPrototypeOf(result.value.new_image), Object.prototype);
+    assert.equal(isConsumableInsert(result.value), false);
   });
 });
 

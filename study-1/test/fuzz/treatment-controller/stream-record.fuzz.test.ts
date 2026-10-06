@@ -1,8 +1,9 @@
 // Property-based tests of the controller's untrusted-input boundary: the raw DynamoDB stream
 // record (testing rule 6; design §9.5, F-2). `unmarshallStreamRecord` is total over any value,
 // including images nested far deeper than the call stack (review r1: decoding overflowed at
-// 1,563 levels), and an image within the nesting bound is decoded, never refused for depth,
-// so a record the controller cannot read never loops the shard; a readable record round-trips
+// 1,563 levels) and numbers DynamoDB cannot store; an image within DynamoDB's documented 32
+// nested levels is decoded and a deeper one refused, so a record the controller cannot read
+// never loops the shard and no storable image is lost; a readable record round-trips
 // its event name, sequence number and image; and, through the composed controller over the
 // store emulator, a record that is not an INSERT of `caller_timeout_recorded` is ignored and
 // writes nothing, even in a partition whose treatment a valid event would signal.
@@ -17,7 +18,6 @@ import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import {
   CALLER_TIMEOUT_RECORD_TYPE,
-  MAX_IMAGE_ATTRIBUTE_LEVELS,
   isConsumableInsert,
   unmarshallStreamRecord,
 } from '../../../src/treatment-controller/stream-record.ts';
@@ -32,6 +32,11 @@ import {
   probeConfigItem,
   streamInsert,
 } from '../../unit/treatment-controller/support/controller-fixtures.ts';
+
+// DynamoDB stores at most 32 nested levels of lists and maps
+// (https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html, "Nested
+// attribute depth"): the independent oracle of the nesting property below.
+const DYNAMODB_NESTED_LEVELS = 32;
 
 // Weighted toward the consumable values, so both sides of `isConsumableInsert` occur often.
 const eventName = fc.oneof(
@@ -76,7 +81,13 @@ const wellFormedRaw = fc
     sequence,
   }));
 
-// Raw records broken at one level: wrong container types, missing members, non-attribute images.
+// Number texts DynamoDB cannot store or JavaScript cannot hold finitely (A-05: `1e400` parses to
+// Infinity), and values a JSON parse of out-of-range literals yields.
+const hostileNumberText = fc.constantFrom('1e400', '-1e400', '9007199254740993', '1e-131', 'NaN', 'Infinity');
+const nonFinite = fc.constantFrom(Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN);
+
+// Raw records broken at one level: wrong container types, missing members, non-attribute images,
+// non-finite members and numbers the store cannot hold.
 const brokenRaw: fc.Arbitrary<unknown> = fc.oneof(
   fc.anything(),
   fc.record({ eventName: fc.anything(), dynamodb: fc.anything() }),
@@ -84,6 +95,11 @@ const brokenRaw: fc.Arbitrary<unknown> = fc.oneof(
     eventName,
     dynamodb: fc.record({ SequenceNumber: fc.anything(), NewImage: fc.anything() }, { requiredKeys: [] }),
   }),
+  fc.record({ eventName: fc.oneof(eventName, nonFinite), dynamodb: fc.record({ SequenceNumber: nonFinite }) }),
+  hostileNumberText.map((text) => ({
+    eventName: 'INSERT',
+    dynamodb: { SequenceNumber: '1', NewImage: { pk: { S: 'p' }, sk: { S: 's' }, n: { N: text } } },
+  })),
 );
 
 // A raw record whose image nests `levels` maps (or plain arrays) under one attribute.
@@ -95,7 +111,7 @@ const nestedRaw = (levels: number, maps: boolean): Readonly<Record<string, unkno
   },
 });
 const deepRaw = fc
-  .tuple(fc.integer({ min: MAX_IMAGE_ATTRIBUTE_LEVELS + 1, max: 4_000 }), fc.boolean())
+  .tuple(fc.integer({ min: DYNAMODB_NESTED_LEVELS + 1, max: 4_000 }), fc.boolean())
   .map(([levels, maps]) => nestedRaw(levels, maps));
 
 describe('stream record properties', () => {
@@ -123,11 +139,11 @@ describe('stream record properties', () => {
     );
   });
 
-  it('decodes every image of nested maps within the bound and refuses every deeper one', () => {
+  it("decodes every image of nested maps within DynamoDB's 32 levels and refuses every deeper one", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: 3 * MAX_IMAGE_ATTRIBUTE_LEVELS }), (levels) => {
+      fc.property(fc.integer({ min: 0, max: 3 * DYNAMODB_NESTED_LEVELS }), (levels) => {
         const result = unmarshallStreamRecord(nestedRaw(levels, true));
-        assert.equal(result.ok, levels <= MAX_IMAGE_ATTRIBUTE_LEVELS, String(levels));
+        assert.equal(result.ok, levels <= DYNAMODB_NESTED_LEVELS, String(levels));
       }),
       fuzzParameters(),
     );
