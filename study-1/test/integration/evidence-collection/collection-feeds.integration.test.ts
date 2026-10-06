@@ -162,7 +162,10 @@ describe('AC-RUA-007 feed: the collected ledger snapshot', () => {
     const ledger = await captureLedgerSnapshot(reader, TRIAL_SCOPE, collectionClock());
     assertValidRecord(ledger.record);
     assert.equal(ledger.complete, false);
-    assert.ok(paginationProblems(ledger.record as unknown as LedgerSnapshot).includes('complete is false'));
+    assert.deepEqual(paginationProblems(ledger.record as unknown as LedgerSnapshot), [
+      'complete is false',
+      'the last page has next_cursor p2',
+    ]);
   });
 
   it('is reported incomplete by ingestion when the store repeated a cursor', async () => {
@@ -179,7 +182,10 @@ describe('AC-RUA-007 feed: the collected ledger snapshot', () => {
     });
     const ledger = await captureLedgerSnapshot(reader, TRIAL_SCOPE, collectionClock());
     assertValidRecord(ledger.record);
-    assert.ok(paginationProblems(ledger.record as unknown as LedgerSnapshot).includes('complete is false'));
+    assert.deepEqual(paginationProblems(ledger.record as unknown as LedgerSnapshot), [
+      'complete is false',
+      'the last page has next_cursor p2',
+    ]);
   });
 });
 
@@ -247,13 +253,51 @@ describe('AC-RUA-020 feed: samples from real collector reads', () => {
     ]);
   });
 
+  it('restarts on a visible, then an in-flight source message during stabilization (AC-RUA-020 cases)', async () => {
+    const surfaces = trialSurfaces();
+    callerEvent(surfaces, 'FINISHED');
+    const samples = [await sampleRound(surfaces, at(6, 0)), await sampleRound(surfaces, at(6, 30))];
+    surfaces.queues.setCounters(SOURCE.queue_url, { visible: 1, in_flight: 0, delayed: 0 });
+    samples.push(await sampleRound(surfaces, at(7, 0)));
+    surfaces.queues.setCounters(SOURCE.queue_url, { visible: 0, in_flight: 1, delayed: 0 });
+    samples.push(await sampleRound(surfaces, at(7, 30)));
+    surfaces.queues.setCounters(SOURCE.queue_url, QUIET);
+    for (const second of [0, 30, 60, 90, 120]) {
+      samples.push(await sampleRound(surfaces, at(8, second)));
+    }
+    samples.push(await sampleRound(surfaces, at(10, 5), 'pre_freeze_recheck'));
+
+    const assessment = evaluateSettlement(samples, TRIAL_SETTLEMENT_POLICY, PUBLISHED_AT);
+    assert.deepEqual(assessment, {
+      status: 'established',
+      window_start: at(8, 0),
+      established_at: at(10, 0),
+      rechecked_at: at(10, 5),
+      restarts: [
+        { at: at(7, 0), cause: 'SOURCE_VISIBLE' },
+        { at: at(7, 30), cause: 'SOURCE_IN_FLIGHT' },
+      ],
+    });
+  });
+
   it('never settles while the ledger read cannot finish or a queue cannot be read', async () => {
     const surfaces = trialSurfaces();
     callerEvent(surfaces, 'FINISHED');
     surfaces.queues.scriptFailure(SOURCE.queue_url, 'ThrottlingException');
     const unreadable = await sampleRound(surfaces, at(6, 0));
     assert.equal(unreadable.source_queue, 'unavailable');
-    const assessment = evaluateSettlement([unreadable], TRIAL_SETTLEMENT_POLICY, PUBLISHED_AT);
-    assert.deepEqual(assessment.restarts, [{ at: at(6, 0), cause: 'QUEUE_UNAVAILABLE' }]);
+    surfaces.store.scriptReadFault('ProvisionedThroughputExceededException', {
+      operation: 'queryPartitionPage',
+      table: 'ledger',
+    });
+    const unfinished = await sampleRound(surfaces, at(6, 30));
+    assert.equal(unfinished.ledger_snapshot_possible, false);
+    assert.deepEqual(unfinished.source_queue, QUIET, 'the queue read recovered; only the ledger is unfinished');
+    const assessment = evaluateSettlement([unreadable, unfinished], TRIAL_SETTLEMENT_POLICY, PUBLISHED_AT);
+    assert.equal(assessment.status, 'not_established');
+    assert.deepEqual(assessment.restarts, [
+      { at: at(6, 0), cause: 'QUEUE_UNAVAILABLE' },
+      { at: at(6, 30), cause: 'LEDGER_ACTIVITY' },
+    ]);
   });
 });
