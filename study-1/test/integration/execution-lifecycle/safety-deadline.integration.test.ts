@@ -139,10 +139,11 @@ describe('AC-RUA-049 the safety deadline is reached', () => {
     assert.equal(world.record(EXECUTION_PATHS.cleanupResult)['cleanup_mode'], 'EMERGENCY');
     assert.equal(world.record(EXECUTION_PATHS.runSummary)['run_terminal_reason'], 'SAFETY_DEADLINE');
     const checks = world.record(EXECUTION_PATHS.safetyAssessment)['checks'] as readonly JsonObject[];
-    const active = checks.find((check) => check['boundary'] === 'ACTIVE_TIME');
+    const observed = checks.find((check) => check['boundary'] === 'ACTIVE_TIME')?.['observed'];
+    assert.ok(typeof observed === 'string', 'the ACTIVE_TIME check records what it observed');
     assert.ok(
-      Number.parseInt(String(active?.['observed']), 10) >= deadline,
-      `active time runs until the deadline cut monitoring short; observed ${String(active?.['observed'])}`,
+      Number.parseInt(observed, 10) >= deadline,
+      `active time runs until the deadline cut monitoring short; observed ${observed}`,
     );
   });
 

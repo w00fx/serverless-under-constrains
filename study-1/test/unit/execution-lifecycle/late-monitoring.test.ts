@@ -53,17 +53,24 @@ describe('LateEvidenceMonitor', () => {
 
   it('keeps the window open for 120 monotonic seconds when the wall clock steps forward', async () => {
     const { time, sleeper, gate } = world();
-    time.schedule(30_000, () => time.skewWall(60_000));
+    time.schedule(30_000, () => {
+      time.skewWall(60_000);
+    });
     const startedNs = time.nowNs();
     const outcome = await new LateEvidenceMonitor(lifecycleServices(time, sleeper).services).observe(gate);
-    assert.equal(outcome.outcome, 'complete');
+    assert.deepEqual(outcome, {
+      outcome: 'complete',
+      started_at: '2026-10-05T12:00:00.000Z',
+      ended_at: '2026-10-05T12:03:00.000Z',
+    });
     assert.equal(time.nowNs() - startedNs, 120_000_000_000n, 'the real window is never cut short');
-    assert.equal(outcome.outcome === 'complete' && outcome.ended_at, '2026-10-05T12:03:00.000Z');
   });
 
   it('keeps the window open until the recorded wall times span 120 s when the wall clock steps back', async () => {
     const { time, sleeper, gate } = world();
-    time.schedule(30_000, () => time.skewWall(-20_000));
+    time.schedule(30_000, () => {
+      time.skewWall(-20_000);
+    });
     const startedNs = time.nowNs();
     const outcome = await new LateEvidenceMonitor(lifecycleServices(time, sleeper).services).observe(gate);
     assert.deepEqual(outcome, {

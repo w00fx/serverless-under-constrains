@@ -105,9 +105,9 @@ function leaseEvents(world: RunnerWorld): readonly JsonObject[] {
 }
 
 function firstLeaseEventMs(world: RunnerWorld, event: string): number {
-  const found = leaseEvents(world).find((record) => record['lease_event'] === event);
-  assert.ok(found !== undefined, `the coordination journal records ${event}`);
-  return Date.parse(String(found['occurred_at']));
+  const occurredAt = leaseEvents(world).find((record) => record['lease_event'] === event)?.['occurred_at'];
+  assert.ok(typeof occurredAt === 'string', `the coordination journal records ${event}`);
+  return Date.parse(occurredAt);
 }
 
 describe('BR-RUA-045 lease uncertainty between trials', () => {
