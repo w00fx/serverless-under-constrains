@@ -46,6 +46,7 @@
             "provider_warmup_journal",
             "caller_canary_journal",
             "controller_canary_journal",
+            "provider_execution_configuration",
             "trial_manifest",
             "payment",
             "approved_decision",
