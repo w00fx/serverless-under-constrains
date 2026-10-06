@@ -163,6 +163,7 @@ function scientificAssessment(
   return assessScientificEvidence(readPackageTrialEvidence({ files, admission: admission.value, summary }, deps));
 }
 
+// An assessment of another execution says nothing about this one's safety, so it counts as absent.
 function safetyAssessmentOf(
   input: VariantValidationVerifierInput,
   deps: VariantValidationVerifierDeps,
@@ -173,7 +174,11 @@ function safetyAssessmentOf(
     'safety_assessment',
     deps.validator,
   );
-  return read.ok ? read.value.record : undefined;
+  return read.ok &&
+    'variant_validation_id' in read.value.record &&
+    read.value.record.variant_validation_id === input.variant_validation_id
+    ? read.value.record
+    : undefined;
 }
 
 function deriveStatus(

@@ -5,7 +5,7 @@
 // invalid admission, a missing anchor, unverified safety), because the same unreadable file means
 // a different thing for each.
 
-import { boundedText } from '../record-contract/json-value.ts';
+import { boundedJsonText, boundedText } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result } from '../record-contract/primitives.ts';
@@ -75,7 +75,7 @@ export function readValidationRecord<K extends ValidationRecordType>(
   if (!checked.valid) {
     const shown = checked.violations
       .slice(0, 1)
-      .map((violation) => `, first ${violation.keyword} at ${boundedText(violation.instance_path)}`)
+      .map((violation) => `, first ${violation.keyword} at ${boundedJsonText(violation.instance_path)}`)
       .join('');
     return err(
       `${path} has ${String(checked.violations.length)} schema violation(s)${shown}; expected a valid ${recordType} record`,
