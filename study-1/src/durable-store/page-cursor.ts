@@ -3,13 +3,18 @@
 // A cursor carries the key of the last item a page returned (DynamoDB `LastEvaluatedKey`), as
 // base64url of canonical JSON `{"pk":…,"sk":…}`. Callers treat it as opaque; the store
 // decodes it strictly and refuses a cursor minted for another partition, because a query
-// continued from a foreign key would silently skip or repeat items.
+// continued from a foreign key would silently skip or repeat items. The cursor's key must be a
+// valid DynamoDB key, as it becomes `ExclusiveStartKey`: the service refuses an empty sort key,
+// and the emulator must refuse it the same way (WP-04 review round 1).
+// Error messages never re-serialize the decoded payload: a hostile cursor may nest deeper than
+// any recursive serializer can follow, so they name only its member names and value types.
 
 import { canonicalJson } from '../record-contract/canonical-json.ts';
 import { isJsonObject } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
-import type { Result } from '../record-contract/primitives.ts';
+import type { JsonValue, Result } from '../record-contract/primitives.ts';
 import type { ItemKey } from './item-store-port.ts';
+import { keyViolations } from './write-action-validation.ts';
 
 /**
  * Encodes the key of the last returned item as a cursor.
@@ -22,7 +27,7 @@ export function encodePageCursor(key: ItemKey): string {
 }
 
 /**
- * Decodes a cursor for the partition `pk`. Total over arbitrary strings.
+ * Decodes a cursor for the partition `pk`. Total over arbitrary strings: it never throws.
  *
  * @example
  * const start = decodePageCursor(cursor, pk);
@@ -40,10 +45,11 @@ export function decodePageCursor(cursor: string, pk: string): Result<ItemKey, st
     return { ok: false, error: `cursor ${JSON.stringify(cursor)} does not hold a JSON object; expected {"pk","sk"}` };
   }
   const { pk: cursorPk, sk: cursorSk } = parsed.value;
-  if (Object.keys(parsed.value).length !== 2 || typeof cursorPk !== 'string' || typeof cursorSk !== 'string') {
+  const names = Object.keys(parsed.value);
+  if (names.length !== 2 || typeof cursorPk !== 'string' || typeof cursorSk !== 'string') {
     return {
       ok: false,
-      error: `cursor ${JSON.stringify(cursor)} holds ${canonicalJson(parsed.value)}; expected exactly string pk and sk`,
+      error: `cursor ${JSON.stringify(cursor)} holds members ${JSON.stringify(names)} with pk ${jsonTypeOf(cursorPk)} and sk ${jsonTypeOf(cursorSk)}; expected exactly string pk and sk`,
     };
   }
   if (cursorPk !== pk) {
@@ -52,5 +58,22 @@ export function decodePageCursor(cursor: string, pk: string): Result<ItemKey, st
       error: `cursor belongs to partition ${JSON.stringify(cursorPk)}; expected partition ${JSON.stringify(pk)}`,
     };
   }
-  return { ok: true, value: { pk: cursorPk, sk: cursorSk } };
+  const [keyViolation] = keyViolations({ pk: cursorPk, sk: cursorSk }, 'cursor');
+  return keyViolation === undefined
+    ? { ok: true, value: { pk: cursorPk, sk: cursorSk } }
+    : { ok: false, error: keyViolation };
+}
+
+// Names a parsed JSON value's type without serializing it.
+function jsonTypeOf(value: JsonValue | undefined): string {
+  if (value === undefined) {
+    return 'absent';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'an array';
+  }
+  return `a ${typeof value === 'object' ? 'map' : typeof value}`;
 }

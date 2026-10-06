@@ -13,13 +13,19 @@ import {
   encodeAttributeValue,
 } from '../../../src/durable-store/attribute-value-codec.ts';
 import { canonicalJson } from '../../../src/record-contract/canonical-json.ts';
-import { attributeValueLike, storableJson, storedItem } from '../../support/durable-store/arbitraries.ts';
+import {
+  attributeValueLike,
+  deepAttributeValueLike,
+  deeplyNestedStorableJson,
+  storableJson,
+  storedItem,
+} from '../../support/durable-store/arbitraries.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
 describe('AttributeValue codec properties', () => {
   it('decode(encode(v)) is structurally equal to v for every storable JSON value', () => {
     fc.assert(
-      fc.property(storableJson, (value) => {
+      fc.property(fc.oneof(storableJson, deeplyNestedStorableJson), (value) => {
         const decoded = decodeAttributeValue(encodeAttributeValue(value));
         assert.ok(decoded.ok);
         assert.equal(canonicalJson(decoded.value), canonicalJson(value));
@@ -41,7 +47,7 @@ describe('AttributeValue codec properties', () => {
 
   it('decoding is total and a success re-encodes to an equivalent AttributeValue', () => {
     fc.assert(
-      fc.property(attributeValueLike, (input) => {
+      fc.property(fc.oneof(attributeValueLike, deepAttributeValueLike), (input) => {
         const decoded = decodeAttributeValue(input);
         if (!decoded.ok) {
           assert.equal(typeof decoded.error, 'string');

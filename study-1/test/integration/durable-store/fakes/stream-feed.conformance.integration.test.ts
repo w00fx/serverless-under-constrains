@@ -31,7 +31,7 @@ interface Harness {
 
 function harness(
   options: Partial<Omit<StreamFeedOptions, 'source' | 'table' | 'scheduler' | 'clock' | 'consumer'>> = {},
-  failures: { remaining: number } = { remaining: 0 },
+  failures: { remaining: number; reason?: unknown } = { remaining: 0 },
 ): Harness {
   const time = new VirtualTimeScheduler({ wallEpochMs: Date.UTC(2026, 9, 5, 12) });
   const store = new InMemoryItemStore({ clock: time });
@@ -40,7 +40,8 @@ function harness(
     delivered.push(...event.Records);
     if (failures.remaining > 0) {
       failures.remaining -= 1;
-      return Promise.reject(new Error('consumer failed'));
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- a non-Error rejection is the case under test
+      return Promise.reject(failures.reason ?? new Error('consumer failed'));
     }
     return Promise.resolve();
   };
@@ -258,6 +259,44 @@ describe('StreamFeed at-least-once delivery and errors', () => {
     await time.advanceUntilIdle();
     assert.deepEqual(sks(delivered), ['e#1', 'e#1', 'e#2']);
     assert.deepEqual(feed.onFailureRecords(), []);
+    assert.deepEqual(feed.deliveries(), [
+      {
+        event_id: '00000000000000000000000000000001',
+        sequence_number: '000000000000000000001',
+        event_name: 'INSERT',
+        attempt: 1,
+        outcome: 'failed',
+        error: { name: 'Error', message: 'consumer failed' },
+      },
+      {
+        event_id: '00000000000000000000000000000001',
+        sequence_number: '000000000000000000001',
+        event_name: 'INSERT',
+        attempt: 2,
+        outcome: 'succeeded',
+      },
+      {
+        event_id: '00000000000000000000000000000002',
+        sequence_number: '000000000000000000002',
+        event_name: 'INSERT',
+        attempt: 1,
+        outcome: 'succeeded',
+      },
+    ]);
+  });
+
+  it('keeps the cause of each failed delivery, including a crash and a non-Error rejection', async () => {
+    const crash = harness({}, { remaining: 1, reason: new TypeError('x is undefined') });
+    crash.feed.enable();
+    await crash.store.write(event('e#1', 'a'));
+    await crash.time.advanceUntilIdle();
+    assert.deepEqual(crash.feed.deliveries()[0]?.error, { name: 'TypeError', message: 'x is undefined' });
+    const odd = harness({}, { remaining: 1, reason: 'plain text' });
+    odd.feed.enable();
+    await odd.store.write(event('e#1', 'a'));
+    await odd.time.advanceUntilIdle();
+    assert.deepEqual(odd.feed.deliveries()[0]?.error, { name: 'NonErrorThrown', message: 'plain text' });
+    assert.equal(odd.feed.deliveries()[1]?.error, undefined);
   });
 
   it('after MaximumRetryAttempts the record goes to the on-failure destination as metadata and the shard advances', async () => {

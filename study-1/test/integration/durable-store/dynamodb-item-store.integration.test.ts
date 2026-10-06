@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import { createDynamoDbItemStore } from '../../../src/durable-store/aws/dynamodb-item-store.ts';
 import type { StoreTableNames } from '../../../src/durable-store/dynamodb-requests.ts';
 import type { StoredItem, WriteAction } from '../../../src/durable-store/item-store-port.ts';
-import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
+import type { JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { RecordingDynamoDbClient } from '../../support/durable-store/aws/recording-dynamodb-client.ts';
 import type { ScriptedDynamoDbResponse } from '../../support/durable-store/aws/recording-dynamodb-client.ts';
 
@@ -283,5 +283,44 @@ describe('createDynamoDbItemStore reads', () => {
     const { recording, store } = setup();
     recording.respondWithSuccess({ Items: [{ pk: { S: PK }, sk: { S: 'a' }, s: { SS: ['x'] } }] });
     assert.deepEqual(await store.queryPartitionPage('ledger', PK), { ok: false, error: { code: 'UndecodableItem' } });
+  });
+});
+
+describe('createDynamoDbItemStore on deep or forged input (WP-04 review round 1)', () => {
+  it('refuses a 20,000-level write locally with an outcome, sending nothing', async () => {
+    const { recording, store } = setup();
+    let deep: JsonValue = 'x';
+    for (let level = 0; level < 20_000; level += 1) {
+      deep = [deep];
+    }
+    const put: WriteAction = { kind: 'put', table: 'ledger', item: { pk: PK, sk: 'deep', deep } };
+    const refused = { kind: 'definitive_failure', code: 'ValidationException' };
+    assert.deepEqual(await store.write(put), refused);
+    assert.deepEqual(await store.transact([put], TOKEN), refused);
+    assert.deepEqual(recording.calls(), []);
+  });
+
+  it('keeps a certain condition failure when the ALL_OLD item nests past 32 levels', async () => {
+    const { recording, store } = setup();
+    // 40 levels: past the store's limit, yet shallow enough for the SDK's own deserializer.
+    const deepItem = `{"pk":{"S":"${PK}"},"sk":{"S":"tx#1"},"d":${'{"L":['.repeat(40)}{"S":"x"}${']}'.repeat(40)}}`;
+    recording.respondWith({
+      kind: 'raw',
+      status: 400,
+      body: `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","Item":${deepItem}}`,
+    });
+    assert.deepEqual(await store.write(ledgerPut), { kind: 'condition_failed', failed_action_index: 0 });
+    recording.respondWith({ kind: 'raw', status: 200, body: `{"Items":[${deepItem}]}` });
+    assert.deepEqual(await store.queryPartitionPage('ledger', PK), { ok: false, error: { code: 'UndecodableItem' } });
+  });
+
+  it('refuses a forged cursor with an empty sort key before sending, as the emulator does', async () => {
+    const { recording, store } = setup();
+    const forged = Buffer.from(`{"pk":"${PK}","sk":""}`, 'utf8').toString('base64url');
+    assert.deepEqual(await store.queryPartitionPage('ledger', PK, forged), {
+      ok: false,
+      error: { code: 'InvalidCursor' },
+    });
+    assert.deepEqual(recording.calls(), []);
   });
 });

@@ -6,6 +6,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import type { DynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
 
 export const STORE_DYNAMODB_CLIENT_OPTIONS = { region: 'us-east-1', maxAttempts: 1 } as const;
+const PINNED_SETTING_NAMES: ReadonlySet<string> = new Set(['region', 'maxAttempts', 'retryStrategy', 'retryMode']);
 
 /** Client settings a caller may supply; region and retry behavior are fixed. */
 export type StoreClientSettings = Omit<DynamoDBClientConfig, 'region' | 'maxAttempts' | 'retryStrategy' | 'retryMode'>;
@@ -18,5 +19,9 @@ export type StoreClientSettings = Omit<DynamoDBClientConfig, 'region' | 'maxAtte
  * const store = createDynamoDbItemStore(tables, createStoreDynamoDbClient());
  */
 export function createStoreDynamoDbClient(settings: StoreClientSettings = {}): DynamoDBClient {
-  return new DynamoDBClient({ ...settings, ...STORE_DYNAMODB_CLIENT_OPTIONS });
+  // The type omits the pinned keys, but a cast can still smuggle them in. A smuggled
+  // `retryStrategy` would bring retries back while `maxAttempts` still reads 1, so every pinned
+  // key is dropped at runtime as well (WP-04 review round 1).
+  const allowed = Object.fromEntries(Object.entries(settings).filter(([name]) => !PINNED_SETTING_NAMES.has(name)));
+  return new DynamoDBClient({ ...(allowed as StoreClientSettings), ...STORE_DYNAMODB_CLIENT_OPTIONS });
 }

@@ -14,6 +14,7 @@ import type { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import type { HttpRequest, HttpResponse } from '@smithy/types';
 
 import { createStoreDynamoDbClient } from '../../../../src/durable-store/aws/dynamodb-client.ts';
+import type { StoreClientSettings } from '../../../../src/durable-store/aws/dynamodb-client.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 
 export const DYNAMODB_TARGET_PREFIX = 'DynamoDB_20120810.';
@@ -32,13 +33,25 @@ export type ScriptedDynamoDbResponse =
   | { readonly kind: 'raw'; readonly status: number; readonly body: string }
   | { readonly kind: 'network_error'; readonly error: Error };
 
+/**
+ * A production-built DynamoDBClient whose HTTP layer records each request and replies with
+ * scripted responses. `settings` reach the production factory first, so a test can prove what
+ * the factory does with them; the recorder's credentials and request handler always win.
+ *
+ * @example
+ * const recorder = new RecordingDynamoDbClient();
+ * recorder.respondWithServiceError('ConditionalCheckFailedException', { Item: { pk: { S: 'p' }, sk: { S: 's' } } });
+ * await createDynamoDbItemStore(tables, recorder.client).write(action); // condition_failed
+ * recorder.calls()[0]?.operation; // 'PutItem'
+ */
 export class RecordingDynamoDbClient {
   readonly client: DynamoDBClient;
   readonly #calls: RecordedDynamoDbCall[] = [];
   readonly #responses: ScriptedDynamoDbResponse[] = [];
 
-  constructor() {
+  constructor(settings: StoreClientSettings = {}) {
     this.client = createStoreDynamoDbClient({
+      ...settings,
       credentials: { accessKeyId: 'AKIDRECORDINGCLIENT', secretAccessKey: 'recording-client-not-a-secret' },
       requestHandler: { handle: (request: HttpRequest) => this.#handle(request) },
     });

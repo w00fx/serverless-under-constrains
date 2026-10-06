@@ -7,11 +7,15 @@
 // (partition key ≤ 2048 bytes, sort key ≤ 1024 bytes, `IN` ≤ 100 operands) and
 // https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html
 // (1 to 100 actions, no two on the same item, ClientRequestToken 1 to 36 characters).
+// Attribute values must also respect the nesting depth, item size and number range limits of
+// `attribute-value-limits.ts` (added in WP-04 review round 1: without them the emulator applied
+// writes the service refuses, and a deep value overflowed the call stack instead of failing).
+// Port policy beyond DynamoDB: an increment is a safe integer. The study's counters only ever
+// add whole numbers, and DynamoDB adds in decimal while JavaScript adds in binary floating
+// point, so a fractional increment could leave the emulator and the service disagreeing.
 
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { isJsonObject } from '../record-contract/json-value.ts';
-import type { JsonValue } from '../record-contract/primitives.ts';
-import { unencodableNumberReason } from './attribute-value-codec.ts';
+import { itemSizeViolation, storableValueViolations } from './attribute-value-limits.ts';
 import { KEY_ATTRIBUTES } from './item-store-port.ts';
 import type { Condition, ItemKey, StoredItem, UpdateAction, WriteAction } from './item-store-port.ts';
 
@@ -23,7 +27,9 @@ export const MAX_SORT_KEY_BYTES = 1024;
 const encoder = new TextEncoder();
 
 /**
- * Lists every reason DynamoDB would reject one write action; empty when it is valid.
+ * Lists every reason this store refuses one write action: each documented DynamoDB rejection,
+ * plus the safe-integer increment policy of the header. Empty when the action is valid. Its
+ * recursion is bounded by the nesting limit, so it never throws on a deep value.
  *
  * @example
  * validateWriteAction({ kind: 'condition_check', table: 'control', key: { pk: '', sk: 'config' },
@@ -130,10 +136,14 @@ function keyPartViolation(part: string, value: string, maxBytes: number, locatio
 }
 
 function itemAttributeViolations(item: StoredItem, location: string): readonly string[] {
-  return Object.entries(item).flatMap(([name, value]) => [
-    ...attributeNameViolation(name, location),
-    ...numberViolations(value, `${location}.item.${name}`),
-  ]);
+  const size = itemSizeViolation(item, `${location}.item`);
+  return [
+    ...Object.entries(item).flatMap(([name, value]) => [
+      ...attributeNameViolation(name, location),
+      ...storableValueViolations(value, `${location}.item.${name}`),
+    ]),
+    ...(size === undefined ? [] : [size]),
+  ];
 }
 
 function updateViolations(action: UpdateAction, location: string): readonly string[] {
@@ -152,12 +162,17 @@ function updateViolations(action: UpdateAction, location: string): readonly stri
   }
   violations.push(...names.flatMap((name) => attributeNameViolation(name, location)));
   for (const [name, value] of Object.entries(action.set)) {
-    violations.push(...numberViolations(value, `${location}.set.${name}`));
+    violations.push(...storableValueViolations(value, `${location}.set.${name}`));
   }
-  for (const [name, value] of incrementEntries) {
-    violations.push(...numberViolations(value, `${location}.increment.${name}`));
+  for (const [name, value] of incrementEntries.filter(([, amount]) => !Number.isSafeInteger(amount))) {
+    violations.push(
+      `${location}.increment.${name}: ${String(value)} is not a safe integer; expected a safe integer increment`,
+    );
   }
-  return violations;
+  // The updated item holds at least the key and the set attributes; the emulator checks the
+  // full result against the existing item.
+  const size = itemSizeViolation({ ...action.set, pk: action.key.pk, sk: action.key.sk }, `${location}.set`);
+  return size === undefined ? violations : [...violations, size];
 }
 
 function conditionViolations(condition: Condition, location: string): readonly string[] {
@@ -167,7 +182,7 @@ function conditionViolations(condition: Condition, location: string): readonly s
     case 'attribute_equals':
       return [
         ...attributeNameViolation(condition.name, location),
-        ...(typeof condition.value === 'number' ? numberViolations(condition.value, `${location}.value`) : []),
+        ...(typeof condition.value === 'number' ? storableValueViolations(condition.value, `${location}.value`) : []),
       ];
     case 'attribute_in': {
       const count = condition.values.length;
@@ -189,20 +204,4 @@ function conditionViolations(condition: Condition, location: string): readonly s
 
 function attributeNameViolation(name: string, location: string): readonly string[] {
   return name === '' ? [`${location}: attribute name is ""; expected a non-empty attribute name`] : [];
-}
-
-function numberViolations(value: JsonValue, path: string): readonly string[] {
-  if (typeof value === 'number') {
-    const reason = unencodableNumberReason(value);
-    return reason === undefined ? [] : [`${path}: ${reason}; expected a finite number, safe when integral`];
-  }
-  if (Array.isArray(value)) {
-    return (value as readonly JsonValue[]).flatMap((element, index) =>
-      numberViolations(element, `${path}[${String(index)}]`),
-    );
-  }
-  if (isJsonObject(value)) {
-    return Object.entries(value).flatMap(([name, nested]) => numberViolations(nested, `${path}.${name}`));
-  }
-  return [];
 }

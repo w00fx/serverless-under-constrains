@@ -15,6 +15,7 @@ import {
 import type { StoreTableNames } from '../../../src/durable-store/dynamodb-requests.ts';
 import type { WriteAction } from '../../../src/durable-store/item-store-port.ts';
 import { encodePageCursor } from '../../../src/durable-store/page-cursor.ts';
+import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 
 const TABLES: StoreTableNames = {
   ledger: 'suc1-ab12cd34-ledger',
@@ -298,5 +299,36 @@ describe('readQueryOutput', () => {
       ok: false,
       error: { code: 'UndecodableItem' },
     });
+  });
+});
+
+describe('planning and reading stay total on deep or forged input (WP-04 review round 1)', () => {
+  // 10,000 levels, parsed from JSON text without recursion: deeper than any recursive walk
+  // could follow, as an untrusted reply or event might be.
+  const deepAttribute = JSON.parse(`${'{"M":{"k":'.repeat(10_000)}{"N":"1"}${'}}'.repeat(10_000)}`) as never;
+  const deepItem = { pk: { S: PK }, sk: { S: 'deep' }, deep: deepAttribute };
+  const base64url = (text: string): string => Buffer.from(text, 'utf8').toString('base64url');
+
+  it('refuses a deep item read from the service as UndecodableItem', () => {
+    assert.deepEqual(readGetItemOutput({ Item: deepItem }), { ok: false, error: { code: 'UndecodableItem' } });
+    assert.deepEqual(readQueryOutput({ Items: [deepItem] }), { ok: false, error: { code: 'UndecodableItem' } });
+  });
+
+  it('refuses a write with a deep value as a definitive ValidationException', () => {
+    let deep: JsonValue = 1;
+    for (let level = 0; level < 10_000; level += 1) {
+      deep = [deep];
+    }
+    const put: WriteAction = { kind: 'put', table: 'ledger', item: { pk: PK, sk: 's', deep } };
+    const refused = { ok: false, error: { kind: 'definitive_failure', code: 'ValidationException' } };
+    assert.deepEqual(planWrite(TABLES, put), refused);
+    assert.deepEqual(planTransaction(TABLES, [put], TOKEN), refused);
+  });
+
+  it('refuses a deeply nested or forged cursor as InvalidCursor', () => {
+    const deepCursor = base64url(`{"pk":"${PK}","sk":"s","x":${'['.repeat(100_000)}${']'.repeat(100_000)}}`);
+    assert.deepEqual(planQueryPage(TABLES, 'ledger', PK, deepCursor), { ok: false, error: { code: 'InvalidCursor' } });
+    const emptySk = base64url(`{"pk":"${PK}","sk":""}`);
+    assert.deepEqual(planQueryPage(TABLES, 'ledger', PK, emptySk), { ok: false, error: { code: 'InvalidCursor' } });
   });
 });
