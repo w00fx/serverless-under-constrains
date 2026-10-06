@@ -7,12 +7,7 @@ import { describe, it } from 'node:test';
 
 import type { WriteOutcome } from '../../../src/durable-store/item-store-port.ts';
 import { classifyJournalOutcome } from '../../../src/event-journal/journal-append-port.ts';
-import {
-  holdsEntryKey,
-  isSameStoredEntry,
-  journalPutAction,
-  toJournalEntry,
-} from '../../../src/event-journal/journal-entry.ts';
+import { isSameStoredEntry, journalPutAction, toJournalEntry } from '../../../src/event-journal/journal-entry.ts';
 import { buildJournalEvent } from '../../../src/event-journal/journal-event.ts';
 import { journalItemKey } from '../../../src/event-journal/journal-scope.ts';
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
@@ -52,9 +47,9 @@ describe('journal entries', () => {
   });
 
   it('compares stored items by key and by structural content', () => {
-    assert.equal(holdsEntryKey({ ...ENTRY.item }, ENTRY), true);
-    assert.equal(holdsEntryKey({ ...ENTRY.item, pk: 'other' }, ENTRY), false);
-    assert.equal(holdsEntryKey({ ...ENTRY.item, sk: 'other' }, ENTRY), false);
+    assert.equal(isSameStoredEntry({ ...ENTRY.item }, ENTRY), true);
+    assert.equal(isSameStoredEntry({ ...ENTRY.item, pk: 'other' }, ENTRY), false);
+    assert.equal(isSameStoredEntry({ ...ENTRY.item, sk: 'other' }, ENTRY), false);
     const reordered = Object.fromEntries(Object.entries(ENTRY.item).reverse()) as typeof ENTRY.item;
     assert.equal(isSameStoredEntry(reordered, ENTRY), true);
     assert.equal(isSameStoredEntry({ ...ENTRY.item, refund_request_id: 'ref-poc-002' }, ENTRY), false);
@@ -62,38 +57,44 @@ describe('journal entries', () => {
 });
 
 describe('classifyJournalOutcome', () => {
-  // Without the put's index (a caller-owned transaction that does not say where the put is),
-  // only an item returned at the entry's own key identifies the journal put.
-  const withoutIndex: readonly (readonly [string, WriteOutcome, string])[] = [
+  // The put in the middle of a three-action transaction (index 1): each outcome kind, and a
+  // failed condition before it, on it and after it.
+  const middleOfThree: readonly (readonly [string, WriteOutcome, string])[] = [
     ['applied', { kind: 'applied' }, 'applied'],
     ['ambiguous', { kind: 'ambiguous', code: 'TimeoutError' }, 'ambiguous'],
     ['definitive failure', { kind: 'definitive_failure', code: 'ValidationException' }, 'not_applied'],
-    ['condition failed on an absent item', { kind: 'condition_failed', failed_action_index: 1 }, 'not_applied'],
     [
-      'condition failed on another item',
-      { kind: 'condition_failed', failed_action_index: 1, existing: { pk: KEY.pk, sk: 'state#attempt#x' } },
+      'condition failed before the put, without an item',
+      { kind: 'condition_failed', failed_action_index: 0 },
       'not_applied',
     ],
     [
-      'condition failed on the identical entry',
-      { kind: 'condition_failed', failed_action_index: 0, existing: { ...ENTRY.item } },
+      'condition failed after the put, on another item',
+      { kind: 'condition_failed', failed_action_index: 2, existing: { pk: KEY.pk, sk: 'state#attempt#x' } },
+      'not_applied',
+    ],
+    [
+      'condition failed on the put, on the identical entry',
+      { kind: 'condition_failed', failed_action_index: 1, existing: { ...ENTRY.item } },
       'applied',
     ],
     [
-      'condition failed on other content at the entry key',
-      { kind: 'condition_failed', failed_action_index: 0, existing: { ...ENTRY.item, event_id: 'x' } },
+      'condition failed on the put, on other content at the entry key',
+      { kind: 'condition_failed', failed_action_index: 1, existing: { ...ENTRY.item, event_id: 'x' } },
       'sequence_conflict',
     ],
   ];
-  for (const [name, outcome, expected] of withoutIndex) {
-    it(`without the put index, ${name} is ${expected}`, () => {
-      assert.equal(classifyJournalOutcome(outcome, ENTRY), expected);
+  for (const [name, outcome, expected] of middleOfThree) {
+    it(`with the put in the middle of three actions, ${name} is ${expected}`, () => {
+      assert.equal(classifyJournalOutcome(outcome, ENTRY, 1), expected);
     });
   }
 
-  // With the put's index, the failed action decides whose condition failed. A failed
-  // item_absent condition on the put proves the key occupied, so without a decodable existing
-  // item (WP-04 omits an undecodable ALL_OLD image) it is a sequence conflict, never not_applied.
+  // The put's index is required (WP-05 review round 2): the failed action decides whose
+  // condition failed. A failed item_absent condition on the put proves the key occupied, so
+  // without a decodable existing item (WP-04 omits an undecodable ALL_OLD image) it is a
+  // sequence conflict, never not_applied. A failed condition elsewhere is not applied even when
+  // the store returned an item, including one at the entry's own key.
   const withIndex: readonly (readonly [string, WriteOutcome, number, string])[] = [
     [
       'the put failed without a decodable item',
@@ -120,6 +121,12 @@ describe('classifyJournalOutcome', () => {
       'sequence_conflict',
     ],
     ['another action failed without an item', { kind: 'condition_failed', failed_action_index: 1 }, 0, 'not_applied'],
+    [
+      'another action failed with the identical entry returned',
+      { kind: 'condition_failed', failed_action_index: 0, existing: { ...ENTRY.item } },
+      1,
+      'not_applied',
+    ],
     [
       'another action failed on its own item',
       { kind: 'condition_failed', failed_action_index: 0, existing: { pk: KEY.pk, sk: 'state#attempt#x' } },

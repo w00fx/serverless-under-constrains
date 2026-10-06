@@ -13,7 +13,7 @@ import type { MonotonicClock, Uuid4, UuidSource, WallClock } from '../record-con
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import type { AcceptedCall } from './acceptance.ts';
 import type { CommitKind, CommitPlan } from './commit-plan.ts';
-import { commitEventBody, drawCommitIdentities, planCommit } from './commit-plan.ts';
+import { COMMIT_JOURNAL_ACTION_INDEX, commitEventBody, drawCommitIdentities, planCommit } from './commit-plan.ts';
 import { ProviderFault } from './provider-fault.ts';
 import type { ProviderStatePort } from './provider-state-port.ts';
 
@@ -108,7 +108,7 @@ async function attemptCommit(
   const outcome = await deps.state.commit(plan);
   const ackNs = deps.monotonic.nowNs();
   const ackWall = deps.wall.now();
-  const confirmed = deps.journal.confirm(prepared.put, outcome);
+  const confirmed = deps.journal.confirm(prepared.put, outcome, COMMIT_JOURNAL_ACTION_INDEX);
   if (confirmed.kind === 'appended') {
     return { plan, ack_ns: ackNs, ack_wall: ackWall };
   }

@@ -25,6 +25,7 @@ import { decideBarrierStep, isCommittedWaitState } from './barrier-decision.ts';
 import { decodeTreatmentItem } from './control-items.ts';
 import { ProviderFault } from './provider-fault.ts';
 import type { ProviderStatePort } from './provider-state-port.ts';
+import { TRANSITION_JOURNAL_ACTION_INDEX } from './provider-state-port.ts';
 
 export { BARRIER_TIMING } from './barrier-timing.ts';
 
@@ -208,7 +209,7 @@ export class TreatmentBarrier {
       event: prepared.put,
       token: this.#deps.ids.next(),
     });
-    const confirmed = this.#deps.journal.confirm(prepared.put, outcome);
+    const confirmed = this.#deps.journal.confirm(prepared.put, outcome, TRANSITION_JOURNAL_ACTION_INDEX);
     if (confirmed.kind === 'stopped') {
       throw new ProviderFault(
         'TRANSITION_AMBIGUOUS',

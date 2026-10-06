@@ -18,6 +18,7 @@ import {
   MANIFEST_SHA,
   PROBE,
   PROBE_ID,
+  RUN,
   RUN_ID,
   TRIAL_ID,
   TRIAL_MANIFEST_SHA,
@@ -97,13 +98,64 @@ describe('buildJournalEvent', () => {
     assert.equal(event.run_id, RUN_ID);
   });
 
+  it('drops every envelope key a body carries at runtime, whatever the scope leaves unset (BR-RUA-033)', () => {
+    // Every envelope field with a value the builder never writes; the compile-time Omit does not
+    // see through a spread, so these reach the builder (WP-05 review round 2).
+    const smuggledEnvelope: Readonly<Record<string, unknown>> = {
+      schema_version: 2,
+      record_type: 'payment',
+      event_id: CAUSE_LOW,
+      run_id: CAUSE_LOW,
+      variant_validation_id: CAUSE_LOW,
+      transport_probe_id: CAUSE_LOW,
+      execution_manifest_sha256: 'f'.repeat(64),
+      trial_id: CAUSE_HIGH,
+      trial_manifest_sha256: 'e'.repeat(64),
+      occurred_at: '1999-01-01T00:00:00.000Z',
+      source: 'runner',
+      source_instance_id: CAUSE_HIGH,
+      source_sequence: 99,
+      causation_event_ids: [CAUSE_LOW],
+    };
+    // Envelope keys first and in reverse order: a key that survived would also change the key
+    // order of the event, even where the envelope overwrites its value.
+    const smuggled = { ...Object.fromEntries(Object.entries(smuggledEnvelope).reverse()), ...dispatchStartedBody() };
+    const cases: readonly EventEnvelopeInput[] = [
+      envelopeInput(),
+      envelopeInput({ scope: executionLevelScope(PROBE, 'probe'), source: 'probe_caller' }),
+      envelopeInput({ scope: executionLevelScope(VALIDATION, 'canary'), causation: [CAUSE_HIGH] }),
+      envelopeInput({ scope: executionLevelScope(RUN, 'execution'), source: 'runner' }),
+    ];
+    for (const input of cases) {
+      const built = buildJournalEvent('dispatch_started', smuggled, input);
+      const clean = buildJournalEvent('dispatch_started', dispatchStartedBody(), input);
+      assert.deepStrictEqual(built, clean, input.scope.partition.kind);
+      assert.deepStrictEqual(Object.keys(built), Object.keys(clean), input.scope.partition.kind);
+    }
+    const probeEvent = buildJournalEvent('dispatch_started', smuggled, cases[1] ?? envelopeInput());
+    assert.deepStrictEqual(
+      Object.keys(probeEvent).filter((name) => name in smuggledEnvelope),
+      [
+        'schema_version',
+        'record_type',
+        'event_id',
+        'transport_probe_id',
+        'execution_manifest_sha256',
+        'occurred_at',
+        'source',
+        'source_instance_id',
+        'source_sequence',
+      ],
+    );
+  });
+
   it('refuses a sequence outside 1..999999999999', () => {
     for (const invalid of [0, 1.5, 1_000_000_000_000]) {
       assert.throws(
         () => buildJournalEvent('dispatch_started', dispatchStartedBody(), envelopeInput({ source_sequence: invalid })),
         {
           name: 'RangeError',
-          message: `source_sequence ${String(invalid)} for dispatch_started; expected a positive integer of at most 12 digits`,
+          message: `source_sequence ${String(invalid)} of dispatch_started; expected an integer from 1 to 999999999999`,
         },
       );
     }

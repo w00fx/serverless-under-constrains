@@ -30,6 +30,14 @@ export interface CommitIds extends CommitIdentities {
 
 export type CommitKind = 'targeted' | 'untargeted';
 
+/**
+ * The position of the `provider_transaction_committed` put in every commit plan: after the
+ * ledger put (index 0), before the treatment update of a targeted plan. The writer's `confirm`
+ * needs it to tell a failed condition on the put itself from a failed business condition
+ * (WP-05 review round 2).
+ */
+export const COMMIT_JOURNAL_ACTION_INDEX = 1;
+
 export interface CommitPlan {
   readonly kind: CommitKind;
   readonly ids: CommitIds;

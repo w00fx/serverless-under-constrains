@@ -10,7 +10,11 @@ import { describe, it } from 'node:test';
 import type { WriteOutcome } from '../../../src/durable-store/item-store-port.ts';
 import type { PreparedJournalPut } from '../../../src/event-journal/journal-writer.ts';
 import type { AttemptRegistration } from '../../../src/provider-client/attempt-state-port.ts';
-import { ATTEMPT_PHASES, attemptStateSortKey } from '../../../src/provider-client/attempt-state-port.ts';
+import {
+  ATTEMPT_JOURNAL_ACTION_INDEX,
+  ATTEMPT_PHASES,
+  attemptStateSortKey,
+} from '../../../src/provider-client/attempt-state-port.ts';
 import {
   ATTEMPT_STATE_TABLE,
   createDurableAttemptStatePort,
@@ -36,7 +40,7 @@ async function settled(
   const prepared = harness.writer.prepare('dispatch_started', dispatchStartedBody());
   assert.ok(prepared.kind === 'prepared');
   const outcome = await write(prepared.put);
-  harness.writer.confirm(prepared.put, outcome);
+  harness.writer.confirm(prepared.put, outcome, ATTEMPT_JOURNAL_ACTION_INDEX);
   return outcome;
 }
 

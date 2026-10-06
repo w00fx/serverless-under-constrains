@@ -20,7 +20,7 @@ import { resolveControllerPartition } from './controller-partition.ts';
 import type { AppendedDecision, SignalOnlyDecision } from './controller-records.ts';
 import { appendDecisionRecord, prepareSignalRecord } from './controller-records.ts';
 import type { ControllerStatePort, ControllerStateRead } from './controller-state-port.ts';
-import { decodeTreatmentAfterConflict } from './controller-state-port.ts';
+import { decodeTreatmentAfterConflict, SIGNAL_JOURNAL_ACTION_INDEX } from './controller-state-port.ts';
 import type { SignalContext, SignalDecision } from './signal-decision.ts';
 import { decideSignal } from './signal-decision.ts';
 import type { StreamInsertRecord } from './stream-record.ts';
@@ -132,7 +132,7 @@ export class TreatmentController {
       event: prepared.put,
       token: this.#deps.ids.next(),
     });
-    const confirmed = journal.confirm(prepared.put, outcome);
+    const confirmed = journal.confirm(prepared.put, outcome, SIGNAL_JOURNAL_ACTION_INDEX);
     if (confirmed.kind === 'appended') {
       return {
         outcome: 'signal',
@@ -141,11 +141,10 @@ export class TreatmentController {
       };
     }
     if (confirmed.kind === 'stopped') {
-      throw new ControllerFault(
-        'SIGNAL_AMBIGUOUS',
-        partitionKey,
-        `signal transaction ${confirmed.reason}; expected applied`,
-      );
+      // Only an ambiguous append leaves the signal's effect unknown. Any other stop (another
+      // event at the signal record's key, WP-05 review round 2) is a stopped journal instance.
+      const code = confirmed.reason === 'AMBIGUOUS_APPEND' ? 'SIGNAL_AMBIGUOUS' : 'JOURNAL_STOPPED';
+      throw new ControllerFault(code, partitionKey, `signal transaction ${confirmed.reason}; expected applied`);
     }
     if (outcome.kind !== 'condition_failed' || outcome.failed_action_index !== 0) {
       throw new ControllerFault(
