@@ -130,6 +130,7 @@ describe('mutation-gate', () => {
   it('passes a fully killed report and fails a survivor or a missing expected file', () => {
     const root = scratchTree({
       'quality/mutation-equivalences.json': '{"equivalences": []}',
+      'quality/mutation-targets.json': '{"include": ["src/**/*.ts"], "exclude": ["src/b.ts"]}',
       'killed.json': report('Killed'),
       'survived.json': report('Survived'),
       'src/a.ts': '',
@@ -147,6 +148,26 @@ describe('mutation-gate', () => {
     assert.match(missing.stdout, /missing {4}src\/b\.ts/);
     assert.equal(runTool(root, 'mutation-gate.ts', []).status, 2);
     assert.equal(runTool(root, 'mutation-gate.ts', ['killed.json', '--expect']).status, 2);
+  });
+
+  it('fails a policy target absent from the report without any --expect, and an Ignored mutant', () => {
+    const root = scratchTree({
+      'quality/mutation-equivalences.json': '{"equivalences": []}',
+      'quality/mutation-targets.json': '{"include": ["src/**/*.ts"], "exclude": ["src/aws/**"]}',
+      'killed.json': report('Killed'),
+      'ignored.json': report('Ignored'),
+      'src/a.ts': '',
+      'src/c/d.ts': '',
+      'src/aws/adapter.ts': '',
+    });
+    const missing = runTool(root, 'mutation-gate.ts', ['killed.json']);
+    assert.equal(missing.status, 1);
+    assert.match(missing.stdout, /missing {4}src\/c\/d\.ts/);
+    assert.doesNotMatch(missing.stdout, /src\/aws\/adapter\.ts/);
+    assert.match(missing.stdout, /mutation gate: FAILED over 2 file\(s\)/);
+    const ignored = runTool(root, 'mutation-gate.ts', ['ignored.json']);
+    assert.equal(ignored.status, 1);
+    assert.match(ignored.stdout, /Ignored NumericLiteral at 1:18 -> "0"/);
   });
 });
 

@@ -1,8 +1,10 @@
 // The mutation gate of design §15.3 (testing rule 5). Stryker's score hides RuntimeError and
-// CompileError, so the gate reads the JSON report and requires, per target file: no
-// Survived (unless a human-approved equivalence covers it), no NoCoverage, no RuntimeError,
-// no Pending, and at least one valid mutant. CompileError and Ignored mutants are invalid and
-// never count as kills. A file with zero valid mutants is unmeasured unless it has no runtime
+// CompileError, so the gate reads the JSON report and requires, per target file: no Survived
+// and no Ignored mutant (unless a human-approved equivalence covers it), no NoCoverage, no
+// RuntimeError, no Pending, and at least one valid mutant. CompileError mutants are invalid and
+// never count as kills. An Ignored mutant is unresolved: a `// Stryker disable` comment or an
+// ignorer must not stand in for the human decision quality/mutation-equivalences.json records
+// (WP-00 review round 1). A file with zero valid mutants is unmeasured unless it has no runtime
 // code at all (type-only modules have nothing to mutate); Timeouts are listed for review.
 
 import { isTypeOnlyModule } from './source-imports.ts';
@@ -63,7 +65,10 @@ export interface GateResult {
   readonly problems: readonly string[];
 }
 
+/** Statuses that are not valid mutation sites: neither kills nor counted as tested code. */
 const INVALID_STATUSES: ReadonlySet<MutantStatus> = new Set(['CompileError', 'Ignored']);
+/** Statuses that only an approved equivalence resolves. */
+const EQUIVALENCE_STATUSES: ReadonlySet<MutantStatus> = new Set(['Survived', 'Ignored']);
 
 /**
  * Reads the files and mutants of a Stryker mutation-testing JSON report.
@@ -158,15 +163,15 @@ export function evaluateMutationGate(
 function judgeFile(file: ReportedFile, equivalences: readonly Equivalence[]): FileVerdict {
   const counts = countStatuses(file.mutants);
   const accepted = file.mutants.filter(
-    (mutant) => mutant.status === 'Survived' && isApprovedEquivalent(mutant, equivalences),
+    (mutant) => EQUIVALENCE_STATUSES.has(mutant.status) && isApprovedEquivalent(mutant, equivalences),
   );
   const valid = file.mutants.filter((mutant) => !INVALID_STATUSES.has(mutant.status)).length;
   const problems = [
     ...file.mutants
-      .filter((mutant) => mutant.status === 'Survived' && !accepted.includes(mutant))
+      .filter((mutant) => EQUIVALENCE_STATUSES.has(mutant.status) && !accepted.includes(mutant))
       .map(
         (mutant) =>
-          `Survived ${mutant.mutatorName} at ${String(mutant.line)}:${String(mutant.column)} -> ${JSON.stringify(mutant.replacement ?? '')}`,
+          `${mutant.status} ${mutant.mutatorName} at ${String(mutant.line)}:${String(mutant.column)} -> ${JSON.stringify(mutant.replacement ?? '')}`,
       ),
     ...(['NoCoverage', 'RuntimeError', 'Pending'] as const)
       .filter((status) => counts[status] > 0)
@@ -176,6 +181,9 @@ function judgeFile(file: ReportedFile, equivalences: readonly Equivalence[]): Fi
     .filter((mutant) => mutant.status === 'Timeout')
     .map((mutant) => `${mutant.mutatorName} at ${String(mutant.line)}:${String(mutant.column)}`);
   const base = { path: file.path, counts, valid, accepted_equivalent: accepted.length, timeouts };
+  if (valid === 0 && problems.length > 0) {
+    return { ...base, verdict: 'failed', problems };
+  }
   if (valid === 0) {
     return isTypeOnlyModule(file.source)
       ? { ...base, verdict: 'type_only', problems: [] }
