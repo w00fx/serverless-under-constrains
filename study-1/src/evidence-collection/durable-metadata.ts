@@ -10,6 +10,7 @@
 // A malformed execution or event is recorded as a failure and left out, and the flag of the read it
 // belongs to turns false, so the record never claims completeness it does not have.
 
+import { pushEach } from '../durable-store/push-each.ts';
 import { ok } from '../record-contract/primitives.ts';
 import type { JsonObject, Result, StructuredReason, UtcMillis, WallClock } from '../record-contract/primitives.ts';
 import type {
@@ -19,7 +20,7 @@ import type {
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { correlationFields } from './capture-scope.ts';
 import type { TrialCaptureScope } from './capture-scope.ts';
-import { appendEach, readFailure } from './collected-records.ts';
+import { readFailure } from './collected-records.ts';
 import type { CollectorReadFailure } from './collected-records.ts';
 import { mapDurableExecution, mapHistoryEvent } from './durable-sdk-mapping.ts';
 import type { DurableExecutionSummary, SdkDurableExecution, SdkHistoryEvent } from './durable-sdk-mapping.ts';
@@ -134,12 +135,12 @@ export async function collectDurableExecutionMetadata(
 ): Promise<DurableMetadataCapture> {
   const listing = await listDurableExecutions(reader, request);
   const failures: StructuredReason[] = [];
-  appendEach(failures, listing.failures);
+  pushEach(failures, listing.failures);
   const executions: DurableExecutionRecord[] = [];
   for (const summary of listing.executions) {
     const detailed = await readExecution(reader, summary, failures);
     const history = await readHistory(reader, summary.durable_execution_arn);
-    appendEach(failures, history.failures);
+    pushEach(failures, history.failures);
     executions.push({ ...detailed, history_complete: history.complete, history: history.items });
   }
   const record = buildDurableExecutionMetadata({

@@ -13,11 +13,12 @@
 // dropping it would be truncation.
 
 import type { StoredItem } from '../durable-store/item-store-port.ts';
+import { pushEach } from '../durable-store/push-each.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import type { JsonObject, StructuredReason, WallClock } from '../record-contract/primitives.ts';
 import { capturePartitionKey, correlationFields } from './capture-scope.ts';
 import type { CaptureScope } from './capture-scope.ts';
-import { appendEach, readFailure, recordOfItem } from './collected-records.ts';
+import { readFailure, recordOfItem } from './collected-records.ts';
 import type { CollectorStoreReader } from './collected-records.ts';
 
 /** The ledger read and what settlement needs to know about it. */
@@ -94,7 +95,7 @@ async function readLedgerPages(reader: CollectorStoreReader, partitionKey: strin
     }
     const next = page.value.next_cursor;
     state.pages.push(pageEntry(pageNumber, page.value.items.length, cursor, next));
-    appendEach(state.items, page.value.items);
+    pushEach(state.items, page.value.items);
     if (next === undefined) {
       state.complete = true;
       return state;
