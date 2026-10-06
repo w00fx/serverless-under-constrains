@@ -1,8 +1,10 @@
 // BR-RUA-004 unknown outcome, as D-03 and design §8.5 define it. It applies when at least one
 // attempt is ambiguous (`classifyOutcome` over `classifyDispatch`; an attempt dispatched or of
 // unknown dispatch without an outcome counts as ambiguous, BR-RUA-021). Every request state the
-// caller recorded at or after the first ambiguous outcome (each state whose `attempt_ids` names an
-// ambiguous attempt) must say UNKNOWN, which is absorbing. Checks, in order:
+// caller recorded at or after the first ambiguous outcome must say UNKNOWN, which is absorbing
+// ("UNKNOWN + any later attempt outcome -> UNKNOWN"): the covered states are the first state whose
+// `attempt_ids` names an ambiguous attempt and every state of a later version, whichever attempts
+// those later states name. Checks, in order:
 //   - the caller journal is absent or gapped: indeterminate (the ambiguity cannot be judged);
 //   - no ambiguous attempt: not applicable;
 //   - a covered state is not UNKNOWN: fail;
@@ -40,7 +42,9 @@ export function evaluateUnknownOutcome(evidence: IngestedEvidence, attempts: rea
   const states = eventsOfType(partitionEvents(evidence), 'request_state_recorded')
     .filter(isCallerEvent)
     .toSorted((a, b) => a.record.version - b.record.version);
-  const covered = states.filter((state) => state.record.attempt_ids.some((id) => ambiguousIds.has(id)));
+  const first = states.find((state) => state.record.attempt_ids.some((id) => ambiguousIds.has(id)));
+  // A later state that names only a later attempt is still after the ambiguity, so it is covered.
+  const covered = first === undefined ? [] : states.filter((state) => state.record.version >= first.record.version);
   const expected = {
     first_ambiguous_attempt_id: ambiguous[0]?.registered.record.attempt_id ?? null,
     effect_knowledge: 'UNKNOWN',

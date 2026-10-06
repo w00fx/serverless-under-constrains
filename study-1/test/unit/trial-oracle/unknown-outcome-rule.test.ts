@@ -1,5 +1,5 @@
-// BR-RUA-004 unknown outcome (D-03): after an ambiguous attempt, every request state that names an
-// ambiguous attempt records UNKNOWN.
+// BR-RUA-004 unknown outcome (D-03): every request state from the first one that names an ambiguous
+// attempt onwards records UNKNOWN, whichever attempts the later states name.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -9,10 +9,23 @@ import { readAttempts } from '../../../src/trial-oracle/attempt-facts.ts';
 import { evaluateUnknownOutcome } from '../../../src/trial-oracle/unknown-outcome-rule.ts';
 import { builtEvidence } from './support/built-trials.ts';
 import type { TrialBuild } from './support/built-trials.ts';
-import { CALLER_JOURNAL, notDispatched, withoutOutcome } from './support/trial-edits.ts';
+import { builtRecords, CALLER_JOURNAL, notDispatched, withoutOutcome } from './support/trial-edits.ts';
 import { CONVENTIONAL_CONTROL, CONVENTIONAL_TREATMENT, DURABLE_TREATMENT, edited } from './support/trial-plans.ts';
 
+const FIRST_STATE = { record_type: 'request_state_recorded', occurrence: 1 } as const;
 const SECOND_STATE = { record_type: 'request_state_recorded', occurrence: 2 } as const;
+
+// The treatment's second attempt, which succeeds after the first one timed out.
+function laterAttemptId(): string {
+  const registered = builtRecords(CONVENTIONAL_TREATMENT, CALLER_JOURNAL).filter(
+    (record) => record['record_type'] === 'attempt_registered',
+  );
+  const attemptId = registered[1]?.['attempt_id'];
+  if (typeof attemptId !== 'string') {
+    throw new Error(`the treatment fixture has ${String(registered.length)} attempts; expected a second one`);
+  }
+  return attemptId;
+}
 
 function evaluate(build: TrialBuild): RuleResult {
   const evidence = builtEvidence(build);
@@ -58,6 +71,62 @@ describe('evaluateUnknownOutcome', () => {
       ]),
     );
     assert.equal(rule.result, 'fail');
+  });
+
+  it('fails when the first state naming the ambiguous attempt claims a confirmed effect', () => {
+    const rule = evaluate(
+      edited(CONVENTIONAL_TREATMENT, [
+        {
+          op: 'set',
+          path: CALLER_JOURNAL,
+          select: FIRST_STATE,
+          pointer: '/effect_knowledge',
+          value: 'ONE_EFFECT_CONFIRMED',
+        },
+      ]),
+    );
+    assert.equal(rule.result, 'fail');
+  });
+
+  // Regression (WP-14 review): a later state that names only the later, successful attempt is still
+  // after the ambiguity; UNKNOWN is absorbing, so its confirmed knowledge fails the rule.
+  it('fails when a later state naming only a later attempt claims a confirmed effect', () => {
+    const rule = evaluate(
+      edited(CONVENTIONAL_TREATMENT, [
+        { op: 'set', path: CALLER_JOURNAL, select: SECOND_STATE, pointer: '/attempt_ids', value: [laterAttemptId()] },
+        {
+          op: 'set',
+          path: CALLER_JOURNAL,
+          select: SECOND_STATE,
+          pointer: '/effect_knowledge',
+          value: 'ONE_EFFECT_CONFIRMED',
+        },
+      ]),
+    );
+    assert.equal(rule.result, 'fail');
+    assert.deepEqual(rule.observed, {
+      recorded: [
+        { version: 1, effect_knowledge: 'UNKNOWN' },
+        { version: 2, effect_knowledge: 'ONE_EFFECT_CONFIRMED' },
+      ],
+    });
+  });
+
+  it('does not judge a state recorded before the first one naming an ambiguous attempt (D-03)', () => {
+    const rule = evaluate(
+      edited(CONVENTIONAL_TREATMENT, [
+        { op: 'set', path: CALLER_JOURNAL, select: FIRST_STATE, pointer: '/attempt_ids', value: [laterAttemptId()] },
+        {
+          op: 'set',
+          path: CALLER_JOURNAL,
+          select: FIRST_STATE,
+          pointer: '/effect_knowledge',
+          value: 'ONE_EFFECT_CONFIRMED',
+        },
+      ]),
+    );
+    assert.equal(rule.result, 'pass');
+    assert.deepEqual(rule.observed, { recorded: [{ version: 2, effect_knowledge: 'UNKNOWN' }] });
   });
 
   it('is indeterminate with ARTIFACT_MISSING when the caller journal is absent', () => {
