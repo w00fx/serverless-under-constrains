@@ -24,6 +24,26 @@ type BodyOf<R> = R extends unknown ? Omit<R, EnvelopeField> : never;
 /** The record-specific fields of an event of type `T`. */
 export type EventBody<T extends EventRecordType> = BodyOf<GroupBRecordByType[T]>;
 
+// Every envelope field, as a runtime list. The mapped type makes a missing or misspelled field
+// a compile error, so this list cannot drift from `EventEnvelope`.
+const ENVELOPE_FIELD_NAMES: { readonly [K in EnvelopeField]: K } = {
+  schema_version: 'schema_version',
+  record_type: 'record_type',
+  event_id: 'event_id',
+  run_id: 'run_id',
+  variant_validation_id: 'variant_validation_id',
+  transport_probe_id: 'transport_probe_id',
+  execution_manifest_sha256: 'execution_manifest_sha256',
+  trial_id: 'trial_id',
+  trial_manifest_sha256: 'trial_manifest_sha256',
+  occurred_at: 'occurred_at',
+  source: 'source',
+  source_instance_id: 'source_instance_id',
+  source_sequence: 'source_sequence',
+  causation_event_ids: 'causation_event_ids',
+};
+const ENVELOPE_FIELDS: ReadonlySet<string> = new Set<string>(Object.values(ENVELOPE_FIELD_NAMES));
+
 /** Everything the envelope of one event needs besides the body. */
 export interface EventEnvelopeInput {
   readonly scope: JournalScope;
@@ -37,8 +57,11 @@ export interface EventEnvelopeInput {
 }
 
 /**
- * Builds an event. The envelope is written after the body, so a body can never override an
- * envelope field. Causation is deduplicated and sorted, and omitted for a causal root.
+ * Builds an event. The builder owns every envelope field (BR-RUA-033): an envelope key that
+ * reaches the body at runtime (the compile-time `Omit` does not see through object spreads) is
+ * dropped, so a body can neither override an envelope field nor add one the scope leaves unset,
+ * such as a second execution identity, trial fields outside a trial partition or causation on a
+ * causal root (WP-05 review round 2). Causation is deduplicated and sorted, and omitted for a causal root.
  * Throws a RangeError for a `source_sequence` outside `1..MAX_SOURCE_SEQUENCE`.
  *
  * @example
@@ -62,7 +85,7 @@ export function buildJournalEvent<T extends EventRecordType>(
       : {};
   const causation = causationIds(input.causation);
   const event = {
-    ...body,
+    ...recordSpecificFields(body),
     schema_version: 1,
     record_type: type,
     event_id: input.event_id,
@@ -79,4 +102,10 @@ export function buildJournalEvent<T extends EventRecordType>(
   // `EventBody<T>` back to the union member it came from. Its soundness is checked at runtime
   // for every event record type (test/integration/event-journal/journal-builder-catalogue).
   return event as unknown as JournalEvent;
+}
+
+// The body without any envelope key. `Object.entries` reads own enumerable properties only, the
+// same ones a spread copies.
+function recordSpecificFields(body: object): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(Object.entries(body).filter(([name]) => !ENVELOPE_FIELDS.has(name)));
 }
