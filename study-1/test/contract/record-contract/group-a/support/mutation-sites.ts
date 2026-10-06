@@ -5,8 +5,8 @@
 // cover the same sites.
 
 import type { JsonObject, JsonValue } from '../../../../../src/record-contract/primitives.ts';
-import { leavesOf, objectPathsOf } from '../../group-b/support/json-paths.ts';
-import type { JsonPath } from '../../group-b/support/json-paths.ts';
+import { leavesOf, objectPathsOf } from '../../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../../support/record-contract/json-paths.ts';
 import type { NamedExample } from './canonical-examples.ts';
 import { isKindFree, isOpenObject } from './json-scope.ts';
 

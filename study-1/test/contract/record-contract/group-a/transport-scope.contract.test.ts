@@ -8,7 +8,7 @@ import { serializeRecordFile } from '../../../../src/record-contract/canonical-j
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import { transportScopePolicy, transportScopeSnapshot } from './support/admission-examples.ts';
 import { CONTROLLER_FILTER_CRITERIA_JSON, IDS } from './support/sample-values.ts';
-import { pointerOf as pointer, withValueAt } from '../group-b/support/json-paths.ts';
+import { pointerOf as pointer, withValueAt } from '../../../support/record-contract/json-paths.ts';
 import {
   asJson,
   assertAccepted,

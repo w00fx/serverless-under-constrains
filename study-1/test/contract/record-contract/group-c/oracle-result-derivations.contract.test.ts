@@ -9,9 +9,9 @@ import { describe, it } from 'node:test';
 
 import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
-import { assertAccepted, assertRejected } from '../group-b/support/group-b-validation.ts';
-import { withValueAt } from '../group-b/support/json-paths.ts';
-import { toJson } from '../group-b/support/record-builders.ts';
+import { assertAccepted, assertRejected } from '../../../support/record-contract/group-b-validation.ts';
+import { withValueAt } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 import {
   controlPassOracleResult,
   indeterminateOracleResult,

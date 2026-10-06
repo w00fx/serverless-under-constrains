@@ -32,7 +32,7 @@ import {
   digest,
   reason,
   uuid,
-} from '../support/record-builders.ts';
+} from '../../../../support/record-contract/record-builders.ts';
 import { example } from '../support/record-example.ts';
 import type { RecordExample } from '../support/record-example.ts';
 

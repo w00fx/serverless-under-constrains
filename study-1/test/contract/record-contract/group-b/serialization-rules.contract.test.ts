@@ -12,7 +12,7 @@ import type { JsonObject, JsonValue } from '../../../../src/record-contract/prim
 import * as vocabulary from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import { isUtcMillis } from '../../../../src/record-contract/timestamps.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
-import { assertAccepted, assertRejected } from './support/group-b-validation.ts';
+import { assertAccepted, assertRejected } from '../../../support/record-contract/group-b-validation.ts';
 import {
   leavesOf,
   objectAt,
@@ -22,10 +22,10 @@ import {
   textOf,
   withMember,
   withValueAt,
-} from './support/json-paths.ts';
-import type { JsonLeaf, JsonPath } from './support/json-paths.ts';
+} from '../../../support/record-contract/json-paths.ts';
+import type { JsonLeaf, JsonPath } from '../../../support/record-contract/json-paths.ts';
 import type { RecordExample } from './support/record-example.ts';
-import { toJson } from './support/record-builders.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 
 type LeafMutation = (value: JsonValue) => JsonValue;
 

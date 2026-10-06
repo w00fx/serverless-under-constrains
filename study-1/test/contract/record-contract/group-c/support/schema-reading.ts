@@ -1,6 +1,7 @@
 // Reads the committed group-C schemas from disk through the kernel parser, so tests can compare a
 // schema location with an expectation stated elsewhere (the spec text, a TypeScript vocabulary or
-// a generated rule block). Pointer resolution is the group-B helper, shared by all groups.
+// a generated rule block). Pointer resolution is the shared helper in
+// test/support/record-contract/json-paths.ts.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

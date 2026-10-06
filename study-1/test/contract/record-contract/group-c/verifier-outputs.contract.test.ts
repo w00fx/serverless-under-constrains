@@ -6,9 +6,13 @@ import { describe, it } from 'node:test';
 
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { CLI_EXIT_CODES, CLI_OUTCOMES } from '../../../../src/record-contract/records/group-c/vocabulary.ts';
-import { assertAccepted, assertForbidden, assertRejected } from '../group-b/support/group-b-validation.ts';
-import { textOf, withValueAt } from '../group-b/support/json-paths.ts';
-import { PROBE_ID, RUN_ID, VALIDATION_ID, digest, toJson } from '../group-b/support/record-builders.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertRejected,
+} from '../../../support/record-contract/group-b-validation.ts';
+import { textOf, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import { PROBE_ID, RUN_ID, VALIDATION_ID, digest, toJson } from '../../../support/record-contract/record-builders.ts';
 import {
   completedCliResult,
   failedRevisionCheck,

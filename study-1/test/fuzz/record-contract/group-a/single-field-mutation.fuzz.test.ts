@@ -20,7 +20,7 @@ import {
   sameKindBreaks,
 } from '../../../contract/record-contract/group-a/support/single-field-mutations.ts';
 import type { JsonKind } from '../../../contract/record-contract/group-a/support/single-field-mutations.ts';
-import { pointerOf, withValueAt } from '../../../contract/record-contract/group-b/support/json-paths.ts';
+import { pointerOf, withValueAt } from '../../../support/record-contract/json-paths.ts';
 import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
 
 const UNKNOWN_OBJECT = fc.dictionary(

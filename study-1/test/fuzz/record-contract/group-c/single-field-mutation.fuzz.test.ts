@@ -16,15 +16,10 @@ import fc from 'fast-check';
 
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
-import { violationsOf } from '../../../contract/record-contract/group-b/support/group-b-validation.ts';
-import {
-  leavesOf,
-  objectPathsOf,
-  pointerOf,
-  withValueAt,
-} from '../../../contract/record-contract/group-b/support/json-paths.ts';
-import type { JsonPath } from '../../../contract/record-contract/group-b/support/json-paths.ts';
-import { toJson } from '../../../contract/record-contract/group-b/support/record-builders.ts';
+import { violationsOf } from '../../../support/record-contract/group-b-validation.ts';
+import { leavesOf, objectPathsOf, pointerOf, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import type { JsonPath } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 import { GROUP_C_EXAMPLES } from '../../../contract/record-contract/group-c/examples/group-c-examples.ts';
 import {
   INHERITED_MEMBER_NAMES,

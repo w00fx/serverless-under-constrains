@@ -5,7 +5,7 @@
 //   record (each validated against its own contract elsewhere);
 // - meaningful nulls (BR-RUA-033): the members whose null is a stated value.
 
-import type { JsonPath } from '../../group-b/support/json-paths.ts';
+import type { JsonPath } from '../../../../support/record-contract/json-paths.ts';
 
 // Per top-level member, the nested member names that are free-form ('*': the whole member).
 const FREE_FORM_MEMBERS: Readonly<Record<string, readonly string[] | '*'>> = {

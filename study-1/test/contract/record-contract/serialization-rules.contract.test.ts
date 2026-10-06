@@ -18,7 +18,7 @@ import type { RecordValidation } from '../../../src/record-contract/schema-regis
 import { DEEP_NESTING, parsedTower } from '../../support/kernel/deep-json.ts';
 import { CANONICAL_EXAMPLES as GROUP_A } from './group-a/support/canonical-examples.ts';
 import { CANONICAL_EXAMPLES as GROUP_B } from './group-b/examples/group-b-examples.ts';
-import { toJson } from './group-b/support/record-builders.ts';
+import { toJson } from '../../support/record-contract/record-builders.ts';
 import { CANONICAL_EXAMPLES as GROUP_C } from './group-c/examples/group-c-examples.ts';
 import { indeterminateOracleResult } from './group-c/examples/oracle-examples.ts';
 

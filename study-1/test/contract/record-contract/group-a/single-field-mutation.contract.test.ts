@@ -20,7 +20,7 @@ import { describe, it } from 'node:test';
 
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
-import { pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
+import { pointerOf, withValueAt } from '../../../support/record-contract/json-paths.ts';
 import type { MutationSite } from './support/mutation-sites.ts';
 import {
   assertRejectedMutation,

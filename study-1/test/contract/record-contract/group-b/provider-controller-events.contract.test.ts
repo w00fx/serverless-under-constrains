@@ -8,9 +8,14 @@ import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import * as controller from './examples/controller-examples.ts';
 import * as provider from './examples/provider-examples.ts';
-import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { textOf, withMember } from './support/json-paths.ts';
-import { toJson, uuid } from './support/record-builders.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertMissing,
+  assertRejected,
+} from '../../../support/record-contract/group-b-validation.ts';
+import { textOf, withMember } from '../../../support/record-contract/json-paths.ts';
+import { toJson, uuid } from '../../../support/record-contract/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
   return toJson(record);

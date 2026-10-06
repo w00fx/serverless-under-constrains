@@ -13,10 +13,9 @@ import { EVENT_RECORD_TYPES, RECORD_TYPES, RECORD_TYPE_GROUPS } from '../../../.
 import type { GroupCRecordType } from '../../../../src/record-contract/records/group-c/record-map.ts';
 import { findSchemaConventionViolations } from '../../../../src/record-contract/schema-conventions.ts';
 import { listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
-import { groupBValidator } from '../group-b/support/group-b-validation.ts';
-import { withValueAt } from '../group-b/support/json-paths.ts';
-import { toJson } from '../group-b/support/record-builders.ts';
-import { resolvePointer } from '../group-b/support/schema-reading.ts';
+import { groupBValidator } from '../../../support/record-contract/group-b-validation.ts';
+import { resolvePointer, withValueAt } from '../../../support/record-contract/json-paths.ts';
+import { toJson } from '../../../support/record-contract/record-builders.ts';
 import { CANONICAL_EXAMPLES, GROUP_C_EXAMPLES } from './examples/group-c-examples.ts';
 import { groupCSchemaOf } from './support/schema-reading.ts';
 import { ORDER_SITES, VOCABULARY_SITES } from './support/vocabulary-sites.ts';

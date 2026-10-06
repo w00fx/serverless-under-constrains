@@ -17,7 +17,7 @@ import type {
   ConditionId,
   PreservationVerdict,
 } from '../../../../../src/record-contract/records/group-c/vocabulary.ts';
-import { TRIAL_ID, digest, reason } from '../../group-b/support/record-builders.ts';
+import { TRIAL_ID, digest, reason } from '../../../../support/record-contract/record-builders.ts';
 
 /** The trial directory of the shared trial (design §7 package layout). */
 export const TRIAL_DIRECTORY = `trials/${TRIAL_ID}`;

@@ -9,9 +9,19 @@ import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import { RECORD_TYPE_GROUPS } from '../../../../src/record-contract/record-types.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
 import { CANONICAL_EXAMPLES } from './examples/group-b-examples.ts';
-import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { withMember, withoutMembers } from './support/json-paths.ts';
-import { TRIAL_ID, TRIAL_MANIFEST_SHA256, TRIAL_SCOPE, toJson } from './support/record-builders.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertMissing,
+  assertRejected,
+} from '../../../support/record-contract/group-b-validation.ts';
+import { withMember, withoutMembers } from '../../../support/record-contract/json-paths.ts';
+import {
+  TRIAL_ID,
+  TRIAL_MANIFEST_SHA256,
+  TRIAL_SCOPE,
+  toJson,
+} from '../../../support/record-contract/record-builders.ts';
 
 const TRIAL_REQUIRED: readonly GroupBRecordType[] = [
   'trial_message_published',

@@ -26,7 +26,7 @@ import {
 import type { RecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { CANONICAL_EXAMPLES as GROUP_A_EXAMPLES } from './group-a/support/canonical-examples.ts';
 import { CANONICAL_EXAMPLES as GROUP_B_EXAMPLES } from './group-b/examples/group-b-examples.ts';
-import { toJson } from './group-b/support/record-builders.ts';
+import { toJson } from '../../support/record-contract/record-builders.ts';
 import { CANONICAL_EXAMPLES as GROUP_C_EXAMPLES } from './group-c/examples/group-c-examples.ts';
 
 const RECORD_MODULE_ROOT = fileURLToPath(new URL('../../../src/record-contract/records/', import.meta.url));

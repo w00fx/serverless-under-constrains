@@ -6,8 +6,12 @@
 import { describe, it } from 'node:test';
 
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
-import { assertAccepted, assertForbidden, assertRejected } from '../group-b/support/group-b-validation.ts';
-import { withValueAt } from '../group-b/support/json-paths.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertRejected,
+} from '../../../support/record-contract/group-b-validation.ts';
+import { withValueAt } from '../../../support/record-contract/json-paths.ts';
 import {
   PROBE_ID,
   RUN_ID,
@@ -15,7 +19,7 @@ import {
   TRIAL_MANIFEST_SHA256,
   VALIDATION_ID,
   toJson,
-} from '../group-b/support/record-builders.ts';
+} from '../../../support/record-contract/record-builders.ts';
 import {
   attemptProjection,
   durableAttemptProjection,
