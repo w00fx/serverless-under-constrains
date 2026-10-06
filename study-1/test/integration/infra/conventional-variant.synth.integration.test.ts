@@ -280,12 +280,22 @@ describe('ConventionalVariant synthesis', () => {
 
   it('tags the variant resources with suc:variant_id and has no provisioned concurrency', () => {
     const variantTag = { Key: 'suc:variant_id', Value: 'conventional' };
+    const mappings = Object.values(resourcesOf('AWS::Lambda::EventSourceMapping')).filter((mapping) =>
+      JSON.stringify(mapping.Properties['EventSourceArn']).includes(logicalId(variant.source.queue)),
+    );
+    assert.equal(mappings.length, 1);
     for (const found of [
       callerFunction(),
       resource('AWS::SQS::Queue', logicalId(variant.source.queue)),
       resource('AWS::SQS::Queue', logicalId(variant.source.deadLetterQueue)),
+      ...mappings,
+      resource('AWS::Logs::LogGroup', logicalId(variant.caller.logGroup)),
+      resource('AWS::IAM::Role', logicalId(variant.caller.role)),
     ]) {
-      assert.ok(tagsOf(found).some((tag) => tag.Key === variantTag.Key && tag.Value === variantTag.Value));
+      assert.ok(
+        tagsOf(found).some((tag) => tag.Key === variantTag.Key && tag.Value === variantTag.Value),
+        JSON.stringify(found.Properties['Tags']),
+      );
     }
     assert.doesNotMatch(JSON.stringify(template.toJSON()), /ProvisionedConcurren/);
   });
