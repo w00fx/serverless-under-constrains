@@ -2,7 +2,7 @@
 // the smallest golden-operation edit that states one fact of design §8.10 or §8.11; the units
 // assert what the production code concludes from it.
 
-import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
+import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import type { ScenarioOperation } from '../../../support/golden-builder/operation-parsing.ts';
 import { deleteOp, documentOp, PROBE_IDS, removeOp, setOp, SUBJECT_FILES } from './treatment-evidence.ts';
 
@@ -15,8 +15,8 @@ const MANIFEST_SHA256 = '497bf46f0ff0900e84ff83d413f9d4baf5e6de429ffebe29934360c
 const PROBE_ID = '2559d5f6-ec95-4777-a74e-452fcfde7526';
 const CONTROLLER_INSTANCE = 'e9db59a7-5876-42f2-8b0b-3b0800182db0';
 
-/** The base probe's only ledger transaction, for a duplicate. */
-const LEDGER_TRANSACTION: JsonValue = {
+/** The base probe's only ledger transaction, for a duplicate or a second transaction. */
+export const LEDGER_TRANSACTION: JsonObject = {
   amount_minor: 10000,
   attempt_id: PROBE_IDS.attempt,
   commit_requested_at: '2026-10-05T12:05:05.120Z',

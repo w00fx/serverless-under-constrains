@@ -12,23 +12,14 @@ import {
   probeEvidence,
   SUBJECT_FILES,
 } from '../../treatment-fidelity/support/treatment-evidence.ts';
-import { PROBE_EDITS } from '../../treatment-fidelity/support/treatment-scenarios.ts';
+import { LEDGER_TRANSACTION, PROBE_EDITS } from '../../treatment-fidelity/support/treatment-scenarios.ts';
 import { codes, present } from '../../treatment-fidelity/support/view-edits.ts';
 
 /** The ledger holds a second transaction under another provider transaction id. */
 const SECOND_TRANSACTION = [
   documentOp(SUBJECT_FILES.ledger, '/transactions/1', {
-    amount_minor: 10000,
-    attempt_id: PROBE_IDS.attempt,
-    commit_requested_at: '2026-10-05T12:05:05.120Z',
-    currency: 'BRL',
-    payment_id: 'pay-poc-001',
-    provider_call_id: PROBE_IDS.call,
-    provider_commit_id: PROBE_IDS.commit,
-    provider_request_id: '58ae07f2-4809-4e4c-9659-f16beb4cfb68',
+    ...LEDGER_TRANSACTION,
     provider_transaction_id: PROBE_IDS.absent,
-    refund_request_id: 'ref-poc-001',
-    status: 'SUCCEEDED',
   }),
   documentOp(SUBJECT_FILES.ledger, '/pages/0/item_count', 2),
 ];
