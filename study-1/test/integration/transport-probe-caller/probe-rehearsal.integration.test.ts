@@ -52,6 +52,11 @@ describe('AC-RUA-002 offline transport rehearsal', () => {
 
     const warm = await rehearsal.warmUpProvider();
     assert.equal(warm.record_type, 'provider_warmup_completed');
+    assert.deepEqual(
+      rehearsal.invoker.requests().map((request) => (request as Readonly<Record<string, unknown>>)['record_type']),
+      ['provider_warmup_request'],
+      'the warm-up crosses the emulated Invoke of the published version',
+    );
     assert.deepEqual(types(rehearsal.events('experiment_journal', WARMUP_PK)), ['provider_warmup_completed']);
     assert.deepEqual(rehearsal.events('caller_journal', PROBE_PK), []);
     assert.equal(rehearsal.treatment()?.['state'], 'ARMED', 'the warm-up consumes no treatment');
@@ -61,7 +66,7 @@ describe('AC-RUA-002 offline transport rehearsal', () => {
     assert.deepEqual(rehearsal.logs.handledOutcomes(), ['canary_acknowledged', 'signal']);
   });
 
-  it('ac002-rehearsal-nominal: BR-RUA-010..015 hold and cardinality is 1/1/1', async () => {
+  it('ac002-rehearsal-nominal: BR-RUA-010..015 hold and the §8.11 cardinality is 1/1/1', async () => {
     const rehearsal = new TransportRehearsal();
     const report = await rehearsal.runProbeSequence();
     const caller = rehearsal.events('caller_journal', PROBE_PK);
@@ -73,11 +78,13 @@ describe('AC-RUA-002 offline transport rehearsal', () => {
     const observed = only(experiment, 'treatment_timeout_observed');
     const released = only(experiment, 'treatment_response_released');
 
-    // Cardinality: one caller invocation, one attempt, one provider call.
-    assert.equal(caller.filter((event) => event.record_type === 'caller_invocation_started').length, 1);
+    // §8.11 cardinality: caller invocations (distinct caller_invocation_started), accepted
+    // provider calls (provider_call_accepted) and committed transactions (the ledger) are 1/1/1.
+    const accepted = only(experiment, 'provider_call_accepted');
+    assert.equal(only(caller, 'caller_invocation_started').source, 'probe_caller');
     assert.equal(caller.filter((event) => event.record_type === 'attempt_registered').length, 1);
-    assert.equal(experiment.filter((event) => event.record_type === 'provider_call_received').length, 1);
     assert.equal(rehearsal.store.itemsIn('ledger').length, 1);
+    assert.equal(value(accepted, 'attempt_id'), value(timeout, 'attempt_id'));
 
     // BR-RUA-010: committed_at (from provider_commit_confirmed, D-24) precedes timer_fired_at.
     assert.ok(String(value(confirmed, 'committed_at')) < String(value(timeout, 'timer_fired_at')));
@@ -88,6 +95,7 @@ describe('AC-RUA-002 offline transport rehearsal', () => {
     assert.equal(value(timeout, 'arbiter_winner'), 'TIMER');
     assert.equal(value(timeout, 'transport_settled_at_claim'), false);
     assert.deepEqual(timeout.causation_event_ids, [only(caller, 'dispatch_started').event_id]);
+    assert.ok(String(value(timeout, 'abort_requested_at')) <= String(value(timeout, 'recorded_at')));
     assert.equal(value(only(caller, 'transport_settled_after_timeout'), 'settlement_kind'), 'aborted');
 
     // BR-RUA-012: the provider kept executing after the abort and finished normally.
@@ -100,14 +108,29 @@ describe('AC-RUA-002 offline transport rehearsal', () => {
     // BR-RUA-013: the signal is caused by exactly the commit and the caller timeout, and the
     // provider then observed it.
     assert.deepEqual(signal.causation_event_ids, [committed.event_id, timeout.event_id].sort());
+    assert.equal(value(signal, 'attempt_id'), value(timeout, 'attempt_id'), 'Σ references T');
+    assert.equal(value(signal, 'caller_timeout_event_id'), timeout.event_id);
+    assert.equal(value(signal, 'provider_commit_id'), value(committed, 'provider_commit_id'));
+    assert.equal(value(signal, 'provider_commit_event_id'), committed.event_id);
     assert.deepEqual(observed.causation_event_ids, [signal.event_id]);
 
-    // BR-RUA-014: release only after observation, and no safety release.
+    // BR-RUA-014: release caused by and after the observation in the same provider instance,
+    // and no safety release.
     assert.deepEqual(released.causation_event_ids, [observed.event_id]);
+    assert.equal(released.source_instance_id, observed.source_instance_id);
+    assert.ok(released.source_sequence > observed.source_sequence);
     assert.equal(experiment.filter((event) => event.record_type === 'treatment_safety_released').length, 0);
     assert.equal(rehearsal.treatment()?.['state'], 'RESPONSE_RELEASED');
 
-    // BR-RUA-015: the caller never observed the successful targeted response.
+    // BR-RUA-015: the caller never observed the successful targeted response: T's outcome is
+    // TIMED_OUT and no caller event of T carries K's provider_transaction_id.
+    const transactionId = String(value(committed, 'provider_transaction_id'));
+    const eventsOfT = caller.filter((event) => value(event, 'attempt_id') === value(timeout, 'attempt_id'));
+    assert.ok(eventsOfT.length >= 3, `${String(eventsOfT.length)} caller event(s) of T`);
+    assert.deepEqual(
+      eventsOfT.filter((event) => JSON.stringify(event).includes(transactionId)),
+      [],
+    );
     assert.equal(report.attempt.outcome, 'TIMED_OUT');
     assert.equal(report.attempt.dispatch_state, 'DISPATCHED');
     assert.equal(value(only(caller, 'attempt_outcome_recorded'), 'outcome'), 'TIMED_OUT');

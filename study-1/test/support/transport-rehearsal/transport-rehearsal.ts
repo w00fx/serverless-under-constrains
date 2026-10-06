@@ -2,8 +2,9 @@
 // provider, treatment controller and probe caller under one VirtualTimeScheduler, over the
 // InMemoryItemStore emulator, the StreamFeed emulator of the caller-journal stream (with the
 // controller mapping's filter) and the InProcessProviderInvoker. The harness plays the runner:
-// it seeds the probe partition, writes the readiness canary (D-10), warms the provider once
-// (addendum §2), then makes the single synchronous probe invocation (BR-RUA-027).
+// it seeds the probe partition, writes the readiness canary (D-10), warms the provider's
+// published version once through the emulated Invoke (addendum §2), then makes the single
+// synchronous probe invocation (BR-RUA-027).
 
 import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
 import { createDurableJournalPort } from '../../../src/event-journal/durable-journal-port.ts';
@@ -137,6 +138,9 @@ export class TransportRehearsal {
         arbiter_winner: 'TIMER',
         transport_settled_at_claim: false,
       },
+      // A runner-generated predecessor that no exported event carries: D-10 does not say which
+      // runner event the canary follows, and WP-26 owns that readiness record (see
+      // rehearsal-evidence.ts, "PROVISIONAL LAYOUT").
       [this.#runnerIds.next()],
     );
     if (written.kind !== 'appended') {
@@ -152,15 +156,29 @@ export class TransportRehearsal {
     return ack;
   }
 
-  /** The runner's single provider warm-up before the probe invocation (addendum §2). */
-  warmUpProvider(): Promise<ProviderInvocationResult> {
-    return this.provider.handle({
+  /**
+   * The runner's single provider warm-up before the probe invocation (addendum §2.1): one
+   * synchronous Invoke of the provider's published version, through the same emulated Invoke as
+   * the probe's call. Throws unless the version answers with a warm-up completion.
+   */
+  async warmUpProvider(): Promise<ProviderInvocationResult> {
+    const settlement = await this.invoker.invokeRequest({
       schema_version: 1,
       record_type: 'provider_warmup_request',
       transport_probe_id: PROBE_ID,
       execution_manifest_sha256: MANIFEST_SHA,
       warmup_id: this.#runnerIds.next(),
     });
+    if (
+      settlement.kind !== 'response' ||
+      settlement.executed_version !== REHEARSAL_QUALIFIER ||
+      settlement.function_error !== undefined
+    ) {
+      throw new Error(
+        `warm-up settled ${JSON.stringify(settlement)}; expected a ${REHEARSAL_QUALIFIER} response without a function error`,
+      );
+    }
+    return JSON.parse(new TextDecoder().decode(settlement.payload)) as ProviderInvocationResult;
   }
 
   /** The runner's single synchronous invocation of the probe caller, driven to quiescence. */
