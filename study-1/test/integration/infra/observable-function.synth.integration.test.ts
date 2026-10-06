@@ -73,9 +73,11 @@ before(() => {
     join(workspace, 'package.json'),
     JSON.stringify({ name: 'rua-synth-fixture', private: true, type: 'module' }),
   );
+  // The handler declares its own top-level `createRequire`, as @aws/durable-execution-sdk-js does
+  // (WP-21 blocker): the require banner must not bind a name an inlined ESM module may declare.
   writeFileSync(
     join(workspace, 'probe.handler.ts'),
-    "import { STSClient } from '@aws-sdk/client-sts';\nexport const handler = async (): Promise<string> => `${typeof STSClient}:${process.env['SUC_EXECUTION_ID'] ?? ''}`;\n",
+    "import { createRequire } from 'node:module';\nimport { STSClient } from '@aws-sdk/client-sts';\nexport const pathSeparator: string = (createRequire(import.meta.url)('node:path') as { readonly sep: string }).sep;\nexport const handler = async (): Promise<string> => `${typeof STSClient}:${process.env['SUC_EXECUTION_ID'] ?? ''}`;\n",
   );
   const outdir = join(workspace, 'cdk.out');
   const app = new App({ outdir });

@@ -25,8 +25,11 @@ export const RESERVED_ENVIRONMENT_KEYS = ['SUC_EXECUTION_KIND', 'SUC_EXECUTION_I
 
 // esbuild emits a throwing `require` shim when an ESM bundle inlines CommonJS code that
 // requires Node built-ins; restoring `require` through createRequire keeps the bundle loadable.
+// The import is aliased because esbuild treats the banner as opaque text and cannot rename around
+// it: an inlined ESM module with its own top-level `createRequire` (the durable SDK) would
+// otherwise fail at load with "Identifier 'createRequire' has already been declared" (WP-21).
 const ESM_REQUIRE_BANNER =
-  "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);";
+  "import { createRequire as suc_createRequire } from 'node:module'; const require = suc_createRequire(import.meta.url);";
 
 export interface ObservableFunctionProps {
   readonly context: ExecutionSynthContext;
