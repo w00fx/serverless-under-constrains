@@ -4,7 +4,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PROVIDER_FAULT_CODES, ProviderFault } from '../../../src/refund-provider/provider-fault.ts';
+import {
+  PROVIDER_FAULT_CODES,
+  ProviderFault,
+  unexpectedErrorLog,
+} from '../../../src/refund-provider/provider-fault.ts';
 import { ATTEMPT_ID } from './support/provider-fixtures.ts';
 
 describe('ProviderFault', () => {
@@ -50,5 +54,20 @@ describe('ProviderFault', () => {
       'TRANSITION_AMBIGUOUS',
       'WARMUP_REQUEST_INVALID',
     ]);
+  });
+
+  it('renders any other escaping error as one structured line, naming a thrown non-Error by type', () => {
+    assert.deepEqual(unexpectedErrorLog(new RangeError('Maximum call stack size exceeded')), {
+      level: 'error',
+      event: 'provider_unexpected_error',
+      error_name: 'RangeError',
+      detail: 'Maximum call stack size exceeded',
+    });
+    assert.deepEqual(unexpectedErrorLog('boom'), {
+      level: 'error',
+      event: 'provider_unexpected_error',
+      error_name: 'string',
+      detail: 'a thrown value that is not an Error',
+    });
   });
 });

@@ -4,7 +4,7 @@
 // performs no deduplication: those are properties the oracle evaluates, never the provider
 // (ADR keep-business-invariants-out-of-the-controlled-provider).
 
-import { describeJson, isJsonObject } from '../record-contract/json-value.ts';
+import { isJsonObject } from '../record-contract/json-value.ts';
 import type { ExecutionIdentity, JsonValue, Uuid4 } from '../record-contract/primitives.ts';
 import type { ProviderCallerId } from '../record-contract/records/group-a/provider_refund_call.ts';
 import type { ProviderRejectionReason } from '../record-contract/records/group-b/vocabulary.ts';
@@ -12,6 +12,7 @@ import type { PaymentView, ProviderConfigView } from './control-items.ts';
 import { describeExecution, sameExecution } from './execution-identity-fields.ts';
 import type { CallTrial, RefundCallShape } from './refund-call-shape.ts';
 import { amountViolation, guardRefundCallShape, identityStructureViolation } from './refund-call-shape.ts';
+import { describeUntrusted, excerptUntrusted } from './untrusted-json.ts';
 
 /** What the provider knows when it judges one call. */
 export interface AcceptanceContext {
@@ -39,7 +40,8 @@ export type AcceptanceDecision =
   | { readonly accepted: false; readonly reason: ProviderRejectionReason; readonly detail: string };
 
 /**
- * Judges one received call. Pure and total over any JSON value.
+ * Judges one received call. Pure and total over any value the runtime's JSON.parse produces,
+ * including non-finite numbers and nesting of any depth; details echo bounded excerpts.
  *
  * @example
  * const decision = evaluateAcceptance(raw, { deployment_execution, trial_configuration, payment });
@@ -51,7 +53,7 @@ export function evaluateAcceptance(raw: JsonValue, ctx: AcceptanceContext): Acce
   if (caller !== registered) {
     return reject(
       'AUTHORIZATION_FAILED',
-      `caller_id ${describeJson(caller)}; expected the registered caller ${JSON.stringify(registered)}`,
+      `caller_id ${describeUntrusted(caller)}; expected the registered caller ${JSON.stringify(registered)}`,
     );
   }
   const shape = guardRefundCallShape(raw);
@@ -74,7 +76,7 @@ function judgeShape(shape: RefundCallShape, ctx: AcceptanceContext): AcceptanceD
   if (payment?.payment_id !== shape.payment_id) {
     return reject(
       'PAYMENT_NOT_FOUND',
-      `payment_id ${JSON.stringify(shape.payment_id)}; expected a payment that exists in the trial partition`,
+      `payment_id ${excerptUntrusted(shape.payment_id)}; expected a payment that exists in the trial partition`,
     );
   }
   const amount = amountViolation(shape);

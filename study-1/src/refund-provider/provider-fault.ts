@@ -65,3 +65,30 @@ export class ProviderFault extends Error {
     };
   }
 }
+
+/** The JSON log line of any other error that escapes the handler, such as an environment refusal. */
+export interface ProviderUnexpectedErrorLog {
+  readonly level: 'error';
+  readonly event: 'provider_unexpected_error';
+  readonly error_name: string;
+  readonly detail: string;
+}
+
+/**
+ * The structured log line of an error that is not a ProviderFault, so no failure leaves the
+ * handler unlogged (WP-07 review round 1). A thrown non-Error value is described by its type.
+ *
+ * @example
+ * unexpectedErrorLog(new TypeError('boom')); // { level: 'error', event: 'provider_unexpected_error', error_name: 'TypeError', detail: 'boom' }
+ */
+export function unexpectedErrorLog(error: unknown): ProviderUnexpectedErrorLog {
+  if (error instanceof Error) {
+    return { level: 'error', event: 'provider_unexpected_error', error_name: error.name, detail: error.message };
+  }
+  return {
+    level: 'error',
+    event: 'provider_unexpected_error',
+    error_name: typeof error,
+    detail: 'a thrown value that is not an Error',
+  };
+}

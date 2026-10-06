@@ -3,8 +3,8 @@
 // Shared by the refund-call guard and the warm-up guard.
 
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { describeJson } from '../record-contract/json-value.ts';
 import type { ExecutionIdentity, JsonObject, Result, Uuid4 } from '../record-contract/primitives.ts';
+import { describeUntrusted } from './untrusted-json.ts';
 
 /** The envelope field of each execution kind. */
 export const EXECUTION_IDENTITY_FIELDS = [
@@ -33,7 +33,7 @@ export function parseExecutionIdentityFields(payload: JsonObject): Result<Execut
   const [field, kind] = only;
   const id = payload[field];
   if (!isUuid4(id)) {
-    return { ok: false, error: `${field} is ${describeJson(id)}; expected a lowercase RFC 4122 version-4 UUID` };
+    return { ok: false, error: `${field} is ${describeUntrusted(id)}; expected a lowercase RFC 4122 version-4 UUID` };
   }
   return { ok: true, value: executionIdentityOf(kind, id) };
 }

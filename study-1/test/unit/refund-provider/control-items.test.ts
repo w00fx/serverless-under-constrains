@@ -66,6 +66,28 @@ describe('decodeConfigItem', () => {
     );
   });
 
+  // WP-07 review round 1: the provider runs the coded OR-RUA-002 timing, so a configuration
+  // declaring other values would make the evidence misdescribe the run.
+  it('refuses a configuration whose declared barrier timing differs from the coded timing', () => {
+    assert.equal(
+      refusal(decodeConfigItem(trialConfigItem('CONTROL', { safety_release_ms: 14999 }), TRIAL_ID)),
+      `control item ${TRIAL_PK}/config: safety_release_ms number 14999; expected 15000, the provider's coded OR-RUA-002 value`,
+    );
+    assert.equal(
+      refusal(decodeConfigItem(trialConfigItem('CONTROL', { safety_release_ms: '15000' }), TRIAL_ID)),
+      `control item ${TRIAL_PK}/config: safety_release_ms string "15000"; expected 15000, the provider's coded OR-RUA-002 value`,
+    );
+    assert.equal(
+      refusal(decodeConfigItem(probeConfigItem({ treatment_poll_interval_ms: 251 }), undefined)),
+      `control item ${PROBE_PK}/config: treatment_poll_interval_ms number 251; expected 250, the provider's coded OR-RUA-002 value`,
+    );
+    const { treatment_poll_interval_ms: _omitted, ...withoutPoll } = trialConfigItem('CONTROL');
+    assert.equal(
+      refusal(decodeConfigItem(withoutPoll, TRIAL_ID)),
+      `control item ${TRIAL_PK}/config: treatment_poll_interval_ms absent; expected 250, the provider's coded OR-RUA-002 value`,
+    );
+  });
+
   it('refuses a probe configuration that carries a trial identity', () => {
     assert.equal(
       refusal(decodeConfigItem(probeConfigItem({ trial_id: TRIAL_ID }), undefined)),

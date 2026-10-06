@@ -10,8 +10,6 @@
 import type { JournalScope } from '../event-journal/journal-scope.ts';
 import type { JournalWriter } from '../event-journal/journal-writer.ts';
 import type { EventBody } from '../event-journal/journal-event.ts';
-import { canonicalJson } from '../record-contract/canonical-json.ts';
-import { sha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
 import { isJsonObject } from '../record-contract/json-value.ts';
 import type {
@@ -39,6 +37,7 @@ import { callJournalScope, resolveCallPartition } from './provider-partition.ts'
 import type { ProviderStatePort, ProviderStateRead } from './provider-state-port.ts';
 import { ProviderWarmup } from './provider-warmup.ts';
 import { BARRIER_TIMING, TreatmentBarrier } from './treatment-barrier.ts';
+import { describeUntrusted, requestDigest } from './untrusted-json.ts';
 
 export interface RefundProviderDeps {
   /** The execution this deployment belongs to (function environment). */
@@ -66,7 +65,6 @@ interface CallSession {
   readonly received_event_id: Uuid4;
 }
 
-const UTF8 = new TextEncoder();
 const RECEIVED_COPY_FIELDS = [
   'caller_id',
   'attempt_id',
@@ -75,6 +73,15 @@ const RECEIVED_COPY_FIELDS = [
   'payment_id',
 ] as const;
 
+/**
+ * The controlled refund provider of one deployment: it judges each received refund call
+ * (BR-RUA-018), commits an accepted one, holds the targeted response at the treatment barrier,
+ * and serves the warm-up. Compose it with `composeRefundProvider` over a durable store.
+ *
+ * @example
+ * const provider = new RefundProvider({ deployment, state, openJournal, ids, wall, monotonic, sleeper });
+ * const response = await provider.handle(event); // a refund response or a warm-up completion
+ */
 export class RefundProvider {
   readonly #deps: RefundProviderDeps;
   readonly #warmup: ProviderWarmup;
@@ -143,11 +150,14 @@ export class RefundProvider {
   async #openSession(raw: JsonValue, providerCallId: Uuid4): Promise<CallSession> {
     const partition = resolveCallPartition(this.#deps.deployment, raw);
     if (partition === undefined) {
+      const named = isJsonObject(raw)
+        ? `trial_id ${describeUntrusted(raw['trial_id'])}`
+        : `payload ${describeUntrusted(raw)}`;
       throw new ProviderFault(
         'UNATTRIBUTABLE_CALL',
         'before_commit',
         providerCallId,
-        `call names no trial partition (trial_id ${JSON.stringify(isJsonObject(raw) ? raw['trial_id'] : raw)}); expected a lowercase UUIDv4 trial_id`,
+        `call names no trial partition (${named}); expected a call object with a lowercase UUIDv4 trial_id`,
       );
     }
     const config = readOrFault(await this.#deps.state.loadTrialConfiguration(partition), providerCallId);
@@ -272,10 +282,12 @@ function receivedBody(raw: JsonValue, providerCallId: Uuid4): EventBody<'provide
       copied[field] = value;
     }
   }
-  // The Lambda runtime hands over the parsed payload, so the digest covers its canonical bytes.
+  // The Lambda Node runtime JSON-parses the Invoke bytes before the handler runs, so the exact
+  // request bytes never reach the provider; the digest covers the canonical bytes of the parsed
+  // payload and is total over it (requestDigest; WP-07 review round 1, `1e400` and deep nesting).
   return {
     provider_call_id: providerCallId,
-    raw_request_sha256: sha256Hex(UTF8.encode(canonicalJson(raw))),
+    raw_request_sha256: requestDigest(raw),
     ...copied,
   };
 }

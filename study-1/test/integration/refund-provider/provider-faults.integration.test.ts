@@ -33,10 +33,10 @@ describe('RefundProvider faults', () => {
       'UNATTRIBUTABLE_CALL',
       'before_commit',
     );
-    assert.match(fault.message, /\(trial_id undefined\)/u);
+    assert.match(fault.message, /\(trial_id absent\); expected a call object with a lowercase UUIDv4 trial_id$/u);
     assert.ok(fault.providerCallId !== undefined);
     const scalar = await expectProviderFault(harness.provider.handle(42), 'UNATTRIBUTABLE_CALL', 'before_commit');
-    assert.match(scalar.message, /\(trial_id 42\)/u);
+    assert.match(scalar.message, /\(payload number 42\)/u);
     assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
   });
 

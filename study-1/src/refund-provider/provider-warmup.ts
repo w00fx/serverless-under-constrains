@@ -12,7 +12,7 @@ import type { JournalWriter } from '../event-journal/journal-writer.ts';
 import { elapsedNs } from '../record-contract/decimal.ts';
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { describeJson, isJsonObject } from '../record-contract/json-value.ts';
+import { isJsonObject } from '../record-contract/json-value.ts';
 import type {
   ExecutionIdentity,
   JsonObject,
@@ -29,6 +29,7 @@ import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { describeExecution, parseExecutionIdentityFields, sameExecution } from './execution-identity-fields.ts';
 import { ProviderFault } from './provider-fault.ts';
 import { warmupJournalScope } from './provider-partition.ts';
+import { describeUntrusted, excerptUntrusted } from './untrusted-json.ts';
 
 /** Every property `provider_warmup_request` declares. */
 export const WARMUP_REQUEST_PROPERTIES = [
@@ -67,7 +68,10 @@ export interface ProviderWarmupDeps {
  */
 export function guardWarmupRequest(raw: JsonValue): Result<WarmupRequestView, string> {
   if (!isJsonObject(raw)) {
-    return { ok: false, error: `warm-up request is ${describeJson(raw)}; expected a provider_warmup_request object` };
+    return {
+      ok: false,
+      error: `warm-up request is ${describeUntrusted(raw)}; expected a provider_warmup_request object`,
+    };
   }
   const problem = warmupFieldProblem(raw);
   if (problem !== undefined) {
@@ -85,6 +89,14 @@ export function guardWarmupRequest(raw: JsonValue): Result<WarmupRequestView, st
   };
 }
 
+/**
+ * The provider's warm-up handler (addendum §2): records `provider_warmup_completed` in the
+ * execution-level warm-up partition and touches no trial state.
+ *
+ * @example
+ * const warmup = new ProviderWarmup({ deployment, openJournal, ids, wall, monotonic });
+ * const completed = await warmup.handle(request); // the recorded provider_warmup_completed
+ */
 export class ProviderWarmup {
   readonly #deps: ProviderWarmupDeps;
 
@@ -143,22 +155,22 @@ export class ProviderWarmup {
 function warmupFieldProblem(raw: JsonObject): string | undefined {
   const unknown = Object.keys(raw).find((key) => !(WARMUP_REQUEST_PROPERTIES as readonly string[]).includes(key));
   if (unknown !== undefined) {
-    return `property ${JSON.stringify(unknown)} is not part of provider_warmup_request; expected only ${WARMUP_REQUEST_PROPERTIES.join(', ')}`;
+    return `property ${excerptUntrusted(unknown)} is not part of provider_warmup_request; expected only ${WARMUP_REQUEST_PROPERTIES.join(', ')}`;
   }
   if (raw['schema_version'] !== 1) {
-    return `schema_version is ${describeJson(raw['schema_version'])}; expected the number 1`;
+    return `schema_version is ${describeUntrusted(raw['schema_version'])}; expected the number 1`;
   }
   if (raw['record_type'] !== 'provider_warmup_request') {
-    return `record_type is ${describeJson(raw['record_type'])}; expected "provider_warmup_request"`;
+    return `record_type is ${describeUntrusted(raw['record_type'])}; expected "provider_warmup_request"`;
   }
   if (!isSha256Hex(raw['execution_manifest_sha256'])) {
-    return `execution_manifest_sha256 is ${describeJson(raw['execution_manifest_sha256'])}; expected 64 lowercase hex digits`;
+    return `execution_manifest_sha256 is ${describeUntrusted(raw['execution_manifest_sha256'])}; expected 64 lowercase hex digits`;
   }
   if (!isUuid4(raw['warmup_id'])) {
-    return `warmup_id is ${describeJson(raw['warmup_id'])}; expected a lowercase RFC 4122 version-4 UUID`;
+    return `warmup_id is ${describeUntrusted(raw['warmup_id'])}; expected a lowercase RFC 4122 version-4 UUID`;
   }
   if (Object.hasOwn(raw, 'trial_id') && !isUuid4(raw['trial_id'])) {
-    return `trial_id is ${describeJson(raw['trial_id'])}; expected a lowercase RFC 4122 version-4 UUID when present`;
+    return `trial_id is ${describeUntrusted(raw['trial_id'])}; expected a lowercase RFC 4122 version-4 UUID when present`;
   }
   return undefined;
 }

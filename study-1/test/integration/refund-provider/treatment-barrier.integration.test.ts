@@ -141,7 +141,7 @@ describe('TreatmentBarrier', () => {
   it('treats a failed read as no news: waits one poll and reads again', async () => {
     const harness = stateHarness();
     seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID });
-    harness.state.scriptTreatmentRead({ ok: false, error: { code: 'InternalServerError', detail: 'read failed' } });
+    harness.store.scriptReadFault('InternalServerError', { table: 'control', operation: 'getConsistent' });
     const running = await startBarrier(harness);
     assert.equal(running.settled(), false);
     await harness.time.advanceBy(BARRIER_TIMING.poll_interval_ms);
@@ -210,7 +210,10 @@ describe('TreatmentBarrier', () => {
   it('retries a definitively failed release after one poll, from the observed state it reads', async () => {
     const harness = stateHarness();
     seedWait(harness, 'TIMEOUT_OBSERVED', { signal_event_id: SIGNAL_EVENT_ID, observed_event_id: OBSERVED_ID });
-    harness.state.scriptTransitionOutcome({ kind: 'definitive_failure', code: 'InternalServerError' });
+    harness.store.scriptWriteFault(
+      { kind: 'definitive_failure', code: 'InternalServerError' },
+      { operation: 'transact' },
+    );
     const running = await startBarrier(harness);
     assert.equal(running.settled(), false);
     await harness.time.advanceBy(BARRIER_TIMING.poll_interval_ms);
@@ -267,5 +270,90 @@ describe('TreatmentBarrier', () => {
     await stopJournal(harness);
     const fault = await expectProviderFault((await startBarrier(harness)).result, 'JOURNAL_STOPPED', 'after_commit');
     assert.match(fault.message, /treatment_safety_released not recorded \(INSTANCE_ALREADY_STOPPED\)/u);
+  });
+
+  // WP-07 review round 1: with every read failing after the deadline, a lost safety release used
+  // to re-read and retry at once, issuing transactions with no wait until the Lambda timeout.
+  it('settles from the superseding item when reads keep failing past the deadline, without spinning', async () => {
+    const harness = stateHarness();
+    seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID });
+    for (let read = 0; read < 200; read += 1) {
+      harness.store.scriptReadFault('InternalServerError', { table: 'control', operation: 'getConsistent' });
+    }
+    const running = await startBarrier(harness);
+    await harness.time.advanceBy(BARRIER_TIMING.safety_release_ms - 1);
+    assert.equal(running.settled(), false);
+    assert.equal(harness.state.transitionsSeen().length, 0);
+    await harness.time.advanceBy(1);
+    assert.deepEqual(await running.result, { kind: 'released' });
+
+    assert.deepEqual(
+      harness.state.transitionsSeen().map((transition) => `${transition.from}->${transition.to}`),
+      [
+        'COMMITTED_WAITING->SAFETY_RELEASED',
+        'TIMEOUT_SIGNALLED->TIMEOUT_OBSERVED',
+        'TIMEOUT_OBSERVED->RESPONSE_RELEASED',
+      ],
+    );
+    assert.equal(
+      harness.state.treatmentReadCount(),
+      BARRIER_TIMING.safety_release_ms / BARRIER_TIMING.poll_interval_ms + 1,
+    );
+    assert.deepEqual(eventTypes(harness), ['treatment_timeout_observed', 'treatment_response_released']);
+    assert.deepEqual(field(journalEvents(harness)[0], 'causation_event_ids'), [SIGNAL_EVENT_ID]);
+  });
+
+  it('faults STATE_UNREADABLE when the superseding item cannot be decoded, after one transition', async () => {
+    const harness = stateHarness();
+    seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID, safety_release_cause: 'BOGUS' });
+    const running = await startBarrier(harness);
+    await harness.time.advanceBy(BARRIER_TIMING.safety_release_ms - 1);
+    assert.equal(running.settled(), false);
+    assert.equal(harness.state.transitionsSeen().length, 0);
+    await harness.time.advanceBy(1);
+    const fault = await expectProviderFault(running.result, 'STATE_UNREADABLE', 'after_commit');
+
+    assert.match(
+      fault.message,
+      /^STATE_UNREADABLE: COMMITTED_WAITING -> SAFETY_RELEASED was superseded by an undecodable treatment item \(control item [^)]*: safety_release_cause string "BOGUS"; expected one of /u,
+    );
+    assert.equal(harness.state.transitionsSeen().length, 1);
+    assert.equal(
+      harness.state.treatmentReadCount(),
+      BARRIER_TIMING.safety_release_ms / BARRIER_TIMING.poll_interval_ms + 1,
+    );
+    assert.deepEqual(eventTypes(harness), []);
+    assert.equal(field(harness.store.peek('control', TREATMENT_KEY), 'state'), 'TIMEOUT_SIGNALLED');
+  });
+
+  it('decides from the superseding item without another read', async () => {
+    const harness = stateHarness();
+    seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID });
+    harness.state.interposeBeforeTransition(() => cleanup(harness, 'TIMEOUT_SIGNALLED'));
+    const running = await startBarrier(harness);
+    assert.deepEqual(await running.result, { kind: 'externally_released', cause: 'CLEANUP_REQUEST' });
+    assert.equal(harness.state.treatmentReadCount(), 1);
+    assert.equal(harness.state.transitionsSeen().length, 1);
+  });
+
+  it('attempts at most one transition per poll interval while transitions keep failing', async () => {
+    const harness = stateHarness();
+    seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      harness.store.scriptWriteFault(
+        { kind: 'definitive_failure', code: 'InternalServerError' },
+        { operation: 'transact' },
+      );
+    }
+    const running = await startBarrier(harness);
+    for (let window = 1; window <= 3; window += 1) {
+      assert.equal(harness.state.transitionsSeen().length, window);
+      await harness.time.advanceBy(BARRIER_TIMING.poll_interval_ms - 1);
+      assert.equal(harness.state.transitionsSeen().length, window);
+      await harness.time.advanceBy(1);
+    }
+    assert.deepEqual(await running.result, { kind: 'released' });
+    assert.equal(harness.state.transitionsSeen().length, 5);
+    assert.equal(harness.state.treatmentReadCount(), 4);
   });
 });
