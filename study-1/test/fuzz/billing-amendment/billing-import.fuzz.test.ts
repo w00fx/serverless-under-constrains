@@ -3,6 +3,9 @@
 // schema. For generated exports, every line lands in exactly one place (attributed, excluded, or
 // counted in an unverified reason), a non-USD attributable line always makes the check `unverified`
 // without a total, and a conclusive check states the exact USD sum and its comparison with the ceiling.
+// A conclusive check also never leaves out a line that may be run usage (BR-RUA-047: the safety
+// boundary covers identifiable run-owned usage; missing identities and shared charges give
+// `unverified`); that oracle is written from the spec, independently of the classification order.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -39,53 +42,71 @@ function assertSchemaValid(record: BillingImport): void {
 
 // Mostly attributable lines (repeated values weight the draw), so every outcome is reached; the rest
 // exercise each exclusion and unverified path.
-const lineArbitrary: fc.Arbitrary<CurRecordValues> = fc
-  .record({
-    account: fc.constantFrom(ACCOUNT_ID, ACCOUNT_ID, ACCOUNT_ID, ACCOUNT_ID, '210987654321', ''),
-    type: fc.constantFrom(
-      'Usage',
-      'Usage',
-      'Usage',
-      'Usage',
-      'Usage',
-      'Tax',
-      'Credit',
-      'SavingsPlanCoveredUsage',
-      'DiscountedUsage',
-    ),
-    owner: fc.constantFrom(
-      [PROVIDER_ARN, 'AWSLambda', 'Invoke'],
-      [PROVIDER_ARN, 'AWSLambda', 'Invoke'],
-      [PROVIDER_ARN, 'AWSLambda', 'Invoke'],
-      [LEDGER_ARN, 'AmazonDynamoDB', 'PayPerRequestThroughput'],
-      [PROVIDER_ARN, 'AWSLambda', 'GetFunction'],
-      [COORDINATION_ARN, 'AmazonDynamoDB', 'PayPerRequestThroughput'],
-      ['', 'AmazonDynamoDB', 'PayPerRequestThroughput'],
-      ['', 'AmazonS3', 'GetObject'],
-      ['constructor', '__proto__', 'toString'],
-    ),
-    hours: fc.constantFrom([10, 11], [10, 11], [11, 12], [10, 12], [9, 10], [12, 13], [9, 11], [11, 13]),
-    currency: fc.constantFrom('USD', 'USD', 'USD', 'USD', 'USD', 'USD', 'EUR', 'BRL', 'usd'),
-    cost: fc.oneof(
-      { arbitrary: fc.bigInt({ min: 0n, max: 6n * 10n ** 6n }).map(microDollars), weight: 8 },
-      { arbitrary: fc.constantFrom('1.25E-5', '0', '5.00', 'Infinity', '1e400', '-1', 'NaN'), weight: 1 },
-    ),
-    tag: fc.constantFrom(RUN_ID, RUN_ID, RUN_ID, OTHER_RUN_ID, ''),
-  })
-  .map((line) =>
-    curRecord({
-      [CUR_LINE_COLUMNS.usage_account_id]: line.account,
-      [CUR_LINE_COLUMNS.line_item_type]: line.type,
-      [CUR_LINE_COLUMNS.resource_id]: line.owner[0],
-      [CUR_LINE_COLUMNS.product_code]: line.owner[1],
-      [CUR_LINE_COLUMNS.operation]: line.owner[2],
-      [CUR_LINE_COLUMNS.usage_start]: `2026-10-05T${String(line.hours[0]).padStart(2, '0')}:00:00Z`,
-      [CUR_LINE_COLUMNS.usage_end]: `2026-10-05T${String(line.hours[1]).padStart(2, '0')}:00:00Z`,
-      [CUR_LINE_COLUMNS.currency]: line.currency,
-      [CUR_LINE_COLUMNS.cost]: line.cost,
-      [CUR_LINE_COLUMNS.run_tag]: line.tag,
-    }),
-  );
+const lineFields = fc.record({
+  account: fc.constantFrom(ACCOUNT_ID, ACCOUNT_ID, ACCOUNT_ID, ACCOUNT_ID, '210987654321', ''),
+  type: fc.constantFrom(
+    'Usage',
+    'Usage',
+    'Usage',
+    'Usage',
+    'Usage',
+    'Tax',
+    'Credit',
+    'SavingsPlanCoveredUsage',
+    'DiscountedUsage',
+  ),
+  owner: fc.constantFrom(
+    [PROVIDER_ARN, 'AWSLambda', 'Invoke'],
+    [PROVIDER_ARN, 'AWSLambda', 'Invoke'],
+    [PROVIDER_ARN, 'AWSLambda', 'Invoke'],
+    [LEDGER_ARN, 'AmazonDynamoDB', 'PayPerRequestThroughput'],
+    [PROVIDER_ARN, 'AWSLambda', 'GetFunction'],
+    [COORDINATION_ARN, 'AmazonDynamoDB', 'PayPerRequestThroughput'],
+    ['', 'AmazonDynamoDB', 'PayPerRequestThroughput'],
+    ['', 'AmazonS3', 'GetObject'],
+    ['constructor', '__proto__', 'toString'],
+  ),
+  hours: fc.constantFrom([10, 11], [10, 11], [11, 12], [10, 12], [9, 10], [12, 13], [9, 11], [11, 13]),
+  currency: fc.constantFrom('USD', 'USD', 'USD', 'USD', 'USD', 'USD', 'EUR', 'BRL', 'usd'),
+  cost: fc.oneof(
+    { arbitrary: fc.bigInt({ min: 0n, max: 6n * 10n ** 6n }).map(microDollars), weight: 8 },
+    { arbitrary: fc.constantFrom('1.25E-5', '0', '5.00', 'Infinity', '1e400', '-1', 'NaN'), weight: 1 },
+  ),
+  tag: fc.constantFrom(RUN_ID, RUN_ID, RUN_ID, OTHER_RUN_ID, ''),
+});
+
+type LineFields = typeof lineFields extends fc.Arbitrary<infer T> ? T : never;
+
+function exportRecord(line: LineFields): CurRecordValues {
+  return curRecord({
+    [CUR_LINE_COLUMNS.usage_account_id]: line.account,
+    [CUR_LINE_COLUMNS.line_item_type]: line.type,
+    [CUR_LINE_COLUMNS.resource_id]: line.owner[0],
+    [CUR_LINE_COLUMNS.product_code]: line.owner[1],
+    [CUR_LINE_COLUMNS.operation]: line.owner[2],
+    [CUR_LINE_COLUMNS.usage_start]: `2026-10-05T${String(line.hours[0]).padStart(2, '0')}:00:00Z`,
+    [CUR_LINE_COLUMNS.usage_end]: `2026-10-05T${String(line.hours[1]).padStart(2, '0')}:00:00Z`,
+    [CUR_LINE_COLUMNS.currency]: line.currency,
+    [CUR_LINE_COLUMNS.cost]: line.cost,
+    [CUR_LINE_COLUMNS.run_tag]: line.tag,
+  });
+}
+
+const lineArbitrary: fc.Arbitrary<CurRecordValues> = lineFields.map(exportRecord);
+
+// The line types BR-RUA-047 itself excludes (tax, credits); every other generated type is usage.
+const SPEC_EXCLUDED_TYPES: ReadonlySet<string> = new Set(['Tax', 'Credit']);
+const RUN_RESOURCES: ReadonlySet<string> = new Set([PROVIDER_ARN, LEDGER_ARN]);
+const WINDOW_HOURS = [10, 12] as const;
+
+// May the line be the run's usage? Usage (not tax or credit) in the run account or with no account,
+// overlapping the 10:00-12:00 window, that names a run resource or carries the run tag.
+function mayBeRunUsage(line: LineFields): boolean {
+  const inAccount = line.account === ACCOUNT_ID || line.account === '';
+  const overlaps = line.hours[0] < WINDOW_HOURS[1] && line.hours[1] > WINDOW_HOURS[0];
+  const identified = RUN_RESOURCES.has(line.owner[0]) || line.tag === RUN_ID;
+  return !SPEC_EXCLUDED_TYPES.has(line.type) && inAccount && overlaps && identified;
+}
 
 function microDollars(units: bigint): string {
   return `${String(units / 10n ** 6n)}.${String(units % 10n ** 6n).padStart(6, '0')}`;
@@ -121,6 +142,31 @@ describe('buildBillingImport is total over arbitrary export bytes (property)', (
 });
 
 describe('buildBillingImport over generated exports (property)', () => {
+  it('never concludes while a line that may be run usage is left out of the total', () => {
+    const parameters = fuzzParameters();
+    let conclusiveWithRunUsage = 0;
+    fc.assert(
+      fc.property(fc.array(lineFields, { minLength: 1, maxLength: 6 }), (fields) => {
+        const built = buildBillingImport(runImport(csvBytes(curCsv(fields.map(exportRecord)))));
+        assert.ok(built.ok, JSON.stringify(built));
+        if (built.value.billed_cost_check === 'unverified') {
+          return;
+        }
+        const used = new Set(built.value.lines_used.map((line) => line.line_id));
+        fields.forEach((line, index) => {
+          const lineId = `row:${String(index + 1)}`;
+          assert.ok(!mayBeRunUsage(line) || used.has(lineId), `${lineId} may be run usage but is not in the total`);
+        });
+        conclusiveWithRunUsage += fields.some(mayBeRunUsage) ? 1 : 0;
+      }),
+      parameters,
+    );
+    // Non-vacuity: a real budget reaches conclusive checks that do include run usage.
+    if (parameters.numRuns >= 1000) {
+      assert.ok(conclusiveWithRunUsage > 0, 'no conclusive check with run usage was generated');
+    }
+  });
+
   it('places every line once, never totals non-USD lines, and compares the exact USD sum', () => {
     const parameters = fuzzParameters();
     const outcomes = new Set<string>();

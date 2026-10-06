@@ -1,17 +1,25 @@
 // Exact billing-line correlation (BR-RUA-047, design §8.17, AC-RUA-024/034). Each export line ends
 // in exactly one of three places, decided in this order:
 //
-// 1. excluded and listed: tax, credit, refund, discount, fee and Savings Plan lines; lines of another
-//    account; lines whose usage interval does not touch the attribution window; usage that carries
-//    no run identity at all (`NOT_RUN_OWNED`);
+// 1. excluded and listed: tax, credit, refund, discount, fee and Savings Plan fee and negation lines;
+//    lines of another account; lines whose usage interval does not touch the attribution window;
+//    usage that carries no run identity at all (`NOT_RUN_OWNED`);
 // 2. attributed: a `Usage` line in the frozen account whose resource id is a resource-manifest
 //    identity, whose activated `suc:run_id` tag equals the execution id, whose product and operation
 //    are run-owned, whose usage interval lies inside the window and whose currency and cost read
 //    exactly;
 // 3. unattributable, which makes the check `unverified`: a candidate that is neither (a blank
-//    resource id, half of the identity, an interval that straddles the window, an unreadable cell:
-//    `INCOMPLETE_ATTRIBUTION`; a run-owned resource charged for a service or operation outside the
-//    allowlist, or a line type this import cannot classify: `SHARED_OR_UNOWNED_CHARGE`).
+//    resource id or usage account, half of the identity, an interval that straddles the window, an
+//    unreadable cell: `INCOMPLETE_ATTRIBUTION`; a run-owned resource charged for a service or
+//    operation outside the allowlist, run usage covered by a shared Savings Plan or Reserved
+//    Instance commitment, or a line type this import cannot classify: `SHARED_OR_UNOWNED_CHARGE`).
+//
+// Commitment-covered usage (`SavingsPlanCoveredUsage`, `DiscountedUsage`) is run-owned compute
+// usage that BR-RUA-047 keeps inside the safety boundary, but its cost is a share of a commitment
+// bought for the whole account: excluding it would drop run usage from the total and could report
+// `within_limit` falsely, and pricing it would be the proportional allocation the PoC forbids. So
+// it is `unverified` when it may be the run's, and excluded when it carries no run identity
+// (evidence/WP-18/decisions.md, single-pass review).
 //
 // Nothing is ever split, allocated or converted. Currency judgement is the billed-cost check's.
 
@@ -55,8 +63,13 @@ export const EXCLUDED_LINE_TYPES: ReadonlyMap<string, BillingExclusionCode> = ne
   ['RIFee', 'FEE'],
   ['SavingsPlanUpfrontFee', 'SAVINGS_PLAN'],
   ['SavingsPlanRecurringFee', 'SAVINGS_PLAN'],
-  ['SavingsPlanCoveredUsage', 'SAVINGS_PLAN'],
   ['SavingsPlanNegation', 'SAVINGS_PLAN'],
+]);
+
+/** CUR line types of usage a shared commitment pays for: Savings Plans and Reserved Instances. */
+export const COMMITMENT_COVERED_LINE_TYPES: ReadonlySet<string> = new Set([
+  'SavingsPlanCoveredUsage',
+  'DiscountedUsage',
 ]);
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
@@ -84,7 +97,8 @@ function classifyLine(line: CurLine, ctx: AttributionContext): LineDisposition {
   if (excludedType !== undefined) {
     return excluded(line, excludedType, `line type ${quoteCell(line.line_item_type)} is not attributable usage`);
   }
-  if (line.usage_account_id !== ctx.account_id) {
+  const accountBlank = isBlank(line.usage_account_id);
+  if (!accountBlank && line.usage_account_id !== ctx.account_id) {
     return excluded(
       line,
       'OTHER_ACCOUNT',
@@ -95,20 +109,44 @@ function classifyLine(line: CurLine, ctx: AttributionContext): LineDisposition {
   if (interval !== undefined && isDisjoint(interval, ctx.window)) {
     return excluded(line, 'OUTSIDE_USAGE_WINDOW', `usage ${interval.start} to ${interval.end} is outside the window`);
   }
-  if (line.line_item_type !== 'Usage') {
+  // A blank account is a missing identity, never proof of another account (BR-RUA-047).
+  return accountBlank ? classifyMissingAccount(line, ctx) : classifyByLineType(line, ctx, interval);
+}
+
+function classifyByLineType(
+  line: CurLine,
+  ctx: AttributionContext,
+  interval: UsageInterval | undefined,
+): LineDisposition {
+  if (line.line_item_type === 'Usage') {
+    return classifyUsage(line, ctx, interval);
+  }
+  if (!COMMITMENT_COVERED_LINE_TYPES.has(line.line_item_type)) {
     return unattributable(
       line,
       'SHARED_OR_UNOWNED_CHARGE',
       `line type ${quoteCell(line.line_item_type)} cannot be assigned`,
     );
   }
-  return classifyUsage(line, ctx, interval);
+  return mayBeRunUsage(line, ctx)
+    ? unattributable(
+        line,
+        'SHARED_OR_UNOWNED_CHARGE',
+        `line type ${quoteCell(line.line_item_type)} is usage covered by a shared commitment`,
+      )
+    : excluded(line, 'NOT_RUN_OWNED', `${quoteCell(line.line_item_type)} line carries no run identity`);
+}
+
+function classifyMissingAccount(line: CurLine, ctx: AttributionContext): LineDisposition {
+  return mayBeRunUsage(line, ctx)
+    ? unattributable(line, 'INCOMPLETE_ATTRIBUTION', 'blank usage account')
+    : excluded(line, 'NOT_RUN_OWNED', 'blank usage account and no run identity');
 }
 
 function classifyUsage(line: CurLine, ctx: AttributionContext, interval: UsageInterval | undefined): LineDisposition {
   const tagged = line.run_tag === ctx.ownership_tag_value;
-  if (line.resource_id.trim() === '') {
-    return tagged || isAllowlisted(line, ctx)
+  if (isBlank(line.resource_id)) {
+    return mayBeRunUsage(line, ctx)
       ? unattributable(line, 'INCOMPLETE_ATTRIBUTION', 'blank resource id')
       : excluded(line, 'NOT_RUN_OWNED', 'blank resource id, no run tag and no run-owned operation');
   }
@@ -158,8 +196,21 @@ function attributedLine(line: CurLine, interval: UsageInterval, cost: MoneyDecim
   };
 }
 
+// Whether the line may be the run's: it names a run resource or carries the run tag, or its
+// resource id is blank (normal for API requests) on a run-owned operation.
+function mayBeRunUsage(line: CurLine, ctx: AttributionContext): boolean {
+  if (line.run_tag === ctx.ownership_tag_value || ctx.resource_identities.has(line.resource_id)) {
+    return true;
+  }
+  return isBlank(line.resource_id) && isAllowlisted(line, ctx);
+}
+
 function isAllowlisted(line: CurLine, ctx: AttributionContext): boolean {
   return ctx.charge_allowlist.get(line.product_code)?.has(line.operation) === true;
+}
+
+function isBlank(cell: string): boolean {
+  return cell.trim() === '';
 }
 
 function excluded(line: CurLine, exclusion: BillingExclusionCode, detail: string): LineDisposition {
