@@ -31,6 +31,7 @@ const AC_CASE_FILES = [
       'account',
       'region',
       'safety',
+      'safety-missing-ownership-strategy',
       'qualification',
       'coordination-configuration',
     ],
@@ -46,8 +47,8 @@ const AC_CASE_FILES = [
     cases: ['failing-report', 'under-covered-report'],
   },
 ] as const;
-/** The WP-23 first delivery. */
-const RATIFIED_FLOOR = { unit: 129, integration: 104, fuzz: 9 } as const;
+/** The WP-23 single-pass review, ratcheted up from the first delivery's 129, 104 and 9. */
+const RATIFIED_FLOOR = { unit: 157, integration: 112, fuzz: 10 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));
