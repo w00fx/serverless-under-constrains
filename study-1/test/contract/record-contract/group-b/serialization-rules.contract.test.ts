@@ -76,7 +76,7 @@ function snakeToCamel(name: string): string {
 
 describe('AC-RUA-046 serialization rules over group B', () => {
   it('every example is valid after kernel serialization', () => {
-    assert.equal(EXAMPLES.length, 68);
+    assert.equal(EXAMPLES.length, 69);
     for (const { example, json } of EXAMPLES) {
       assertAccepted(json, example.label);
     }
@@ -94,7 +94,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       assertRejected(withMember(json, 'record_type', textOf(json['record_type'] ?? null).toUpperCase()), example.label);
     }
     const upperSnake = (value: JsonValue): boolean => typeof value === 'string' && UPPER_SNAKE_VALUE.test(value);
-    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 73);
+    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 74);
   });
 
   it('millisecond UTC', () => {
@@ -105,7 +105,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value): JsonValue => textOf(value).replace(/Z$/, 'z'),
       (value): JsonValue => textOf(value).replace(/^\d{4}-\d{2}-\d{2}/, '2026-02-30'),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 92);
+    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 93);
   });
 
   it('lowercase UUIDv4', () => {
@@ -115,7 +115,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value): JsonValue => `${textOf(value).slice(0, 14)}1${textOf(value).slice(15)}`,
       (value): JsonValue => `{${textOf(value)}}`,
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUuid4, mutations), 336);
+    assert.equal(rejectEveryGovernedLeaf(isUuid4, mutations), 344);
   });
 
   it('lowercase SHA-256 digests', () => {
@@ -123,7 +123,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value: JsonValue): JsonValue => textOf(value).toUpperCase(),
       (value: JsonValue): JsonValue => textOf(value).slice(1),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isSha256Hex, mutations), 127);
+    assert.equal(rejectEveryGovernedLeaf(isSha256Hex, mutations), 129);
   });
 
   it('safe-integer amounts', () => {
@@ -133,7 +133,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (): JsonValue => -1,
       (): JsonValue => Number.MAX_SAFE_INTEGER + 1,
     ];
-    assert.equal(rejectEveryGovernedLeaf(isNumber, mutations), 170);
+    assert.equal(rejectEveryGovernedLeaf(isNumber, mutations), 172);
   });
 
   it('decimal aggregates', () => {
@@ -154,7 +154,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value: JsonValue): JsonValue => textOf(value),
       (value: JsonValue): JsonValue => (value === true ? 1 : 0),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isBoolean, mutations), 18);
+    assert.equal(rejectEveryGovernedLeaf(isBoolean, mutations), 20);
   });
 
   it('omitted versus null', () => {

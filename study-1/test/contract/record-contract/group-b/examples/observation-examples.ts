@@ -172,6 +172,34 @@ export function treatmentItemPresent(): TreatmentStateSnapshot {
       signal_caller_event_id: uuid(6),
       observed_event_id: uuid(17),
       release_event_id: uuid(18),
+    },
+  };
+}
+
+/**
+ * A treatment item the provider released at its safety deadline while it waited after commit:
+ * the barrier writes `safety_release_cause` only on the transition to SAFETY_RELEASED
+ * (refund-provider treatment-barrier), so only this state carries it.
+ */
+export function treatmentItemSafetyReleased(): TreatmentStateSnapshot {
+  return {
+    schema_version: 1,
+    record_type: 'treatment_state_snapshot',
+    ...RUN_CORRELATION,
+    ...TRIAL_SCOPE,
+    partition_key: TRIAL_PARTITION,
+    captured_at: at(63_000),
+    consistent_read: true,
+    item_present: true,
+    treatment: {
+      state: 'SAFETY_RELEASED',
+      version: 3,
+      targeted_attempt_id: ATTEMPT_CORRELATION.attempt_id,
+      provider_request_id: ATTEMPT_CORRELATION.provider_request_id,
+      provider_call_id: COMMIT_TRIPLE.provider_call_id,
+      provider_commit_id: COMMIT_TRIPLE.provider_commit_id,
+      provider_transaction_id: COMMIT_TRIPLE.provider_transaction_id,
+      commit_event_id: uuid(14),
       safety_release_cause: 'SAFETY_DEADLINE',
     },
   };
@@ -287,6 +315,7 @@ export const OBSERVATION_EXAMPLES: readonly RecordExample[] = [
   example('dlq_snapshot', dlqSnapshot()),
   example('ledger_snapshot', ledgerSnapshot()),
   example('treatment_state_snapshot present', treatmentItemPresent()),
+  example('treatment_state_snapshot safety released', treatmentItemSafetyReleased()),
   example('treatment_state_snapshot absent', treatmentItemAbsent()),
   example('durable_execution_metadata', durableExecutionMetadata()),
   example('telemetry_availability', telemetryAvailability()),

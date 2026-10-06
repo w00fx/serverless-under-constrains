@@ -171,7 +171,7 @@ describe('AC-RUA-046 durable_execution_metadata', () => {
     );
   });
 
-  it('a running execution has no end', () => {
+  it('a running execution may omit its end', () => {
     const metadata = json(observation.durableExecutionMetadata());
     const running = withValueAt(
       withValueAt(metadata, ['executions', 0, 'status'], 'RUNNING'),
