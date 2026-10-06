@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/dlq_snapshot.schema.json",
   "title": "dlq_snapshot (catalogue group B, row 59)",
-  "description": "Conditional trials/<t>/queues/dlq-snapshot.json: the dead-letter messages received without deletion, each with its exact body and SQS attributes, captured before cleanup deletes them (BR-RUA-032, BR-RUA-037, BR-RUA-048 step 7).",
+  "description": "Conditional trials/<t>/queues/dlq-snapshot.json: the dead-letter messages received without deletion, each with its exact body and SQS attributes, captured before cleanup deletes them (BR-RUA-032, BR-RUA-037, BR-RUA-048 step 7). The collector converts the SQS epoch-millisecond attributes SentTimestamp and ApproximateFirstReceiveTimestamp to millisecond UTC timestamps (BR-RUA-033), which loses no information.",
   "type": "object",
   "$defs": {
     "dlq_message": {
@@ -28,12 +28,10 @@
           "maximum": 9007199254740991
         },
         "approximate_first_receive_timestamp": {
-          "type": "string",
-          "pattern": "^[0-9]+$"
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
         },
         "sent_timestamp": {
-          "type": "string",
-          "pattern": "^[0-9]+$"
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
         },
         "message_group_id": {
           "type": "string",

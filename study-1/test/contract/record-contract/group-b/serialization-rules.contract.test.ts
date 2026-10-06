@@ -105,7 +105,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value): JsonValue => textOf(value).replace(/Z$/, 'z'),
       (value): JsonValue => textOf(value).replace(/^\d{4}-\d{2}-\d{2}/, '2026-02-30'),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 90);
+    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 92);
   });
 
   it('lowercase UUIDv4', () => {

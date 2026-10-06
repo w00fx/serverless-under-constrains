@@ -76,11 +76,23 @@ describe('AC-RUA-046 dlq_snapshot', () => {
       'md5',
       '/messages/0/md5_of_body pattern',
     );
-    for (const field of ['sent_timestamp', 'approximate_first_receive_timestamp', 'sequence_number']) {
-      const label = `${field} as ISO`;
+    assertRejected(
+      withValueAt(snapshot, ['messages', 0, 'sequence_number'], '2026-10-05'),
+      'sequence_number as a date',
+      '/messages/0/sequence_number pattern',
+    );
+  });
+
+  it('SQS message timestamps are millisecond UTC, never the epoch digit strings SQS reports', () => {
+    // BR-RUA-033: "Timestamps use UTC `YYYY-MM-DDTHH:mm:ss.SSSZ` with exactly millisecond precision."
+    const snapshot = json(observation.dlqSnapshot());
+    for (const field of ['sent_timestamp', 'approximate_first_receive_timestamp']) {
+      const path = ['messages', 0, field];
+      assertAccepted(withValueAt(snapshot, path, '2026-10-05T12:00:00.000Z'), `${field} UTC`);
+      assertRejected(withValueAt(snapshot, path, '1791201599000'), `${field} epoch`, `/messages/0/${field} pattern`);
       assertRejected(
-        withValueAt(snapshot, ['messages', 0, field], '2026-10-05'),
-        label,
+        withValueAt(snapshot, path, '2026-10-05T12:00:00Z'),
+        `${field} seconds`,
         `/messages/0/${field} pattern`,
       );
     }

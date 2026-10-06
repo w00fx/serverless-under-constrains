@@ -11,9 +11,12 @@ export interface DlqMessage {
   readonly body_sha256: Sha256Hex;
   readonly md5_of_body: string;
   readonly approximate_receive_count: number;
-  /** Epoch milliseconds as SQS reports them, a digit string. */
-  readonly approximate_first_receive_timestamp: string;
-  readonly sent_timestamp: string;
+  /**
+   * SQS reports these attributes as epoch-millisecond digit strings; the collector converts them
+   * to millisecond UTC (BR-RUA-033 "Timestamps use UTC `YYYY-MM-DDTHH:mm:ss.SSSZ`"), losslessly.
+   */
+  readonly approximate_first_receive_timestamp: UtcMillis;
+  readonly sent_timestamp: UtcMillis;
   readonly message_group_id: string;
   readonly message_deduplication_id: string;
   readonly sequence_number: string;
