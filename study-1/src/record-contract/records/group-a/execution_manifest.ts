@@ -117,12 +117,19 @@ export interface ConservativeEstimates {
   readonly resource_counts: Readonly<Record<string, number>>;
 }
 
+/** The CA-1 scope, verbatim from the spec. */
+export const CA_1_SCOPE = 'same-account, same-Region AWS Lambda execution environments';
+
+/** The CA-1 statement, verbatim from the spec (its line break joined by one space). */
+export const CA_1_STATEMENT =
+  'UTC wall-clock timestamps preserve the ordering of the provider commit and caller timer events for this PoC.';
+
 /** CA-1, the PoC clock-alignment assumption, declared verbatim as a study assumption. */
 export interface ClockAssumptionDeclaration {
   readonly assumption_id: 'CA-1';
   readonly assumption_type: 'clock_alignment';
-  readonly scope: string;
-  readonly statement: string;
+  readonly scope: typeof CA_1_SCOPE;
+  readonly statement: typeof CA_1_STATEMENT;
   readonly status: 'declared_not_service_guaranteed';
 }
 
