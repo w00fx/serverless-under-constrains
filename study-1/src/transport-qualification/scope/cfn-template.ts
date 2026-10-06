@@ -10,7 +10,7 @@
 // Every read is of own properties only: a policy property path may name a segment such as
 // `constructor` or `toString`, which must read as absent, never as an inherited member.
 
-import { isJsonObject } from '../../record-contract/json-value.ts';
+import { describeJson, isJsonObject } from '../../record-contract/json-value.ts';
 import type { JsonObject, JsonValue, Result, StructuredReason } from '../../record-contract/primitives.ts';
 import { scopeViolation } from './scope-reasons.ts';
 
@@ -64,6 +64,21 @@ export function listTemplateResources(template: CfnTemplate): Result<readonly Te
 }
 
 /**
+ * The execution-independent identity of a resource: its stack-relative construct path, or its
+ * type when it carries no construct path. Logical ids are not identities: CDK derives their
+ * hash suffix from the whole path, stack name included, and some (`CurrentVersion<hash>`) vary
+ * with the bundled code.
+ *
+ * @example
+ * resourceIdentity({ logical_id: 'ExperimentCoreLedgerTable84EA353E', type: 'AWS::DynamoDB::Table',
+ *   construct_path: ['ExperimentCore', 'LedgerTable', 'Resource'], resource: {} });
+ * // 'ExperimentCore/LedgerTable/Resource'
+ */
+export function resourceIdentity(resource: TemplateResource): string {
+  return resource.construct_path === undefined ? resource.type : resource.construct_path.join('/');
+}
+
+/**
  * The value at a dot-separated path inside a resource, or `undefined` when any segment is not
  * an own property (an inherited member such as `constructor` is absent).
  *
@@ -89,7 +104,8 @@ function constructPath(resource: JsonObject): readonly string[] | undefined {
   return typeof path === 'string' ? path.split('/').slice(1) : undefined;
 }
 
+// The kernel renderer bounds the quoted value and walks it iteratively, so a deep or huge
+// malformed resource gives a short detail instead of a RangeError (Owner amendment A-05).
 function invalidTemplate(location: string, value: JsonValue | undefined, expected: string): StructuredReason {
-  const found = value === undefined ? 'absent' : JSON.stringify(value);
-  return scopeViolation('TEMPLATE_INVALID', `template ${location} is ${found}; expected ${expected}`);
+  return scopeViolation('TEMPLATE_INVALID', `template ${location} is ${describeJson(value)}; expected ${expected}`);
 }

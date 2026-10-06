@@ -14,6 +14,7 @@
 // carries the execution id) never takes part in the match.
 
 import { sha256Hex } from '../../record-contract/digests.ts';
+import { boundedJsonText } from '../../record-contract/json-value.ts';
 import { parseJsonDocument } from '../../record-contract/parsing.ts';
 import type { Result, Sha256Hex, StructuredReason } from '../../record-contract/primitives.ts';
 import type { TransportScopePolicy } from '../../record-contract/records/group-a/transport_scope_policy.ts';
@@ -76,7 +77,7 @@ export function parseTransportScopePolicy(
       error: duplicates.map((id) =>
         scopeViolation(
           'SCOPE_POLICY_DUPLICATE_PROJECTION',
-          `projection_id ${JSON.stringify(id)} is declared more than once; expected unique projection ids`,
+          `projection_id ${boundedJsonText(id)} is declared more than once; expected unique projection ids`,
         ),
       ),
     };

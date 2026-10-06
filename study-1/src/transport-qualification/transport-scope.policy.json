@@ -27,6 +27,7 @@
         "Properties.Handler",
         "Properties.MemorySize",
         "Properties.ReservedConcurrentExecutions",
+        "Properties.Role",
         "Properties.Runtime",
         "Properties.Timeout"
       ]
@@ -34,7 +35,7 @@
     {
       "projection_id": "experiment_core__versions",
       "resource_type": "AWS::Lambda::Version",
-      "property_paths": ["Properties.ProvisionedConcurrencyConfig"]
+      "property_paths": ["Properties.FunctionName", "Properties.ProvisionedConcurrencyConfig"]
     },
     {
       "projection_id": "experiment_core__stream_mappings",
@@ -45,6 +46,7 @@
         "Properties.DestinationConfig",
         "Properties.EventSourceArn",
         "Properties.FilterCriteria",
+        "Properties.FunctionName",
         "Properties.FunctionResponseTypes",
         "Properties.MaximumBatchingWindowInSeconds",
         "Properties.MaximumRecordAgeInSeconds",
@@ -61,6 +63,7 @@
         "Properties.BillingMode",
         "Properties.KeySchema",
         "Properties.StreamSpecification",
+        "Properties.TableName",
         "Properties.TimeToLiveSpecification"
       ]
     },

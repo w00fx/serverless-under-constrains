@@ -168,7 +168,9 @@ describe('computeScopeSnapshot', () => {
     const base = snapshotOf(sampleSnapshotInput());
     const changed = snapshotOf(sampleSnapshotInput({ template: cdkTemplate({ providerReservedConcurrency: 1 }) }));
     assert.notEqual(scopeSnapshotSha256(changed), scopeSnapshotSha256(base));
+    // Construct-path order: ExperimentCore/Controller/... before ExperimentCore/Provider/...
     assert.deepEqual(changed.configuration_projections[0].resources, [
+      UNRESERVED_FUNCTION,
       {
         property_values: [
           { property_path: 'Properties.MemorySize', canonical_json: '512' },
@@ -176,7 +178,6 @@ describe('computeScopeSnapshot', () => {
           { property_path: 'Properties.Timeout', canonical_json: '30' },
         ],
       },
-      UNRESERVED_FUNCTION,
     ]);
   });
 
@@ -282,7 +283,7 @@ describe('computeScopeSnapshot refusals', () => {
       {
         code: 'TEMPLATE_INVALID',
         subject: 'BR-RUA-028',
-        detail: 'template Resources is []; expected an object of resources',
+        detail: 'template Resources is array []; expected an object of resources',
       },
     ]);
   });
