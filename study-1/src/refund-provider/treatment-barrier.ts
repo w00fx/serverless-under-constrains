@@ -24,6 +24,7 @@ import type { BarrierStep, CommittedWaitState } from './barrier-decision.ts';
 import { decideBarrierStep, isCommittedWaitState } from './barrier-decision.ts';
 import { decodeTreatmentItem } from './control-items.ts';
 import { ProviderFault } from './provider-fault.ts';
+import type { ProviderLogSink } from './provider-log.ts';
 import type { ProviderStatePort } from './provider-state-port.ts';
 import { TRANSITION_JOURNAL_ACTION_INDEX } from './provider-state-port.ts';
 import { describeWriteOutcome } from './untrusted-json.ts';
@@ -56,6 +57,8 @@ export interface TreatmentBarrierDeps {
   readonly sleeper: Sleeper;
   /** Fresh ClientRequestTokens for the transitions. */
   readonly ids: UuidSource;
+  /** Reports each treatment read the barrier could not use. */
+  readonly log: ProviderLogSink;
   readonly pollIntervalMs: number;
   readonly safetyReleaseMs: number;
 }
@@ -77,7 +80,7 @@ const READ_NEXT: NextRead = { kind: 'read' };
  * commit.
  *
  * @example
- * const barrier = new TreatmentBarrier({ state, journal, monotonic, sleeper, ids, pollIntervalMs: 250, safetyReleaseMs: 15_000 });
+ * const barrier = new TreatmentBarrier({ state, journal, monotonic, sleeper, ids, log, pollIntervalMs: 250, safetyReleaseMs: 15_000 });
  * const outcome = await barrier.awaitRelease(commit); // { kind: 'released' }
  */
 export class TreatmentBarrier {
@@ -101,7 +104,7 @@ export class TreatmentBarrier {
     this.#waitState = 'COMMITTED_WAITING';
     let next: NextRead = READ_NEXT;
     for (;;) {
-      const treatment = next.kind === 'decide' ? next.treatment : await this.#readTreatment(commit.partition);
+      const treatment = next.kind === 'decide' ? next.treatment : await this.#readTreatment(commit);
       this.#waitState = latestWaitState(treatment?.state, this.#waitState);
       const elapsed = this.#deps.monotonic.nowNs() - commit.commit_ack_ns;
       const step = decideBarrierStep(treatment, commit.provider_commit_id, elapsed, safetyReleaseNs);
@@ -114,10 +117,21 @@ export class TreatmentBarrier {
   }
 
   // A failed or undecodable read is no news (decideBarrierStep documents why); the conditional
-  // safety release at the deadline settles what the state really is.
-  async #readTreatment(partition: string): Promise<TreatmentItem | undefined> {
-    const read = await this.#deps.state.loadTreatment(partition);
-    return read.ok ? read.value : undefined;
+  // safety release at the deadline settles what the state really is. The failure is still
+  // reported, never swallowed (WP-07 review round 0).
+  async #readTreatment(commit: BarrierCommit): Promise<TreatmentItem | undefined> {
+    const read = await this.#deps.state.loadTreatment(commit.partition);
+    if (read.ok) {
+      return read.value;
+    }
+    this.#deps.log({
+      level: 'warn',
+      event: 'treatment_read_failed',
+      provider_call_id: commit.provider_call_id,
+      code: read.error.code,
+      detail: read.error.detail,
+    });
+    return undefined;
   }
 
   async #perform(step: BarrierStep, commit: BarrierCommit): Promise<BarrierOutcome | NextRead> {

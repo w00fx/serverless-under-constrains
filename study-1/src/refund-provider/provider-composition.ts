@@ -14,6 +14,7 @@ import type {
   UuidSource,
   WallClock,
 } from '../record-contract/primitives.ts';
+import type { ProviderLogSink } from './provider-log.ts';
 import { createProviderStatePort } from './provider-state-port.ts';
 import { RefundProvider } from './refund-provider.ts';
 
@@ -27,13 +28,14 @@ export interface ProviderRuntime {
   readonly wall: WallClock;
   readonly monotonic: MonotonicClock;
   readonly sleeper: Sleeper;
+  readonly log: ProviderLogSink;
 }
 
 /**
  * Composes a provider over a durable store.
  *
  * @example
- * const provider = composeRefundProvider({ deployment, store, ids, wall, monotonic, sleeper });
+ * const provider = composeRefundProvider({ deployment, store, ids, wall, monotonic, sleeper, log });
  * const response = await provider.handle(event);
  */
 export function composeRefundProvider(runtime: ProviderRuntime): RefundProvider {
@@ -55,5 +57,6 @@ export function composeRefundProvider(runtime: ProviderRuntime): RefundProvider 
     wall: runtime.wall,
     monotonic: runtime.monotonic,
     sleeper: runtime.sleeper,
+    log: runtime.log,
   });
 }
