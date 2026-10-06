@@ -7,7 +7,7 @@
 
 import { isJsonArray, isJsonObject } from '../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
-import { recordText } from '../../support/golden-builder/golden-event-log.ts';
+import { recordNumber, recordText } from '../../support/golden-builder/golden-event-log.ts';
 import { fixtureRecords } from './golden-harness.ts';
 import type { LoadedGoldenCase } from './golden-harness.ts';
 
@@ -39,7 +39,7 @@ export function observeSubject(loaded: LoadedGoldenCase): JsonObject {
   const requestStates = records('journals/caller-journal.jsonl').filter(
     (record) => record['record_type'] === 'request_state_recorded',
   );
-  const lastState = requestStates.toSorted((a, b) => Number(a['version']) - Number(b['version'])).at(-1);
+  const lastState = requestStates.toSorted(byVersion).at(-1);
   return {
     subject: { caller: member(configuration, 'registered_caller_id'), scenario: member(configuration, 'scenario') },
     configured_trace: {
@@ -86,8 +86,13 @@ export function deriveSettlement(samples: readonly JsonObject[], deadlineMs: num
   let previous: JsonObject | undefined;
   let window: number | undefined;
   let quietUntil: number | undefined;
-  const ordered = samples.toSorted((a, b) => observedMs(a) - observedMs(b));
-  for (const sample of ordered.filter((item) => observedMs(item) <= deadlineMs)) {
+  // Unreadable instants are dropped before ordering: a NaN comparison counts as equal, which made
+  // the order inconsistent and let a recheck sort after a later window (fuzz seed 20261006,
+  // WP-09 single-pass review).
+  const ordered = samples
+    .filter((item) => observedMs(item) <= deadlineMs)
+    .toSorted((a, b) => observedMs(a) - observedMs(b));
+  for (const sample of ordered) {
     const active = activity(sample, previous);
     previous = sample;
     if (active) {
@@ -144,18 +149,31 @@ function activity(sample: JsonObject, previous: JsonObject | undefined): boolean
   }
   const previousIds = stringItems(previous['correlated_dlq_message_ids']);
   return (
-    Number(sample['correlated_event_watermark']) > Number(previous['correlated_event_watermark']) ||
+    recordNumber(sample, 'correlated_event_watermark') > recordNumber(previous, 'correlated_event_watermark') ||
     sample['ledger_item_count'] !== previous['ledger_item_count'] ||
     stringItems(sample['correlated_dlq_message_ids']).some((id) => !previousIds.includes(id))
   );
 }
 
-// Queue counters in a sample; 'unavailable' or any other non-object is never quiet (§8.12).
+// Queue counters in a sample; 'unavailable' or any other non-object is never quiet (§8.12), and
+// neither is a counter that is not a number: it reads as NaN, which equals no count (A-05).
 function counterTotal(counters: JsonValue | undefined): number {
   if (!isJsonObject(counters)) {
     return Number.POSITIVE_INFINITY;
   }
-  return Number(counters['visible']) + Number(counters['in_flight']) + Number(counters['delayed']);
+  return recordNumber(counters, 'visible') + recordNumber(counters, 'in_flight') + recordNumber(counters, 'delayed');
+}
+
+// Request states in version order; a state without a numeric version sorts first, so the
+// comparison stays consistent (a NaN difference would count as equal to every version).
+function byVersion(a: JsonObject, b: JsonObject): number {
+  const [x, y] = [orderedVersion(a), orderedVersion(b)];
+  return Number(x > y) - Number(x < y);
+}
+
+function orderedVersion(record: JsonObject): number {
+  const version = recordNumber(record, 'version');
+  return Number.isNaN(version) ? Number.NEGATIVE_INFINITY : version;
 }
 
 function observedMs(sample: JsonObject): number {
