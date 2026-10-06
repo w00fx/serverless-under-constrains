@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { isDecimalString } from '../../../../src/record-contract/decimal.ts';
+import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
 import { isSha256Hex } from '../../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
@@ -13,7 +14,7 @@ import { isUtcMillis } from '../../../../src/record-contract/timestamps.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { assertAccepted, assertRejected } from './support/group-b-validation.ts';
 import { leavesOf, objectPathsOf, pointerOf, textOf, withMember, withValueAt } from './support/json-paths.ts';
-import type { JsonLeaf } from './support/json-paths.ts';
+import type { JsonLeaf, JsonPath } from './support/json-paths.ts';
 import type { RecordExample } from './support/record-example.ts';
 import { toJson } from './support/record-builders.ts';
 
@@ -60,6 +61,9 @@ function isBoolean(value: JsonValue): boolean {
 
 const UPPER_SNAKE_VALUE = /^[A-Z][A-Z0-9_]*[A-Z]$/;
 
+// Members of nested objects across all examples (each checked for omission).
+const NESTED_MEMBER_COUNT = 122;
+
 /** Omitting a member is valid exactly when the example declares it optional. */
 function assertOmission(example: RecordExample, json: JsonObject, key: string): void {
   const label = `${example.label} without ${key}`;
@@ -68,6 +72,58 @@ function assertOmission(example: RecordExample, json: JsonObject, key: string): 
     return;
   }
   assertRejected(withMember(json, key, undefined), label);
+}
+
+/** A member path as its pattern: every array index becomes `*`. */
+function patternOf(path: JsonPath): string {
+  return path.map((segment) => (typeof segment === 'number' ? '/*' : `/${segment}`)).join('');
+}
+
+/** The members of every nested object (the root excluded), each with its full path. */
+function nestedMemberPathsOf(json: JsonObject): readonly JsonPath[] {
+  return objectPathsOf(json)
+    .filter((path) => path.length > 0)
+    .flatMap((path) => Object.keys(objectAt(json, path)).map((key) => [...path, key]));
+}
+
+function objectAt(json: JsonValue, path: JsonPath): JsonObject {
+  const node = path.reduce<JsonValue | undefined>(
+    (parent, segment) => (isJsonArray(parent) || isJsonObject(parent) ? childOf(parent, segment) : undefined),
+    json,
+  );
+  if (!isJsonObject(node)) {
+    throw new Error(`path ${pointerOf(path)} addresses ${JSON.stringify(node)}; expected an object`);
+  }
+  return node;
+}
+
+function childOf(parent: JsonValue, segment: string | number): JsonValue | undefined {
+  if (isJsonArray(parent) && typeof segment === 'number') {
+    return parent[segment];
+  }
+  return isJsonObject(parent) && typeof segment === 'string' ? parent[segment] : undefined;
+}
+
+/**
+ * Omitting a nested member is valid exactly when the example declares its pattern optional;
+ * returns how many nested members were checked so the rule can never pass vacuously.
+ */
+function assertNestedOmissions(example: RecordExample, json: JsonObject): number {
+  const paths = nestedMemberPathsOf(json);
+  const patterns = new Set(paths.map(patternOf));
+  for (const declared of example.nested_optional) {
+    assert.ok(patterns.has(declared), `${example.label} declares ${declared}, which the example must carry`);
+  }
+  for (const path of paths) {
+    const label = `${example.label} without ${pointerOf(path)}`;
+    const removed = withValueAt(json, path, undefined);
+    if (example.nested_optional.includes(patternOf(path))) {
+      assertAccepted(removed, label);
+      continue;
+    }
+    assertRejected(removed, label, pointerOf(path.slice(0, -1)));
+  }
+  return paths.length;
 }
 
 function snakeToCamel(name: string): string {
@@ -170,6 +226,14 @@ describe('AC-RUA-046 serialization rules over group B', () => {
         assertRejected(withValueAt(json, leaf.path, null), `${example.label}${pointerOf(leaf.path)}: null`);
       }
     }
+  });
+
+  it('omitted versus null: nested members', () => {
+    let checked = 0;
+    for (const { example, json } of EXAMPLES) {
+      checked += assertNestedOmissions(example, json);
+    }
+    assert.equal(checked, NESTED_MEMBER_COUNT);
   });
 
   it('schema_version and record_type present', () => {

@@ -308,16 +308,53 @@ export function coordinationPrefixCheckpoint(): CoordinationPrefixCheckpoint {
   };
 }
 
+// A treatment item carries its commit and signal identities only as far as they exist
+// (treatment_state_snapshot schema), so each one may be absent.
+const TREATMENT_COMMIT_IDENTITIES = [
+  'targeted_attempt_id',
+  'provider_request_id',
+  'provider_call_id',
+  'provider_commit_id',
+  'provider_transaction_id',
+  'commit_event_id',
+];
+const TREATMENT_IDENTITIES = [
+  ...TREATMENT_COMMIT_IDENTITIES,
+  'signal_event_id',
+  'signal_caller_event_id',
+  'observed_event_id',
+  'release_event_id',
+];
+// GetDurableExecutionHistory fills these per event type only; event type and time are always there.
+const DURABLE_HISTORY_DETAILS = [
+  'history_event_id',
+  'name',
+  'current_attempt',
+  'next_attempt_delay_seconds',
+  'request_id',
+  'error_type',
+];
+
 export const OBSERVATION_EXAMPLES: readonly RecordExample[] = [
   example('queue_observation ok', queueCountersObserved()),
   example('queue_observation unavailable', queueCountersUnavailable()),
   example('settlement_sample', settlementSample()),
   example('dlq_snapshot', dlqSnapshot()),
-  example('ledger_snapshot', ledgerSnapshot()),
-  example('treatment_state_snapshot present', treatmentItemPresent()),
-  example('treatment_state_snapshot safety released', treatmentItemSafetyReleased()),
+  example('ledger_snapshot', ledgerSnapshot(), { nested_optional: ['/pages/*/start_cursor', '/pages/*/next_cursor'] }),
+  example('treatment_state_snapshot present', treatmentItemPresent(), {
+    nested_optional: TREATMENT_IDENTITIES.map((member) => `/treatment/${member}`),
+  }),
+  example('treatment_state_snapshot safety released', treatmentItemSafetyReleased(), {
+    nested_optional: [...TREATMENT_COMMIT_IDENTITIES, 'safety_release_cause'].map((member) => `/treatment/${member}`),
+  }),
   example('treatment_state_snapshot absent', treatmentItemAbsent()),
-  example('durable_execution_metadata', durableExecutionMetadata()),
+  example('durable_execution_metadata', durableExecutionMetadata(), {
+    nested_optional: [
+      '/executions/*/ended_at',
+      '/executions/*/version',
+      ...DURABLE_HISTORY_DETAILS.map((member) => `/executions/*/history/*/${member}`),
+    ],
+  }),
   example('telemetry_availability', telemetryAvailability()),
   example('pre_cleanup_snapshot', preCleanupSnapshot()),
   example('coordination_prefix_checkpoint', coordinationPrefixCheckpoint()),
