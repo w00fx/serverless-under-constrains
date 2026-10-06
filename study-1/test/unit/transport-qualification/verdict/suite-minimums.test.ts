@@ -49,8 +49,8 @@ const SECTION_14_CASES: Readonly<Record<string, readonly string[]>> = {
     'known-safety-breach',
   ],
 };
-/** The WP-10 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 75, golden: 18, fuzz: 3 } as const;
+/** The WP-10 counts after its single-pass review (first delivery: 75 unit, 18 golden, 3 fuzz). */
+const RATIFIED_FLOOR = { unit: 86, golden: 19, fuzz: 3 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));
