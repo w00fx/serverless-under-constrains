@@ -40,6 +40,9 @@
     "record_type": {
       "const": "settlement_sample"
     },
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
     "execution_manifest_sha256": {
       "$ref": "_defs.schema.json#/$defs/sha256"
     },
@@ -171,5 +174,5 @@
     "trial_id": ["trial_manifest_sha256"],
     "trial_manifest_sha256": ["trial_id"]
   },
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

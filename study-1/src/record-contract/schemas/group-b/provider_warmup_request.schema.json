@@ -16,6 +16,9 @@
     "record_type": {
       "const": "provider_warmup_request"
     },
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
     "execution_manifest_sha256": {
       "$ref": "_defs.schema.json#/$defs/sha256"
     },
@@ -28,5 +31,5 @@
     }
   },
   "required": ["schema_version", "record_type", "execution_manifest_sha256", "warmup_id"],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

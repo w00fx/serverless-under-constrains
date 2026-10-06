@@ -78,6 +78,17 @@
     "record_type": {
       "const": "settlement_assessed"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["runner"]
     },
@@ -109,5 +120,5 @@
     }
   },
   "required": ["schema_version", "record_type", "source", "status", "reasons", "restarts", "sample_count"],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

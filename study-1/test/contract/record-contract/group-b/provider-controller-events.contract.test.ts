@@ -57,7 +57,7 @@ describe('AC-RUA-046 validated provider records', () => {
     const committed = json(provider.providerTransactionCommitted());
     assertAccepted(withMember(committed, 'targeted', false), 'untargeted commit');
     assertMissing(withMember(committed, 'targeted', undefined), 'no targeted flag', 'targeted');
-    assertRejected(withMember(committed, 'error_code', 'X'), 'stray member', ' unevaluatedProperties');
+    assertRejected(withMember(committed, 'error_code', 'X'), 'stray member', ' additionalProperties');
   });
 
   it('a failed commit names the error', () => {

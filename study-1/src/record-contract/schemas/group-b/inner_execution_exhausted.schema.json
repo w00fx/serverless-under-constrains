@@ -16,6 +16,17 @@
     "record_type": {
       "const": "inner_execution_exhausted"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["durable_caller"]
     },
@@ -49,5 +60,5 @@
     "step_attempts",
     "approximate_receive_count"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

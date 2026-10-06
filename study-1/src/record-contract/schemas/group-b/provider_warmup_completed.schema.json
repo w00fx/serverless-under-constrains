@@ -16,6 +16,15 @@
     "record_type": {
       "const": "provider_warmup_completed"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["refund_provider"]
     },
@@ -47,5 +56,5 @@
     "completed_at",
     "handler_elapsed_ns"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

@@ -1,7 +1,8 @@
 // AC-RUA-046 property (design §12.5): a valid group-B record mutated in one field is rejected.
 // The generator picks any leaf of any example and replaces it with a value of another JSON
-// kind, or adds an unknown member to any object of any example. Strings and booleans are never
-// swapped for each other: the tri-state settlement fields legitimately admit both.
+// kind, or adds an unknown member (a fresh or an inherited `Object.prototype` name) to any
+// object of any example. Strings and booleans are never swapped for each other: the tri-state
+// settlement fields legitimately admit both.
 // FC_RUNS sets the budget and FC_SEED replays a failure (test/support/kernel/fuzz-parameters.ts).
 
 import assert from 'node:assert/strict';
@@ -13,7 +14,7 @@ import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { violationsOf } from './support/group-b-validation.ts';
-import { leavesOf, objectPathsOf, pointerOf, withValueAt } from './support/json-paths.ts';
+import { INHERITED_MEMBER_NAMES, leavesOf, objectPathsOf, pointerOf, withValueAt } from './support/json-paths.ts';
 import type { JsonPath } from './support/json-paths.ts';
 import { toJson } from './support/record-builders.ts';
 
@@ -57,9 +58,16 @@ const leafMutation = fc
   .constantFrom(...LEAF_SITES)
   .chain((site) => replacementFor(site.value).map((replacement) => ({ site, replacement })));
 
+// Extra-member names: fresh `x_` names, or a name `Object.prototype` defines (A-07: a validator
+// that tracks members in a plain object once treated those as declared).
+const extraMemberName = fc.oneof(
+  fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`),
+  fc.constantFrom(...INHERITED_MEMBER_NAMES),
+);
+
 const extraMember = fc.record({
   site: fc.constantFrom(...OBJECT_SITES),
-  name: fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`),
+  name: extraMemberName,
   member: fc.oneof(fc.constant<JsonValue>(null), fc.boolean(), fc.integer(), fc.string(), arrays),
 });
 

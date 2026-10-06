@@ -195,3 +195,13 @@ function replaceMember(root: JsonObject, key: string, next: JsonValue | undefine
   const kept = Object.entries(root).filter(([name]) => name !== key);
   return Object.fromEntries(next === undefined ? kept : [...kept, [key, next]]);
 }
+
+/**
+ * Every own property name of `Object.prototype` (`__proto__`, `constructor`, `toString`, ...).
+ * A validator that tracks members in a plain object sees these as present on every object, so
+ * each closed object must be proven to reject them as unknown members (Owner amendment A-07).
+ *
+ * @example
+ * INHERITED_MEMBER_NAMES.includes('hasOwnProperty'); // true
+ */
+export const INHERITED_MEMBER_NAMES: readonly string[] = Object.getOwnPropertyNames(Object.prototype).toSorted();

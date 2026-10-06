@@ -16,6 +16,16 @@
     "record_type": {
       "const": "caller_timeout_recorded"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
     "source": {
       "enum": ["conventional_caller", "durable_caller", "probe_caller", "runner"]
     },
@@ -77,5 +87,5 @@
     "arbiter_winner",
     "transport_settled_at_claim"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }
