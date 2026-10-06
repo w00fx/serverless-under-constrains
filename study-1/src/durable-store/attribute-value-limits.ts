@@ -20,6 +20,7 @@
 // this store writes it can also read back.
 
 import type { JsonValue } from '../record-contract/primitives.ts';
+import { memberPath } from './attribute-path.ts';
 
 export const MAX_NESTING_DEPTH = 32;
 export const MAX_ITEM_BYTES = 400 * 1024;
@@ -88,19 +89,40 @@ export function storableValueViolations(value: JsonValue, path: string): readonl
  */
 export function estimatedItemBytes(attributes: Readonly<Record<string, JsonValue>>): number {
   let total = 0;
-  const pending: JsonValue[] = [];
   for (const [name, value] of Object.entries(attributes)) {
-    total += utf8Bytes(name);
-    pending.push(value);
+    total += utf8Bytes(name) + estimatedValueBytes(value);
   }
-  for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
-    total += ownBytes(value);
-    for (const [name, nested] of containerEntries(value)) {
+  return total;
+}
+
+/**
+ * Estimates one attribute value's size with the same rules as `estimatedItemBytes` (used for
+ * expression substitution values too). Iterative, so a value of any depth is sized.
+ *
+ * @example
+ * estimatedValueBytes(['ab', true]); // 8: list 3, one byte per element 2, 'ab' 2, true 1
+ */
+export function estimatedValueBytes(value: JsonValue): number {
+  let total = 0;
+  const pending: JsonValue[] = [value];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    total += ownBytes(next);
+    for (const [name, nested] of containerEntries(next)) {
       total += utf8Bytes(name) + ELEMENT_OVERHEAD_BYTES;
       pending.push(nested);
     }
   }
   return total;
+}
+
+/**
+ * The UTF-8 length of a string, the unit of every DynamoDB size limit.
+ *
+ * @example
+ * utf8Bytes('é'); // 2
+ */
+export function utf8Bytes(text: string): number {
+  return Buffer.byteLength(text, 'utf8');
 }
 
 /**
@@ -133,7 +155,7 @@ function valueViolations(value: JsonValue, path: string, depth: number): readonl
       valueViolations(element, `${path}[${String(index)}]`, depth + 1),
     );
   }
-  return Object.entries(value).flatMap(([name, nested]) => valueViolations(nested, `${path}.${name}`, depth + 1));
+  return Object.entries(value).flatMap(([name, nested]) => valueViolations(nested, memberPath(path, name), depth + 1));
 }
 
 // A list's or map's members as [name, value] pairs, where a list element has the empty name
@@ -160,8 +182,4 @@ function significantDigits(value: number): number {
   const [mantissa = ''] = String(Math.abs(value)).split('e');
   const digits = mantissa.replace('.', '').replace(/^0+/, '').replace(/0+$/, '');
   return Math.max(digits.length, 1);
-}
-
-function utf8Bytes(text: string): number {
-  return Buffer.byteLength(text, 'utf8');
 }

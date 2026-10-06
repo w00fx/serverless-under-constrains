@@ -9,12 +9,16 @@
 // safe-integer JSON numbers).
 // Decoding is total over untrusted input (stream records reach it from the Lambda event): it
 // refuses nesting past DynamoDB's 32-level limit instead of recursing until the call stack
-// overflows (WP-04 review round 1), so its recursion depth is bounded.
+// overflows (WP-04 review round 1), so its recursion depth is bounded. Its error messages quote
+// untrusted strings and member names only through the kernel's `boundedJsonText`, and build
+// paths through `memberPath`, so they stay short however large the input (WP-04 review round 2,
+// Owner amendment A-05).
 
 import type { AttributeValue } from '@aws-sdk/client-dynamodb';
 
-import { isJsonObject } from '../record-contract/json-value.ts';
+import { boundedJsonText, isJsonObject } from '../record-contract/json-value.ts';
 import type { JsonObject, JsonValue, Result } from '../record-contract/primitives.ts';
+import { memberPath } from './attribute-path.ts';
 import {
   MAX_NESTING_DEPTH,
   nestingViolation,
@@ -66,7 +70,7 @@ export function encodeAttributeValue(value: JsonValue, path = '$'): AttributeVal
 export function encodeAttributeMap(attributes: JsonObject, path = '$'): AttributeMap {
   const encoded: AttributeMap = {};
   for (const [name, value] of Object.entries(attributes)) {
-    defineOwn(encoded, name, encodeAttributeValue(value, `${path}.${name}`));
+    defineOwn(encoded, name, encodeAttributeValue(value, memberPath(path, name)));
   }
   return encoded;
 }
@@ -120,7 +124,7 @@ function decodeAtDepth(value: unknown, path: string, depth: number): Result<Json
   if (members.length !== 1 || member === undefined) {
     return {
       ok: false,
-      error: `${path} has members ${JSON.stringify(Object.keys(value))}; expected exactly one of S, N, BOOL, NULL, L or M`,
+      error: `${path} has members ${boundedJsonText(Object.keys(value))}; expected exactly one of S, N, BOOL, NULL, L or M`,
     };
   }
   return decodeMember(member[0], member[1], path, depth);
@@ -155,7 +159,7 @@ function decodeMember(member: string, content: unknown, path: string, depth: num
     default:
       return {
         ok: false,
-        error: `${path} has member ${JSON.stringify(member)}; expected exactly one of S, N, BOOL, NULL, L or M`,
+        error: `${path} has member ${boundedJsonText(member)}; expected exactly one of S, N, BOOL, NULL, L or M`,
       };
   }
 }
@@ -197,7 +201,7 @@ function decodeMapMember(content: unknown, path: string, memberDepth: number): R
   }
   const values: Record<string, JsonValue> = {};
   for (const [name, element] of Object.entries(content)) {
-    const decoded = decodeAtDepth(element, `${path}.${name}`, memberDepth);
+    const decoded = decodeAtDepth(element, memberPath(path, name), memberDepth);
     if (!decoded.ok) {
       return decoded;
     }
@@ -232,16 +236,17 @@ function defineOwn<T>(target: Record<string, T>, name: string, value: T): void {
 }
 
 // Describes any value for an error message without serializing nested content, which may not
-// be JSON-serializable when the input did not come from DynamoDB.
+// be JSON-serializable when the input did not come from DynamoDB; strings and member lists are
+// cut to the kernel's quoting limit.
 function describeUnknown(value: unknown): string {
   if (Array.isArray(value)) {
     return `an array of length ${String(value.length)}`;
   }
   if (typeof value === 'object' && value !== null) {
-    return `an object with members ${JSON.stringify(Object.keys(value))}`;
+    return `an object with members ${boundedJsonText(Object.keys(value))}`;
   }
   if (typeof value === 'string') {
-    return JSON.stringify(value);
+    return boundedJsonText(value);
   }
   if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
     return String(value);
