@@ -5,8 +5,10 @@
 // `LEASE_LOST`, blocks further publication and begins emergency cleanup (AC-RUA-033).
 // Beats never overlap: the next one is scheduled only after the previous one settled. The
 // runner stops the loop before finalizing the lease; if it finalizes first, the beat that falls
-// due finds no held lease (`heartbeatOnce` rejects only then) and the loop ends quietly instead
-// of leaving an unhandled rejection behind.
+// due finds no held lease and the loop ends quietly instead of leaving an unhandled rejection
+// behind. `heartbeatOnce` rejects only then: the session guards its store, so a store call that
+// throws is an unconfirmed beat (uncertainty, then staleness at the boundary), never a
+// rejection that would end the loop with the lease still held (WP-22 review).
 
 import type { TimerHandle, TimerScheduler } from '../record-contract/primitives.ts';
 import type { LeaseLoss, LeaseSession } from './lease-session.ts';
