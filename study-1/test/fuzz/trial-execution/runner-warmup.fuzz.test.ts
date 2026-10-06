@@ -33,6 +33,9 @@ interface Payload {
 
 const correlatedFields = ['run_id', 'execution_manifest_sha256', 'warmup_id'] as const;
 const COMPLETION_FIELDS: ReadonlySet<string> = new Set(Object.keys(warmupCompleted()));
+// Owner amendment A-05: member names a prototype chain also answers to, and nesting towers.
+const INHERITED_NAMES = ['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf'];
+const arrayTower = (depth: number): string => `${'['.repeat(depth)}${']'.repeat(depth)}`;
 
 const payloads: fc.Arbitrary<Payload> = fc.oneof(
   fc.constant({ bytes: encoder.encode(JSON.stringify(warmupCompleted())), accepted: true }),
@@ -45,11 +48,21 @@ const payloads: fc.Arbitrary<Payload> = fc.oneof(
       bytes: encoder.encode(JSON.stringify(warmupCompleted({ [field]: value }))),
       accepted: false,
     })),
+  // A nesting tower as the payload or as the value of a completion member (A-05 deep nesting).
+  fc
+    .tuple(fc.integer({ min: 1, max: 5000 }), fc.boolean(), fc.constantFrom(...COMPLETION_FIELDS))
+    .map(([depth, alone, member]) => {
+      const tower = arrayTower(depth);
+      const text = alone ? tower : JSON.stringify(warmupCompleted()).replace(/}$/, `,"${member}":${tower}}`);
+      return { bytes: encoder.encode(text), accepted: false };
+    }),
   // Unknown members only (the schema refuses them): an empty or colliding dictionary would be the
   // completion itself, which seed 260610 found as a defect of this generator, not of the check.
   fc
     .dictionary(
-      fc.string({ maxLength: 12 }).filter((key) => !COMPLETION_FIELDS.has(key)),
+      fc
+        .oneof(fc.string({ maxLength: 12 }), fc.constantFrom(...INHERITED_NAMES))
+        .filter((key) => !COMPLETION_FIELDS.has(key)),
       fc.jsonValue({ maxDepth: 1 }),
       {
         minKeys: 1,

@@ -11,7 +11,7 @@
 
 import type { ProviderTransportResult } from '../provider-client/provider-invocation-port.ts';
 import { executionIdentityFields } from '../record-contract/envelope.ts';
-import { boundedText } from '../record-contract/json-value.ts';
+import { boundedJsonText, boundedText } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
 import type { JsonObject, JsonValue, StructuredReason, UuidSource } from '../record-contract/primitives.ts';
 import type { ProviderWarmupCompleted } from '../record-contract/records/group-b/provider_warmup_completed.ts';
@@ -127,8 +127,9 @@ function correlationMismatch(completed: ProviderWarmupCompleted, request: Provid
 }
 
 // Correlated values are schema-validated identifiers and digests; an absent one reads as such.
+// They are quoted through the kernel's bounded renderer, never a local JSON.stringify (A-05).
 function describeField(value: JsonValue | undefined): string {
-  return value === undefined ? 'absent' : JSON.stringify(value);
+  return value === undefined ? 'absent' : boundedJsonText(value);
 }
 
 function ownField(record: JsonObject, name: string): JsonValue | undefined {
