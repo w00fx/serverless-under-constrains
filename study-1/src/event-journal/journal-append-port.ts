@@ -24,6 +24,8 @@ export type JournalStopReason =
 export interface JournalStopped {
   readonly kind: 'stopped';
   readonly reason: JournalStopReason;
+  /** The triggering item key and outcome (its code, or the error the port threw), for operators. */
+  readonly detail: string;
 }
 
 export type AppendResult = { readonly kind: 'appended'; readonly event: JournalEvent } | JournalStopped;
@@ -43,15 +45,26 @@ export type PrepareResult = { readonly kind: 'prepared'; readonly put: JournalEn
 export type JournalOutcomeClass = 'applied' | 'not_applied' | 'ambiguous' | 'sequence_conflict';
 
 /**
- * Reads a store outcome for an entry written with `journalPutAction`. A failed condition on an
- * item at the entry's own key is the entry itself when the content is identical (an earlier
- * write landed), and a sequence conflict otherwise. A failed condition anywhere else, or a
- * definitive failure, left the entry unwritten.
+ * Reads a store outcome for an entry written with `journalPutAction`. `journalActionIndex` is
+ * the position of that put in the write: 0 for a standalone append, the put's index inside a
+ * caller-owned transaction, or `undefined` when the caller cannot tell.
+ *
+ * A failed condition on the entry's own put is the entry itself when the item there holds
+ * identical content (an earlier write landed), and a sequence conflict otherwise, including
+ * when the store returned no decodable item (WP-04 omits an undecodable ALL_OLD image, and an
+ * `item_absent` put fails only on an occupied key). A failed condition on another action, or a
+ * definitive failure, left the entry unwritten. Without an index, only an item returned at the
+ * entry's own key identifies the journal put.
  *
  * @example
- * classifyJournalOutcome({ kind: 'ambiguous', code: 'TimeoutError' }, entry); // 'ambiguous'
+ * classifyJournalOutcome({ kind: 'ambiguous', code: 'TimeoutError' }, entry, 0); // 'ambiguous'
+ * classifyJournalOutcome({ kind: 'condition_failed', failed_action_index: 0 }, entry, 0); // 'sequence_conflict'
  */
-export function classifyJournalOutcome(outcome: WriteOutcome, entry: JournalEntry): JournalOutcomeClass {
+export function classifyJournalOutcome(
+  outcome: WriteOutcome,
+  entry: JournalEntry,
+  journalActionIndex?: number,
+): JournalOutcomeClass {
   switch (outcome.kind) {
     case 'applied':
       return 'applied';
@@ -60,16 +73,22 @@ export function classifyJournalOutcome(outcome: WriteOutcome, entry: JournalEntr
     case 'definitive_failure':
       return 'not_applied';
     case 'condition_failed':
-      return classifyConditionFailure(outcome.existing, entry);
+      return classifyConditionFailure(outcome.failed_action_index, outcome.existing, entry, journalActionIndex);
   }
 }
 
 function classifyConditionFailure(
+  failedActionIndex: number,
   existing: JournalEntry['item'] | undefined,
   entry: JournalEntry,
+  journalActionIndex: number | undefined,
 ): JournalOutcomeClass {
-  if (existing === undefined || !holdsEntryKey(existing, entry)) {
+  const ownPutFailed =
+    journalActionIndex === undefined
+      ? existing !== undefined && holdsEntryKey(existing, entry)
+      : failedActionIndex === journalActionIndex;
+  if (!ownPutFailed) {
     return 'not_applied';
   }
-  return isSameStoredEntry(existing, entry) ? 'applied' : 'sequence_conflict';
+  return existing !== undefined && isSameStoredEntry(existing, entry) ? 'applied' : 'sequence_conflict';
 }

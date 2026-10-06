@@ -4,7 +4,10 @@
 // event (BR-RUA-033) and that a stopped instance sent nothing more.
 //
 // Fault injection: `throwNext(error)` makes the next append throw instead of returning an
-// outcome, as a port with a defect would; the inner port is not called.
+// outcome, as a port with a defect would; `answerNext(outcome)` makes the next append return
+// `outcome`, for outcomes the inner fake cannot produce (for example a condition failure whose
+// ALL_OLD image did not decode, so `existing` is omitted). In both cases the inner port is not
+// called.
 
 import type { WriteOutcome } from '../../../src/durable-store/item-store-port.ts';
 import type { JournalAppendPort } from '../../../src/event-journal/journal-append-port.ts';
@@ -15,6 +18,7 @@ export class RecordingJournalAppendPort implements JournalAppendPort {
   readonly #entries: JournalEntry[] = [];
   readonly #outcomes: WriteOutcome[] = [];
   readonly #thrown: unknown[] = [];
+  readonly #answers: WriteOutcome[] = [];
 
   constructor(inner: JournalAppendPort) {
     this.#inner = inner;
@@ -25,6 +29,10 @@ export class RecordingJournalAppendPort implements JournalAppendPort {
     if (this.#thrown.length > 0) {
       throw this.#thrown.shift();
     }
+    const answer = this.#answers.shift();
+    if (answer !== undefined) {
+      return answer;
+    }
     const outcome = await this.#inner.append(entry);
     this.#outcomes.push(outcome);
     return outcome;
@@ -33,6 +41,11 @@ export class RecordingJournalAppendPort implements JournalAppendPort {
   /** The next append throws `error` without reaching the inner port. */
   throwNext(error: unknown): void {
     this.#thrown.push(error);
+  }
+
+  /** The next append returns `outcome` without reaching the inner port. */
+  answerNext(outcome: WriteOutcome): void {
+    this.#answers.push(outcome);
   }
 
   /** Every entry passed to `append`, in call order (thrown calls included). */

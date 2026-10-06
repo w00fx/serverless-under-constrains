@@ -27,9 +27,14 @@ import { SequentialUuidSource } from '../../support/kernel/sequential-uuid-sourc
 import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-scheduler.ts';
 import { RecordingJournalAppendPort } from '../../support/event-journal/recording-journal-append-port.ts';
 import { createDurableJournalPort } from '../../../src/event-journal/durable-journal-port.ts';
+import { createJsonlJournalPort } from '../../../src/event-journal/jsonl-journal-port.ts';
+import { parseJsonl } from '../../../src/record-contract/parsing.ts';
 import { InMemoryItemStore } from '../../support/durable-store/in-memory-item-store.ts';
 
 const FIRST_EVENT_ID = 'eeeeeeee-0000-4000-8000-000000000001' as Uuid4;
+const RESTARTED_INSTANCE_ID = 'cccccccc-0000-4000-8000-000000000009' as Uuid4;
+const SK1 = journalItemKey(TRIAL_SCOPE, 'conventional_caller', INSTANCE_ID, 1).sk;
+const SK2 = journalItemKey(TRIAL_SCOPE, 'conventional_caller', INSTANCE_ID, 2).sk;
 
 function storedSequences(harness: ReturnType<typeof writerHarness>): readonly number[] {
   return harness.store.itemsIn('caller_journal').map((item) => item['source_sequence'] as number);
@@ -108,15 +113,18 @@ describe('JournalWriter.append', () => {
     for (let fault = 0; fault < 3; fault += 1) {
       harness.store.scriptWriteFault({ kind: 'definitive_failure', code: 'ThrottlingException' });
     }
+    const exhausted = `${SK1}: 3 identical attempt(s) failed definitively; last outcome definitive_failure ThrottlingException`;
     assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody()), {
       kind: 'stopped',
       reason: 'DEFINITIVE_RETRIES_EXHAUSTED',
+      detail: exhausted,
     });
     assert.equal(harness.port.entries().length, 3);
     assert.equal(harness.writer.isStopped(), true);
     assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody(2)), {
       kind: 'stopped',
       reason: 'INSTANCE_ALREADY_STOPPED',
+      detail: `stopped earlier by DEFINITIVE_RETRIES_EXHAUSTED: ${exhausted}`,
     });
     assert.equal(harness.port.entries().length, 3);
     assert.deepEqual(storedSequences(harness), []);
@@ -128,6 +136,7 @@ describe('JournalWriter.append', () => {
     assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody()), {
       kind: 'stopped',
       reason: 'DEFINITIVE_RETRIES_EXHAUSTED',
+      detail: `${SK1}: 1 identical attempt(s) failed definitively; last outcome definitive_failure ThrottlingException`,
     });
     assert.equal(harness.port.entries().length, 1);
   });
@@ -136,13 +145,16 @@ describe('JournalWriter.append', () => {
     it(`an ambiguous append (${applied ? 'applied' : 'not applied'}) stops the instance for good`, async () => {
       const harness = writerHarness();
       harness.store.scriptWriteFault({ kind: 'ambiguous', code: 'TimeoutError', applied });
+      const ambiguous = `${SK1}: ambiguous TimeoutError; the event may or may not be stored`;
       assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody()), {
         kind: 'stopped',
         reason: 'AMBIGUOUS_APPEND',
+        detail: ambiguous,
       });
       assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody(2)), {
         kind: 'stopped',
         reason: 'INSTANCE_ALREADY_STOPPED',
+        detail: `stopped earlier by AMBIGUOUS_APPEND: ${ambiguous}`,
       });
       assert.equal(harness.port.entries().length, 1);
       assert.deepEqual(storedSequences(harness), applied ? [1] : []);
@@ -177,9 +189,24 @@ describe('JournalWriter.append', () => {
     assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody()), {
       kind: 'stopped',
       reason: 'SEQUENCE_CONFLICT',
+      detail: `${SK1}: condition_failed at action 0; other content occupies this sequence`,
     });
     assert.equal(harness.writer.isStopped(), true);
     assert.equal(harness.port.entries().length, 1);
+  });
+
+  it('a condition failure without a decodable existing item is a SEQUENCE_CONFLICT, never retried', async () => {
+    // The journal put's only condition is item_absent, so its failure proves the key is
+    // occupied; WP-04 omits `existing` when the ALL_OLD image does not decode.
+    const harness = writerHarness({ maxDefinitiveRetries: 2 });
+    harness.port.answerNext({ kind: 'condition_failed', failed_action_index: 0 });
+    assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody()), {
+      kind: 'stopped',
+      reason: 'SEQUENCE_CONFLICT',
+      detail: `${SK1}: condition_failed at action 0 without a decodable existing item; other content occupies this sequence`,
+    });
+    assert.equal(harness.port.entries().length, 1);
+    assert.deepEqual(storedSequences(harness), []);
   });
 
   for (const thrown of [new TypeError('socket hang up'), 'a string']) {
@@ -189,6 +216,7 @@ describe('JournalWriter.append', () => {
       assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody()), {
         kind: 'stopped',
         reason: 'AMBIGUOUS_APPEND',
+        detail: `${SK1}: port threw ${thrown instanceof Error ? 'TypeError: socket hang up' : 'a non-Error string'}; the event may or may not be stored`,
       });
       assert.deepEqual(harness.port.outcomes(), []);
       assert.equal(harness.writer.isStopped(), true);
@@ -202,6 +230,7 @@ describe('JournalWriter.append', () => {
     assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody(2)), {
       kind: 'stopped',
       reason: 'DEFINITIVE_RETRIES_EXHAUSTED',
+      detail: `${SK2}: 2 identical attempt(s) failed definitively; last outcome definitive_failure FILE_FINALIZED`,
     });
     assert.equal(harness.file.text(JSONL_PATH)?.split('\n').length, 2);
     assert.equal(harness.port.entries().length, 3);
@@ -214,7 +243,37 @@ describe('JournalWriter.append', () => {
     assert.deepEqual(await harness.writer.append('dispatch_started', dispatchStartedBody(2)), {
       kind: 'stopped',
       reason: 'AMBIGUOUS_APPEND',
+      detail: `${SK2}: ambiguous EIO; the event may or may not be stored`,
     });
+  });
+
+  it('a restarted instance keeps journaling to a JSONL file after a torn write (BR-RUA-033)', async () => {
+    const harness = writerHarness({ medium: 'jsonl' });
+    harness.file.failWriteAt(JSONL_PATH, 2, 'torn_write');
+    appendedEvent(await harness.writer.append('dispatch_started', dispatchStartedBody()));
+    assert.equal((await harness.writer.append('dispatch_started', dispatchStartedBody(2))).kind, 'stopped');
+    const restarted = new JournalWriter({
+      port: createJsonlJournalPort(JSONL_PATH, harness.file),
+      source: 'conventional_caller',
+      instanceId: RESTARTED_INSTANCE_ID,
+      scope: TRIAL_SCOPE,
+      clock: harness.time,
+      ids: new SequentialUuidSource('77777777'),
+      maxDefinitiveRetries: 2,
+    });
+    const first = appendedEvent(await restarted.append('dispatch_started', dispatchStartedBody(3)));
+    const second = appendedEvent(await restarted.append('dispatch_started', dispatchStartedBody(4)));
+    assert.deepEqual([first.source_sequence, second.source_sequence], [1, 2]);
+    const report = parseJsonl(harness.file.contents(JSONL_PATH) ?? new Uint8Array(0));
+    assert.equal(report.ends_with_newline, true);
+    // Line 2 is the torn fragment alone: malformed, never merged into the restarted record.
+    assert.deepEqual(
+      report.lines.map((line) =>
+        line.parsed.ok ? (line.parsed.value as { source_instance_id: string }).source_instance_id : 'malformed',
+      ),
+      [INSTANCE_ID, 'malformed', RESTARTED_INSTANCE_ID, RESTARTED_INSTANCE_ID],
+    );
+    assert.equal(restarted.isStopped(), false);
   });
 
   it('refuses a retry budget that is not a nonnegative safe integer', () => {
