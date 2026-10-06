@@ -138,6 +138,18 @@ export const PROBE_TERMINAL_REASONS = [
 ] as const;
 export type ProbeTerminalReason = (typeof PROBE_TERMINAL_REASONS)[number];
 
+/**
+ * Probe terminal reasons that arise only after phase P5 froze the probe result (design §10.2):
+ * the lifecycle completed, or normal cleanup (P7) or its leak audit did not end clean. A summary
+ * with one of them carries the probe-result digest (CTR-RUA-003).
+ */
+export const POST_FREEZE_PROBE_TERMINAL_REASONS = [
+  'COMPLETED',
+  'CLEANUP_INCOMPLETE',
+  'LEAK_AUDIT_NOT_CLEAN',
+] as const satisfies readonly ProbeTerminalReason[];
+export type PostFreezeProbeTerminalReason = (typeof POST_FREEZE_PROBE_TERMINAL_REASONS)[number];
+
 /** BR-RUA-038 canonical validation terminal reasons. */
 export const VALIDATION_TERMINAL_REASONS = [
   'COMPLETED',
@@ -234,10 +246,13 @@ export const ARTIFACT_CLASSES = [
   'provisioning_journal',
   'resource_manifest',
   'runner_journal',
-  // Addendum §2.2 and D-10 readiness evidence: the execution-level `<execution_id>#warmup`
-  // provider partition and `<execution_id>#canary` controller partition. Included in the
+  // Addendum §2.2 and D-10 readiness evidence, each export of one execution-level partition:
+  // the provider's `<execution_id>#warmup` partition, the runner-inserted
+  // `caller_timeout_recorded` in the caller journal's `<execution_id>#canary` partition, and the
+  // controller's acknowledgement in its `<execution_id>#canary` partition. Included in the
   // package, never an input to a monetary rule, gate or treatment condition.
   'provider_warmup_journal',
+  'caller_canary_journal',
   'controller_canary_journal',
   'trial_manifest',
   'payment',

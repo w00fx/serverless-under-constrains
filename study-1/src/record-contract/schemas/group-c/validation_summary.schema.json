@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/validation_summary.schema.json",
   "title": "validation_summary (catalogue group C, row 71)",
-  "description": "summary/validation-summary.json (BR-RUA-038; design §6.3, §8.15): one variant, two trials (CONTROL then COMMIT_THEN_TIMEOUT), no run_id and no cross-variant field. A conclusive status (verified or failed) needs a valid validation, a COMPLETED lifecycle, clean closure, no safety breach and acceptable late evidence; failed means a trustworthy control fail; verified means control pass with a conclusive treatment. Any status other than verified states its reasons.",
+  "description": "summary/validation-summary.json (BR-RUA-038; design §6.3, §8.15): one variant, two trials (CONTROL then COMMIT_THEN_TIMEOUT), no run_id and no cross-variant field. A conclusive status (verified or failed) needs a valid validation, a COMPLETED lifecycle, verified evidence integrity, clean closure, no safety breach and acceptable late evidence; failed means a trustworthy control fail; verified means control pass with a conclusive treatment. Any status other than verified states its reasons.",
   "type": "object",
   "$defs": {
     "artifact_ref": {
@@ -144,7 +144,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -229,6 +229,9 @@
           },
           "late_evidence_status": {
             "enum": ["none", "consistent"]
+          },
+          "evidence_integrity_status": {
+            "const": "verified"
           }
         }
       }
@@ -480,5 +483,5 @@
     "late_evidence_assessment_ref",
     "created_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

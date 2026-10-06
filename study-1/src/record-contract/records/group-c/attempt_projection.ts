@@ -15,7 +15,10 @@ import type {
 import type { ExecutionCorrelation, ExecutionScoped, TrialScoped } from './shared-shapes.ts';
 import type { OutcomeClass } from './vocabulary.ts';
 
-/** The caller invocation an attempt ran in (BR-RUA-020, BR-RUA-024). */
+/**
+ * The caller invocation an attempt ran in (BR-RUA-020, BR-RUA-024). Only a `durable_caller`
+ * invocation carries `durable_execution_arn` and `step_attempt`.
+ */
 export interface ProjectedInvocation {
   readonly source: CallerEventSource;
   readonly source_instance_id: Uuid4;
@@ -31,7 +34,10 @@ export interface ProjectedLateSettlement {
   readonly observed_after_elapsed_ns: DecimalString;
 }
 
-/** One physical attempt. `outcome` is omitted for a dispatched attempt that never recorded one. */
+/**
+ * One physical attempt. `outcome` is omitted for an attempt that never recorded one; such an
+ * attempt is never `SUCCESS` or `REJECTION` (BR-RUA-021), and a dispatched one is `AMBIGUOUS`.
+ */
 export interface ProjectedAttempt {
   readonly attempt_id: Uuid4;
   readonly provider_request_id: Uuid4;
@@ -45,8 +51,16 @@ export interface ProjectedAttempt {
   /** Joined through the provider commit event, never through the caller (design §8.9). */
   readonly provider_transaction_id?: Uuid4;
   readonly late_transport_settlement?: ProjectedLateSettlement;
+  /**
+   * The effect knowledge after this attempt, folded over the attempts in order through the
+   * BR-RUA-022 transition table from `NOT_ATTEMPTED` (design §8.9). An `AMBIGUOUS` attempt always
+   * leaves `UNKNOWN`, the table's Ambiguous column.
+   */
   readonly knowledge_after_derived: EffectKnowledge;
-  /** Omitted when no request state was recorded after the attempt. */
+  /**
+   * The `effect_knowledge` of the last `request_state_recorded` after this attempt, as the caller
+   * recorded it. Omitted when no request state was recorded after the attempt.
+   */
   readonly knowledge_after_recorded?: EffectKnowledge;
 }
 

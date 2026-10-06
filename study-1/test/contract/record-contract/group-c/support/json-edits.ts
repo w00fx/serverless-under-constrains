@@ -1,9 +1,10 @@
 // Multi-member edits for the cross-field rule cases: one call states every member a variant
 // changes, so a case reads as the rule it breaks.
 
-import { isJsonArray } from '../../../../../src/record-contract/json-value.ts';
+import { isJsonArray, isJsonObject } from '../../../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../../../src/record-contract/primitives.ts';
-import { withMember } from '../../group-b/support/json-paths.ts';
+import { withMember, withValueAt } from '../../group-b/support/json-paths.ts';
+import type { JsonPath } from '../../group-b/support/json-paths.ts';
 
 /**
  * Copies a record with each listed top-level member set, or removed when its value is undefined.
@@ -27,4 +28,19 @@ export function arrayAt(root: JsonObject, key: string): readonly JsonValue[] {
     throw new TypeError(`member ${key} is ${JSON.stringify(value)}; expected a JSON array`);
   }
   return value;
+}
+
+/**
+ * Copies a record with the value at `path` set (or removed when undefined), keeping the record
+ * type so further `edited` calls compose.
+ *
+ * @example
+ * recordWithValueAt(json, ['condition_results', 0, 'result'], 'fail');
+ */
+export function recordWithValueAt(root: JsonObject, path: JsonPath, next: JsonValue | undefined): JsonObject {
+  const copy = withValueAt(root, path, next);
+  if (!isJsonObject(copy)) {
+    throw new TypeError(`edit at ${JSON.stringify(path)} returned ${typeof copy}; expected a JSON object`);
+  }
+  return copy;
 }

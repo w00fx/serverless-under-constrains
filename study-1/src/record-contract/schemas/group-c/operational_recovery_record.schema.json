@@ -114,5 +114,5 @@
     "started_at",
     "completed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

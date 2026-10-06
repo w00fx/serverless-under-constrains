@@ -96,7 +96,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -307,5 +307,5 @@
   "dependentRequired": {
     "monitoring_ended_at": ["monitoring_started_at"]
   },
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

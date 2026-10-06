@@ -101,7 +101,7 @@ function snakeToCamel(name: string): string {
 
 describe('AC-RUA-046 serialization rules over group C', () => {
   it('every example is valid after kernel serialization', () => {
-    assert.equal(EXAMPLES.length, 54);
+    assert.equal(EXAMPLES.length, 56);
     for (const { example, json } of EXAMPLES) {
       assertAccepted(json, example.label);
     }
@@ -119,10 +119,10 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       assertRejected(withMember(json, 'record_type', textOf(json['record_type'] ?? null).toUpperCase()), example.label);
     }
     const upperSnake = (value: JsonValue): boolean => typeof value === 'string' && UPPER_SNAKE_VALUE.test(value);
-    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 156);
+    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 165);
     const lowercase = (value: JsonValue, leaf: JsonLeaf): boolean =>
       typeof value === 'string' && LOWERCASE_VOCABULARY.has(value) && !isProse(leaf.path);
-    assert.equal(rejectEveryGovernedLeaf(lowercase, [(value): JsonValue => textOf(value).toUpperCase()]), 531);
+    assert.equal(rejectEveryGovernedLeaf(lowercase, [(value): JsonValue => textOf(value).toUpperCase()]), 545);
   });
 
   it('millisecond UTC', () => {
@@ -133,7 +133,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       (value): JsonValue => textOf(value).replace(/Z$/, 'z'),
       (value): JsonValue => textOf(value).replace(/^\d{4}-\d{2}-\d{2}/, '2026-02-30'),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 95);
+    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 97);
   });
 
   it('lowercase UUIDv4', () => {
@@ -143,7 +143,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       (value): JsonValue => `${textOf(value).slice(0, 14)}1${textOf(value).slice(15)}`,
       (value): JsonValue => `{${textOf(value)}}`,
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUuid4, mutations), 125);
+    assert.equal(rejectEveryGovernedLeaf(isUuid4, mutations), 151);
   });
 
   it('lowercase SHA-256 digests', () => {
@@ -151,7 +151,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       (value: JsonValue): JsonValue => textOf(value).toUpperCase(),
       (value: JsonValue): JsonValue => textOf(value).slice(1),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isSha256Hex, mutations), 354);
+    assert.equal(rejectEveryGovernedLeaf(isSha256Hex, mutations), 365);
   });
 
   it('safe-integer amounts', () => {
@@ -162,7 +162,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       (): JsonValue => Number.MAX_SAFE_INTEGER + 1,
     ];
     const isNumber = (value: JsonValue): boolean => typeof value === 'number';
-    assert.equal(rejectEveryGovernedLeaf(isNumber, mutations), 134);
+    assert.equal(rejectEveryGovernedLeaf(isNumber, mutations), 140);
   });
 
   it('decimal aggregates', () => {
@@ -175,7 +175,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       (): JsonValue => '1e3',
       (value): JsonValue => Number(value),
     ];
-    assert.equal(rejectEveryGovernedLeaf(aggregate, aggregateMutations), 7);
+    assert.equal(rejectEveryGovernedLeaf(aggregate, aggregateMutations), 8);
     const money = (_value: JsonValue, leaf: JsonLeaf): boolean =>
       ['cost', 'ceiling_usd', 'attributed_total_usd'].includes(memberOf(leaf));
     const moneyMutations: readonly LeafMutation[] = [
@@ -195,7 +195,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       (value: JsonValue): JsonValue => (value === true ? 1 : 0),
     ];
     const isBoolean = (value: JsonValue): boolean => typeof value === 'boolean';
-    assert.equal(rejectEveryGovernedLeaf(isBoolean, mutations), 71);
+    assert.equal(rejectEveryGovernedLeaf(isBoolean, mutations), 74);
   });
 
   it('omitted versus null', () => {
@@ -232,7 +232,7 @@ describe('AC-RUA-046 serialization rules over group C', () => {
     for (const { example, json, path } of roots) {
       assertNullFreeFormValue(example, json, path);
     }
-    assert.equal(roots.length, 201);
+    assert.equal(roots.length, 219);
   });
 
   it('schema_version and record_type present', () => {

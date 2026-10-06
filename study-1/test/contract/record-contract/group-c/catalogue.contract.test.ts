@@ -3,22 +3,22 @@
 // modules export are the ones the schemas enforce, including the fixed order of every tuple.
 
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
-import { parseJsonDocument } from '../../../../src/record-contract/parsing.ts';
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { EVENT_RECORD_TYPES, RECORD_TYPES, RECORD_TYPE_GROUPS } from '../../../../src/record-contract/record-types.ts';
 import type { GroupCRecordType } from '../../../../src/record-contract/records/group-c/record-map.ts';
 import { findSchemaConventionViolations } from '../../../../src/record-contract/schema-conventions.ts';
-import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
+import { listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
 import { groupBValidator } from '../group-b/support/group-b-validation.ts';
 import { withValueAt } from '../group-b/support/json-paths.ts';
 import { toJson } from '../group-b/support/record-builders.ts';
+import { resolvePointer } from '../group-b/support/schema-reading.ts';
 import { CANONICAL_EXAMPLES, GROUP_C_EXAMPLES } from './examples/group-c-examples.ts';
+import { groupCSchemaOf } from './support/schema-reading.ts';
 import { ORDER_SITES, VOCABULARY_SITES } from './support/vocabulary-sites.ts';
 
 const GROUP_C: readonly GroupCRecordType[] = RECORD_TYPE_GROUPS['group-c'];
@@ -35,24 +35,6 @@ const RESTATED_DEFINITIONS: readonly (readonly [string, number])[] = [
 
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-function schemaOf(recordType: GroupCRecordType): JsonValue {
-  const parsed = parseJsonDocument(readFileSync(join(DEFAULT_SCHEMA_ROOT, 'group-c', `${recordType}.schema.json`)));
-  assert.ok(parsed.ok, `${recordType} schema parses`);
-  return parsed.value;
-}
-
-function resolvePointer(root: JsonValue, pointer: string): JsonValue | undefined {
-  return pointer
-    .split('/')
-    .slice(1)
-    .reduce<JsonValue | undefined>((node, segment) => {
-      if (isJsonArray(node)) {
-        return node[Number(segment)];
-      }
-      return isJsonObject(node) ? node[segment] : undefined;
-    }, root);
-}
-
 describe('AC-RUA-046 group C catalogue', () => {
   it('lists exactly the 23 group-C record types, one schema each, within 90 catalogued names', () => {
     const listed = listSchemaFiles()
@@ -67,7 +49,7 @@ describe('AC-RUA-046 group C catalogue', () => {
 
   it('every group-C schema follows the catalogue conventions and names its catalogue row', () => {
     GROUP_C.forEach((recordType, index) => {
-      const schema = schemaOf(recordType);
+      const schema = groupCSchemaOf(recordType);
       assert.deepEqual(findSchemaConventionViolations(recordType, schema), [], recordType);
       assert.equal(resolvePointer(schema, '/title'), `${recordType} (catalogue group C, row ${String(66 + index)})`);
     });
@@ -91,9 +73,9 @@ describe('AC-RUA-046 group C catalogue', () => {
   });
 
   it('every closed vocabulary is the enum its schema enforces', () => {
-    assert.equal(VOCABULARY_SITES.length, 150);
+    assert.equal(VOCABULARY_SITES.length, 151);
     for (const [values, recordType, pointer] of VOCABULARY_SITES) {
-      assert.deepEqual(resolvePointer(schemaOf(recordType), pointer), [...values], `${recordType}#${pointer}`);
+      assert.deepEqual(resolvePointer(groupCSchemaOf(recordType), pointer), [...values], `${recordType}#${pointer}`);
     }
     const covered = new Set(VOCABULARY_SITES.map(([, recordType]) => recordType));
     assert.deepEqual(
@@ -105,7 +87,7 @@ describe('AC-RUA-046 group C catalogue', () => {
 
   it('every fixed-order tuple pins each position to its vocabulary, in order', () => {
     for (const [values, recordType, pointer, member] of ORDER_SITES) {
-      const schema = schemaOf(recordType);
+      const schema = groupCSchemaOf(recordType);
       assert.equal(resolvePointer(schema, `${pointer}/minItems`), values.length, `${recordType}${pointer} minItems`);
       assert.equal(resolvePointer(schema, `${pointer}/maxItems`), values.length, `${recordType}${pointer} maxItems`);
       assert.equal(resolvePointer(schema, `${pointer}/items`), false, `${recordType}${pointer} closed`);
@@ -120,7 +102,7 @@ describe('AC-RUA-046 group C catalogue', () => {
     // The schemas may reference only `_defs.schema.json` and their own `$defs`, so shared shapes
     // are restated per file; a hand edit to one copy must fail here instead of drifting.
     const copiesOf = (definition: string): readonly JsonValue[] =>
-      GROUP_C.map((recordType) => resolvePointer(schemaOf(recordType), `/$defs/${definition}`)).filter(
+      GROUP_C.map((recordType) => resolvePointer(groupCSchemaOf(recordType), `/$defs/${definition}`)).filter(
         (copy): copy is JsonValue => copy !== undefined,
       );
     for (const [definition, count] of RESTATED_DEFINITIONS) {

@@ -2,7 +2,8 @@
 // rule of a spec-faithful example (one BR-RUA-029 matrix row each) and expects the rejection at
 // the member that rule governs; the accepted cases pin the branch the rule deliberately leaves
 // open. Sources: BR-RUA-006, BR-RUA-029, BR-RUA-030, BR-RUA-035, INV-RUA-001, design §8.3-§8.8,
-// D-04, D-05, D-15 and D-17.
+// D-04, D-05 and D-17; D-15 and the design §8.10 fidelity rules are in
+// oracle-result-derivations.contract.test.ts.
 
 import { describe, it } from 'node:test';
 
@@ -367,7 +368,14 @@ describe('AC-RUA-046 oracle_result: scenario shape (D-05)', () => {
       'duplicate CA-1',
       '/clock_assumption_refs uniqueItems',
     );
-    assertAccepted(edited(indeterminate, { clock_assumption_refs: ['CA-1'] }), 'causal basis may cite CA-1');
+    assertAccepted(
+      edited(indeterminate, { fidelity_basis: 'causal', clock_assumption_refs: ['CA-1'] }),
+      'an unverified fidelity on the spec causal basis may cite CA-1',
+    );
+    assertAccepted(
+      edited(indeterminate, { fidelity_basis: 'causal', clock_assumption_refs: [] }),
+      'an unverified fidelity on the spec causal basis may cite nothing',
+    );
   });
 
   it('lists the nine gates and the ten rules in their fixed order', () => {

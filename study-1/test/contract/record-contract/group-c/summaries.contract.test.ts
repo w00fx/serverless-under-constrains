@@ -41,6 +41,8 @@ describe('AC-RUA-046 validation_summary rules', () => {
       ['safety_status', 'breached'],
       ['late_evidence_status', 'contradictory'],
       ['late_evidence_status', 'unverified'],
+      ['evidence_integrity_status', 'unverified'],
+      ['evidence_integrity_status', 'invalid'],
     ];
     for (const [member, value] of breaks) {
       assertRejected(
@@ -117,7 +119,7 @@ describe('AC-RUA-046 validation_summary rules', () => {
     assertRejected(edited(verified, { trial_results: trials.slice(0, 1) }), 'one trial', '/trial_results minItems');
     assertForbidden(edited(verified, { run_id: RUN_ID }), 'run identity', '/run_id');
     assertForbidden(edited(verified, { trial_id: TRIAL_ID }), 'trial identity', '/trial_id');
-    assertRejected(edited(verified, { winner: 'durable' }), 'cross-variant field', ' unevaluatedProperties');
+    assertRejected(edited(verified, { winner: 'durable' }), 'cross-variant field', ' additionalProperties');
   });
 });
 
@@ -203,6 +205,36 @@ describe('AC-RUA-046 run_summary rules', () => {
     );
   });
 
+  it('eligible needs an oracle result for each of the four trials and verified evidence (BR-RUA-031)', () => {
+    for (const index of [0, 1, 2, 3]) {
+      const withoutOracle = trialAt(
+        trialAt(
+          trialAt(trialAt(eligible, index, 'oracle_result_ref', undefined), index, 'preservation_verdict', undefined),
+          index,
+          'correct_completion',
+          undefined,
+        ),
+        index,
+        'execution_status',
+        'not_started',
+      );
+      const stated = trialAt(withoutOracle, index, 'incompletion_reasons', REASONS);
+      assertRejected(
+        stated,
+        `eligible without the oracle result of trial ${String(index + 1)}`,
+        `/trial_results/${String(index)} required`,
+      );
+    }
+    for (const status of ['unverified', 'invalid']) {
+      assertRejected(
+        edited(eligible, { evidence_integrity_status: status }),
+        `eligible with ${status} evidence integrity`,
+        '/evidence_integrity_status const',
+      );
+    }
+    assertAccepted(edited(incomplete, { evidence_integrity_status: 'unverified' }), 'ineligible may be unverified');
+  });
+
   it('lists exactly four trials in the BR-RUA-019 order, never filtered or reordered (AC-RUA-012)', () => {
     const trials = arrayAt(eligible, 'trial_results');
     const [first, second, ...rest] = trials;
@@ -218,12 +250,12 @@ describe('AC-RUA-046 run_summary rules', () => {
       'wrong scenario',
       '/trial_results/1/scenario const',
     );
-    assertRejected(trialAt(eligible, 0, 'rank', 1), 'annotated trial', '/trial_results/0 unevaluatedProperties');
+    assertRejected(trialAt(eligible, 0, 'rank', 1), 'annotated trial', '/trial_results/0 additionalProperties');
   });
 
   it('has no winner, aggregate, ranking or statistic', () => {
     for (const member of ['winner', 'aggregate_verdict', 'ranking', 'pass_rate']) {
-      assertRejected(edited(eligible, { [member]: 'durable' }), member, ' unevaluatedProperties');
+      assertRejected(edited(eligible, { [member]: 'durable' }), member, ' additionalProperties');
     }
   });
 
@@ -264,6 +296,23 @@ describe('AC-RUA-046 comparison_assessment rules', () => {
       'ineligible without reasons',
       '/comparison_ineligibility_reasons minItems',
     );
+  });
+
+  it('eligible needs the four oracle results and a passing BR-RUA-007 equality (BR-RUA-031)', () => {
+    const refs = arrayAt(eligible, 'oracle_result_refs');
+    assertRejected(
+      edited(eligible, { oracle_result_refs: refs.slice(0, 3) }),
+      'eligible with three oracle results',
+      '/oracle_result_refs minItems',
+    );
+    for (const equality of ['fail', 'indeterminate']) {
+      assertRejected(
+        edited(eligible, { equality_result: equality }),
+        `eligible with equality ${equality}`,
+        '/equality_result const',
+      );
+    }
+    assertAccepted(edited(ineligible, { oracle_result_refs: refs.slice(0, 3) }), 'ineligible with three results');
   });
 
   it('a projection fails only on an undeclared difference (BR-RUA-031)', () => {
@@ -357,7 +406,7 @@ describe('AC-RUA-046 transport_probe_summary rules', () => {
     );
   });
 
-  it('carries the probe-result digest when COMPLETED; a probe that froze no result omits it', () => {
+  it('carries the probe-result digest after P5; a probe that froze no result omits it', () => {
     assertRejected(edited(summary, { probe_result_sha256: undefined }), 'COMPLETED without digest', ' required');
     for (const reason of ['LEASE_ACQUISITION_FAILED', 'PROVISIONING_FAILED', 'PROBE_INCOMPLETE']) {
       assertAccepted(
@@ -366,6 +415,14 @@ describe('AC-RUA-046 transport_probe_summary rules', () => {
       );
     }
     assertAccepted(edited(summary, { probe_terminal_reason: 'CLEANUP_INCOMPLETE' }), 'frozen result, failed cleanup');
+    // Normal cleanup (P7) and its audit run only after P5 froze the probe result (design §10.2).
+    for (const reason of ['CLEANUP_INCOMPLETE', 'LEAK_AUDIT_NOT_CLEAN']) {
+      assertRejected(
+        edited(summary, { probe_terminal_reason: reason, probe_result_sha256: undefined }),
+        `${reason} without digest`,
+        ' required',
+      );
+    }
     assertRejected(
       edited(summary, { probe_terminal_reason: 'LEASE_ACQUISITION_FAILED', probe_result_sha256: 'A'.repeat(64) }),
       'malformed digest',

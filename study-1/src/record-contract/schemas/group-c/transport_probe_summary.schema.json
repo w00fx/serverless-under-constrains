@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_probe_summary.schema.json",
   "title": "transport_probe_summary (catalogue group C, row 70)",
-  "description": "summary/transport-probe-summary.json, written after cleanup (CTR-RUA-003): lifecycle, cleanup, audit, lease, safety, late evidence and the probe-result digest. COMPLETED means the probe lifecycle completed; it does not imply the transport passed. probe_result_sha256 is required when the lifecycle COMPLETED; a probe that could not start or could not freeze its result (for example LEASE_ACQUISITION_FAILED, PROVISIONING_FAILED or PROBE_INCOMPLETE, design §10.2) omits it (BR-RUA-033: optional properties are omitted when unavailable).",
+  "description": "summary/transport-probe-summary.json, written after cleanup (CTR-RUA-003): lifecycle, cleanup, audit, lease, safety, late evidence and the probe-result digest. COMPLETED means the probe lifecycle completed; it does not imply the transport passed. probe_result_sha256 is required when the lifecycle COMPLETED and when it ended in CLEANUP_INCOMPLETE or LEAK_AUDIT_NOT_CLEAN, which arise only in normal cleanup (P7), after phase P5 froze the probe result (design §10.2); a probe whose primary reason can come before P5 (for example LEASE_ACQUISITION_FAILED, PROVISIONING_FAILED, PROBE_INCOMPLETE or an interruption) omits it when no result was frozen (BR-RUA-033: optional properties are omitted when unavailable).",
   "type": "object",
   "$defs": {
     "artifact_ref": {
@@ -90,13 +90,13 @@
     "late_evidence_assessment_ref",
     "created_at"
   ],
-  "unevaluatedProperties": false,
+  "additionalProperties": false,
   "allOf": [
     {
       "if": {
         "properties": {
           "probe_terminal_reason": {
-            "const": "COMPLETED"
+            "enum": ["COMPLETED", "CLEANUP_INCOMPLETE", "LEAK_AUDIT_NOT_CLEAN"]
           }
         },
         "required": ["probe_terminal_reason"]

@@ -2,11 +2,12 @@
 // summaries, the comparison assessment, the variant-validation verification and the study
 // completion assessment (catalogue rows 71-73, 82 and 83).
 
-import type { Scenario, Uuid4, VariantId } from '../../../../../src/record-contract/primitives.ts';
+import type { JsonValue, Scenario, Uuid4, VariantId } from '../../../../../src/record-contract/primitives.ts';
 import type {
   ComparisonAssessment,
   ComparisonCheck,
   EqualityProjection,
+  ProjectionDifference,
 } from '../../../../../src/record-contract/records/group-c/comparison_assessment.ts';
 import type { RunSummary } from '../../../../../src/record-contract/records/group-c/run_summary.ts';
 import type {
@@ -215,17 +216,81 @@ export function incompleteRunSummary(): RunSummary {
   };
 }
 
+/**
+ * The fields each BR-RUA-007 projection compares, as design §8.14 lists them (the warm-up policy
+ * replaces provisioned concurrency, addendum §2.3), read from the frozen manifests.
+ */
+const COMPARED_FIELDS: Readonly<Record<EqualityProjectionId, readonly string[]>> = {
+  financial_inputs: ['/financial_inputs/payment_sha256', '/financial_inputs/approved_decision_sha256'],
+  control_parameters: ['/control_parameters/provider_configuration'],
+  treatment_parameters: [
+    '/treatment_parameters/deadline_ms',
+    '/treatment_parameters/safety_release_ms',
+    '/treatment_parameters/provider_timeout_ms',
+    '/treatment_parameters/barrier_polling_ms',
+    '/treatment_parameters/arming_rule',
+  ],
+  message_source_protocol: [
+    '/message_source_protocol/fifo',
+    '/message_source_protocol/batch_size',
+    '/message_source_protocol/batching_window_s',
+    '/message_source_protocol/max_receive_count',
+    '/message_source_protocol/visibility_timeout_s',
+  ],
+  provider_configuration: [
+    '/provider_configuration/version',
+    '/provider_configuration/runtime',
+    '/provider_configuration/architecture',
+    '/provider_configuration/memory_mb',
+    '/provider_configuration/timeout_s',
+    '/provider_configuration/environment_keys',
+    '/provider_configuration/provider_warmup/invocations_per_trial',
+  ],
+  controller_configuration: ['/controller_configuration/stream_event_source_mapping'],
+  caller_timing: [
+    '/caller_timing/provider_client_deadline_ms',
+    '/caller_timing/caller_timeout_s',
+    '/caller_timing/execution_strategy',
+  ],
+  observation_window: [
+    '/observation_window/deadline_s',
+    '/observation_window/stabilization_s',
+    '/observation_window/polling_s',
+  ],
+};
+
+/** A difference between the two CONTROL trials (conventional, then Durable) at one field. */
+function difference(
+  field: string,
+  declared: boolean,
+  conventional: JsonValue,
+  durable: JsonValue,
+): ProjectionDifference {
+  return {
+    field,
+    declared,
+    values: [
+      { trial_id: RUN_TRIALS[0] ?? uuid(0), value: conventional },
+      { trial_id: RUN_TRIALS[1] ?? uuid(0), value: durable },
+    ],
+  };
+}
+
+/** Design §8.14 declared variant differences: source visibility timeout and execution strategy. */
+const DECLARED_DIFFERENCES: Readonly<Partial<Record<EqualityProjectionId, readonly ProjectionDifference[]>>> = {
+  message_source_protocol: [difference('/message_source_protocol/visibility_timeout_s', true, 60, 360)],
+  caller_timing: [difference('/caller_timing/execution_strategy', true, 'conventional', 'durable')],
+};
+
 function projection(projectionId: EqualityProjectionId, result: PreservationVerdict): EqualityProjection {
-  const values = [
-    { trial_id: RUN_TRIALS[0] ?? uuid(0), value: { timeout_ms: 3000 } },
-    { trial_id: RUN_TRIALS[1] ?? uuid(0), value: { timeout_ms: result === 'fail' ? 4000 : 3000 } },
-  ];
-  const differs = projectionId === 'caller_timing';
+  // A failing caller-timing projection carries one undeclared difference: the provider-client deadline.
+  const undeclared =
+    result === 'fail' ? [difference('/caller_timing/provider_client_deadline_ms', false, 3000, 4000)] : [];
   return {
     projection_id: projectionId,
     result,
-    compared_fields: ['/caller_timing/timeout_ms'],
-    differences: differs ? [{ field: '/caller_timing/timeout_ms', declared: result !== 'fail', values }] : [],
+    compared_fields: COMPARED_FIELDS[projectionId],
+    differences: [...undeclared, ...(DECLARED_DIFFERENCES[projectionId] ?? [])],
     evidence_refs: [evidenceRef(EXECUTION_MANIFEST_PATH)],
   };
 }

@@ -44,6 +44,7 @@
             "resource_manifest",
             "runner_journal",
             "provider_warmup_journal",
+            "caller_canary_journal",
             "controller_canary_journal",
             "trial_manifest",
             "payment",
@@ -183,5 +184,5 @@
     }
   },
   "required": ["schema_version", "record_type", "execution_manifest_sha256", "index_scope", "entries", "created_at"],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

@@ -166,7 +166,7 @@ describe('AC-RUA-046 package_verification rules (BR-RUA-044, AC-RUA-022, D-12)',
     assertRejected(
       edited(eligible, { execution_manifest_sha256: digest('m') }),
       'manifest digest',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
   });
 });
@@ -267,7 +267,7 @@ describe('AC-RUA-046 billing_import rules (BR-RUA-047)', () => {
       );
     }
     assertRejected(edited(within, { ceiling_usd: 5 }), 'numeric ceiling', '/ceiling_usd type');
-    assertRejected(edited(within, { exchange_rate: '1.08' }), 'conversion', ' unevaluatedProperties');
+    assertRejected(edited(within, { exchange_rate: '1.08' }), 'conversion', ' additionalProperties');
     assertRejected(
       withValueAt(within, ['exclusions', 0, 'exclusion'], 'ROUNDING'),
       'unknown exclusion',

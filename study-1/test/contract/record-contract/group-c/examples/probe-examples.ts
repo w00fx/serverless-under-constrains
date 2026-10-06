@@ -46,7 +46,9 @@ export function passingTransportProbeResult(): TransportProbeResult {
 }
 
 /**
- * An invalid probe, which is indeterminate whatever its conditions say.
+ * An invalid probe: a second caller invocation (design §8.11) makes it indeterminate whatever its
+ * conditions say (BR-RUA-027). Its unaffected failing conditions make treatment fidelity invalid
+ * (design §8.10), and it keeps the D-05 basis under CA-1.
  *
  * @example
  * invalidTransportProbeResult().transport_probe_verdict; // 'indeterminate'
@@ -59,11 +61,28 @@ export function invalidTransportProbeResult(): TransportProbeResult {
     probe_cardinality: { caller_invocations: 2, accepted_provider_calls: 0, committed_transactions: 0 },
     evidence_integrity: 'unverified',
     treatment_fidelity: 'invalid',
-    fidelity_basis: 'causal',
-    clock_assumption_refs: [],
     condition_results: sixConditions('fail', ['BR-RUA-011', 'indeterminate'], PROBE_DIRECTORY),
     evidence_refs: [],
     indeterminate_reasons: [reason('PROBE_CARDINALITY_INVALID', 'probe workload')],
+  };
+}
+
+/**
+ * A failing probe (AC-RUA-031): a valid probe with the expected cardinality whose commit and timer
+ * timestamps are reversed, so BR-RUA-010 fails on unaffected evidence (design §8.10:
+ * `committed_at > timer_fired_at`) while the other five conditions pass. The unaffected failure
+ * makes the verdict `fail` and treatment fidelity `invalid`.
+ *
+ * @example
+ * failingTransportProbeResult().transport_probe_verdict; // 'fail'
+ */
+export function failingTransportProbeResult(): TransportProbeResult {
+  return {
+    ...passingTransportProbeResult(),
+    transport_probe_verdict: 'fail',
+    probe_validity: 'valid',
+    treatment_fidelity: 'invalid',
+    condition_results: sixConditions('pass', ['BR-RUA-010', 'fail'], PROBE_DIRECTORY),
   };
 }
 
@@ -145,6 +164,7 @@ export function unusableProbe(): ProbeUsabilityAssessment {
 export const PROBE_EXAMPLES: readonly GroupCExample[] = [
   groupCExample('transport_probe_result', passingTransportProbeResult()),
   groupCExample('transport_probe_result (invalid)', invalidTransportProbeResult()),
+  groupCExample('transport_probe_result (fail)', failingTransportProbeResult()),
   groupCExample('transport_probe_summary', transportProbeSummary()),
   groupCExample('probe_usability_assessment', usableProbe()),
   groupCExample('probe_usability_assessment (not usable)', unusableProbe(), ['transport_scope_snapshot_sha256']),

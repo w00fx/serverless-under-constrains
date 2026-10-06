@@ -86,6 +86,40 @@ describe('AC-RUA-046 variant_validation_verification rules (CTR-RUA-004)', () =>
     }
   });
 
+  it('recovery never turns one conclusive declared status into the other (BR-RUA-038, CTR-RUA-004)', () => {
+    const crossings: readonly (readonly [string, string])[] = [
+      ['failed', 'verified'],
+      ['verified', 'failed'],
+    ];
+    for (const [declared, effective] of crossings) {
+      assertRejected(
+        edited(verified, {
+          declared_implementation_validation_status: declared,
+          effective_implementation_validation_status: effective,
+        }),
+        `declared ${declared}, effective ${effective}`,
+        '/effective_implementation_validation_status enum',
+      );
+      assertAccepted(
+        edited(verified, {
+          declared_implementation_validation_status: declared,
+          effective_implementation_validation_status: declared,
+        }),
+        `declared ${declared} kept`,
+      );
+      assertAccepted(
+        edited(indeterminate, { declared_implementation_validation_status: declared }),
+        `declared ${declared}, effective indeterminate`,
+      );
+    }
+    // The verified example: recovery repaired the closure of a declared indeterminate validation.
+    assertAccepted(verified, 'declared indeterminate, effective verified after recovery');
+    assertAccepted(
+      edited(verified, { effective_implementation_validation_status: 'failed' }),
+      'declared indeterminate, effective failed after recovery',
+    );
+  });
+
   it('an indeterminate status states its reasons; no head means no recovery', () => {
     assertRejected(
       edited(indeterminate, { effective_status_reasons: [] }),
@@ -118,7 +152,7 @@ describe('AC-RUA-046 variant_validation_verification rules (CTR-RUA-004)', () =>
     assertRejected(
       edited(verified, { execution_manifest_sha256: digest('m') }),
       'manifest digest',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
     assertForbidden(edited(verified, { run_id: RUN_ID }), 'run identity', '/run_id');
   });
@@ -160,7 +194,7 @@ describe('AC-RUA-046 study_completion_assessment rules (BR-RUA-054, AC-RUA-038)'
     assertRejected(
       edited(complete, { selected_amendment_head_sha256: null }),
       'amendment head',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
   });
 });
@@ -212,7 +246,7 @@ describe('AC-RUA-046 oracle_revision_check rules (BR-RUA-055, AC-RUA-055)', () =
     assertRejected(
       edited(passed, { execution_manifest_sha256: digest('m') }),
       'manifest digest',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
   });
 });
