@@ -3,8 +3,11 @@
 // examples and the other branch of each conditional rule (support/canonical-examples.ts and
 // support/branch-examples.ts). A
 // mutation site is any governed leaf, at any depth, replaced by a value of another JSON kind;
-// any governed object, given an unknown member; or any top-level required member, removed.
-// The open members the schemas deliberately accept are listed once, in support/json-scope.ts.
+// any governed object, given an unknown member; any top-level required member, removed; or any
+// governed leaf given a malformed value of its own kind (a negative, fractional or unsafe number,
+// the other boolean, a string padded with whitespace), which reaches the pattern, enum, const and
+// bound rules at every depth. The open members the schemas deliberately accept, free text
+// included, are listed once, in support/json-scope.ts.
 // Each mutation kind runs twice: an exhaustive sweep with one fixed value per JSON kind over
 // every site, then a fast-check property with generated values. FC_RUNS sets the property
 // budget and FC_SEED replays a failure (test/support/kernel/fuzz-parameters.ts).
@@ -21,6 +24,7 @@ import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-con
 import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
 import { pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
 import { allValidExamples } from './support/canonical-examples.ts';
+import { isFreeText } from './support/json-scope.ts';
 import { governedLeafSites, governedObjectSites } from './support/mutation-sites.ts';
 import type { MutationSite } from './support/mutation-sites.ts';
 import { catalogueValidator, withoutField } from './support/validation-assertions.ts';
@@ -102,6 +106,40 @@ function otherKinds(value: JsonValue): readonly JsonKind[] {
   return kinds.filter((kind) => kind !== own && !(own === 'null' && kind === 'string'));
 }
 
+// Same-kind values that break the rule of every governed leaf of that kind: no governed group A
+// number admits a negative, fractional or unsafe value, no governed boolean admits the other
+// value, and no governed string except free text admits surrounding whitespace.
+function sameKindBreaks(site: MutationSite): readonly JsonValue[] {
+  const { value } = site;
+  if (typeof value === 'number') {
+    return [-1, 0.5, 2 ** 53];
+  }
+  if (typeof value === 'boolean') {
+    return [!value];
+  }
+  return typeof value === 'string' && !isFreeText(site.path) ? [` ${value}`, `${value}\n`] : [];
+}
+
+const WHITESPACE = fc.constantFrom(' ', '\t', '\n', '\r');
+const BROKEN_NUMBER: fc.Arbitrary<JsonValue> = fc.oneof(
+  fc.integer({ min: Number.MIN_SAFE_INTEGER, max: -1 }),
+  fc.integer().map((whole) => whole + 0.5),
+  fc.double({ min: 2 ** 53, max: 1e300, noNaN: true }),
+);
+
+function sameKindArbitrary(site: MutationSite): fc.Arbitrary<JsonValue> {
+  const { value } = site;
+  if (typeof value === 'number') {
+    return BROKEN_NUMBER;
+  }
+  if (typeof value === 'string') {
+    return fc
+      .tuple(WHITESPACE, fc.boolean())
+      .map(([space, before]) => (before ? `${space}${value}` : `${value}${space}`));
+  }
+  return fc.constant(!value);
+}
+
 // No group A record declares a member that starts with `x_`, so the name is always unknown.
 const UNKNOWN_MEMBER_NAME = fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`);
 
@@ -148,6 +186,20 @@ describe('record validators (group A)', () => {
     }
   });
 
+  it('rejects every governed leaf given a malformed value of its own kind (exhaustive)', () => {
+    let mutations = 0;
+    for (const site of LEAF_SITES) {
+      for (const replacement of sameKindBreaks(site)) {
+        mutations += 1;
+        assertRejectedMutation(
+          withValueAt(site.record, site.path, replacement),
+          () => `${site.label}${pointerOf(site.path)} = ${JSON.stringify(replacement)}`,
+        );
+      }
+    }
+    assert.ok(mutations > LEAF_SITES.length, `${String(mutations)} same-kind mutations`);
+  });
+
   it('rejects an unknown member added to every governed object (exhaustive)', () => {
     for (const site of OBJECT_SITES) {
       assertRejectedMutation(
@@ -176,6 +228,20 @@ describe('record validators (group A)', () => {
       );
     fc.assert(
       fc.property(leafMutation, ({ site, replacement }) => {
+        assertRejectedMutation(
+          withValueAt(site.record, site.path, replacement),
+          () => `${site.label}${pointerOf(site.path)} = ${JSON.stringify(replacement)}`,
+        );
+      }),
+      fuzzParameters(),
+    );
+
+    const sameKindSites = LEAF_SITES.filter((site) => sameKindBreaks(site).length > 0);
+    const sameKindMutation = fc
+      .constantFrom(...sameKindSites)
+      .chain((site) => sameKindArbitrary(site).map((replacement) => ({ site, replacement })));
+    fc.assert(
+      fc.property(sameKindMutation, ({ site, replacement }) => {
         assertRejectedMutation(
           withValueAt(site.record, site.path, replacement),
           () => `${site.label}${pointerOf(site.path)} = ${JSON.stringify(replacement)}`,
