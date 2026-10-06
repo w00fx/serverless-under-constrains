@@ -78,7 +78,9 @@ export default defineGoldenCase({
     monitoring: 'complete',
     correlated_record_count: 1,
     reassessments: [{ trial: '$trial', status: 'consistent', changes: [] }],
+    reason_codes: [],
     frozen_result_unchanged: true,
+    late_stream_referenced: true,
     late_evidence_acceptable: true,
   },
 });

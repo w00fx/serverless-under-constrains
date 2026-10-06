@@ -106,7 +106,9 @@ export default defineGoldenCase({
         ],
       },
     ],
+    reason_codes: [],
     frozen_result_unchanged: true,
+    late_stream_referenced: true,
     late_evidence_acceptable: false,
   },
 });

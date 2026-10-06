@@ -1,7 +1,7 @@
 // Reading `late-evidence/late-evidence-stream.jsonl` (BR-RUA-043, catalogue group C row 77): every
 // line is one late record, dense from sequence 1, of this execution. A correlated record that is
-// valid, belongs to this execution and has a place in the frozen evidence is accepted for
-// reassessment; an uncorrelated record is kept in the stream but correlates with nothing, so it is
+// valid, belongs to this execution, has a place in the frozen evidence and carries a valid record
+// of its own type is accepted for reassessment; an uncorrelated record is kept in the stream but correlates with nothing, so it is
 // neither counted nor folded. Any line that cannot be read this way is a late problem: late
 // monitoring then yielded no verifiable late evidence. The bytes are untrusted, so reading is total
 // and quotes untrusted values bounded (Owner amendment A-05).
@@ -15,6 +15,7 @@ import type { ExecutionIdentity, JsonValue, Sha256Hex } from '../../record-contr
 import type { RecordValidator } from '../../record-contract/schema-registry.ts';
 import type { LateEvidenceRecord } from '../../record-contract/records/group-c/late_evidence_record.ts';
 import type { TrialExecutionIdentity } from '../../record-contract/records/group-c/shared-shapes.ts';
+import { describeFirstViolation } from './late-evidence-reasons.ts';
 import type { LateProblem, LateProblemCode } from './late-evidence-reasons.ts';
 import { routeLateRecord } from './late-record-routing.ts';
 import type { LateRoute } from './late-record-routing.ts';
@@ -89,11 +90,8 @@ function readLine(line: JsonlLine, context: LateStreamContext, validator: Record
   }
   const validation = validator.validateAs('late_evidence_record', line.parsed.value);
   if (!validation.valid) {
-    const why = validation.violations
-      .slice(0, 1)
-      .map((violation) => `${violation.instance_path} ${violation.detail}`)
-      .join('');
-    return problem('LATE_RECORD_SCHEMA_INVALID', `${at}: ${boundedJsonText(why)}; expected a late_evidence_record`);
+    const why = describeFirstViolation(validation.violations);
+    return problem('LATE_RECORD_SCHEMA_INVALID', `${at}: ${why}; expected a late_evidence_record`);
   }
   const record = validation.record as LateEvidenceRecord;
   if (record.sequence !== line.line_number) {
@@ -101,7 +99,7 @@ function readLine(line: JsonlLine, context: LateStreamContext, validator: Record
     return problem('LATE_SEQUENCE_BROKEN', detail);
   }
   return record.correlated
-    ? readCorrelated(record, line.parsed.value, line.line_number, context)
+    ? readCorrelated(record, line.parsed.value, line.line_number, context, validator)
     : { kind: 'uncorrelated' };
 }
 
@@ -110,6 +108,7 @@ function readCorrelated(
   raw: JsonValue,
   lineNumber: number,
   context: LateStreamContext,
+  validator: RecordValidator,
 ): LineVerdict {
   const at = `line ${String(lineNumber)}`;
   const foreign = foreignMember(record, raw, context);
@@ -130,6 +129,14 @@ function readCorrelated(
     const scope = record.trial_id === undefined ? 'execution-level' : 'trial';
     const detail = `${at}: ${scope} ${boundedJsonText(record.late_record_type)} from ${record.late_source} has no place in the frozen evidence; expected a journal event, queue observation or re-captured snapshot of its source`;
     return problem('LATE_RECORD_UNROUTABLE', detail);
+  }
+  // The carried record joins frozen evidence the oracle re-ingests, so it must first be a valid
+  // record of its own type (already checked equal to late_record_type and routable): a corrupt late
+  // record is unverifiable late evidence, never a contradiction of the frozen result.
+  const carried = validator.validate(record.late_record);
+  if (!carried.valid) {
+    const detail = `${at}: late_record ${describeFirstViolation(carried.violations)}; expected a valid ${record.late_record_type}`;
+    return problem('LATE_RECORD_SCHEMA_INVALID', detail);
   }
   return { kind: 'accepted', record: { record, route, line_number: lineNumber } };
 }

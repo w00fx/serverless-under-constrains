@@ -25,7 +25,7 @@ import type {
 import type { TrialExecutionIdentity } from '../../record-contract/records/group-c/shared-shapes.ts';
 import { readFrozenTrials } from './frozen-results.ts';
 import type { LateEvidenceInput } from './late-evidence-input.ts';
-import { LATE_EVIDENCE_SUBJECT } from './late-evidence-reasons.ts';
+import { LATE_EVIDENCE_SUBJECT, describeFirstViolation } from './late-evidence-reasons.ts';
 import type { LateProblem } from './late-evidence-reasons.ts';
 import { readLateStream } from './late-stream-reading.ts';
 import type { AcceptedLateRecord } from './late-stream-reading.ts';
@@ -178,11 +178,12 @@ function conforming(
   if (validation.valid) {
     return ok(validation.record as LateEvidenceAssessment);
   }
-  return err(
-    validation.violations.slice(0, 1).map((violation) => ({
+  const why = describeFirstViolation(validation.violations);
+  return err([
+    {
       code: 'ASSESSMENT_SCHEMA_INVALID',
       subject: LATE_EVIDENCE_SUBJECT,
-      detail: `${boundedJsonText(`${violation.instance_path} ${violation.detail}`)}; expected a valid late_evidence_assessment`,
-    })),
-  );
+      detail: `${why}; expected a valid late_evidence_assessment`,
+    },
+  ]);
 }

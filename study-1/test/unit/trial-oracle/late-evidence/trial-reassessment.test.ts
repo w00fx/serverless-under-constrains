@@ -1,14 +1,18 @@
 // Reassessing one frozen trial (design §8.13, D-16): only late records that name the trial, or no
 // trial, are its late evidence; with them the frozen evidence plus the late records is re-evaluated
 // and compared on the verdict projection; the status follows from the changes and the monitoring.
+// A change is the late records' only when the frozen evidence alone reproduces the frozen result.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { ingestEvidence } from '../../../../src/evidence-ingestion/ingest-evidence.ts';
 import type { IngestionInput } from '../../../../src/evidence-ingestion/ingestion-model.ts';
+import { serializeRecordFile } from '../../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../../src/record-contract/digests.ts';
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { LateEvidenceRecord } from '../../../../src/record-contract/records/group-c/late_evidence_record.ts';
+import { evaluateTrial } from '../../../../src/trial-oracle/evaluate-trial.ts';
 import type { FrozenTrial } from '../../../../src/trial-oracle/late-evidence/frozen-results.ts';
 import type { LateRoute } from '../../../../src/trial-oracle/late-evidence/late-record-routing.ts';
 import type { AcceptedLateRecord } from '../../../../src/trial-oracle/late-evidence/late-stream-reading.ts';
@@ -35,6 +39,21 @@ const RUNNER = 'runner/runner-journal.jsonl';
 function frozenTrial(fixture: FrozenFixture, frozen: IngestionInput = fixture.frozen): FrozenTrial {
   const { path, bytes } = fixture.evidence.result;
   return { frozen, result: fixture.result, result_ref: { artifact_path: path, artifact_sha256: sha256Hex(bytes) } };
+}
+
+// A trial frozen as this evidence: its frozen result is the oracle's evaluation of exactly this input.
+function frozenAs(fixture: FrozenFixture, frozen: IngestionInput): FrozenTrial {
+  const evaluation = evaluateTrial({ evidence: ingestEvidence(frozen, ORACLE_VALIDATOR), checked_at: ASSESSED_AT });
+  if (!evaluation.ok) {
+    throw new Error(`the frozen evidence was refused: ${JSON.stringify(evaluation.error)}; expected a frozen result`);
+  }
+  const { path } = fixture.evidence.result;
+  const bytes = serializeRecordFile(evaluation.value.result);
+  return {
+    frozen,
+    result: evaluation.value.result,
+    result_ref: { artifact_path: path, artifact_sha256: sha256Hex(bytes) },
+  };
 }
 
 function accepted(record: JsonObject, route: LateRoute): AcceptedLateRecord {
@@ -133,17 +152,48 @@ describe('reevaluateTrial', () => {
         artifact.path === controller ? { path: controller, bytes: encoder.encode('{}') } : artifact,
       ),
     };
-    const reevaluation = reevaluateTrial(
-      frozenTrial(treatment, truncated),
-      [lateSignal()],
-      ASSESSED_AT,
-      ORACLE_VALIDATOR,
-    );
+    const reevaluation = reevaluateTrial(frozenAs(treatment, truncated), [lateSignal()], ASSESSED_AT, ORACLE_VALIDATOR);
     assert.ok(reevaluation.ok);
     assert.deepEqual(
       reevaluation.value.problems.map((problem) => problem.code),
       ['LATE_DOCUMENT_UNFOLDABLE'],
     );
+    assert.deepEqual(reevaluation.value.changes, []);
+  });
+
+  it('refuses, never reports a contradiction, when the frozen evidence alone does not reproduce the frozen result', () => {
+    // The frozen evidence lacks the payment the frozen pass was derived from; the late ledger adds
+    // nothing, so any difference has a cause other than the late records.
+    const payment = `trials/${control.result.trial_id}/inputs/payment.json`;
+    const withoutPayment: IngestionInput = {
+      ...control.frozen,
+      artifacts: control.frozen.artifacts.filter((artifact) => artifact.path !== payment),
+    };
+    const reevaluation = reevaluateTrial(
+      frozenTrial(control, withoutPayment),
+      [lateLedgerOf(control, 0)],
+      ASSESSED_AT,
+      ORACLE_VALIDATOR,
+    );
+    assert.deepEqual(
+      refusalOf(reevaluation).map((reason) => [reason.code, reason.subject, reason.artifact_path]),
+      [['FROZEN_RESULT_NOT_REPRODUCED', 'BR-RUA-043', control.evidence.result.path]],
+    );
+    assert.match(
+      firstOf(refusalOf(reevaluation)).detail,
+      /^the frozen evidence alone re-evaluates to \/preservation_verdict "indeterminate" where the frozen result holds "pass" \(and \d+ more\); expected it to reproduce the frozen result's verdict projection$/,
+    );
+  });
+
+  it('reports a change only against a frozen result its frozen evidence reproduces', () => {
+    const reevaluation = reevaluateTrial(
+      frozenTrial(control),
+      [lateLedgerOf(control, 0)],
+      ASSESSED_AT,
+      ORACLE_VALIDATOR,
+    );
+    assert.ok(reevaluation.ok);
+    assert.deepEqual([reevaluation.value.counted, reevaluation.value.changes], [1, []]);
   });
 
   it('refuses when the frozen evidence cannot be evaluated', () => {

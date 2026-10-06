@@ -168,6 +168,18 @@ describe('readLateStream', () => {
     assert.match(detailOf(untyped), /late_record.record_type is null;/);
   });
 
+  it('reports a carried record that is not a valid record of its own type, and accepts nothing from it', () => {
+    const { pages, ...pageless } = lateLedger(control, 0);
+    assert.ok(pages !== undefined);
+    const stream = lateStream([ledgerRecord(1, { late_record: pageless })]);
+    assert.deepEqual(codesOf(stream), ['LATE_RECORD_SCHEMA_INVALID']);
+    assert.match(
+      detailOf(stream),
+      /^line 1: late_record " must have required property 'pages'.*"; expected a valid ledger_snapshot$/,
+    );
+    assert.deepEqual(readLateStream(stream, CONTEXT, ORACLE_VALIDATOR).accepted, []);
+  });
+
   it('reports a trial record whose trial manifest is not the frozen one', () => {
     const stream = lateStream([ledgerRecord(1, { trial_manifest_sha256: 'f'.repeat(64) })]);
     assert.deepEqual(codesOf(stream), ['LATE_TRIAL_MANIFEST_MISMATCH']);

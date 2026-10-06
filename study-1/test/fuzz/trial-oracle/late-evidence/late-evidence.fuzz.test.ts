@@ -104,6 +104,16 @@ function editedLine(
   return canonicalJson(line);
 }
 
+// The record with one member replaced (or removed when the value is null), defined as an own
+// member so `__proto__` behaves as JSON.parse makes it.
+function withMember(record: JsonObject, member: string, value: JsonValue | null): JsonObject {
+  const kept = Object.fromEntries(Object.entries(record).filter(([name]) => name !== member));
+  if (value !== null) {
+    Object.defineProperty(kept, member, { value, enumerable: true, writable: true, configurable: true });
+  }
+  return kept;
+}
+
 function streamOf(lines: readonly string[], closed: boolean): RawArtifact {
   const text = lines.join('\n');
   return lateStreamText(closed && text !== '' ? `${text}\n` : text);
@@ -178,6 +188,33 @@ describe('late-evidence reading and assessment over untrusted streams', () => {
             assert.ok(assessment.error.length > 0, 'a refusal names its reasons');
           }
           assert.deepEqual([control.evidence.result.bytes, treatment.evidence.result.bytes], frozenBytes);
+        },
+      ),
+      fuzzParameters(),
+    );
+  });
+
+  it('never accepts a carried record that fails its own schema', () => {
+    const carriedLines = LATE_LINES.filter((line) => line['correlated'] === true);
+    const carriedMembers = [
+      ...new Set(carriedLines.flatMap((line) => Object.keys(line['late_record'] as JsonObject))),
+      'constructor',
+      '__proto__',
+    ];
+    fc.assert(
+      fc.property(
+        fc.nat({ max: carriedLines.length - 1 }),
+        fc.constantFrom(...carriedMembers),
+        fc.option(fc.jsonValue({ maxDepth: 3 }).map((value) => value as JsonValue)),
+        (base, member, value) => {
+          const line = carriedLines[base] ?? {};
+          const carried = withMember(line['late_record'] as JsonObject, member, value);
+          const stream = lateStreamText(`${canonicalJson({ ...line, sequence: 1, late_record: carried })}\n`);
+          const reading = readLateStream(stream, CONTEXT, ORACLE_VALIDATOR);
+          if (!ORACLE_VALIDATOR.validate(carried).valid) {
+            assert.deepEqual(reading.accepted, []);
+            assert.equal(reading.problems.length, 1);
+          }
         },
       ),
       fuzzParameters(),
