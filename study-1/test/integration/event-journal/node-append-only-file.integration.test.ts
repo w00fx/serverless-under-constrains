@@ -2,12 +2,15 @@
 // an integration boundary). Finalization survives the process as file mode 0444; open, read
 // and directory failures are reported as `not_written`/`failed` with the OS code; a writer
 // over the JSONL port produces a journal that the BR-RUA-033 JSONL parser reads back as dense,
-// canonical events; and a restarted source instance keeps journaling after a torn write.
+// canonical events; a write that fails midway is `unknown`, never `appended` or `not_written`
+// (BR-RUA-033 ambiguity); and a restarted source instance keeps journaling after a torn write.
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { after, describe, it } from 'node:test';
 
 import { JournalWriter } from '../../../src/event-journal/journal-writer.ts';
@@ -29,6 +32,9 @@ import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-schedule
 
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
 
+const SIZE_LIMITED_APPEND = fileURLToPath(
+  new URL('../../support/event-journal/append-under-file-size-limit.ts', import.meta.url),
+);
 const RESTARTED_INSTANCE_ID = 'cccccccc-0000-4000-8000-000000000009' as Uuid4;
 const encoder = new TextEncoder();
 const root = mkdtempSync(join(tmpdir(), 'rua-node-append-'));
@@ -82,11 +88,34 @@ describe('NodeAppendOnlyFile on the local file system', () => {
     });
   });
 
-  it('reports a path under a regular file as not written', async () => {
+  it('reports a path under a regular file as not written, and as a failed finalization', async () => {
     const parent = join(freshDirectory('not-a-directory'), 'plain');
     writeFileSync(parent, '');
-    const outcome = await new NodeAppendOnlyFile().append(join(parent, 'journal.jsonl'), encoder.encode('a\n'));
+    const file = new NodeAppendOnlyFile();
+    const outcome = await file.append(join(parent, 'journal.jsonl'), encoder.encode('a\n'));
     assert.deepEqual(outcome, { kind: 'not_written', code: 'ENOTDIR' });
+    // The finalize probe fails with an OS code other than ENOENT (WP-05 review round 2).
+    assert.deepEqual(await file.finalize(join(parent, 'journal.jsonl')), { kind: 'failed', code: 'ENOTDIR' });
+  });
+
+  it('a write that fails midway is unknown, and the next instance closes the torn line', async () => {
+    // BR-RUA-033: a medium that cannot say whether the bytes were stored reports an ambiguous
+    // append. Under RLIMIT_FSIZE of one block the real appendFile writes part of the line, then
+    // fails with EFBIG (WP-05 review round 2: the binding's own failure mapping, untested before).
+    const path = join(freshDirectory('size-limit'), 'journal.jsonl');
+    const lineBytes = 8192;
+    const child = spawnSync(
+      '/bin/sh',
+      ['-c', 'ulimit -f 1 && exec "$0" "$1" "$2" "$3"', process.execPath, SIZE_LIMITED_APPEND, path, String(lineBytes)],
+      { encoding: 'utf8' },
+    );
+    assert.equal(child.status, 0, child.stderr);
+    assert.deepEqual(JSON.parse(child.stdout), { kind: 'unknown', code: 'EFBIG' });
+    const written = statSync(path).size;
+    assert.ok(written > 0 && written < lineBytes, `wrote ${String(written)} of ${String(lineBytes)} bytes`);
+    assert.deepEqual(await new NodeAppendOnlyFile().append(path, encoder.encode('a\n')), { kind: 'appended' });
+    const text = readFileSync(path, 'utf8');
+    assert.equal(text, `${'x'.repeat(written)}\na\n`);
   });
 
   it('a writer over the JSONL port leaves dense canonical events that parse back', async () => {
