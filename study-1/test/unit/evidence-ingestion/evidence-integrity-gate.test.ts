@@ -253,6 +253,18 @@ describe('assessEvidenceIntegrity over supplementary evidence (review WP-12 R2)'
     assert.equal(kept?.artifact_path, caller);
   });
 
+  it('names the subject artifact for a sequence conflict a supplementary file listed first shares', () => {
+    const third = artifactValues(input, caller)[2] as Readonly<Record<string, JsonValue>>;
+    const rival = { ...third, event_id: NEW_EVENT };
+    const evidence = ingest({ ...input, artifacts: [{ path: READINESS, bytes: jsonl([rival]) }, ...input.artifacts] });
+    const result = assessEvidenceIntegrity(evidence);
+    assert.equal(result.value, 'invalid');
+    assert.deepEqual(
+      result.reasons.map((reason) => [reason.code, reason.artifact_path]),
+      [['CONFLICTING_SOURCE_SEQUENCE', caller]],
+    );
+  });
+
   it('is invalid when a record lacking correlation carries an own __proto__ member (A-07, review WP-12 R1)', () => {
     const lines = artifactValues(input, caller).map((value) => JSON.stringify(value));
     const { run_id: _dropped, ...uncorrelated } = artifactValues(input, caller)[2] as Readonly<
