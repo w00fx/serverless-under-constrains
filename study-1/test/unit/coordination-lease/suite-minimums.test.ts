@@ -4,7 +4,7 @@
 // `ownership-mismatch`, `stale-past-300s`, `ttl-expiry-is-not-release`), so its integration
 // minimum is at least those four; unit (the lease layout, store adapter, health machine and
 // session) and fuzz (decoder totality and the health and session state machines, testing rule
-// 6) are at least one.
+// 6) are at least one. The coordination stack's synthesis cases have their own file (A-11).
 // The committed values sit at the counts that exist today and only ratchet upward; that is a
 // review rule, not a test.
 
@@ -26,5 +26,10 @@ describe('coordination-lease suite minimums', () => {
     assert.ok((minimums.unit ?? 0) >= 1, `unit minimum ${String(minimums.unit)}; expected >= 1`);
     assert.ok((minimums.integration ?? 0) >= 4, `integration minimum ${String(minimums.integration)}; expected >= 4`);
     assert.ok((minimums.fuzz ?? 0) >= 1, `fuzz minimum ${String(minimums.fuzz)}; expected >= 1`);
+  });
+
+  it('hold an integration minimum for the coordination stack synthesis', () => {
+    const minimums = minimumsOf('infra-coordination-stack.json');
+    assert.ok((minimums.integration ?? 0) >= 1, `integration minimum ${String(minimums.integration)}; expected >= 1`);
   });
 });
