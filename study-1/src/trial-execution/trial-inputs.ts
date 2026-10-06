@@ -12,7 +12,7 @@ import type { Result, Sha256Hex, StructuredReason, WallClock } from '../record-c
 import type { TrialManifest } from '../record-contract/records/group-a/trial_manifest.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { PACKAGE_LAYOUT } from '../evidence-package/package-layout.ts';
-import type { UNIT_PATHS } from '../evidence-package/package-layout.ts';
+import type { EvidenceUnit, UNIT_PATHS } from '../evidence-package/package-layout.ts';
 import type { PackageFileSystem } from '../evidence-package/package-file-system.ts';
 import type { TrialPlan } from './trial-execution-ports.ts';
 
@@ -22,7 +22,7 @@ export interface FrozenTrialInputs {
   readonly manifest_sha256: Sha256Hex;
 }
 
-/** Where a trial's files go: the execution package directory and the file system. */
+/** Where a trial's or the probe's files go: the execution package directory and the file system. */
 export interface TrialFileTarget {
   readonly files: PackageFileSystem;
   readonly package_directory: string;
@@ -39,7 +39,17 @@ export function trialFilePath(
   trialId: TrialPlan['trial']['trial_id'],
   file: keyof typeof UNIT_PATHS,
 ): string {
-  return `${packageDirectory}/${PACKAGE_LAYOUT.unitFile({ kind: 'trial', trial_id: trialId }, file)}`;
+  return unitFilePath(packageDirectory, { kind: 'trial', trial_id: trialId }, file);
+}
+
+/**
+ * The package path of one file of a trial or probe directory.
+ *
+ * @example
+ * unitFilePath('transport-probes/<id>', { kind: 'probe' }, 'payment'); // 'transport-probes/<id>/probe/inputs/payment.json'
+ */
+export function unitFilePath(packageDirectory: string, unit: EvidenceUnit, file: keyof typeof UNIT_PATHS): string {
+  return `${packageDirectory}/${PACKAGE_LAYOUT.unitFile(unit, file)}`;
 }
 
 /**
@@ -48,19 +58,35 @@ export function trialFilePath(
  * @example
  * const failure = await writeTrialFile(target, trialId, 'oracleResult', bytes);
  */
-export async function writeTrialFile(
+export function writeTrialFile(
   target: TrialFileTarget,
   trialId: TrialPlan['trial']['trial_id'],
   file: keyof typeof UNIT_PATHS,
   bytes: Uint8Array,
 ): Promise<StructuredReason | undefined> {
-  const path = trialFilePath(target.package_directory, trialId, file);
+  return writeUnitFile(target, { kind: 'trial', trial_id: trialId }, file, bytes);
+}
+
+/**
+ * Writes one file of a trial or probe directory once; the reason names the path when it was not
+ * written (`TRIAL_FILE_NOT_WRITTEN` or `PROBE_FILE_NOT_WRITTEN`).
+ *
+ * @example
+ * const failure = await writeUnitFile(target, { kind: 'probe' }, 'transportProbeResult', bytes);
+ */
+export async function writeUnitFile(
+  target: TrialFileTarget,
+  unit: EvidenceUnit,
+  file: keyof typeof UNIT_PATHS,
+  bytes: Uint8Array,
+): Promise<StructuredReason | undefined> {
+  const path = unitFilePath(target.package_directory, unit, file);
   const written = await target.files.writeOnce(path, bytes);
   if (written.ok) {
     return undefined;
   }
   return {
-    code: 'TRIAL_FILE_NOT_WRITTEN',
+    code: `${unit.kind.toUpperCase()}_FILE_NOT_WRITTEN`,
     subject: 'BR-RUA-043',
     artifact_path: path,
     detail: `${path} was not written (${written.error.code}: ${written.error.detail}); expected a new write-once file`,

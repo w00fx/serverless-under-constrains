@@ -8,16 +8,22 @@
 // partially collected trial still freezes, indeterminate (D-29). Only an index that cannot be
 // written fails the freeze, because nothing then freezes the evidence.
 //
+// The probe freezes through the same steps (`freezeUnitEvidence`): its buffer and samples (it has
+// no queue observations), `settlement_assessed`, its own derivation (the transport probe result and
+// the coordination prefix checkpoint, probe-workload-executor.ts), then `probe/evidence-index.json`
+// and `trial_evidence_frozen` (evidence/CMP-04/decisions.md).
+//
 // The registry item is not cleared at T11: the store port has no delete (design §5.3 WP-04), and
 // the next trial of the variant replaces it with a conditional write (trial-setup.ts), so a late
 // redelivery of this trial's message keeps being validated against this trial.
 
 import type { EventBody } from '../event-journal/journal-event.ts';
 import { settlementSampleRecord } from '../evidence-collection/settlement-sample.ts';
-import type { TrialCaptureScope } from '../evidence-collection/capture-scope.ts';
+import type { CaptureScope, TrialCaptureScope } from '../evidence-collection/capture-scope.ts';
 import type { TrialCollection } from '../evidence-collection/trial-collection.ts';
 import { encodeRecordLines } from '../evidence-collection/collected-records.ts';
-import { buildEvidenceIndex } from '../evidence-package/evidence-index.ts';
+import { buildEvidenceIndex, unitOf } from '../evidence-package/evidence-index.ts';
+import type { EvidenceIndexTarget } from '../evidence-package/evidence-index.ts';
 import { expectedArtifactsFor } from '../evidence-package/expected-artifacts.ts';
 import { readPackageSnapshot } from '../evidence-package/package-snapshot.ts';
 import { PACKAGE_LAYOUT, UNIT_PATHS } from '../evidence-package/package-layout.ts';
@@ -26,28 +32,49 @@ import { ingestEvidence } from '../evidence-ingestion/ingest-evidence.ts';
 import { serializeRecordFile } from '../record-contract/canonical-json.ts';
 import { sha256Hex } from '../record-contract/digests.ts';
 import { err, ok } from '../record-contract/primitives.ts';
-import type { JsonObject, Result, Sha256Hex, StructuredReason, WallClock } from '../record-contract/primitives.ts';
+import type {
+  ExecutionIdentity,
+  JsonObject,
+  Result,
+  Sha256Hex,
+  StructuredReason,
+  WallClock,
+} from '../record-contract/primitives.ts';
 import type { TrialManifest } from '../record-contract/records/group-a/trial_manifest.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import type { SettlementAssessment } from '../settlement/settlement-policy.ts';
 import { evaluateTrial } from '../trial-oracle/evaluate-trial.ts';
-import type { RunnerTrialJournal } from './runner-trial-journal.ts';
+import type { RunnerUnitJournal } from './runner-trial-journal.ts';
 import type { SettlementReading } from './settlement-reading.ts';
 import type { TrialExecution } from './trial-execution-ports.ts';
-import { writeTrialFile } from './trial-inputs.ts';
+import { writeTrialFile, writeUnitFile } from './trial-inputs.ts';
 import type { TrialFileTarget } from './trial-inputs.ts';
+
+/** What a unit's freeze writes through, for which unit, and the index that freezes it. */
+export interface UnitFreezeContext {
+  readonly target: TrialFileTarget;
+  readonly journal: RunnerUnitJournal;
+  readonly clock: WallClock;
+  readonly execution: ExecutionIdentity;
+  readonly scope: CaptureScope;
+  /** The trial's or the probe's index; it names the same unit as `scope`. */
+  readonly index: EvidenceIndexTarget;
+}
 
 /** What the freeze writes through and for which trial. */
 export interface TrialFreezeContext {
   readonly target: TrialFileTarget;
-  readonly journal: RunnerTrialJournal;
+  readonly journal: RunnerUnitJournal;
   readonly clock: WallClock;
   readonly validator: RecordValidator;
   readonly execution: TrialExecution;
   readonly scope: TrialCaptureScope;
   readonly manifest: TrialManifest;
 }
+
+/** The unit's derived files, written after `settlement_assessed`: every problem it tolerated. */
+export type UnitDerivation = () => Promise<readonly StructuredReason[]>;
 
 /** What is frozen: the buffer, every settlement round and the settlement judgement. */
 export interface TrialFreezeInput {
@@ -70,9 +97,30 @@ export interface FrozenTrialEvidence {
  * const frozen = await freezeTrialEvidence(context, { collection, rounds, assessment });
  * if (frozen.ok) frozen.value.evidence_index_path; // 'trials/<trial_id>/evidence-index.json'
  */
-export async function freezeTrialEvidence(
+export function freezeTrialEvidence(
   context: TrialFreezeContext,
   input: TrialFreezeInput,
+): Promise<Result<FrozenTrialEvidence, readonly StructuredReason[]>> {
+  const unit: UnitFreezeContext = {
+    ...context,
+    index: { index_scope: 'TRIAL', execution: context.execution, trial_id: context.manifest.trial_id },
+  };
+  return freezeUnitEvidence(unit, input, () => writeEvaluation(context));
+}
+
+/**
+ * Writes a trial's or the probe's buffer and samples, journals `settlement_assessed`, runs the
+ * unit's derivation, then freezes the unit with its evidence index and `trial_evidence_frozen`.
+ * Only an index that cannot be built or written fails the freeze.
+ *
+ * @example
+ * const frozen = await freezeUnitEvidence(context, { collection, rounds, assessment }, derive);
+ * if (frozen.ok) frozen.value.evidence_index_path; // 'probe/evidence-index.json'
+ */
+export async function freezeUnitEvidence(
+  context: UnitFreezeContext,
+  input: TrialFreezeInput,
+  derive: UnitDerivation,
 ): Promise<Result<FrozenTrialEvidence, readonly StructuredReason[]>> {
   const failures: StructuredReason[] = [
     ...input.rounds.flatMap((round) => round.failures),
@@ -83,7 +131,7 @@ export async function freezeTrialEvidence(
   if (!assessed.ok) {
     failures.push(assessed.error);
   }
-  await writeEvaluation(context, failures);
+  failures.push(...(await derive()));
   const index = await writeEvidenceIndex(context);
   if (!index.ok) {
     return err([...failures, ...index.error]);
@@ -127,43 +175,59 @@ export function settlementAssessedBody(input: TrialFreezeInput): EventBody<'sett
 }
 
 async function writePrimaryFiles(
-  context: TrialFreezeContext,
+  context: UnitFreezeContext,
   input: TrialFreezeInput,
   failures: StructuredReason[],
 ): Promise<void> {
-  const trialId = context.manifest.trial_id;
+  const unit = unitOf(context.index);
   for (const file of input.collection.files) {
     if (!Object.hasOwn(UNIT_PATHS, file.key)) {
-      failures.push(freezeReason('COLLECTED_FILE_UNPLACED', `collected file ${file.key} has no trial path`));
+      failures.push(freezeReason('COLLECTED_FILE_UNPLACED', `collected file ${file.key} has no ${unit.kind} path`));
       continue;
     }
-    pushFailure(
-      failures,
-      await writeTrialFile(context.target, trialId, file.key as keyof typeof UNIT_PATHS, file.bytes),
-    );
+    pushFailure(failures, await writeUnitFile(context.target, unit, file.key as keyof typeof UNIT_PATHS, file.bytes));
   }
-  const lines: readonly (readonly [keyof typeof UNIT_PATHS, readonly JsonObject[]])[] = [
-    ['sourceObservations', input.rounds.map((round) => round.source_observation)],
-    ['dlqObservations', input.rounds.map((round) => round.dlq_observation)],
-    ['settlementSamples', input.rounds.map((round) => settlementSampleRecord(round.sample, context.scope))],
-  ];
-  for (const [file, records] of lines) {
+  for (const [file, records] of recordLines(context, input.rounds)) {
     const bytes = encodeRecordLines(records, file);
     if (!bytes.ok) {
       failures.push(bytes.error);
       continue;
     }
-    pushFailure(failures, await writeTrialFile(context.target, trialId, file, bytes.value));
+    pushFailure(failures, await writeUnitFile(context.target, unit, file, bytes.value));
   }
+}
+
+// A trial writes its two queue observation files and its samples; the probe, which has no queue
+// (design §7), writes its samples only.
+function recordLines(
+  context: UnitFreezeContext,
+  rounds: readonly SettlementReading[],
+): readonly (readonly [keyof typeof UNIT_PATHS, readonly JsonObject[]])[] {
+  const samples = [
+    'settlementSamples',
+    rounds.map((round) => settlementSampleRecord(round.sample, context.scope)),
+  ] as const;
+  if (context.index.index_scope === 'PROBE') {
+    return [samples];
+  }
+  return [
+    ['sourceObservations', present(rounds.map((round) => round.source_observation))],
+    ['dlqObservations', present(rounds.map((round) => round.dlq_observation))],
+    samples,
+  ];
+}
+
+function present(observations: readonly (JsonObject | undefined)[]): readonly JsonObject[] {
+  return observations.filter((observation): observation is JsonObject => observation !== undefined);
 }
 
 // Ingestion reads the trial's own files and the execution-level files as artifacts and every
 // earlier trial's files as the execution scope (INV-RUA-001), as the golden ingestion input does.
-async function writeEvaluation(context: TrialFreezeContext, failures: StructuredReason[]): Promise<void> {
+async function writeEvaluation(context: TrialFreezeContext): Promise<readonly StructuredReason[]> {
+  const failures: StructuredReason[] = [];
   const snapshot = await readPackageSnapshot(context.target.files, context.execution);
   if (!snapshot.ok) {
-    failures.push(freezeReason('PACKAGE_UNREADABLE', `${snapshot.error.code}: ${snapshot.error.detail}`));
-    return;
+    return [freezeReason('PACKAGE_UNREADABLE', `${snapshot.error.code}: ${snapshot.error.detail}`)];
   }
   const subject = `${PACKAGE_LAYOUT.unitDirectory({ kind: 'trial', trial_id: context.manifest.trial_id })}/`;
   const scope = snapshot.value.files.filter(
@@ -179,8 +243,7 @@ async function writeEvaluation(context: TrialFreezeContext, failures: Structured
   );
   const evaluation = evaluateTrial({ evidence, checked_at: formatUtcMillis(context.clock.now()) });
   if (!evaluation.ok) {
-    failures.push(...evaluation.error);
-    return;
+    return evaluation.error;
   }
   const trialId = context.manifest.trial_id;
   pushFailure(
@@ -196,39 +259,42 @@ async function writeEvaluation(context: TrialFreezeContext, failures: Structured
     failures,
     await writeTrialFile(context.target, trialId, 'oracleResult', serializeRecordFile(evaluation.value.result)),
   );
+  return failures;
 }
 
 async function writeEvidenceIndex(
-  context: TrialFreezeContext,
+  context: UnitFreezeContext,
 ): Promise<Result<{ readonly path: string; readonly sha256: Sha256Hex }, readonly StructuredReason[]>> {
   const snapshot = await readPackageSnapshot(context.target.files, context.execution);
   if (!snapshot.ok) {
     return err([freezeReason('PACKAGE_UNREADABLE', `${snapshot.error.code}: ${snapshot.error.detail}`)]);
   }
   const files: readonly PackageFile[] = snapshot.value.files;
-  const index = buildEvidenceIndex({
-    files,
-    target: { index_scope: 'TRIAL', execution: context.execution, trial_id: context.manifest.trial_id },
-    created_at: formatUtcMillis(context.clock.now()),
-  });
+  const index = buildEvidenceIndex({ files, target: context.index, created_at: formatUtcMillis(context.clock.now()) });
   if (!index.ok) {
     return index;
   }
+  const unit = unitOf(context.index);
   const bytes = serializeRecordFile(index.value);
-  const unwritten = await writeTrialFile(context.target, context.manifest.trial_id, 'evidenceIndex', bytes);
+  const unwritten = await writeUnitFile(context.target, unit, 'evidenceIndex', bytes);
   if (unwritten !== undefined) {
     return err([unwritten]);
   }
-  const path = PACKAGE_LAYOUT.unitFile({ kind: 'trial', trial_id: context.manifest.trial_id }, 'evidenceIndex');
-  return ok({ path, sha256: sha256Hex(bytes) });
+  return ok({ path: PACKAGE_LAYOUT.unitFile(unit, 'evidenceIndex'), sha256: sha256Hex(bytes) });
+}
+
+/**
+ * The reason a unit freeze step tolerated, in the freeze's own terms (BR-RUA-043).
+ *
+ * @example
+ * freezeReason('PACKAGE_UNREADABLE', 'list failed'); // { code: 'PACKAGE_UNREADABLE', subject: 'BR-RUA-043', ... }
+ */
+export function freezeReason(code: string, problem: string): StructuredReason {
+  return { code, subject: 'BR-RUA-043', detail: `${problem}; expected the unit evidence to be frozen whole` };
 }
 
 function pushFailure(failures: StructuredReason[], failure: StructuredReason | undefined): void {
   if (failure !== undefined) {
     failures.push(failure);
   }
-}
-
-function freezeReason(code: string, problem: string): StructuredReason {
-  return { code, subject: 'BR-RUA-043', detail: `${problem}; expected the trial evidence to be frozen whole` };
 }

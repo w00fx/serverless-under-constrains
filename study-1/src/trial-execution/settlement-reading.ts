@@ -1,9 +1,11 @@
-// One round of independent settlement reads of a trial (design §8.12, §10.2 T7; BR-RUA-032):
-// the unit's journals, its treatment item, its ledger, the source queue and DLQ counters, the
-// correlated DLQ messages (received without deletion, only when the DLQ holds any) and, for a
-// Durable trial, its inner executions. `buildSettlementSample` turns the readings into the sample
-// the §8.12 evaluator judges; the two queue observations are kept for
-// `queues/source-observations.jsonl` and `queues/dlq-observations.jsonl`.
+// One round of independent settlement reads of a trial or of the transport probe (design §8.12,
+// §10.2 T7; BR-RUA-032): the unit's journals, its treatment item, its ledger and, for a trial, the
+// source queue and DLQ counters, the correlated DLQ messages (received without deletion, only when
+// the DLQ holds any) and, for a Durable trial, its inner executions. `buildSettlementSample` turns
+// the readings into the sample the §8.12 evaluator judges; a trial's two queue observations are
+// kept for `queues/source-observations.jsonl` and `queues/dlq-observations.jsonl`. The probe has
+// no queue (design §7: its directory has no `queues/`); its processing is terminal once the
+// runner's synchronous Invoke of the probe caller returned.
 //
 // Reads fail closed. Queue counters that cannot be read are `unavailable` (never quiet). A
 // journal or treatment read that fails raises the correlated-event watermark above the previous
@@ -14,7 +16,7 @@ import type { DlqReceiver } from '../evidence-collection/dlq-capture.ts';
 import { captureDlq } from '../evidence-collection/dlq-capture.ts';
 import type { CollectorStoreReader } from '../evidence-collection/collected-records.ts';
 import { capturePartitionKey } from '../evidence-collection/capture-scope.ts';
-import type { TrialCaptureScope } from '../evidence-collection/capture-scope.ts';
+import type { CaptureScope, TrialCaptureScope } from '../evidence-collection/capture-scope.ts';
 import { innerExecutionsTerminal, listDurableExecutions } from '../evidence-collection/durable-metadata.ts';
 import type { DurableExecutionReader, DurableListingRequest } from '../evidence-collection/durable-metadata.ts';
 import { exportJournals, unitJournalPlans } from '../evidence-collection/journal-export.ts';
@@ -33,16 +35,20 @@ import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { TREATMENT_SORT_KEY } from '../refund-provider/control-items.ts';
 import type { QueueCounters, SettlementSample } from '../settlement/settlement-policy.ts';
 
-/** The ports one round reads through. */
-export interface SettlementReadingPorts {
+/** The ports a probe round reads through: the tables and the clock. */
+export interface UnitReadingPorts {
   readonly store: CollectorStoreReader;
-  readonly queues: QueueCounterReader;
-  readonly dlq: DlqReceiver;
-  readonly durable: DurableExecutionReader;
   readonly clock: WallClock;
 }
 
-/** What a round reads: the trial, its scenario, its queues and, for Durable, its executions. */
+/** The ports a trial round reads through: the tables, the queues, the DLQ and Durable. */
+export interface SettlementReadingPorts extends UnitReadingPorts {
+  readonly queues: QueueCounterReader;
+  readonly dlq: DlqReceiver;
+  readonly durable: DurableExecutionReader;
+}
+
+/** What a trial round reads: the trial, its scenario, its queues and, for Durable, its executions. */
 export interface SettlementReadingTarget {
   readonly scope: TrialCaptureScope;
   readonly scenario: Scenario;
@@ -51,12 +57,26 @@ export interface SettlementReadingTarget {
   readonly durable?: DurableListingRequest;
 }
 
-/** One round: the sample, its two queue observations and every read that failed. */
+/** One round: the sample, a trial's two queue observations and every read that failed. */
 export interface SettlementReading {
   readonly sample: SettlementSample;
-  readonly source_observation: JsonObject;
-  readonly dlq_observation: JsonObject;
+  /** Absent for the probe, which has no queue. */
+  readonly source_observation?: JsonObject;
+  /** Absent for the probe, which has no queue. */
+  readonly dlq_observation?: JsonObject;
   readonly failures: readonly StructuredReason[];
+}
+
+/** One round of settlement reads of a unit, as the observer takes them. */
+export type SettlementRoundReader = (
+  phase: SettlementSamplePhase,
+  previous: SettlementSample | undefined,
+) => Promise<SettlementReading>;
+
+/** The unit-specific part of a round: its readings and, for a trial, its queue observations. */
+interface UnitRound {
+  readonly unit: SampleUnitReadings;
+  readonly observations?: { readonly source: JsonObject; readonly dlq: JsonObject };
 }
 
 interface JournalReading {
@@ -71,27 +91,61 @@ interface JournalReading {
  * const round = await readSettlementRound(ports, target, 'observation', previous);
  * round.sample.source_queue; // { visible: 0, in_flight: 0, delayed: 0 }
  */
-export async function readSettlementRound(
+export function readSettlementRound(
   ports: SettlementReadingPorts,
   target: SettlementReadingTarget,
   phase: SettlementSamplePhase,
   previous: SettlementSample | undefined,
 ): Promise<SettlementReading> {
+  return readUnitRound(ports, target.scope, phase, previous, async (failures) => {
+    const source = await observeQueue(ports.queues, target.source, 'source', target.scope, ports.clock);
+    const dlq = await observeQueue(ports.queues, target.dlq, 'dlq', target.scope, ports.clock);
+    const queues = await readDlqMessages(ports, target, source.counters, dlq.counters, failures);
+    const unit = await unitReadings(ports, target, queues, failures);
+    return { unit, observations: { source: source.record, dlq: dlq.record } };
+  });
+}
+
+/**
+ * Reads one settlement round of the transport probe: its partition's journals, treatment and
+ * ledger, with processing terminal once the probe caller's Invoke returned.
+ *
+ * @example
+ * const round = await readProbeSettlementRound(ports, scope, true, 'observation', previous);
+ * round.sample.source_queue; // 'not_applicable'
+ */
+export function readProbeSettlementRound(
+  ports: UnitReadingPorts,
+  scope: CaptureScope,
+  invocationReturned: boolean,
+  phase: SettlementSamplePhase,
+  previous: SettlementSample | undefined,
+): Promise<SettlementReading> {
+  return readUnitRound(ports, scope, phase, previous, () =>
+    Promise.resolve({ unit: { kind: 'probe', invocation_returned: invocationReturned } }),
+  );
+}
+
+// The reads every unit shares, in order: journals, treatment, ledger, then the unit's own reads.
+async function readUnitRound(
+  ports: UnitReadingPorts,
+  scope: CaptureScope,
+  phase: SettlementSamplePhase,
+  previous: SettlementSample | undefined,
+  readUnit: (failures: StructuredReason[]) => Promise<UnitRound>,
+): Promise<SettlementReading> {
   const observedAt = formatUtcMillis(ports.clock.now());
   const failures: StructuredReason[] = [];
-  const journals = await readJournals(ports.store, target.scope, failures);
-  const treatment = await readTreatment(ports.store, target.scope, failures);
-  const ledger = await captureLedgerSnapshot(ports.store, target.scope, ports.clock);
+  const journals = await readJournals(ports.store, scope, failures);
+  const treatment = await readTreatment(ports.store, scope, failures);
+  const ledger = await captureLedgerSnapshot(ports.store, scope, ports.clock);
   failures.push(...ledger.failures);
-  const source = await observeQueue(ports.queues, target.source, 'source', target.scope, ports.clock);
-  const dlq = await observeQueue(ports.queues, target.dlq, 'dlq', target.scope, ports.clock);
-  const queues = await readDlqMessages(ports, target, source.counters, dlq.counters, failures);
-  const unit = await unitReadings(ports, target, queues, failures);
+  const round = await readUnit(failures);
   const built = buildSettlementSample({
     observed_at: observedAt,
     phase,
     publication_stopped: true,
-    unit,
+    unit: round.unit,
     journals: journals.journals,
     treatment: treatment.item,
     ledger: { complete: ledger.complete, item_count: ledger.transaction_count },
@@ -101,12 +155,16 @@ export async function readSettlementRound(
   const sample = unread
     ? { ...built, correlated_event_watermark: Math.max(built.correlated_event_watermark, floor) }
     : built;
-  return { sample, source_observation: source.record, dlq_observation: dlq.record, failures };
+  const observations =
+    round.observations === undefined
+      ? {}
+      : { source_observation: round.observations.source, dlq_observation: round.observations.dlq };
+  return { sample, ...observations, failures };
 }
 
 async function readJournals(
   store: CollectorStoreReader,
-  scope: TrialCaptureScope,
+  scope: CaptureScope,
   failures: StructuredReason[],
 ): Promise<JournalReading> {
   const files = new Map<string, readonly JsonObject[]>();
@@ -135,7 +193,7 @@ async function readJournals(
 
 async function readTreatment(
   store: CollectorStoreReader,
-  scope: TrialCaptureScope,
+  scope: CaptureScope,
   failures: StructuredReason[],
 ): Promise<{ readonly item: JsonObject | undefined; readonly complete: boolean }> {
   const pk = capturePartitionKey(scope);

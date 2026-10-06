@@ -1,9 +1,11 @@
-// The runner's journal of one trial (design §7 `runner/runner-journal.jsonl`, BR-RUA-033). Each
-// trial gets its own runner source instance, scoped to the trial partition, so every runner event
-// of the trial carries `trial_id` and `trial_manifest_sha256` and the oracle attributes it to that
-// trial (§8.1). The golden builder records one runner instance across the whole execution; both
-// layouts are dense per (source, source_instance_id), which is all BR-RUA-033 asks
-// (evidence/WP-26/decisions.md).
+// The runner's journal of one capture unit, a trial or the transport probe (design §7
+// `runner/runner-journal.jsonl`, BR-RUA-033). Each unit gets its own runner source instance,
+// scoped to the unit's partition: every runner event of a trial carries `trial_id` and
+// `trial_manifest_sha256`, so the oracle attributes it to that trial (§8.1), and every runner
+// event of the probe carries only the execution identity, because the probe has no trial (D-06).
+// The golden builder records one runner instance across the whole execution; both layouts are
+// dense per (source, source_instance_id), which is all BR-RUA-033 asks
+// (evidence/WP-26/decisions.md; generalized to the probe by evidence/CMP-04/decisions.md).
 //
 // An append that is not written stops the instance: the runner reports the reason and carries on,
 // because the evidence it is collecting is still worth freezing, and ingestion then reports the
@@ -16,47 +18,38 @@ import { JournalWriter } from '../event-journal/journal-writer.ts';
 import { EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
 import type { JournalEvent } from '../event-journal/journal-event.ts';
 import { err, ok } from '../record-contract/primitives.ts';
-import type {
-  Result,
-  Sha256Hex,
-  StructuredReason,
-  UuidSource,
-  Uuid4,
-  WallClock,
-} from '../record-contract/primitives.ts';
+import type { Result, StructuredReason, UuidSource, WallClock } from '../record-contract/primitives.ts';
 import type { EventRecordType } from '../record-contract/record-types.ts';
-import type { TrialExecution } from './trial-execution-ports.ts';
+import type { CaptureScope } from '../evidence-collection/capture-scope.ts';
 
 /** Identical retries of a definitively failed runner append (BR-RUA-033). */
 export const RUNNER_DEFINITIVE_RETRIES = 2;
 
-/** What the runner journal of one trial needs. */
-export interface RunnerTrialJournalInput {
+/** What the runner journal of one trial or of the probe needs. */
+export interface RunnerUnitJournalInput {
   readonly file: AppendOnlyFile;
   /** The execution's package directory, for example `runs/<run_id>`. */
   readonly package_directory: string;
-  readonly execution: TrialExecution;
-  readonly execution_manifest_sha256: Sha256Hex;
-  readonly trial_id: Uuid4;
-  readonly trial_manifest_sha256: Sha256Hex;
+  /** The execution, its manifest digest and the trial or probe whose partition the events name. */
+  readonly scope: CaptureScope;
   readonly clock: WallClock;
   readonly ids: UuidSource;
 }
 
-/** The runner events of one trial, appended in order. */
-export class RunnerTrialJournal {
+/** The runner events of one trial or of the probe, appended in order. */
+export class RunnerUnitJournal {
   readonly #writer: JournalWriter;
 
-  constructor(input: RunnerTrialJournalInput) {
+  constructor(input: RunnerUnitJournalInput) {
     const path = `${input.package_directory}/${EXECUTION_PATHS.runnerJournal}`;
     this.#writer = new JournalWriter({
       port: createJsonlJournalPort(path, input.file),
       source: 'runner',
       instanceId: input.ids.next(),
       scope: {
-        execution: input.execution,
-        execution_manifest_sha256: input.execution_manifest_sha256,
-        partition: { kind: 'trial', trial_id: input.trial_id, trial_manifest_sha256: input.trial_manifest_sha256 },
+        execution: input.scope.execution,
+        execution_manifest_sha256: input.scope.execution_manifest_sha256,
+        partition: input.scope.unit,
       },
       clock: input.clock,
       ids: input.ids,

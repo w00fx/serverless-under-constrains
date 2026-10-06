@@ -14,7 +14,7 @@ import type { TrialManifest } from '../record-contract/records/group-a/trial_man
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { buildTrialMessage, validateBeforePublication } from '../trial-message/trial-message-publication.ts';
-import type { RunnerTrialJournal } from './runner-trial-journal.ts';
+import type { RunnerUnitJournal } from './runner-trial-journal.ts';
 import type { TrialPlan, TrialMessagePublisher } from './trial-execution-ports.ts';
 import { writeTrialFile } from './trial-inputs.ts';
 import type { TrialFileTarget } from './trial-inputs.ts';
@@ -23,7 +23,7 @@ import type { TrialFileTarget } from './trial-inputs.ts';
 export interface TrialPublicationContext {
   readonly publisher: TrialMessagePublisher;
   readonly target: TrialFileTarget;
-  readonly journal: RunnerTrialJournal;
+  readonly journal: RunnerUnitJournal;
   readonly clock: WallClock;
   readonly validator: RecordValidator;
   readonly plan: TrialPlan;
