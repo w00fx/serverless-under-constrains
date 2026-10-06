@@ -12,8 +12,14 @@ import {
 } from '../../../src/provider-client/transport-options.ts';
 
 describe('transport options', () => {
-  it('the deadline is exactly 3 s of monotonic time', () => {
-    assert.deepEqual(PROVIDER_CLIENT_TIMING, { deadline_ns: 3_000_000_000n });
+  it('the deadline is exactly 3 s of monotonic time and the late-settlement grace exactly 2 s', () => {
+    assert.deepEqual(PROVIDER_CLIENT_TIMING, { deadline_ns: 3_000_000_000n, late_settlement_grace_ns: 2_000_000_000n });
+  });
+
+  it('the deadline plus the grace leaves at least 5 s of the 10 s caller invocation timeout (OR-RUA-002)', () => {
+    const invocationTimeoutNs = 10_000_000_000n;
+    const { deadline_ns: deadline, late_settlement_grace_ns: grace } = PROVIDER_CLIENT_TIMING;
+    assert.ok(invocationTimeoutNs - deadline - grace >= 5_000_000_000n);
   });
 
   it('the Lambda client makes one attempt in us-east-1', () => {

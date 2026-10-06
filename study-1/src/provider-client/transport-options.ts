@@ -7,8 +7,20 @@
 // - every HTTP-level timeout is 0 (disabled) and `throwOnRequestTimeout` is false, so no
 //   lower-level timeout can preempt the 3 s deadline; keep-alive reuses the TLS connection (RK-01).
 
-/** The application deadline of one attempt, in nanoseconds (BR-RUA-011: "at least three seconds"). */
-export const PROVIDER_CLIENT_TIMING = { deadline_ns: 3_000_000_000n } as const;
+/**
+ * The attempt timings, in nanoseconds:
+ * - `deadline_ns`: the application deadline (BR-RUA-011: "at least three seconds");
+ * - `late_settlement_grace_ns`: how long after a durable timeout the client waits for the
+ *   aborted transport to settle before it records the outcome without a
+ *   `transport_settled_after_timeout` (D-26, RK-04). An abort through the SDK HTTP handler
+ *   settles at once, so the grace only bounds a transport that ignores the abort; 3 s + 2 s
+ *   leaves at least 5 s of the 10 s caller invocation timeout (OR-RUA-002) for the outcome
+ *   append and the variant's request state (WP-06 review round 1).
+ */
+export const PROVIDER_CLIENT_TIMING = {
+  deadline_ns: 3_000_000_000n,
+  late_settlement_grace_ns: 2_000_000_000n,
+} as const;
 
 /** The Lambda client settings no caller may change (BR-RUA-053 "automatic retries are disabled"). */
 export const PROVIDER_LAMBDA_CLIENT_OPTIONS = { region: 'us-east-1', maxAttempts: 1 } as const;

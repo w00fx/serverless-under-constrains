@@ -6,7 +6,10 @@
 //   stays behind its barrier until the controller sees the durable timeout write;
 // - the transport wins when it settles first; the timer is cancelled.
 // A transport that settles after the timer won is reported as a late settlement: its kind and
-// elapsed time only, never its payload (D-26, BR-RUA-015).
+// elapsed time only, never its payload (D-26, BR-RUA-015). The caller waits for it only within
+// a bounded grace (`lateSettlementWithin`): a transport that ignores the abort and never settles
+// (RK-04, UNVERIFIED) must not hold back the TIMED_OUT outcome, which depends only on the
+// durable timeout append (BR-RUA-023; WP-06 review round 1).
 
 import { elapsedNs } from '../record-contract/decimal.ts';
 import type { DecimalString, MonotonicClock, UtcMillis, WallClock } from '../record-contract/primitives.ts';
@@ -108,11 +111,43 @@ function settleTransport(
 ): Promise<TimedSettlement> {
   let pending: Promise<ProviderTransportResult>;
   try {
-    pending = invoker.invoke(call, signal);
+    // Promise.resolve also absorbs a defective port that returns a non-promise value.
+    pending = Promise.resolve(invoker.invoke(call, signal));
   } catch (thrown) {
     pending = Promise.resolve(transportErrorFromThrown(thrown));
   }
   return pending.catch(transportErrorFromThrown).then((result) => ({ result, at_ns: monotonic.nowNs() }));
+}
+
+/** What `lateSettlementWithin` needs: the deadline timer and the clock it measures. */
+export interface LateSettlementWaitDeps {
+  readonly timer: DeadlineTimer;
+  readonly monotonic: MonotonicClock;
+}
+
+/**
+ * The late settlement when it arrives within `graceNs` of monotonic time from now, otherwise
+ * `undefined` (nothing was observed in the grace). Never rejects, and cancels its grace timer
+ * when the settlement wins.
+ *
+ * @example
+ * const late = await lateSettlementWithin(deps, decision.late_settlement, 2_000_000_000n);
+ * if (late !== undefined) await journal.append('transport_settled_after_timeout', { ...ids, ...late });
+ */
+export function lateSettlementWithin(
+  deps: LateSettlementWaitDeps,
+  late: Promise<LateSettlement>,
+  graceNs: bigint,
+): Promise<LateSettlement | undefined> {
+  return new Promise((resolve) => {
+    const grace = deps.timer.start(deps.monotonic.nowNs(), graceNs, () => {
+      resolve(undefined);
+    });
+    void late.then((settlement) => {
+      grace.cancel();
+      resolve(settlement);
+    });
+  });
 }
 
 /**

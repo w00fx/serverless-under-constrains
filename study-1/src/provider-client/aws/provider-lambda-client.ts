@@ -19,11 +19,16 @@ import { PROVIDER_HTTP_HANDLER_OPTIONS, PROVIDER_LAMBDA_CLIENT_OPTIONS } from '.
 /** Builds the HTTP handler of the provider client from the fixed options. */
 export type HttpHandlerFactory = (options: ProviderHttpHandlerOptions) => NodeHttpHandler;
 
-/** Client settings a caller may supply; region, retries and the HTTP handler are fixed. */
-export type ProviderLambdaClientSettings = Omit<
-  LambdaClientConfig,
-  'region' | 'maxAttempts' | 'retryStrategy' | 'retryMode' | 'requestHandler'
->;
+/**
+ * The only client setting a caller may supply: the credentials (tests pass static ones). It is
+ * an allow-list, not an `Omit` of `LambdaClientConfig`, because any other key can reach the
+ * transport: `extensions` can replace the HTTP handler through `setHttpHandler`, and a
+ * handler with its own request timeout would preempt the 3 s deadline (BR-RUA-028, BR-RUA-053;
+ * WP-06 review round 1). Keys smuggled past the type are dropped at run time.
+ */
+export interface ProviderLambdaClientSettings {
+  readonly credentials?: LambdaClientConfig['credentials'];
+}
 
 /**
  * The production HTTP handler: the fixed timeouts plus a keep-alive HTTPS agent, so a warm
@@ -54,7 +59,7 @@ export function createProviderLambdaClient(
   settings: ProviderLambdaClientSettings = {},
 ): LambdaClient {
   return new LambdaClient({
-    ...settings,
+    ...(settings.credentials === undefined ? {} : { credentials: settings.credentials }),
     ...PROVIDER_LAMBDA_CLIENT_OPTIONS,
     requestHandler: handlerFactory(PROVIDER_HTTP_HANDLER_OPTIONS),
   });

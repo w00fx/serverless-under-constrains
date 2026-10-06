@@ -58,6 +58,42 @@ describe('createProviderLambdaClient', () => {
     assert.equal(await client.config.region(), 'us-east-1');
     assert.equal(client.config.requestHandler, factory.onlyHandler());
   });
+
+  // Regression (WP-06 review round 1): the settings were an Omit of LambdaClientConfig, so a
+  // runtime extension could swap the fixed handler for another (with a 500 ms request timeout,
+  // say) through setHttpHandler.
+  it('ignores runtime extensions and every other key smuggled past the credentials-only type', async () => {
+    const factory = new SpyHttpHandlerFactory();
+    const other = new SpyHttpHandlerFactory().create(PROVIDER_HTTP_HANDLER_OPTIONS);
+    const configured: string[] = [];
+    const smuggled = {
+      credentials: TEST_CREDENTIALS,
+      extensions: [
+        {
+          configure: (extension: { setHttpHandler: (handler: unknown) => void }): void => {
+            configured.push('configure');
+            extension.setHttpHandler(other);
+          },
+        },
+      ],
+      retryMode: 'adaptive',
+      retryStrategy: { mode: 'standard', acquireInitialRetryToken: () => undefined },
+      endpoint: 'https://example.invalid',
+    } as unknown as ProviderLambdaClientSettings;
+    const client = createProviderLambdaClient(factory.create, smuggled);
+    assert.deepEqual(configured, []);
+    assert.equal(client.config.requestHandler, factory.onlyHandler());
+    assert.equal(await client.config.maxAttempts(), 1);
+    assert.equal(client.config.endpoint, undefined);
+    assert.deepEqual(await client.config.credentials(), TEST_CREDENTIALS);
+  });
+
+  it('builds a client without credentials when none are supplied', async () => {
+    const factory = new SpyHttpHandlerFactory();
+    const client = createProviderLambdaClient(factory.create);
+    assert.equal(client.config.requestHandler, factory.onlyHandler());
+    assert.equal(await client.config.region(), 'us-east-1');
+  });
 });
 
 describe('createKeepAliveHttpHandler', () => {

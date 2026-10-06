@@ -38,18 +38,34 @@ export interface ProviderInvocationPort {
   invoke(call: ProviderRefundCall, signal: AbortSignal): Promise<ProviderTransportResult>;
 }
 
+/** The error name of a thrown value whose name or text could not be read. */
+export const UNREPRESENTABLE_THROWN_NAME = 'UnrepresentableThrown';
+
 /**
  * The settlement of a port call that threw or rejected instead of returning a result: a
  * transport error named after what was thrown, because the call crossed the dispatch boundary
- * and nothing it threw proves the provider was not reached (BR-RUA-021).
+ * and nothing it threw proves the provider was not reached (BR-RUA-021). Total over every
+ * thrown value: a value whose `name`, `message` or string conversion throws (a null-prototype
+ * object, a throwing `toString` or getter) maps to `UnrepresentableThrown` instead of
+ * throwing, so the transport race always settles (WP-06 review round 1).
  *
  * @example
  * transportErrorFromThrown(Object.assign(new Error('socket hang up'), { name: 'TimeoutError' }));
  * // { kind: 'transport_error', error_name: 'TimeoutError', message: 'socket hang up' }
  */
 export function transportErrorFromThrown(thrown: unknown): ProviderTransportError {
-  if (thrown instanceof Error) {
-    return { kind: 'transport_error', error_name: thrown.name, message: thrown.message };
+  try {
+    if (thrown instanceof Error) {
+      // Typed string, but a hostile Error can carry any value there, or a throwing getter.
+      const { name, message } = thrown as { readonly name: unknown; readonly message: unknown };
+      return { kind: 'transport_error', error_name: String(name), message: String(message) };
+    }
+    return { kind: 'transport_error', error_name: 'NonErrorThrown', message: String(thrown) };
+  } catch {
+    return {
+      kind: 'transport_error',
+      error_name: UNREPRESENTABLE_THROWN_NAME,
+      message: 'the thrown value has no readable name or string form',
+    };
   }
-  return { kind: 'transport_error', error_name: 'NonErrorThrown', message: String(thrown) };
 }

@@ -7,11 +7,15 @@
 //
 // Scripts:
 // - resolveAfter(ns, respond): settles with `respond(call)` after `ns` of virtual time;
-// - rejectAfter(ns, error): rejects the promise with `error` after `ns` (a defective port);
+// - rejectAfter(ns, thrown): rejects the promise with `thrown` after `ns` (a defective port; any
+//   value, a null-prototype object or one whose `toString` throws included);
 // - hang(): never settles on its own, like a request whose response never arrives;
 // - resolveAfterAbort(ns, respond): ignores the abort and settles with `respond(call)` `ns`
 //   after it (RK-04: an abort that does not stop a late response);
-// - throwBeforeSend(error): `invoke` throws synchronously, before any promise exists.
+// - ignoreAbortForever(): ignores the abort and never settles at all (RK-04 at its worst);
+// - throwBeforeSend(error): `invoke` throws synchronously, before any promise exists;
+// - returnWithoutPromise(respond): a defective port whose `invoke` returns the settlement itself
+//   instead of a promise.
 
 import type { MonotonicClock, TimerHandle, TimerScheduler } from '../../../src/record-contract/primitives.ts';
 import type { ProviderRefundCall } from '../../../src/record-contract/records/group-a/provider_refund_call.ts';
@@ -25,10 +29,12 @@ export type ScriptedResponder = (call: ProviderRefundCall) => ProviderTransportR
 
 type InvokerScript =
   | { readonly kind: 'resolve_after'; readonly after_ns: bigint; readonly respond: ScriptedResponder }
-  | { readonly kind: 'reject_after'; readonly after_ns: bigint; readonly error: Error }
+  | { readonly kind: 'reject_after'; readonly after_ns: bigint; readonly thrown: unknown }
   | { readonly kind: 'hang' }
   | { readonly kind: 'resolve_after_abort'; readonly after_ns: bigint; readonly respond: ScriptedResponder }
-  | { readonly kind: 'throw_before_send'; readonly error: Error };
+  | { readonly kind: 'ignore_abort_forever' }
+  | { readonly kind: 'throw_before_send'; readonly error: Error }
+  | { readonly kind: 'return_without_promise'; readonly respond: ScriptedResponder };
 
 export interface RecordedInvocation {
   readonly call: ProviderRefundCall;
@@ -58,8 +64,8 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
     this.#scripts.push({ kind: 'resolve_after', after_ns: ns, respond });
   }
 
-  rejectAfter(ns: bigint, error: Error): void {
-    this.#scripts.push({ kind: 'reject_after', after_ns: ns, error });
+  rejectAfter(ns: bigint, thrown: unknown): void {
+    this.#scripts.push({ kind: 'reject_after', after_ns: ns, thrown });
   }
 
   hang(): void {
@@ -70,8 +76,16 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
     this.#scripts.push({ kind: 'resolve_after_abort', after_ns: ns, respond });
   }
 
+  ignoreAbortForever(): void {
+    this.#scripts.push({ kind: 'ignore_abort_forever' });
+  }
+
   throwBeforeSend(error: Error): void {
     this.#scripts.push({ kind: 'throw_before_send', error });
+  }
+
+  returnWithoutPromise(respond: ScriptedResponder): void {
+    this.#scripts.push({ kind: 'return_without_promise', respond });
   }
 
   /** Every invoke call in order, including calls that threw. */
@@ -95,11 +109,17 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
     if (script.kind === 'resolve_after_abort') {
       return this.#settleAfterAbort(script.after_ns, () => script.respond(call), signal);
     }
+    if (script.kind === 'ignore_abort_forever') {
+      return new Promise(() => undefined);
+    }
+    if (script.kind === 'return_without_promise') {
+      return script.respond(call) as unknown as Promise<ProviderTransportResult>;
+    }
     return this.#settleUnlessAborted(script, call, signal);
   }
 
   #settleUnlessAborted(
-    script: Exclude<InvokerScript, { readonly kind: 'throw_before_send' | 'resolve_after_abort' }>,
+    script: Extract<InvokerScript, { readonly kind: 'resolve_after' | 'reject_after' | 'hang' }>,
     call: ProviderRefundCall,
     signal: AbortSignal,
   ): Promise<ProviderTransportResult> {
@@ -118,7 +138,8 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
       pending.timer = this.#time.schedule(Number(script.after_ns) / NS_PER_MS, () => {
         signal.removeEventListener('abort', onAbort);
         if (script.kind === 'reject_after') {
-          reject(script.error);
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- rejectAfter scripts any thrown value of a defective port
+          reject(script.thrown);
           return;
         }
         resolve(script.respond(call));

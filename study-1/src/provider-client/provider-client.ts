@@ -12,7 +12,9 @@
 //     call; otherwise the transport is never invoked (AC-RUA-028);
 // C4/C5 race the transport against the 3 s deadline (`transport-race.ts`): a timer win aborts
 //     and appends `caller_timeout_recorded`, and only that durable append makes the attempt
-//     `TIMED_OUT` (BR-RUA-023, AC-RUA-044); a late settlement is recorded, never parsed (D-26);
+//     `TIMED_OUT` (BR-RUA-023, AC-RUA-044); a late settlement is recorded, never parsed (D-26),
+//     and only when it arrives within the bounded grace, so a transport that never settles
+//     cannot hold back the outcome (RK-04);
 // C6  append `attempt_outcome_recorded`. Request state belongs to the variant.
 
 import type { EventBody, JournalEvent } from '../event-journal/journal-event.ts';
@@ -33,8 +35,8 @@ import { buildProviderCall } from './provider-call.ts';
 import type { CallBuildFailure } from './provider-call.ts';
 import type { ProviderInvocationPort } from './provider-invocation-port.ts';
 import { parseProviderResponse } from './provider-response.ts';
-import { raceTransportAgainstDeadline } from './transport-race.ts';
-import type { RaceDecision } from './transport-race.ts';
+import { lateSettlementWithin, raceTransportAgainstDeadline } from './transport-race.ts';
+import type { LateSettlement, RaceDecision } from './transport-race.ts';
 import { PROVIDER_CLIENT_TIMING } from './transport-options.ts';
 
 const NS_PER_MS = 1_000_000n;
@@ -44,7 +46,11 @@ export interface ProviderClientDeps {
   readonly attempts: AttemptStatePort;
   /** The caller journal writer of this source instance. */
   readonly journal: JournalWriter;
-  /** The scope the journal writer was built with; the call carries its execution identity. */
+  /**
+   * The scope the journal writer was built with; the call carries its execution identity. The
+   * writer keeps its scope private, so the composer must pass the same value (one source of
+   * truth would need a WP-05 API addition).
+   */
   readonly scope: JournalScope;
   readonly monotonic: MonotonicClock;
   readonly wall: WallClock;
@@ -78,7 +84,9 @@ interface ResolvedAttempt {
 }
 
 /**
- * Performs provider attempts under the BR-RUA-028 contract.
+ * Performs provider attempts under the BR-RUA-028 contract. One attempt at a time: the journal
+ * writer serializes its appends, so a second `performAttempt` on the same client before the
+ * first one settled throws from `JournalWriter.prepare` ("expected an idle writer").
  *
  * @example
  * const client = new ProviderClient({ invoker, attempts, journal, scope, monotonic, wall, timer, ids });
@@ -231,10 +239,9 @@ export class ProviderClient {
       },
       [dispatchStarted.event_id],
     );
-    const late = await decision.late_settlement;
-    await journal.append('transport_settled_after_timeout', { ...correlation, ...late }, [dispatchStarted.event_id]);
     const timing = { dispatch_to_settlement_ns: decision.elapsed_ns };
     if (timeout.kind === 'appended') {
+      await this.#recordLateSettlement(correlation, dispatchStarted, decision.late_settlement);
       return { resolution: { ...timing, outcome: 'TIMED_OUT', dispatch_state: 'DISPATCHED' }, cause: timeout.event };
     }
     const failure = {
@@ -246,6 +253,25 @@ export class ProviderClient {
       resolution: { ...timing, outcome: 'FAILED', dispatch_state: 'DISPATCHED', failure },
       cause: dispatchStarted,
     };
+  }
+
+  // D-26: the settlement after a timer win is recorded by kind only, if it arrives within the
+  // grace. A stopped journal (failed timeout append) could record nothing, so it is not awaited.
+  async #recordLateSettlement(
+    correlation: AttemptCorrelation,
+    dispatchStarted: JournalEvent,
+    lateSettlement: Promise<LateSettlement>,
+  ): Promise<void> {
+    const late = await lateSettlementWithin(
+      this.#deps,
+      lateSettlement,
+      PROVIDER_CLIENT_TIMING.late_settlement_grace_ns,
+    );
+    if (late !== undefined) {
+      await this.#deps.journal.append('transport_settled_after_timeout', { ...correlation, ...late }, [
+        dispatchStarted.event_id,
+      ]);
+    }
   }
 }
 
