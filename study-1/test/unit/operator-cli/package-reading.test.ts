@@ -12,7 +12,7 @@ import {
   readVerificationInput,
   writeVerification,
 } from '../../../src/operator-cli/package-reading.ts';
-import { operandOf } from '../../../src/operator-cli/arg-parsing.ts';
+import { flagValue, operandOf } from '../../../src/operator-cli/arg-parsing.ts';
 import type { UtcMillis } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { MemoryPackageFileSystem } from '../../support/evidence-package/memory-package-file-system.ts';
@@ -110,10 +110,16 @@ describe('writeVerification', () => {
   });
 });
 
-describe('operandOf', () => {
+describe('operandOf and flagValue', () => {
   it('gives the named operand, and nothing for a name the grammar lacks', () => {
     const args = { command: 'x', positionals: new Map([['package', 'p']]), flags: new Map(), evidence_root: 'e' };
     assert.equal(operandOf(args, 'package'), 'p');
     assert.equal(operandOf(args, 'trial-dir'), '');
+  });
+
+  it('gives a flag value, and the empty string for a flag that was not given', () => {
+    const flags = new Map([['env', 'environment-input.json']]);
+    assert.equal(flagValue(flags, 'env'), 'environment-input.json');
+    assert.equal(flagValue(flags, 'payment'), '');
   });
 });
