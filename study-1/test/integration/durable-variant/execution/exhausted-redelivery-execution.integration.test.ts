@@ -18,6 +18,7 @@ import {
   pollDurable,
   publishDurable,
   setUpDurableRunner,
+  stepFailuresOf,
   stepsOf,
   tearDownDurableRunner,
   waitOutDurableVisibility,
@@ -59,6 +60,11 @@ describe('the Durable handler on an exhausted execution', () => {
       assert.equal(execution.getStatus(), 'FAILED');
       assert.equal(execution.getInvocations().length, 2);
       assert.deepEqual(stepsOf(execution), [[DURABLE_REFUND_STEP_NAME, 2]]);
+      // One retry after the fixed delay, then the strategy stops: no next attempt is scheduled.
+      assert.deepEqual(stepFailuresOf(execution), [
+        [DURABLE_REFUND_STEP_NAME, 'StepAttemptFailed', 1],
+        [DURABLE_REFUND_STEP_NAME, 'StepAttemptFailed', undefined],
+      ]);
     }
     assert.equal(harness.invoker.invocations().length, 4);
     assert.deepEqual(

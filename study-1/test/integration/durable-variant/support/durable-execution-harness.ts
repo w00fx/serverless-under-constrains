@@ -144,3 +144,29 @@ export function stepsOf(
     .filter((operation) => operation.getType() === 'STEP')
     .map((operation) => [operation.getName(), operation.getStepDetails()?.attempt] as const);
 }
+
+/**
+ * The step failures the SDK checkpointed in an execution's history, in order: step name, the
+ * thrown error's type, and the delay before the next attempt (absent when the strategy stopped).
+ * This is what the retry strategy decided, read from the SDK rather than from the strategy.
+ * (`RetryDetails.CurrentAttempt` is not read: the local emulator reports 1 on every attempt,
+ * durable-functions research §7.)
+ *
+ * @example
+ * stepFailuresOf(execution); // [['refund-attempt', 'StepAttemptFailed', 1]]
+ */
+export function stepFailuresOf(
+  result: TestResult<DurableStepResult>,
+): readonly (readonly [string | undefined, string | undefined, number | undefined])[] {
+  return result
+    .getHistoryEvents()
+    .filter((event) => event.EventType === 'StepFailed')
+    .map(
+      (event) =>
+        [
+          event.Name,
+          event.StepFailedDetails?.Error?.Payload?.ErrorType,
+          event.StepFailedDetails?.RetryDetails?.NextAttemptDelaySeconds,
+        ] as const,
+    );
+}
