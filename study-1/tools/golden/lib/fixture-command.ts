@@ -4,7 +4,13 @@
 
 import type { CaseModuleLoader } from './case-module-loader.ts';
 import type { FixtureFileSystem } from './fixture-file-system.ts';
-import { compareFixture, generateFixtures, orphanFixtureDirectories, writeFixture } from './fixture-generation.ts';
+import {
+  compareFixture,
+  generateFixtures,
+  handAuthoredFixtureDirectories,
+  orphanFixtureDirectories,
+  writeFixture,
+} from './fixture-generation.ts';
 
 /** The parsed command line. */
 export interface FixtureCommandOptions {
@@ -100,6 +106,11 @@ export async function runFixtureCommand(
   errors.push(
     ...orphanFixtureDirectories(ports.files, report.fixtures).map(
       (directory) => `${directory}: no case owns this fixture directory; expected a sibling cases/<case-id>.case.ts`,
+    ),
+  );
+  lines.push(
+    ...handAuthoredFixtureDirectories(ports.files).map(
+      (directory) => `${directory}: hand-authored fixture, neither generated nor checked (no cases/ beside it)`,
     ),
   );
   const mode = options.value.check ? 'check' : 'write';
