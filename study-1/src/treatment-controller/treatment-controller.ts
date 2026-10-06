@@ -12,6 +12,7 @@
 import type { JournalWriter } from '../event-journal/journal-writer.ts';
 import type { JournalScope } from '../event-journal/journal-scope.ts';
 import { isSha256Hex } from '../record-contract/digests.ts';
+import { boundedJsonText, describeJson } from '../record-contract/json-value.ts';
 import type { ExecutionIdentity, JsonValue, UuidSource } from '../record-contract/primitives.ts';
 import type { ControllerConfigView, ControllerTreatment } from './controller-control-items.ts';
 import { ControllerFault } from './controller-fault.ts';
@@ -25,7 +26,6 @@ import type { SignalContext, SignalDecision } from './signal-decision.ts';
 import { decideSignal } from './signal-decision.ts';
 import type { StreamInsertRecord } from './stream-record.ts';
 import { isConsumableInsert } from './stream-record.ts';
-import { describeUntrustedValue } from './untrusted-value.ts';
 
 export interface TreatmentControllerDeps {
   readonly deployment: ExecutionIdentity;
@@ -67,7 +67,7 @@ export class TreatmentController {
     if (!isConsumableInsert(record)) {
       return ignored(
         null,
-        `${record.event_name} of ${describeUntrustedValue(record.new_image['record_type'])}; expected an INSERT of caller_timeout_recorded`,
+        `${record.event_name} of ${describeJson(record.new_image['record_type'])}; expected an INSERT of caller_timeout_recorded`,
       );
     }
     const partition = resolveControllerPartition(this.#deps.deployment, record.new_image.pk);
@@ -150,7 +150,7 @@ export class TreatmentController {
       throw new ControllerFault(
         'SIGNAL_FAILED',
         partitionKey,
-        `signal transaction ${JSON.stringify(outcome)}; expected applied or a failed treatment condition`,
+        `signal transaction ${boundedJsonText(outcome)}; expected applied or a failed treatment condition`,
       );
     }
     // design §9.11: a failed signal condition re-reads ALL_OLD and re-decides once.

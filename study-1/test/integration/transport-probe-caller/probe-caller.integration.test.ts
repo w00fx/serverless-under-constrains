@@ -21,7 +21,7 @@ import {
 import { ScriptedProviderInvoker } from '../../support/provider-client/scripted-provider-invoker.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { PROBE, PROBE_PK, RUN, workloadRequest } from '../../unit/transport-probe-caller/support/probe-fixtures.ts';
-import { nestedArrays } from '../../support/transport-rehearsal/deep-values.ts';
+import { DESCRIBED_DEEP_ARRAYS, HOSTILE_DEPTH, nestedArrays } from '../../support/transport-rehearsal/deep-values.ts';
 
 interface ProbeHarness {
   readonly store: InMemoryItemStore;
@@ -126,13 +126,12 @@ describe('ProbeCaller', () => {
     assert.equal(harness.invoker.invocations().length, 0);
   });
 
-  it('refuses a payload nested 20,000 levels deep as REQUEST_INVALID, not a RangeError (review r1)', async () => {
+  it('refuses a payload nested 100,000 levels deep as REQUEST_INVALID, not a RangeError (review r1, A-05)', async () => {
     const harness = probeHarness();
-    await assert.rejects(run(harness, workloadRequest({ transport_probe_id: nestedArrays(20_000) })), {
+    await assert.rejects(run(harness, workloadRequest({ transport_probe_id: nestedArrays(HOSTILE_DEPTH) })), {
       name: 'ProbeCallerFault',
       code: 'REQUEST_INVALID',
-      message:
-        'REQUEST_INVALID: probe workload request invalid: transport_probe_id array of length 1; expected a lowercase RFC 4122 version-4 UUID',
+      message: `REQUEST_INVALID: probe workload request invalid: transport_probe_id ${DESCRIBED_DEEP_ARRAYS}; expected a lowercase RFC 4122 version-4 UUID`,
     });
     assert.deepEqual(harness.store.itemsIn('caller_journal'), []);
     assert.equal(harness.invoker.invocations().length, 0);

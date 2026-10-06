@@ -26,7 +26,13 @@ import {
   TRIAL_MANIFEST_SHA,
   callerTimeoutImage,
 } from './support/controller-fixtures.ts';
-import { nestedArrays, nestedObjects } from '../../support/transport-rehearsal/deep-values.ts';
+import {
+  DESCRIBED_DEEP_ARRAYS,
+  DESCRIBED_DEEP_OBJECTS,
+  HOSTILE_DEPTH,
+  nestedArrays,
+  nestedObjects,
+} from '../../support/transport-rehearsal/deep-values.ts';
 
 const TRIAL_CONFIG: ControllerConfigView = {
   execution_manifest_sha256: MANIFEST_SHA,
@@ -206,7 +212,7 @@ describe('readCallerTimeout record shape (design §9.11 "invalid event"; BR-RUA-
     ['occurred_at', '2026-02-30T00:00:00.000Z', 'string "2026-02-30T00:00:00.000Z"', UTC],
     ['source_instance_id', 'x', 'string "x"', UUID],
     ['source_sequence', 0, 'number 0', 'a safe integer >= 1'],
-    ['causation_event_ids', [], 'array of length 0', 'a non-empty ascending list of distinct lowercase UUIDv4s'],
+    ['causation_event_ids', [], 'array []', 'a non-empty ascending list of distinct lowercase UUIDv4s'],
     ['provider_request_id', 1, 'number 1', UUID],
     ['refund_request_id', ' r', 'string " r"', 'a non-empty string without edge whitespace'],
     ['elapsed_ns', '03000000000', 'string "03000000000"', 'a decimal string of nanoseconds without leading zeros'],
@@ -245,7 +251,7 @@ describe('readCallerTimeout record shape (design §9.11 "invalid event"; BR-RUA-
     ] as readonly JsonValue[]) {
       assert.deepEqual(
         readCallerTimeout(callerTimeoutImage('probe', { causation_event_ids: list }), expected),
-        rejected(`causation_event_ids array of length 2; expected ${shape}`),
+        rejected(`causation_event_ids array ${JSON.stringify(list)}; expected ${shape}`),
       );
     }
     const ordered = callerTimeoutImage('probe', { causation_event_ids: [low ?? '', high ?? ''] });
@@ -270,14 +276,71 @@ describe('readCallerTimeout record shape (design §9.11 "invalid event"; BR-RUA-
     assert.deepEqual(readCallerTimeout(judgedLater, expected), VALID);
   });
 
-  it('describes deeply nested values without throwing (review r1)', () => {
+  it('describes values nested 100,000 levels deep without throwing (review r1, A-05)', () => {
     assert.deepEqual(
-      readCallerTimeout(nestedArrays(20_000), expected),
-      rejected('stream image is array of length 1; expected a JSON object', {}),
+      readCallerTimeout(nestedArrays(HOSTILE_DEPTH), expected),
+      rejected(`stream image is ${DESCRIBED_DEEP_ARRAYS}; expected a JSON object`, {}),
     );
     assert.deepEqual(
-      readCallerTimeout(callerTimeoutImage('probe', { source: nestedObjects(20_000) }), expected),
-      rejected('source object with 1 member(s); expected probe_caller'),
+      readCallerTimeout(callerTimeoutImage('probe', { source: nestedObjects(HOSTILE_DEPTH) }), expected),
+      rejected(`source ${DESCRIBED_DEEP_OBJECTS}; expected probe_caller`),
     );
+    assert.deepEqual(
+      readCallerTimeout(callerTimeoutImage('probe', { elapsed_ns: nestedArrays(HOSTILE_DEPTH) }), expected),
+      rejected(`elapsed_ns ${DESCRIBED_DEEP_ARRAYS}; expected a decimal string of nanoseconds without leading zeros`),
+    );
+  });
+
+  it('bounds the detail of a huge undeclared property name or field value (A-05)', () => {
+    const name = 'x'.repeat(1_000_000);
+    const undeclared = readCallerTimeout(callerTimeoutImage('probe', { [name]: 1 }), expected);
+    assert.equal(undeclared.ok, false);
+    assert.ok(undeclared.error.detail.length < 400, String(undeclared.error.detail.length));
+    assert.match(
+      undeclared.error.detail,
+      /^property "x+…\[truncated\] is not declared by caller_timeout_recorded; expected only/,
+    );
+    const hugeSource = readCallerTimeout(callerTimeoutImage('probe', { source: name }), expected);
+    assert.equal(hugeSource.ok, false);
+    assert.ok(hugeSource.error.detail.length < 400, String(hugeSource.error.detail.length));
+  });
+
+  it('refuses non-finite numbers, as a JSON parse of 1e400 yields them (A-05)', () => {
+    for (const nonFinite of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      assert.deepEqual(
+        readCallerTimeout(callerTimeoutImage('probe', { source_sequence: nonFinite }), expected),
+        rejected('source_sequence number null; expected a safe integer >= 1'),
+      );
+      assert.deepEqual(
+        readCallerTimeout(callerTimeoutImage('probe', { schema_version: nonFinite }), expected),
+        rejected(
+          'record_type string "caller_timeout_recorded" schema_version number null; expected caller_timeout_recorded version 1',
+        ),
+      );
+    }
+  });
+
+  it('refuses inherited member names as undeclared properties or wrong values, and never reads them (A-05)', () => {
+    const own = JSON.parse(
+      `{"__proto__":{"source":"probe_caller"},${JSON.stringify(callerTimeoutImage('probe')).slice(1)}`,
+    ) as JsonObject;
+    assert.deepEqual(
+      readCallerTimeout(own, expected),
+      rejected('property "__proto__" is not declared by caller_timeout_recorded; expected only its schema properties'),
+    );
+    for (const name of ['constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf']) {
+      assert.deepEqual(
+        readCallerTimeout(callerTimeoutImage('probe', { [name]: 1 }), expected),
+        rejected(`property "${name}" is not declared by caller_timeout_recorded; expected only its schema properties`),
+        name,
+      );
+    }
+    assert.deepEqual(
+      readCallerTimeout(callerTimeoutImage('probe', { source: 'constructor' }), expected),
+      rejected('source string "constructor"; expected probe_caller'),
+    );
+    const { source: _source, ...withoutSource } = callerTimeoutImage('probe');
+    const inherited = Object.assign(Object.create({ source: 'probe_caller' }) as JsonObject, withoutSource);
+    assert.deepEqual(readCallerTimeout(inherited, expected), rejected('source absent; expected probe_caller'));
   });
 });

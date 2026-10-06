@@ -4,7 +4,8 @@
 // request with up to three properties removed or replaced by boundary values) it accepts exactly
 // what `probe_workload_request` accepts and that names this deployment's probe. It is total over
 // arbitrary JSON, including payloads nested far deeper than the call stack (review r1: the guard
-// threw RangeError at 6,174 levels), and every refusal names the offending property.
+// threw RangeError at 6,174 levels) and the non-finite numbers the runtime parses from literals
+// such as `1e400` (Owner amendment A-05), and every refusal names the offending property.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -64,12 +65,15 @@ const boundaryValue: fc.Arbitrary<JsonValue> = fc.oneof(
     MANIFEST_SHA,
     MANIFEST_SHA.toUpperCase(),
     MANIFEST_SHA.slice(1),
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.NaN,
   ),
   fc.uuid({ version: 4 }),
   fc.stringMatching(/^[0-9a-f]{64}$/u),
   fc.string({ maxLength: 6 }),
   fc.integer(),
-  fc.double({ noNaN: true, noDefaultInfinity: true }),
+  fc.double(),
 );
 
 type Mutation = readonly [string, JsonValue | undefined];

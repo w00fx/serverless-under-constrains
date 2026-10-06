@@ -50,13 +50,13 @@ describe('consumeStreamEvent', () => {
     ]);
   });
 
-  it('logs and skips a record nested 20,000 levels deep instead of throwing (review r1)', async () => {
+  it('logs and skips a record nested 100,000 levels deep instead of throwing (review r1, A-05)', async () => {
     const handler = new ScriptedStreamRecordHandler();
     const logs = new ControllerLogRecorder();
     handler.returnNext({ outcome: 'signal', partition_key: PROBE_PK, detail: 'signalled' });
     const deep = {
       eventName: 'INSERT',
-      dynamodb: { SequenceNumber: '8', NewImage: { pk: { S: 'p' }, sk: { S: 's' }, x: nestedMapAttribute(20_000) } },
+      dynamodb: { SequenceNumber: '8', NewImage: { pk: { S: 'p' }, sk: { S: 's' }, x: nestedMapAttribute(100_000) } },
     };
     await consumeStreamEvent({ Records: [deep, record('9')] }, handler, logs.sink);
     assert.deepEqual(
@@ -67,7 +67,7 @@ describe('consumeStreamEvent', () => {
       level: 'warn',
       event: 'stream_record_unreadable',
       code: 'STREAM_RECORD_MALFORMED',
-      detail: 'dynamodb.NewImage of 8: nests deeper than 130 containers; expected at most 64 nested attribute levels',
+      detail: `dynamodb.NewImage of 8: $.x${'.a'.repeat(32)} nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`,
     });
     assert.equal(logs.lines().length, 2);
   });
@@ -104,6 +104,22 @@ describe('consumeStreamEvent', () => {
         detail: 'stream event Records is object; expected an array of stream records',
       },
     ]);
+  });
+
+  it('reads Records only as an own member of the event (A-05)', async () => {
+    const handler = new ScriptedStreamRecordHandler();
+    const logs = new ControllerLogRecorder();
+    await consumeStreamEvent(Object.create({ Records: [record('1')] }) as unknown, handler, logs.sink);
+    const parsed: unknown = JSON.parse('{"__proto__":{"Records":[]}}');
+    await consumeStreamEvent(parsed, handler, logs.sink);
+    assert.equal(handler.handled().length, 0);
+    assert.deepEqual(
+      logs.lines().map((line) => (line.event === 'stream_event_unreadable' ? line.detail : line.event)),
+      [
+        'stream event Records is undefined; expected an array of stream records',
+        'stream event Records is undefined; expected an array of stream records',
+      ],
+    );
   });
 
   it('logs a ControllerFault as its structured line and rethrows it', async () => {

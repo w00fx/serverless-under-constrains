@@ -18,7 +18,7 @@ import { isSha256Hex } from '../record-contract/digests.ts';
 import { executionIdentityFields, isCanonicalCausation } from '../record-contract/envelope.ts';
 import type { EventSource } from '../record-contract/envelope.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
-import { isJsonObject } from '../record-contract/json-value.ts';
+import { boundedJsonText, describeJson, isJsonObject } from '../record-contract/json-value.ts';
 import type {
   ExecutionIdentity,
   JsonObject,
@@ -29,7 +29,7 @@ import type {
 } from '../record-contract/primitives.ts';
 import { isUtcMillis } from '../record-contract/timestamps.ts';
 import type { ConfiguredTrial, ControllerConfigView } from './controller-control-items.ts';
-import { describeUntrustedValue } from './untrusted-value.ts';
+import { ownMembers } from './own-members.ts';
 
 /** The identities of a valid caller timeout. */
 export interface CallerTimeoutView {
@@ -138,8 +138,16 @@ export function readCallerTimeout(
   expected: CallerTimeoutExpectation,
 ): Result<CallerTimeoutView, InvalidCallerTimeout> {
   if (!isJsonObject(image)) {
-    return invalid(`stream image is ${describeUntrustedValue(image)}; expected a JSON object`, undefined);
+    return invalid(`stream image is ${describeJson(image)}; expected a JSON object`, undefined);
   }
+  return readOwnCallerTimeout(ownMembers(image), expected);
+}
+
+// Every read below sees only the image's own members (Owner amendment A-05).
+function readOwnCallerTimeout(
+  image: JsonObject,
+  expected: CallerTimeoutExpectation,
+): Result<CallerTimeoutView, InvalidCallerTimeout> {
   const problem = firstProblem(image, expected);
   if (problem !== undefined) {
     return invalid(problem, image);
@@ -148,7 +156,7 @@ export function readCallerTimeout(
   const attemptId = image['attempt_id'];
   if (!isUuid4(eventId) || !isUuid4(attemptId)) {
     return invalid(
-      `event_id ${describeUntrustedValue(eventId)} and attempt_id ${describeUntrustedValue(attemptId)}; expected lowercase RFC 4122 version-4 UUIDs`,
+      `event_id ${describeJson(eventId)} and attempt_id ${describeJson(attemptId)}; expected lowercase RFC 4122 version-4 UUIDs`,
       image,
     );
   }
@@ -161,7 +169,7 @@ export function readCallerTimeout(
 
 function firstProblem(image: JsonObject, expected: CallerTimeoutExpectation): string | undefined {
   if (image['record_type'] !== RECORD_TYPE || image['schema_version'] !== 1) {
-    return `record_type ${describeUntrustedValue(image['record_type'])} schema_version ${describeUntrustedValue(image['schema_version'])}; expected ${RECORD_TYPE} version 1`;
+    return `record_type ${describeJson(image['record_type'])} schema_version ${describeJson(image['schema_version'])}; expected ${RECORD_TYPE} version 1`;
   }
   return (
     executionProblem(image, expected.deployment) ??
@@ -178,7 +186,7 @@ function executionProblem(image: JsonObject, deployment: ExecutionIdentity): str
     return undefined;
   }
   const declared = IDENTITY_FIELDS.filter((name) => Object.hasOwn(image, name)).map(
-    (name) => `${name}=${describeUntrustedValue(image[name])}`,
+    (name) => `${name}=${describeJson(image[name])}`,
   );
   return `execution identity [${declared.join(', ')}]; expected only ${field}=${id}`;
 }
@@ -188,7 +196,7 @@ function manifestProblem(image: JsonObject, expected: Sha256Hex | undefined): st
   if (expected === undefined ? isSha256Hex(digest) : digest === expected) {
     return undefined;
   }
-  return `execution_manifest_sha256 ${describeUntrustedValue(digest)}; expected ${expected ?? '64 lowercase hex digits'}`;
+  return `execution_manifest_sha256 ${describeJson(digest)}; expected ${expected ?? '64 lowercase hex digits'}`;
 }
 
 function trialProblem(image: JsonObject, trial: ConfiguredTrial | undefined): string | undefined {
@@ -197,23 +205,21 @@ function trialProblem(image: JsonObject, trial: ConfiguredTrial | undefined): st
   if (trial === undefined) {
     return trialId === undefined && trialDigest === undefined
       ? undefined
-      : `trial_id ${describeUntrustedValue(trialId)} trial_manifest_sha256 ${describeUntrustedValue(trialDigest)}; expected no trial identity`;
+      : `trial_id ${describeJson(trialId)} trial_manifest_sha256 ${describeJson(trialDigest)}; expected no trial identity`;
   }
   if (trialId === trial.trial_id && trialDigest === trial.trial_manifest_sha256) {
     return undefined;
   }
-  return `trial_id ${describeUntrustedValue(trialId)} trial_manifest_sha256 ${describeUntrustedValue(trialDigest)}; expected trial ${trial.trial_id} with manifest ${trial.trial_manifest_sha256}`;
+  return `trial_id ${describeJson(trialId)} trial_manifest_sha256 ${describeJson(trialDigest)}; expected trial ${trial.trial_id} with manifest ${trial.trial_manifest_sha256}`;
 }
 
 function recordShapeProblem(image: JsonObject): string | undefined {
   const undeclared = Object.keys(image).find((name) => !DECLARED_PROPERTIES.has(name));
   if (undeclared !== undefined) {
-    return `property ${JSON.stringify(undeclared)} is not declared by ${RECORD_TYPE}; expected only its schema properties`;
+    return `property ${boundedJsonText(undeclared)} is not declared by ${RECORD_TYPE}; expected only its schema properties`;
   }
   const failed = RECORD_FIELD_CHECKS.find(([field, holds]) => !holds(image[field]));
-  return failed === undefined
-    ? undefined
-    : `${failed[0]} ${describeUntrustedValue(image[failed[0]])}; expected ${failed[2]}`;
+  return failed === undefined ? undefined : `${failed[0]} ${describeJson(image[failed[0]])}; expected ${failed[2]}`;
 }
 
 function isSourceSequence(value: JsonValue | undefined): boolean {
@@ -229,9 +235,7 @@ function isNonEmptyTrimmed(value: JsonValue | undefined): boolean {
 }
 
 function sourceProblem(image: JsonObject, source: EventSource): string | undefined {
-  return image['source'] === source
-    ? undefined
-    : `source ${describeUntrustedValue(image['source'])}; expected ${source}`;
+  return image['source'] === source ? undefined : `source ${describeJson(image['source'])}; expected ${source}`;
 }
 
 function invalid(detail: string, image: JsonObject | undefined): Result<CallerTimeoutView, InvalidCallerTimeout> {

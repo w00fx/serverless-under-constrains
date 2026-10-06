@@ -1,6 +1,7 @@
 // Property-based tests of the controller's control-item decoders (testing rule 6: decoders of
 // state written by another source; WP-08 review r1). The decoders are total over any attribute
-// values, including values nested deeper than the call stack, and on near-valid items they accept
+// values, including values nested deeper than the call stack, non-finite numbers and inherited
+// member names as fields or values (Owner amendment A-05), and on near-valid items they accept
 // exactly what an independent, field-by-field restatement of design §9.3 / §9.11 accepts, with
 // the decoded view equal to the item's fields.
 
@@ -82,6 +83,12 @@ const attributeValue: fc.Arbitrary<JsonValue> = fc.oneof(
       1.5,
       Number.MAX_SAFE_INTEGER,
       Number.MAX_SAFE_INTEGER + 1,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NaN,
+      'constructor',
+      'toString',
+      '__proto__',
       '1',
       '',
       null,
@@ -113,14 +120,17 @@ const mutations = (fields: readonly string[]): fc.Arbitrary<readonly Mutation[]>
     maxLength: 2,
   });
 
+// Inherited member names as own fields are data the decoders ignore (A-05).
+const INHERITED_NAMES = ['constructor', 'toString', 'valueOf'];
 const CONFIG_FIELDS = [
   'execution_manifest_sha256',
   'registered_caller_id',
   'scenario',
   'trial_id',
   'trial_manifest_sha256',
+  ...INHERITED_NAMES,
 ];
-const TREATMENT_FIELDS = ['state', 'version', ...COMMIT_FIELDS, 'signal_caller_event_id'];
+const TREATMENT_FIELDS = ['state', 'version', ...COMMIT_FIELDS, 'signal_caller_event_id', ...INHERITED_NAMES];
 
 const configCase = fc.oneof(
   fc
