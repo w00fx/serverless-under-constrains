@@ -2,7 +2,12 @@
 // It shares request validation, condition vocabulary and cursors with the DynamoDB adapter,
 // and reproduces the documented service behavior the adapter relies on:
 // - conditional writes return the old item (`ReturnValuesOnConditionCheckFailure: ALL_OLD`);
-// - `TransactWriteItems` is all-or-nothing and reports the first failing action;
+// - `TransactWriteItems` is all-or-nothing. It evaluates every action and reports the first
+//   failed condition before any other cancellation reason, the same precedence that
+//   `classifyDynamoError` applies to the service's CancellationReasons. Which reasons AWS
+//   reports for such a mix is not documented; sharing the rule keeps fake and adapter agreeing;
+// - an update whose resulting item exceeds 400 KB is refused like an ADD on a non-number
+//   (`attribute-value-limits.ts`); the request validation already refuses oversized puts;
 // - `ClientRequestToken` replays with identical actions succeed without re-applying for 10
 //   minutes after completion, and replays with changed actions fail with
 //   `IdempotentParameterMismatchException` (F-1). F-1 leaves a replay after a cancelled
@@ -14,6 +19,9 @@
 //   (https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html).
 // Fault injection: scripted definitive failures, ambiguous outcomes (applied or not, then a
 // lost response), read failures and the page size.
+// Known limitation: an ADD whose sum leaves the safe-integer range is stored as the rounded
+// double. DynamoDB would store the exact decimal and the adapter's next read would report
+// UndecodableItem. The study's counters (`version`, +1 per transition) cannot get there.
 
 import { canonicalJson, structurallyEqual } from '../../../src/record-contract/canonical-json.ts';
 import type { JsonValue, Result, WallClock } from '../../../src/record-contract/primitives.ts';
@@ -28,6 +36,7 @@ import type {
   WriteAction,
   WriteOutcome,
 } from '../../../src/durable-store/item-store-port.ts';
+import { itemSizeViolation } from '../../../src/durable-store/attribute-value-limits.ts';
 import { decodePageCursor, encodePageCursor } from '../../../src/durable-store/page-cursor.ts';
 import {
   keyViolations,
@@ -86,6 +95,15 @@ interface Commit {
   readonly previous: StoredItem | undefined;
 }
 
+/**
+ * The offline DurableItemStore: DynamoDB item semantics in memory, on an injected clock, with
+ * scripted faults and a change feed for `StreamFeed`.
+ *
+ * @example
+ * const store = new InMemoryItemStore({ clock: new VirtualTimeScheduler({ wallEpochMs: 0 }) });
+ * store.scriptWriteFault({ kind: 'ambiguous', code: 'TimeoutError', applied: true }, { table: 'ledger' });
+ * await store.transact([ledgerPut, journalPut], token); // { kind: 'ambiguous', code: 'TimeoutError' }, yet applied
+ */
 export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
   readonly #clock: WallClock;
   readonly #mutationLog: RecordingMutationLog | undefined;
@@ -246,10 +264,12 @@ export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
     return outcome;
   }
 
-  // `typeErrorCode` is what DynamoDB reports for an ADD on a non-number: a single UpdateItem
-  // fails with ValidationException, a transaction is cancelled with reason ValidationError.
+  // `typeErrorCode` is what DynamoDB reports for an ADD on a non-number or an update past the
+  // item size limit: a single UpdateItem fails with ValidationException, a transaction is
+  // cancelled with reason ValidationError.
   #execute(actions: readonly WriteAction[], typeErrorCode: string): WriteOutcome {
     const commits: Commit[] = [];
+    let refused = false;
     for (const [index, action] of actions.entries()) {
       const key = action.kind === 'put' ? action.item : action.key;
       const previous = this.peek(action.table, key);
@@ -259,12 +279,13 @@ export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
           : { kind: 'condition_failed', failed_action_index: index, existing: previous };
       }
       const next = nextImage(action, previous);
-      if (!next.ok) {
-        return { kind: 'definitive_failure', code: typeErrorCode };
-      }
-      if (next.value !== undefined) {
+      refused ||= !next.ok;
+      if (next.ok && next.value !== undefined) {
         commits.push({ table: action.table, item: next.value, previous });
       }
+    }
+    if (refused) {
+      return { kind: 'definitive_failure', code: typeErrorCode };
     }
     commits.forEach((commit) => {
       this.#commit(commit);
@@ -328,8 +349,11 @@ function nextImage(action: WriteAction, previous: StoredItem | undefined): Resul
   switch (action.kind) {
     case 'put':
       return { ok: true, value: structuredClone(action.item) };
-    case 'update':
-      return applyUpdate(previous, action);
+    case 'update': {
+      const updated = applyUpdate(previous, action);
+      const oversized = updated.ok ? itemSizeViolation(updated.value, 'updated item') : undefined;
+      return oversized === undefined ? updated : { ok: false, error: oversized };
+    }
     case 'condition_check':
       return { ok: true, value: undefined };
   }

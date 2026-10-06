@@ -7,33 +7,27 @@
 // Numbers travel as decimal strings; an integral number must be a safe integer so that every
 // encoded value decodes back to the same JavaScript number (BR-RUA-033: amounts are
 // safe-integer JSON numbers).
+// Decoding is total over untrusted input (stream records reach it from the Lambda event): it
+// refuses nesting past DynamoDB's 32-level limit instead of recursing until the call stack
+// overflows (WP-04 review round 1), so its recursion depth is bounded.
 
 import type { AttributeValue } from '@aws-sdk/client-dynamodb';
 
 import { isJsonObject } from '../record-contract/json-value.ts';
 import type { JsonObject, JsonValue, Result } from '../record-contract/primitives.ts';
+import {
+  MAX_NESTING_DEPTH,
+  nestingViolation,
+  STORABLE_NUMBER_SHAPE,
+  unencodableNumberReason,
+} from './attribute-value-limits.ts';
 import type { StoredItem } from './item-store-port.ts';
+
+export { unencodableNumberReason } from './attribute-value-limits.ts';
 
 export type AttributeMap = Record<string, AttributeValue>;
 
 const DYNAMODB_NUMBER_PATTERN = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
-
-/**
- * Tells why a number cannot be stored exactly, or `undefined` when it can.
- *
- * @example
- * unencodableNumberReason(Number.NaN); // 'NaN is not a finite number'
- * unencodableNumberReason(2 ** 53); // '9007199254740992 is an integer outside the safe-integer range'
- */
-export function unencodableNumberReason(value: number): string | undefined {
-  if (!Number.isFinite(value)) {
-    return `${String(value)} is not a finite number`;
-  }
-  if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
-    return `${String(value)} is an integer outside the safe-integer range`;
-  }
-  return undefined;
-}
 
 /**
  * Encodes one JSON value as a DynamoDB AttributeValue. Throws a RangeError naming the path
@@ -78,36 +72,31 @@ export function encodeAttributeMap(attributes: JsonObject, path = '$'): Attribut
 }
 
 /**
- * Decodes one AttributeValue received from DynamoDB. Total: any other shape is an error that
- * names the offending value and the expected shape.
+ * Decodes one AttributeValue received from DynamoDB. Total: any other shape, and lists or maps
+ * nested deeper than 32 levels, is an error that names the offending value and the expected
+ * shape; it never throws.
  *
  * @example
  * decodeAttributeValue({ N: '3' }); // { ok: true, value: 3 }
  * decodeAttributeValue({ SS: ['a'] }); // { ok: false, error: '... expected exactly one of S, N, BOOL, NULL, L or M' }
  */
 export function decodeAttributeValue(value: unknown, path = '$'): Result<JsonValue, string> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { ok: false, error: `${path} is ${describeUnknown(value)}; expected an AttributeValue object` };
-  }
-  const members = Object.entries(value);
-  const [member] = members;
-  if (members.length !== 1 || member === undefined) {
-    return {
-      ok: false,
-      error: `${path} has members ${JSON.stringify(Object.keys(value))}; expected exactly one of S, N, BOOL, NULL, L or M`,
-    };
-  }
-  return decodeMember(member[0], member[1], path);
+  return readSafely(path, () => decodeAtDepth(value, path, 0));
 }
 
 /**
  * Decodes a full item received from DynamoDB; it must carry string `pk` and `sk` attributes.
+ * Total like `decodeAttributeValue`; the item's own map is not a nesting level.
  *
  * @example
  * decodeStoredItem({ pk: { S: 'p' }, sk: { S: 's' } }); // { ok: true, value: { pk: 'p', sk: 's' } }
  */
 export function decodeStoredItem(value: unknown): Result<StoredItem, string> {
-  const decoded = decodeMapMember(value, '$');
+  return readSafely('$', () => decodeItem(value));
+}
+
+function decodeItem(value: unknown): Result<StoredItem, string> {
+  const decoded = decodeMapMember(value, '$', 0);
   if (!decoded.ok) {
     return decoded;
   }
@@ -121,15 +110,31 @@ export function decodeStoredItem(value: unknown): Result<StoredItem, string> {
   return { ok: true, value: { ...decoded.value, pk, sk } };
 }
 
+// `depth` counts the lists and maps that enclose `value` (attribute-value-limits.ts).
+function decodeAtDepth(value: unknown, path: string, depth: number): Result<JsonValue, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { ok: false, error: `${path} is ${describeUnknown(value)}; expected an AttributeValue object` };
+  }
+  const members = Object.entries(value);
+  const [member] = members;
+  if (members.length !== 1 || member === undefined) {
+    return {
+      ok: false,
+      error: `${path} has members ${JSON.stringify(Object.keys(value))}; expected exactly one of S, N, BOOL, NULL, L or M`,
+    };
+  }
+  return decodeMember(member[0], member[1], path, depth);
+}
+
 function encodeNumber(value: number, path: string): string {
   const reason = unencodableNumberReason(value);
   if (reason !== undefined) {
-    throw new RangeError(`number at ${path}: ${reason}; expected a finite number, safe when integral`);
+    throw new RangeError(`number at ${path}: ${reason}; expected ${STORABLE_NUMBER_SHAPE}`);
   }
   return String(value);
 }
 
-function decodeMember(member: string, content: unknown, path: string): Result<JsonValue, string> {
+function decodeMember(member: string, content: unknown, path: string, depth: number): Result<JsonValue, string> {
   switch (member) {
     case 'S':
       return typeof content === 'string'
@@ -144,9 +149,9 @@ function decodeMember(member: string, content: unknown, path: string): Result<Js
     case 'NULL':
       return content === true ? { ok: true, value: null } : memberError(path, member, content, 'true');
     case 'L':
-      return decodeList(content, path);
+      return depth < MAX_NESTING_DEPTH ? decodeList(content, path, depth + 1) : nestingError(path);
     case 'M':
-      return decodeMapMember(content, path);
+      return depth < MAX_NESTING_DEPTH ? decodeMapMember(content, path, depth + 1) : nestingError(path);
     default:
       return {
         ok: false,
@@ -163,18 +168,19 @@ function decodeNumber(content: unknown, path: string): Result<JsonValue, string>
   // '12345678901234567890.5') could not be written back unchanged, so it is refused.
   const value = Number(content);
   if (unencodableNumberReason(value) !== undefined) {
-    return memberError(path, 'N', content, 'a finite number, safe when integral');
+    return memberError(path, 'N', content, STORABLE_NUMBER_SHAPE);
   }
   return { ok: true, value };
 }
 
-function decodeList(content: unknown, path: string): Result<JsonValue, string> {
+// `memberDepth` is the depth of the elements (one more than the list's own depth).
+function decodeList(content: unknown, path: string, memberDepth: number): Result<JsonValue, string> {
   if (!Array.isArray(content)) {
     return memberError(path, 'L', content, 'an array of AttributeValues');
   }
   const values: JsonValue[] = [];
   for (const [index, element] of (content as readonly unknown[]).entries()) {
-    const decoded = decodeAttributeValue(element, `${path}[${String(index)}]`);
+    const decoded = decodeAtDepth(element, `${path}[${String(index)}]`, memberDepth);
     if (!decoded.ok) {
       return decoded;
     }
@@ -183,19 +189,36 @@ function decodeList(content: unknown, path: string): Result<JsonValue, string> {
   return { ok: true, value: values };
 }
 
-function decodeMapMember(content: unknown, path: string): Result<JsonObject, string> {
+// `memberDepth` is the depth of the members: one more than a nested map's own depth, and 0 for
+// the item's own map, which is not a nesting level.
+function decodeMapMember(content: unknown, path: string, memberDepth: number): Result<JsonObject, string> {
   if (typeof content !== 'object' || content === null || Array.isArray(content)) {
     return memberError(path, 'M', content, 'an object of AttributeValues');
   }
   const values: Record<string, JsonValue> = {};
   for (const [name, element] of Object.entries(content)) {
-    const decoded = decodeAttributeValue(element, `${path}.${name}`);
+    const decoded = decodeAtDepth(element, `${path}.${name}`, memberDepth);
     if (!decoded.ok) {
       return decoded;
     }
     defineOwn(values, name, decoded.value);
   }
   return { ok: true, value: values };
+}
+
+// The nesting bound keeps the recursion shallow, so the remaining way to throw is input that is
+// not plain data: an accessor or a proxy trap that throws while it is read. That is refused too.
+function readSafely<T>(path: string, decode: () => Result<T, string>): Result<T, string> {
+  try {
+    return decode();
+  } catch (error) {
+    const cause = error instanceof Error ? `${error.name}: ${error.message}` : 'a non-Error value';
+    return { ok: false, error: `${path} could not be read (${cause}); expected plain AttributeValue data` };
+  }
+}
+
+function nestingError(path: string): { ok: false; error: string } {
+  return { ok: false, error: nestingViolation(path) };
 }
 
 function memberError(path: string, member: string, content: unknown, expected: string): { ok: false; error: string } {

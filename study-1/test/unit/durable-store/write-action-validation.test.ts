@@ -14,7 +14,7 @@ import {
   validateTransaction,
   validateWriteAction,
 } from '../../../src/durable-store/write-action-validation.ts';
-import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
+import type { JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
 
 const TOKEN = '7d1c0fbc-ba4e-4c06-9d65-e566dbdbb434' as Uuid4;
 
@@ -80,8 +80,8 @@ describe('validateWriteAction', () => {
       }),
       [
         'action: attribute name is ""; expected a non-empty attribute name',
-        'action.item.deep.list[1]: NaN is not a finite number; expected a finite number, safe when integral',
-        'action.item.big: 9007199254740992 is an integer outside the safe-integer range; expected a finite number, safe when integral',
+        'action.item.deep.list[1]: NaN is not a finite number; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+        'action.item.big: 9007199254740992 is an integer outside the safe-integer range; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
       ],
     );
   });
@@ -107,8 +107,8 @@ describe('validateWriteAction', () => {
       validateWriteAction({ ...base, set: { '': 1, n: Number.NaN }, increment: { c: Number.POSITIVE_INFINITY } }),
       [
         'action: attribute name is ""; expected a non-empty attribute name',
-        'action.set.n: NaN is not a finite number; expected a finite number, safe when integral',
-        'action.increment.c: Infinity is not a finite number; expected a finite number, safe when integral',
+        'action.set.n: NaN is not a finite number; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+        'action.increment.c: Infinity is not a safe integer; expected a safe integer increment',
       ],
     );
   });
@@ -116,7 +116,7 @@ describe('validateWriteAction', () => {
   it('rejects malformed conditions at every depth', () => {
     assert.deepEqual(validateWriteAction(check({ kind: 'attribute_equals', name: '', value: Number.NaN })), [
       'action.condition: attribute name is ""; expected a non-empty attribute name',
-      'action.condition.value: NaN is not a finite number; expected a finite number, safe when integral',
+      'action.condition.value: NaN is not a finite number; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
     ]);
     assert.deepEqual(validateWriteAction(check({ kind: 'attribute_equals', name: 'a', value: 'NaN' })), []);
     assert.deepEqual(validateWriteAction(check({ kind: 'attribute_in', name: 'a', values: [] })), [
@@ -171,6 +171,97 @@ describe('validateWriteAction', () => {
         'action.condition: all has no conditions; expected at least one',
       ],
     );
+  });
+});
+
+describe('validateWriteAction DynamoDB value limits (WP-04 review round 1)', () => {
+  // A list nested `depth` levels around the number 1, built without recursion.
+  function nestedList(depth: number): JsonValue {
+    let value: JsonValue = 1;
+    for (let level = 0; level < depth; level += 1) {
+      value = [value];
+    }
+    return value;
+  }
+
+  it('accepts 32 levels of nesting and refuses the 33rd, naming its path', () => {
+    const put = (value: JsonValue): WriteAction => ({
+      kind: 'put',
+      table: 'ledger',
+      item: { pk: 'p', sk: 's', v: value },
+    });
+    assert.deepEqual(validateWriteAction(put(nestedList(32))), []);
+    assert.deepEqual(validateWriteAction(put(nestedList(33))), [
+      `action.item.v${'[0]'.repeat(32)} nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`,
+    ]);
+  });
+
+  it('refuses a deep value with a violation instead of overflowing the call stack', () => {
+    const deep = nestedList(20_000);
+    const violation = `nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`;
+    assert.deepEqual(validateWriteAction({ kind: 'put', table: 'ledger', item: { pk: 'p', sk: 's', v: deep } }), [
+      `action.item.v${'[0]'.repeat(32)} ${violation}`,
+    ]);
+    assert.deepEqual(
+      validateWriteAction({
+        kind: 'update',
+        table: 'control',
+        key: { pk: 'p', sk: 's' },
+        set: { v: deep },
+        condition: { kind: 'item_absent' },
+      }),
+      [`action.set.v${'[0]'.repeat(32)} ${violation}`],
+    );
+  });
+
+  it('refuses an item over 400 KB and accepts one at the limit', () => {
+    // Names pk, sk and v (5 bytes) plus values p and s (2 bytes) leave 409593 bytes for v.
+    const fits = 'x'.repeat(409_593);
+    assert.deepEqual(validateWriteAction({ kind: 'put', table: 'ledger', item: { pk: 'p', sk: 's', v: fits } }), []);
+    assert.deepEqual(validateWriteAction({ kind: 'put', table: 'ledger', item: { pk: 'p', sk: 's', v: `${fits}x` } }), [
+      'action.item is about 409601 bytes; expected at most 409600 bytes (DynamoDB item size limit)',
+    ]);
+    assert.deepEqual(
+      validateWriteAction({
+        kind: 'update',
+        table: 'control',
+        key: { pk: 'p', sk: 's' },
+        set: { v: `${fits}x` },
+        condition: { kind: 'item_absent' },
+      }),
+      ['action.set is about 409601 bytes; expected at most 409600 bytes (DynamoDB item size limit)'],
+    );
+  });
+
+  it('refuses numbers below the smallest DynamoDB magnitude anywhere in a value or condition', () => {
+    assert.deepEqual(
+      validateWriteAction({ kind: 'put', table: 'ledger', item: { pk: 'p', sk: 's', tiny: [1e-131], zero: 0 } }),
+      [
+        'action.item.tiny[0]: 1e-131 is nonzero with a magnitude below 1E-130; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+      ],
+    );
+    assert.deepEqual(validateWriteAction(check({ kind: 'attribute_equals', name: 'a', value: 5e-324 })), [
+      'action.condition.value: 5e-324 is nonzero with a magnitude below 1E-130; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+    ]);
+  });
+
+  it('accepts only safe-integer increments', () => {
+    const update = (amount: number): WriteAction => ({
+      kind: 'update',
+      table: 'control',
+      key: { pk: 'p', sk: 's' },
+      set: {},
+      increment: { n: amount },
+      condition: { kind: 'item_absent' },
+    });
+    assert.deepEqual(validateWriteAction(update(-3)), []);
+    assert.deepEqual(validateWriteAction(update(Number.MAX_SAFE_INTEGER)), []);
+    assert.deepEqual(validateWriteAction(update(0.2)), [
+      'action.increment.n: 0.2 is not a safe integer; expected a safe integer increment',
+    ]);
+    assert.deepEqual(validateWriteAction(update(2 ** 53)), [
+      'action.increment.n: 9007199254740992 is not a safe integer; expected a safe integer increment',
+    ]);
   });
 });
 

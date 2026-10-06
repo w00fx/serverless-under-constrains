@@ -17,7 +17,16 @@ describe('unencodableNumberReason', () => {
     assert.equal(unencodableNumberReason(-12.5), undefined);
     assert.equal(unencodableNumberReason(Number.MAX_SAFE_INTEGER), undefined);
     assert.equal(unencodableNumberReason(Number.MIN_SAFE_INTEGER), undefined);
-    assert.equal(unencodableNumberReason(1.5e-300), undefined);
+    // DynamoDB's smallest magnitude is 1E-130 (HowItWorks.NamingRulesDataTypes.html).
+    assert.equal(unencodableNumberReason(1e-130), undefined);
+    assert.equal(unencodableNumberReason(-1e-130), undefined);
+    assert.equal(unencodableNumberReason(-0), undefined);
+  });
+
+  it('names a nonzero number below the smallest DynamoDB magnitude', () => {
+    assert.equal(unencodableNumberReason(1.5e-300), '1.5e-300 is nonzero with a magnitude below 1E-130');
+    assert.equal(unencodableNumberReason(-9.99e-131), '-9.99e-131 is nonzero with a magnitude below 1E-130');
+    assert.equal(unencodableNumberReason(5e-324), '5e-324 is nonzero with a magnitude below 1E-130');
   });
 
   it('names non-finite numbers and unsafe integers', () => {
@@ -53,11 +62,12 @@ describe('encodeAttributeValue', () => {
   it('refuses a number that cannot round-trip, naming its path', () => {
     assert.throws(() => encodeAttributeValue({ a: [1, Number.NaN] }), {
       name: 'RangeError',
-      message: 'number at $.a[1]: NaN is not a finite number; expected a finite number, safe when integral',
+      message:
+        'number at $.a[1]: NaN is not a finite number; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
     });
     assert.throws(() => encodeAttributeValue(2 ** 60, '$.amount'), {
       message:
-        'number at $.amount: 1152921504606847000 is an integer outside the safe-integer range; expected a finite number, safe when integral',
+        'number at $.amount: 1152921504606847000 is an integer outside the safe-integer range; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
     });
   });
 
@@ -98,8 +108,14 @@ describe('decodeAttributeValue', () => {
       [{ N: ' 1' }, '$.N is " 1"; expected a decimal number string'],
       [{ N: '0x10' }, '$.N is "0x10"; expected a decimal number string'],
       [{ N: 'Infinity' }, '$.N is "Infinity"; expected a decimal number string'],
-      [{ N: '1e400' }, '$.N is "1e400"; expected a finite number, safe when integral'],
-      [{ N: '9007199254740993' }, '$.N is "9007199254740993"; expected a finite number, safe when integral'],
+      [
+        { N: '1e400' },
+        '$.N is "1e400"; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+      ],
+      [
+        { N: '9007199254740993' },
+        '$.N is "9007199254740993"; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+      ],
       [{ BOOL: 'true' }, '$.BOOL is "true"; expected a boolean'],
       [{ NULL: false }, '$.NULL is false; expected true'],
       [{ L: {} }, '$.L is an object with members []; expected an array of AttributeValues'],
@@ -108,6 +124,10 @@ describe('decodeAttributeValue', () => {
       [{ M: null }, '$.M is null; expected an object of AttributeValues'],
       [{ M: { a: { S: 'x' }, b: { N: 'x' } } }, '$.b.N is "x"; expected a decimal number string'],
       [{ S: 10n }, '$.S is a bigint; expected a string'],
+      [
+        { N: '1e-131' },
+        '$.N is "1e-131"; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+      ],
     ];
     for (const [input, error] of cases) {
       assert.deepEqual(decodeAttributeValue(input), { ok: false, error }, JSON.stringify(String(input)));
@@ -118,7 +138,81 @@ describe('decodeAttributeValue', () => {
     assert.deepEqual(decodeAttributeValue({ N: '123456789.125' }), { ok: true, value: 123456789.125 });
     assert.deepEqual(decodeAttributeValue({ N: '12345678901234567890.5' }), {
       ok: false,
-      error: '$.N is "12345678901234567890.5"; expected a finite number, safe when integral',
+      error:
+        '$.N is "12345678901234567890.5"; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
+    });
+  });
+});
+
+// JSON text nesting `depth` lists or maps around {"S":"x"}, parsed like an untrusted event:
+// JSON.parse follows nesting far deeper than a recursive decoder could.
+function nestedAttributeValue(member: 'L' | 'M', depth: number): unknown {
+  const [open, close] = member === 'L' ? ['{"L":[', ']}'] : ['{"M":{"a":', '}}'];
+  return JSON.parse(`${open.repeat(depth)}{"S":"x"}${close.repeat(depth)}`);
+}
+
+describe('decodeAttributeValue nesting limit (WP-04 review round 1)', () => {
+  it('accepts 32 levels of lists or maps and refuses the 33rd, naming its path', () => {
+    const atLimit = decodeAttributeValue(nestedAttributeValue('L', 32));
+    assert.ok(atLimit.ok);
+    assert.equal(JSON.stringify(atLimit.value), `${'['.repeat(32)}"x"${']'.repeat(32)}`);
+    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('L', 33)), {
+      ok: false,
+      error: `$${'[0]'.repeat(32)} nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`,
+    });
+    assert.equal(decodeAttributeValue(nestedAttributeValue('M', 32)).ok, true);
+    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('M', 33)), {
+      ok: false,
+      error: `$${'.a'.repeat(32)} nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`,
+    });
+  });
+
+  it('returns an error instead of overflowing the call stack on 10,000 levels', () => {
+    const limit = 'nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)';
+    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('L', 10_000)), {
+      ok: false,
+      error: `$${'[0]'.repeat(32)} ${limit}`,
+    });
+    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('M', 10_000)), {
+      ok: false,
+      error: `$${'.a'.repeat(32)} ${limit}`,
+    });
+  });
+
+  it('does not count the item map as a level', () => {
+    const item = { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedAttributeValue('M', 32) };
+    assert.equal(decodeStoredItem(item).ok, true);
+    const tooDeep = { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedAttributeValue('L', 10_000) };
+    assert.deepEqual(decodeStoredItem(tooDeep), {
+      ok: false,
+      error: `$.deep${'[0]'.repeat(32)} nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`,
+    });
+  });
+});
+
+describe('decoding input that is not plain data (WP-04 review round 1)', () => {
+  it('refuses accessors and proxy traps that throw instead of throwing itself', () => {
+    const throwingMember = {
+      get S(): string {
+        throw new Error('boom');
+      },
+    };
+    assert.deepEqual(decodeAttributeValue(throwingMember), {
+      ok: false,
+      error: '$ could not be read (Error: boom); expected plain AttributeValue data',
+    });
+    const trap = new Proxy(
+      {},
+      {
+        ownKeys: (): never => {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- a non-Error throw is the case under test
+          throw 'trap';
+        },
+      },
+    );
+    assert.deepEqual(decodeStoredItem(trap), {
+      ok: false,
+      error: '$ could not be read (a non-Error value); expected plain AttributeValue data',
     });
   });
 });

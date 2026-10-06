@@ -40,7 +40,8 @@ describe('toUpdateExpression', () => {
 
   it('refuses an unencodable value, naming the attribute', () => {
     assert.throws(() => toUpdateExpression({ amount: Number.POSITIVE_INFINITY }), {
-      message: 'number at $.amount: Infinity is not a finite number; expected a finite number, safe when integral',
+      message:
+        'number at $.amount: Infinity is not a finite number; expected a finite number, safe when integral, zero or of magnitude at least 1E-130',
     });
   });
 });

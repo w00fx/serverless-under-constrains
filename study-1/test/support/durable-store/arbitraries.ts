@@ -6,12 +6,15 @@ import fc from 'fast-check';
 import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 
-/** Numbers the store accepts: finite, and safe when integral. */
+/** Numbers the store accepts: finite, safe when integral, and zero or of magnitude ≥ 1E-130. */
 export const storableNumber: fc.Arbitrary<number> = fc.oneof(
   fc.integer({ min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
   fc
     .double({ noNaN: true, noDefaultInfinity: true })
-    .filter((value) => !Number.isInteger(value) || Number.isSafeInteger(value)),
+    .filter(
+      (value) =>
+        (!Number.isInteger(value) || Number.isSafeInteger(value)) && (value === 0 || Math.abs(value) >= 1e-130),
+    ),
 );
 
 /** Attribute names, biased toward names that break naive object handling. */
@@ -41,6 +44,35 @@ export const storedItem: fc.Arbitrary<StoredItem> = fc
     fc.dictionary(attributeName, storableJson, { maxKeys: 5 }),
   )
   .map(([pk, sk, attributes]) => ({ ...attributes, pk, sk }));
+
+/**
+ * A storable value nested 0 to 32 levels deep (the DynamoDB limit), as lists and maps around a
+ * storable leaf, so round-trip properties reach the boundary that `depthSize: 'small'` never does.
+ */
+export const deeplyNestedStorableJson: fc.Arbitrary<JsonValue> = fc
+  .tuple(
+    fc.array(fc.constantFrom('L', 'M'), { maxLength: 32 }),
+    attributeName,
+    fc.oneof(fc.constant(null), fc.boolean(), fc.string({ maxLength: 12 }), storableNumber),
+  )
+  .map(([levels, name, leaf]) =>
+    levels.reduceRight<JsonValue>((inner, level) => (level === 'L' ? [inner] : { [name]: inner }), leaf),
+  );
+
+/**
+ * AttributeValues nested 0 to 5,000 levels, parsed from JSON text the way an untrusted event
+ * arrives; deep enough that a recursive decoder without a bound would overflow the stack.
+ */
+export const deepAttributeValueLike: fc.Arbitrary<unknown> = fc
+  .tuple(
+    fc.integer({ min: 0, max: 5_000 }),
+    fc.constantFrom('L', 'M'),
+    fc.constantFrom('{"S":"x"}', '{"N":"1"}', '{"X":1}'),
+  )
+  .map(([depth, member, leaf]) => {
+    const [open, close] = member === 'L' ? ['{"L":[', ']}'] : ['{"M":{"k":', '}}'];
+    return JSON.parse(`${open.repeat(depth)}${leaf}${close.repeat(depth)}`) as unknown;
+  });
 
 /** Arbitrary values shaped roughly like AttributeValues, valid or not. */
 export const attributeValueLike: fc.Arbitrary<unknown> = fc.letrec<{ value: unknown }>((tie) => ({

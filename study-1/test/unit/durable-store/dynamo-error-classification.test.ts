@@ -17,7 +17,9 @@ import {
   classifyDynamoError,
   DEFINITIVE_ERROR_NAMES,
   errorCode,
+  UNREADABLE_ERROR_CODE,
 } from '../../../src/durable-store/dynamo-error-classification.ts';
+import { deepAttributeValueLike } from '../../support/durable-store/arbitraries.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 
 const META = { $metadata: { httpStatusCode: 400 }, message: 'rejected' };
@@ -102,14 +104,46 @@ describe('classifyDynamoError', () => {
   });
 
   it('documented rejections are definitive', () => {
-    for (const name of DEFINITIVE_ERROR_NAMES) {
+    // Written from the AWS pages, not from the implementation (addendum §6): each name is a
+    // documented rejection of the request that applied nothing.
+    const documentedRejections: readonly (readonly [name: string, source: string])[] = [
+      ['AccessDeniedException', 'CommonErrors.html'],
+      ['IdempotentParameterMismatchException', 'API_TransactWriteItems.html Errors'],
+      ['IncompleteSignatureException', 'CommonErrors.html'],
+      ['ItemCollectionSizeLimitExceededException', 'API_PutItem.html Errors'],
+      ['MissingAuthenticationTokenException', 'CommonErrors.html'],
+      ['ProvisionedThroughputExceededException', 'API_PutItem.html Errors'],
+      ['ReplicatedWriteConflictException', 'API_PutItem.html Errors'],
+      ['RequestLimitExceeded', 'API_TransactWriteItems.html Errors'],
+      ['ResourceNotFoundException', 'API_TransactWriteItems.html Errors'],
+      ['ThrottlingException', 'CommonErrors.html'],
+      ['TransactionConflictException', 'API_PutItem.html Errors'],
+      ['UnrecognizedClientException', 'CommonErrors.html'],
+      ['ValidationException', 'CommonErrors.html'],
+    ];
+    const expected = documentedRejections.map(([name]) => name);
+    assert.deepEqual([...DEFINITIVE_ERROR_NAMES].sort(), [...expected].sort());
+    for (const name of expected) {
       assert.deepEqual(classifyDynamoError({ name, $fault: 'client' }), { kind: 'definitive_failure', code: name });
     }
     assert.deepEqual(classifyDynamoError(validationError), {
       kind: 'definitive_failure',
       code: 'ValidationException',
     });
-    assert.equal(DEFINITIVE_ERROR_NAMES.size, 13);
+  });
+
+  it('stays total when the ALL_OLD item nests past the limit (WP-04 review round 1)', () => {
+    // JSON.parse builds 10,000 levels without recursion; the old decoder overflowed the stack.
+    const deep = JSON.parse(`${'{"L":['.repeat(10_000)}{"S":"x"}${']}'.repeat(10_000)}`) as unknown;
+    const item = { pk: { S: 'p' }, sk: { S: 's' }, deep };
+    assert.deepEqual(classifyDynamoError(new ConditionalCheckFailedException({ ...META, Item: item as never })), {
+      kind: 'condition_failed',
+      failed_action_index: 0,
+    });
+    assert.deepEqual(classifyDynamoError(cancelled([{ Code: 'ConditionalCheckFailed', Item: item as never }])), {
+      kind: 'condition_failed',
+      failed_action_index: 0,
+    });
   });
 
   it('server faults, in-progress tokens, timeouts, network and unknown errors are ambiguous', () => {
@@ -166,6 +200,10 @@ describe('classifyDynamoError properties', () => {
         CancellationReasons: fc.anything(),
         Item: fc.anything(),
       }),
+      fc.record({
+        name: fc.constant('ConditionalCheckFailedException'),
+        Item: fc.record({ pk: fc.constant({ S: 'p' }), sk: fc.constant({ S: 's' }), deep: deepAttributeValueLike }),
+      }),
     );
     fc.assert(
       fc.property(errorLike, (error) => {
@@ -181,5 +219,29 @@ describe('classifyDynamoError properties', () => {
       }),
       fuzzParameters(),
     );
+  });
+});
+
+describe('errors whose properties throw when read (WP-04 review round 1)', () => {
+  it('are ambiguous with the UnreadableError code, never a throw', () => {
+    const throwingName = {
+      get name(): string {
+        throw new Error('boom');
+      },
+    };
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    const throwingReasons = {
+      name: 'TransactionCanceledException',
+      get CancellationReasons(): unknown {
+        throw new Error('boom');
+      },
+    };
+    assert.equal(UNREADABLE_ERROR_CODE, 'UnreadableError');
+    assert.deepEqual(classifyDynamoError(throwingName), { kind: 'ambiguous', code: 'UnreadableError' });
+    assert.deepEqual(classifyDynamoError(revoked.proxy), { kind: 'ambiguous', code: 'UnreadableError' });
+    assert.deepEqual(classifyDynamoError(throwingReasons), { kind: 'ambiguous', code: 'UnreadableError' });
+    assert.equal(errorCode(throwingName), 'UnreadableError');
+    assert.equal(errorCode(revoked.proxy), 'UnreadableError');
   });
 });

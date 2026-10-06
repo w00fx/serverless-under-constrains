@@ -33,6 +33,9 @@ export const DEFINITIVE_ERROR_NAMES: ReadonlySet<string> = new Set([
   'ValidationException',
 ]);
 
+/** The code of an error whose properties throw when read (an accessor or a revoked proxy). */
+export const UNREADABLE_ERROR_CODE = 'UnreadableError';
+
 const NO_ERROR_REASON = 'None';
 const CONDITION_REASON = 'ConditionalCheckFailed';
 
@@ -45,6 +48,16 @@ const CONDITION_REASON = 'ConditionalCheckFailed';
  * classifyDynamoError(new Error('socket hang up')); // { kind: 'ambiguous', code: 'Error' }
  */
 export function classifyDynamoError(error: unknown): WriteOutcome {
+  // An error object whose properties throw when read (an accessor or a revoked proxy) cannot be
+  // classified; ambiguous is the only safe answer, as it never hides an applied write.
+  try {
+    return classifyReadableError(error);
+  } catch {
+    return { kind: 'ambiguous', code: UNREADABLE_ERROR_CODE };
+  }
+}
+
+function classifyReadableError(error: unknown): WriteOutcome {
   const code = errorCode(error);
   if (code === 'ConditionalCheckFailedException') {
     return conditionFailed(0, propertyOf(error, 'Item'));
@@ -62,8 +75,17 @@ export function classifyDynamoError(error: unknown): WriteOutcome {
  * @example
  * errorCode(Object.assign(new Error('reset'), { code: 'ECONNRESET' })); // 'ECONNRESET'
  * errorCode('boom'); // 'NonErrorThrown'
+ * errorCode({ get name() { throw new Error('x'); } }); // 'UnreadableError'
  */
 export function errorCode(error: unknown): string {
+  try {
+    return readableErrorCode(error);
+  } catch {
+    return UNREADABLE_ERROR_CODE;
+  }
+}
+
+function readableErrorCode(error: unknown): string {
   if (typeof error !== 'object' || error === null) {
     return 'NonErrorThrown';
   }

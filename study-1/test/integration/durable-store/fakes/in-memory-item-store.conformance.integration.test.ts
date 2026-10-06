@@ -1,12 +1,15 @@
 // Conformance of InMemoryItemStore with the DynamoDB behavior it emulates (design §12.2, RK-17):
 // conditional writes, transactions and partition queries. Sources: API_PutItem, API_UpdateItem,
 // API_TransactWriteItems (F-1 token window and IdempotentParameterMismatch), API_Query and
-// Query.Pagination ([R-aws] §1.1-§1.3), HowItWorks.NamingRulesDataTypes (UTF-8 byte order).
+// Query.Pagination ([R-aws] §1.1-§1.3), HowItWorks.NamingRulesDataTypes (UTF-8 byte order and
+// the number range), Constraints.html (32 nesting levels), ServiceQuotas.html and
+// CapacityUnitCalculations.html (400 KB item size).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { Condition, WriteAction, WriteOutcome } from '../../../../src/durable-store/item-store-port.ts';
+import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { decodePageCursor, encodePageCursor } from '../../../../src/durable-store/page-cursor.ts';
 import { IDEMPOTENCY_WINDOW_MS, InMemoryItemStore } from '../../../support/durable-store/in-memory-item-store.ts';
 import {
@@ -295,5 +298,82 @@ describe('InMemoryItemStore partition queries', () => {
     assert.throws(() => new InMemoryItemStore({ clock: new VirtualTimeScheduler({ wallEpochMs: 0 }), pageSize: 1.5 }), {
       message: 'page size 1.5; expected a positive safe integer',
     });
+  });
+});
+
+describe('InMemoryItemStore DynamoDB value limits (WP-04 review round 1)', () => {
+  function nestedList(depth: number): JsonValue {
+    let value: JsonValue = 1;
+    for (let level = 0; level < depth; level += 1) {
+      value = [value];
+    }
+    return value;
+  }
+  const refused: WriteOutcome = { kind: 'definitive_failure', code: 'ValidationException' };
+
+  it('refuses what DynamoDB refuses: 33 nesting levels, an item over 400 KB, a number below 1E-130', async () => {
+    const { store } = storeHarness();
+    assert.deepEqual(await store.write(putAction('ledger', { pk: PK, sk: 'a', v: nestedList(32) })), {
+      kind: 'applied',
+    });
+    assert.deepEqual(await store.write(putAction('ledger', { pk: PK, sk: 'b', v: nestedList(33) })), refused);
+    assert.deepEqual(await store.write(putAction('ledger', { pk: PK, sk: 'c', v: 'x'.repeat(409_600) })), refused);
+    assert.deepEqual(await store.write(putAction('ledger', { pk: PK, sk: 'd', v: 1e-131 })), refused);
+    assert.deepEqual(await store.write(putAction('ledger', { pk: PK, sk: 'e', v: 5e-324 })), refused);
+    assert.deepEqual(
+      store.itemsIn('ledger').map((item) => item.sk),
+      ['a'],
+    );
+  });
+
+  it('refuses a 20,000-level value with an outcome instead of throwing', async () => {
+    const { store } = storeHarness();
+    const deep = putAction('ledger', { pk: PK, sk: 'deep', v: nestedList(20_000) });
+    assert.deepEqual(await store.write(deep), refused);
+    assert.deepEqual(await store.transact([deep], TOKEN), refused);
+  });
+
+  it('refuses an update whose result grows past 400 KB: ValidationException alone, ValidationError in a transaction', async () => {
+    const { store } = storeHarness();
+    const half = 'x'.repeat(250_000);
+    store.seed('control', { pk: PK, sk: 'big', a: half });
+    const grow: WriteAction = {
+      kind: 'update',
+      table: 'control',
+      key: { pk: PK, sk: 'big' },
+      set: { b: half },
+      condition: { kind: 'attribute_equals', name: 'a', value: half },
+    };
+    assert.deepEqual(await store.write(grow), refused);
+    assert.deepEqual(await store.transact([grow], TOKEN), { kind: 'definitive_failure', code: 'ValidationError' });
+    assert.deepEqual(store.peek('control', { pk: PK, sk: 'big' }), { pk: PK, sk: 'big', a: half });
+  });
+
+  it('a failed condition outranks an earlier refused action, like classifyDynamoError', async () => {
+    const { store } = storeHarness();
+    store.seed('control', { pk: PK, sk: 'treatment', state: 'ARMED', version: 'one' });
+    store.seed('control', { pk: PK, sk: 'other', state: 'CONSUMED' });
+    const otherCheck: WriteAction = {
+      kind: 'condition_check',
+      table: 'control',
+      key: { pk: PK, sk: 'other' },
+      condition: { kind: 'attribute_equals', name: 'state', value: 'ARMED' },
+    };
+    assert.deepEqual(await store.transact([COMMIT_TREATMENT, otherCheck], TOKEN), {
+      kind: 'condition_failed',
+      failed_action_index: 1,
+      existing: { pk: PK, sk: 'other', state: 'CONSUMED' },
+    });
+    assert.equal(store.peek('control', { pk: PK, sk: 'treatment' })?.['state'], 'ARMED');
+  });
+
+  it('refuses a forged cursor with an empty sort key and a deeply nested one, as the adapter does', async () => {
+    const { store } = storeHarness();
+    store.seed('ledger', { pk: PK, sk: 'a' });
+    const base64url = (text: string): string => Buffer.from(text, 'utf8').toString('base64url');
+    const invalid = { ok: false, error: { code: 'InvalidCursor' } };
+    assert.deepEqual(await store.queryPartitionPage('ledger', PK, base64url(`{"pk":"${PK}","sk":""}`)), invalid);
+    const deep = base64url(`{"pk":"${PK}","sk":"a","x":${'['.repeat(100_000)}${']'.repeat(100_000)}}`);
+    assert.deepEqual(await store.queryPartitionPage('ledger', PK, deep), invalid);
   });
 });
