@@ -1,8 +1,9 @@
 // Conformance of ScriptedProviderInvoker (design §12.2): its settlements have exactly the shapes
 // the real Lambda binding produces through a real LambdaClient, the aborted settlement included,
 // and each script settles at its virtual time. `rejectAfter`, `throwBeforeSend`,
-// `returnWithoutPromise` and `ignoreAbortForever` have no real counterpart (the real port never
-// rejects and settles at once on abort): they emulate a defective port.
+// `returnWithoutPromise`, `resolveMalformedAfter` and `ignoreAbortForever` have no real
+// counterpart (the real port never rejects, always resolves a well-formed settlement and settles
+// at once on abort): they emulate a defective port.
 
 import assert from 'node:assert/strict';
 import { setImmediate as nextMacrotask } from 'node:timers/promises';
@@ -187,5 +188,21 @@ describe('ScriptedProviderInvoker conformance', () => {
     const bare: unknown = invoker.invoke(PROVIDER_CALL, signal);
     assert.equal(bare instanceof Promise, false);
     assert.deepEqual(bare, succeededResponder(PROVIDER_CALL));
+  });
+
+  it('resolveMalformedAfter resolves its value as is at its time, or the aborted settlement', async () => {
+    const { time, invoker } = scripted();
+    const malformed = { kind: 'response', status_code: '200' };
+    invoker.resolveMalformedAfter(2n * MS, malformed);
+    invoker.resolveMalformedAfter(2n * MS, undefined);
+    const resolved = invoker.invoke(PROVIDER_CALL, new AbortController().signal);
+    const controller = new AbortController();
+    const aborted = invoker.invoke(PROVIDER_CALL, controller.signal);
+    await time.advanceBy(1);
+    controller.abort();
+    await time.advanceBy(1);
+    assert.equal(await resolved, malformed);
+    assert.deepEqual(await aborted, ABORTED_SETTLEMENT);
+    assert.equal(time.pendingTimerCount(), 0);
   });
 });

@@ -112,6 +112,7 @@ export function clientHarness(options: ClientHarnessOptions = {}): ClientHarness
   const store = new InMemoryItemStore({ clock: time, mutationLog: new RecordingMutationLog() });
   const port = new RecordingJournalAppendPort(createDurableJournalPort(store, 'caller_journal'));
   const scope = options.scope ?? TRIAL_SCOPE;
+  const maxDefinitiveRetries = options.maxDefinitiveRetries ?? 0;
   const journal = new JournalWriter({
     port,
     source: options.source ?? 'conventional_caller',
@@ -119,7 +120,7 @@ export function clientHarness(options: ClientHarnessOptions = {}): ClientHarness
     scope,
     clock: time,
     ids: new SequentialUuidSource('eeeeeeee'),
-    maxDefinitiveRetries: options.maxDefinitiveRetries ?? 0,
+    maxDefinitiveRetries,
   });
   const attempts = (options.attempts ?? createDurableAttemptStatePort)(store);
   const invoker = new ScriptedProviderInvoker(time);
@@ -132,6 +133,7 @@ export function clientHarness(options: ClientHarnessOptions = {}): ClientHarness
     wall: time,
     timer: new DeadlineTimer({ monotonic: time, scheduler: time }),
     ids: new SequentialUuidSource('dddddddd'),
+    maxDefinitiveRetries,
   });
   return { client, invoker, attempts, journal, port, store, time };
 }

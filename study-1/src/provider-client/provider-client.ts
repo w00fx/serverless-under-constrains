@@ -16,6 +16,10 @@
 //     and only when it arrives within the bounded grace, so a transport that never settles
 //     cannot hold back the outcome (RK-04);
 // C6  append `attempt_outcome_recorded`. Request state belongs to the variant.
+// Each C1-C3 transaction the store definitively refuses is first resubmitted unchanged within
+// the journal writer's retry budget (BR-RUA-033); only a refusal on every try counts as
+// rejected. A rejected C3 then leaves the attempt in PRE_DISPATCH, which the C2 transition
+// proves (AC-RUA-015).
 
 import type { EventBody, JournalEvent } from '../event-journal/journal-event.ts';
 import type { JournalScope } from '../event-journal/journal-scope.ts';
@@ -30,7 +34,7 @@ import { outcomeRecordBody, resolutionFromResponse, toAttemptReport } from './at
 import type { AttemptStatePort } from './attempt-state-port.ts';
 import type { DeadlineTimer } from './deadline-timer.ts';
 import { runDurableTransition } from './durable-transition.ts';
-import type { TransitionResult } from './durable-transition.ts';
+import type { DurableTransition, TransitionEventType, TransitionResult } from './durable-transition.ts';
 import { buildProviderCall } from './provider-call.ts';
 import type { CallBuildFailure } from './provider-call.ts';
 import type { ProviderInvocationPort } from './provider-invocation-port.ts';
@@ -56,6 +60,12 @@ export interface ProviderClientDeps {
   readonly wall: WallClock;
   readonly timer: DeadlineTimer;
   readonly ids: UuidSource;
+  /**
+   * The journal writer's `maxDefinitiveRetries`. The writer keeps it private, so the composer
+   * passes the same value; the C1-C3 transactions then retry a definitively refused write
+   * identically within the same budget as every standalone append (BR-RUA-033).
+   */
+  readonly maxDefinitiveRetries: number;
 }
 
 /** Why the pre-dispatch registration of C1 did not apply. */
@@ -89,14 +99,21 @@ interface ResolvedAttempt {
  * first one settled throws from `JournalWriter.prepare` ("expected an idle writer").
  *
  * @example
- * const client = new ProviderClient({ invoker, attempts, journal, scope, monotonic, wall, timer, ids });
+ * const client = new ProviderClient({ invoker, attempts, journal, scope, monotonic, wall, timer, ids,
+ *   maxDefinitiveRetries: 2 });
  * const report = await client.performAttempt({ caller_id: 'conventional', refund_request_id: 'ref-poc-001',
  *   payment_id: 'pay-poc-001', amount_minor: 10000, currency: 'BRL', provider_qualifier: '7', causation_event_ids: [] });
  */
 export class ProviderClient {
   readonly #deps: ProviderClientDeps;
 
+  /** Throws a RangeError when `maxDefinitiveRetries` is not a nonnegative safe integer. */
   constructor(deps: ProviderClientDeps) {
+    if (!Number.isSafeInteger(deps.maxDefinitiveRetries) || deps.maxDefinitiveRetries < 0) {
+      throw new RangeError(
+        `maxDefinitiveRetries ${String(deps.maxDefinitiveRetries)}; expected a nonnegative safe integer`,
+      );
+    }
     this.#deps = deps;
   }
 
@@ -131,6 +148,10 @@ export class ProviderClient {
     );
   }
 
+  #transition<T extends TransitionEventType>(transition: DurableTransition<T>): Promise<TransitionResult> {
+    return runDurableTransition(this.#deps.journal, this.#deps.maxDefinitiveRetries, transition);
+  }
+
   async #register(input: AttemptInput, correlation: AttemptCorrelation): Promise<JournalEvent> {
     const body: EventBody<'attempt_registered'> = {
       ...correlation,
@@ -139,13 +160,12 @@ export class ProviderClient {
       currency: input.currency,
       provider_qualifier: input.provider_qualifier,
     };
-    const result = await runDurableTransition(
-      this.#deps.journal,
-      'attempt_registered',
+    const result = await this.#transition({
+      type: 'attempt_registered',
       body,
-      input.causation_event_ids,
-      (put) => this.#deps.attempts.registerPreDispatch(correlation, put),
-    );
+      causation: input.causation_event_ids,
+      write: (put) => this.#deps.attempts.registerPreDispatch(correlation, put),
+    });
     if (result.kind !== 'applied') {
       throw new AttemptNotRegisteredError(correlation.attempt_id, result.kind);
     }
@@ -171,13 +191,12 @@ export class ProviderClient {
       ),
       deadline_ns: PROVIDER_CLIENT_TIMING.deadline_ns.toString() as EventBody<'dispatch_started'>['deadline_ns'],
     };
-    const dispatched = await runDurableTransition(
-      this.#deps.journal,
-      'dispatch_started',
-      dispatchBody,
-      [registered.event_id],
-      (put) => this.#deps.attempts.transitionToDispatched(correlation.attempt_id, put),
-    );
+    const dispatched = await this.#transition({
+      type: 'dispatch_started',
+      body: dispatchBody,
+      causation: [registered.event_id],
+      write: (put) => this.#deps.attempts.transitionToDispatched(correlation.attempt_id, put),
+    });
     if (dispatched.kind === 'rejected') {
       return this.#recordNotDispatched(correlation, registered, {
         code: 'DISPATCH_TRANSITION_REJECTED',
@@ -203,13 +222,12 @@ export class ProviderClient {
     registered: JournalEvent,
     failure: CallBuildFailure | (Omit<CallBuildFailure, 'code'> & { readonly code: 'DISPATCH_TRANSITION_REJECTED' }),
   ): Promise<ResolvedAttempt> {
-    const result = await runDurableTransition(
-      this.#deps.journal,
-      'attempt_not_dispatched',
-      { ...correlation, failure },
-      [registered.event_id],
-      (put) => this.#deps.attempts.transitionToNotDispatched(correlation.attempt_id, put),
-    );
+    const result = await this.#transition({
+      type: 'attempt_not_dispatched',
+      body: { ...correlation, failure },
+      causation: [registered.event_id],
+      write: (put) => this.#deps.attempts.transitionToNotDispatched(correlation.attempt_id, put),
+    });
     if (result.kind === 'applied') {
       return { resolution: { outcome: 'FAILED', dispatch_state: 'NOT_DISPATCHED', failure }, cause: result.event };
     }

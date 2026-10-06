@@ -18,7 +18,7 @@ import type { TransportSettlementKind } from '../record-contract/records/group-b
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import type { DeadlineTimer } from './deadline-timer.ts';
 import type { ProviderInvocationPort, ProviderTransportResult } from './provider-invocation-port.ts';
-import { ABORT_ERROR_NAME, transportErrorFromThrown } from './provider-invocation-port.ts';
+import { ABORT_ERROR_NAME, transportErrorFromThrown, transportResultOf } from './provider-invocation-port.ts';
 import { SettlementArbiter } from './settlement-arbiter.ts';
 
 export interface TransportRaceDeps {
@@ -101,8 +101,9 @@ export function raceTransportAgainstDeadline(
   });
 }
 
-// Invokes the port and turns a throw or a rejection into a transport error: the dispatch
-// boundary is already crossed, so nothing the transport throws can prove non-dispatch.
+// Invokes the port and turns a throw, a rejection or a malformed resolved value into a
+// transport error: the dispatch boundary is already crossed, so nothing the transport does can
+// prove non-dispatch, and the classification must receive a well-formed result.
 function settleTransport(
   invoker: ProviderInvocationPort,
   call: ProviderRefundCall,
@@ -116,7 +117,9 @@ function settleTransport(
   } catch (thrown) {
     pending = Promise.resolve(transportErrorFromThrown(thrown));
   }
-  return pending.catch(transportErrorFromThrown).then((result) => ({ result, at_ns: monotonic.nowNs() }));
+  return pending
+    .then(transportResultOf, transportErrorFromThrown)
+    .then((result) => ({ result, at_ns: monotonic.nowNs() }));
 }
 
 /** What `lateSettlementWithin` needs: the deadline timer and the clock it measures. */

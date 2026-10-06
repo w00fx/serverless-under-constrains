@@ -15,7 +15,9 @@
 // - ignoreAbortForever(): ignores the abort and never settles at all (RK-04 at its worst);
 // - throwBeforeSend(error): `invoke` throws synchronously, before any promise exists;
 // - returnWithoutPromise(respond): a defective port whose `invoke` returns the settlement itself
-//   instead of a promise.
+//   instead of a promise;
+// - resolveMalformedAfter(ns, value): a defective port whose promise resolves `value`, which is
+//   not a `ProviderTransportResult` (undefined, a string, an object with mistyped fields).
 
 import type { MonotonicClock, TimerHandle, TimerScheduler } from '../../../src/record-contract/primitives.ts';
 import type { ProviderRefundCall } from '../../../src/record-contract/records/group-a/provider_refund_call.ts';
@@ -30,6 +32,7 @@ export type ScriptedResponder = (call: ProviderRefundCall) => ProviderTransportR
 type InvokerScript =
   | { readonly kind: 'resolve_after'; readonly after_ns: bigint; readonly respond: ScriptedResponder }
   | { readonly kind: 'reject_after'; readonly after_ns: bigint; readonly thrown: unknown }
+  | { readonly kind: 'resolve_malformed_after'; readonly after_ns: bigint; readonly value: unknown }
   | { readonly kind: 'hang' }
   | { readonly kind: 'resolve_after_abort'; readonly after_ns: bigint; readonly respond: ScriptedResponder }
   | { readonly kind: 'ignore_abort_forever' }
@@ -66,6 +69,10 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
 
   rejectAfter(ns: bigint, thrown: unknown): void {
     this.#scripts.push({ kind: 'reject_after', after_ns: ns, thrown });
+  }
+
+  resolveMalformedAfter(ns: bigint, value: unknown): void {
+    this.#scripts.push({ kind: 'resolve_malformed_after', after_ns: ns, value });
   }
 
   hang(): void {
@@ -119,7 +126,10 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
   }
 
   #settleUnlessAborted(
-    script: Extract<InvokerScript, { readonly kind: 'resolve_after' | 'reject_after' | 'hang' }>,
+    script: Extract<
+      InvokerScript,
+      { readonly kind: 'resolve_after' | 'reject_after' | 'resolve_malformed_after' | 'hang' }
+    >,
     call: ProviderRefundCall,
     signal: AbortSignal,
   ): Promise<ProviderTransportResult> {
@@ -142,7 +152,10 @@ export class ScriptedProviderInvoker implements ProviderInvocationPort {
           reject(script.thrown);
           return;
         }
-        resolve(script.respond(call));
+        // A defective port breaks its own type: the caller must check what it resolved.
+        resolve(
+          script.kind === 'resolve_malformed_after' ? (script.value as ProviderTransportResult) : script.respond(call),
+        );
       });
     });
   }

@@ -7,10 +7,16 @@ import { describe, it } from 'node:test';
 
 import fc from 'fast-check';
 
+import { outcomeRecordBody, resolutionFromResponse } from '../../../src/provider-client/attempt-resolution.ts';
 import type { ProviderTransportResult } from '../../../src/provider-client/provider-invocation-port.ts';
 import type { ExpectedProviderResponse } from '../../../src/provider-client/provider-response.ts';
-import { parseProviderResponse, REQUEST_RESPONSE_STATUS } from '../../../src/provider-client/provider-response.ts';
-import type { JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
+import {
+  boundedDiagnostic,
+  parseProviderResponse,
+  REQUEST_RESPONSE_STATUS,
+  RESPONSE_DIAGNOSTIC_MAX_CHARS,
+} from '../../../src/provider-client/provider-response.ts';
+import type { DecimalString, JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 import {
   FIRST_ATTEMPT_ID,
@@ -80,7 +86,11 @@ describe('parseProviderResponse (design §9.9)', () => {
       executed_version: '9',
       function_error: 'Handled',
       kind: 'failed',
-      failure: { code: 'FUNCTION_ERROR', subject: 'BR-RUA-053', detail: 'function error "Handled"; expected none' },
+      failure: {
+        code: 'FUNCTION_ERROR',
+        subject: 'BR-RUA-053',
+        detail: 'function error string "Handled"; expected none',
+      },
     });
   });
 
@@ -95,7 +105,7 @@ describe('parseProviderResponse (design §9.9)', () => {
       failure: {
         code: 'VERSION_MISMATCH',
         subject: 'BR-RUA-053',
-        detail: 'executed version "$LATEST"; expected the invoked version "7"',
+        detail: 'executed version string "$LATEST"; expected the invoked version string "7"',
       },
     });
   });
@@ -123,13 +133,13 @@ describe('parseProviderResponse (design §9.9)', () => {
     assert.deepEqual(notUtf8.kind === 'failed' ? notUtf8.failure : undefined, {
       code: 'MALFORMED_RESPONSE',
       subject: 'BR-RUA-018',
-      detail: 'payload is not a JSON document ({"kind":"invalid_utf8","byte_offset":1})',
+      detail: 'payload is not a JSON document (invalid UTF-8 at byte 1)',
     });
     const notJson = parseProviderResponse(respond({ payload: new TextEncoder().encode('{') }), EXPECTED);
     assert.equal(notJson.kind === 'failed' ? notJson.failure.code : '', 'MALFORMED_RESPONSE');
     assert.match(
       notJson.kind === 'failed' ? notJson.failure.detail : '',
-      /^payload is not a JSON document \(\{"kind":"invalid_json"/u,
+      /^payload is not a JSON document \(invalid JSON: "[^"]+"\)$/u,
     );
   });
 
@@ -141,7 +151,7 @@ describe('parseProviderResponse (design §9.9)', () => {
     assert.deepEqual(parsed.kind === 'failed' ? parsed.failure : undefined, {
       code: 'MALFORMED_RESPONSE',
       subject: 'BR-RUA-018',
-      detail: 'outcome "OK"; expected "SUCCEEDED" or "REJECTED"',
+      detail: 'outcome string "OK"; expected "SUCCEEDED" or "REJECTED"',
     });
   });
 
@@ -149,13 +159,13 @@ describe('parseProviderResponse (design §9.9)', () => {
     const cases = [
       [
         { ...SUCCEEDED_PAYLOAD, attempt_id: OTHER_ID },
-        `attempt_id "${OTHER_ID}"; expected the request's ${FIRST_ATTEMPT_ID}`,
+        `attempt_id string "${OTHER_ID}"; expected the request's ${FIRST_ATTEMPT_ID}`,
       ],
       [
         { ...SUCCEEDED_PAYLOAD, provider_request_id: OTHER_ID },
-        `provider_request_id "${OTHER_ID}"; expected the request's ${FIRST_PROVIDER_REQUEST_ID}`,
+        `provider_request_id string "${OTHER_ID}"; expected the request's ${FIRST_PROVIDER_REQUEST_ID}`,
       ],
-      [REJECTED_WITHOUT_ECHO, `provider_request_id undefined; expected the request's ${FIRST_PROVIDER_REQUEST_ID}`],
+      [REJECTED_WITHOUT_ECHO, `provider_request_id absent; expected the request's ${FIRST_PROVIDER_REQUEST_ID}`],
     ] as const;
     for (const [payload, detail] of cases) {
       const parsed = parseProviderResponse(respond({ payload: jsonBytes(payload) }), EXPECTED);
@@ -174,7 +184,7 @@ describe('parseProviderResponse (design §9.9)', () => {
         code: 'ABORTED_WITHOUT_DEADLINE',
         subject: 'BR-RUA-023',
         detail:
-          'transport aborted (Request aborted) without a deadline timer win; expected an abort only after the timer won',
+          'transport aborted ("Request aborted") without a deadline timer win; expected an abort only after the timer won',
       },
     });
   });
@@ -185,13 +195,13 @@ describe('parseProviderResponse (design §9.9)', () => {
       failure: {
         code: 'TRANSPORT_ERROR',
         subject: 'BR-RUA-053',
-        detail: 'transport_error:ServiceException (HTTP 500): internal; expected a provider response',
+        detail: 'transport_error:"ServiceException" (HTTP 500): "internal"; expected a provider response',
       },
     });
     const network = parseProviderResponse(transportError('TimeoutError', 'ETIMEDOUT'), EXPECTED);
     assert.equal(
       network.kind === 'failed' ? network.failure.detail : '',
-      'transport_error:TimeoutError: ETIMEDOUT; expected a provider response',
+      'transport_error:"TimeoutError": "ETIMEDOUT"; expected a provider response',
     );
   });
 });
@@ -199,10 +209,21 @@ describe('parseProviderResponse (design §9.9)', () => {
 // Totality over hostile settlements (design §9.9 "payload unparseable ... FAILED
 // (malformed_response)"; testing rule 6). Regression (WP-06 review round 1): a 20 KB payload
 // nested 10,000 deep made the parser throw RangeError after the dispatch boundary, and a large
-// offending value was copied whole into the outcome's failure detail.
+// offending value was copied whole into the outcome's failure detail. Round 2: the raw
+// function error and executed version still reached the outcome event unbounded, and the
+// A-05.3 classes (100,000 levels, non-finite numbers, inherited member names) had no case here.
 describe('parseProviderResponse on hostile settlements', () => {
   // The longest detail repeats two bounded values (a transport error's name and message).
   const MAX_DETAIL_CHARS = 1024;
+  // A diagnostic keeps at most RESPONSE_DIAGNOSTIC_MAX_CHARS characters plus the cut marker.
+  const MAX_DIAGNOSTIC_CHARS = RESPONSE_DIAGNOSTIC_MAX_CHARS + '…[truncated from 9007199254740991 chars]'.length;
+  // Far below the 400 KB item limit (aws-semantics.md), whatever the settlement carried.
+  const MAX_OUTCOME_BODY_BYTES = 8 * 1024;
+  const CORRELATION = {
+    attempt_id: FIRST_ATTEMPT_ID,
+    provider_request_id: FIRST_PROVIDER_REQUEST_ID,
+    refund_request_id: 'ref-1',
+  };
 
   function failureOf(result: ProviderTransportResult): { readonly code: string; readonly detail: string } {
     const parsed = parseProviderResponse(result, EXPECTED);
@@ -210,45 +231,96 @@ describe('parseProviderResponse on hostile settlements', () => {
     return parsed.failure;
   }
 
-  it('classifies a payload nested 10,000 deep as MALFORMED_RESPONSE', () => {
-    const deepArray = new TextEncoder().encode(`${'['.repeat(10_000)}${']'.repeat(10_000)}`);
+  it('classifies a payload nested 100,000 deep as MALFORMED_RESPONSE', () => {
+    const deepArray = new TextEncoder().encode(`${'['.repeat(100_000)}${']'.repeat(100_000)}`);
     assert.deepEqual(failureOf(respond({ payload: deepArray })), {
       code: 'MALFORMED_RESPONSE',
       subject: 'BR-RUA-018',
-      detail: 'payload an array of length 1; expected a JSON object',
+      detail: `payload array ${'['.repeat(200)}…[truncated]; expected a JSON object`,
     });
-    const deepField = new TextEncoder().encode(`{"schema_version":${'['.repeat(10_000)}${']'.repeat(10_000)}}`);
+    const deepField = new TextEncoder().encode(`{"schema_version":${'['.repeat(100_000)}${']'.repeat(100_000)}}`);
     assert.deepEqual(failureOf(respond({ payload: deepField })), {
       code: 'MALFORMED_RESPONSE',
       subject: 'BR-RUA-018',
-      detail: 'schema_version an array of length 1; expected 1',
+      detail: `schema_version array ${'['.repeat(200)}…[truncated]; expected 1`,
     });
   });
 
-  it('repeats at most 256 characters of an offending value in every failure detail', () => {
+  it('quotes at most 200 characters of an offending value in every failure detail (kernel rendering)', () => {
     const huge = 'X'.repeat(500_000);
-    const cut = `${'X'.repeat(255)}... (500002 chars)`;
-    assert.equal(failureOf(respond({ payload: jsonBytes(huge) })).detail, `payload "${cut}; expected a JSON object`);
-    assert.equal(failureOf(respond({ function_error: huge })).detail, `function error "${cut}; expected none`);
+    // The kernel's boundedJsonText: the first 200 characters of the JSON text, then a marker.
+    const cut = `"${'X'.repeat(199)}…[truncated]`;
+    assert.equal(
+      failureOf(respond({ payload: jsonBytes(huge) })).detail,
+      `payload string ${cut}; expected a JSON object`,
+    );
+    assert.equal(failureOf(respond({ function_error: huge })).detail, `function error string ${cut}; expected none`);
     assert.equal(
       failureOf(respond({ executed_version: huge })).detail,
-      `executed version "${cut}; expected the invoked version "7"`,
+      `executed version string ${cut}; expected the invoked version string "7"`,
     );
     assert.equal(
       failureOf(
         respond({ payload: jsonBytes({ ...SUCCEEDED_PAYLOAD, attempt_id: OTHER_ID, provider_request_id: huge }) }),
       ).detail,
-      `provider_request_id "${cut}; expected a lowercase UUIDv4`,
+      `provider_request_id string ${cut}; expected a lowercase UUIDv4`,
     );
-    const plainCut = `${'X'.repeat(256)}... (500000 chars)`;
     assert.equal(
       failureOf(transportError(huge, huge)).detail,
-      `transport_error:${plainCut}: ${plainCut}; expected a provider response`,
+      `transport_error:${cut}: ${cut}; expected a provider response`,
     );
     assert.equal(
       failureOf(transportError('AbortError', huge)).detail,
-      `transport aborted (${plainCut}) without a deadline timer win; expected an abort only after the timer won`,
+      `transport aborted (${cut}) without a deadline timer win; expected an abort only after the timer won`,
     );
+  });
+
+  it('classifies non-finite numbers and inherited member names as MALFORMED_RESPONSE (A-05.3)', () => {
+    const succeededText = JSON.stringify(SUCCEEDED_PAYLOAD).slice(1, -1);
+    const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
+    const fields =
+      'schema_version, record_type, outcome, provider_call_id, attempt_id, provider_request_id, provider_transaction_id, rejection_reason';
+    const cases: readonly (readonly [string, string])[] = [
+      [
+        `{${succeededText.replace('"schema_version":1', '"schema_version":1e400')}}`,
+        'payload is not a JSON document (invalid JSON: "number at JSON pointer \\"/schema_version\\" overflows a finite double")',
+      ],
+      [
+        `{${succeededText.replace('"outcome":"SUCCEEDED"', '"outcome":-1e400')}}`,
+        'payload is not a JSON document (invalid JSON: "number at JSON pointer \\"/outcome\\" overflows a finite double")',
+      ],
+      [
+        `{${succeededText},"__proto__":{"outcome":"SUCCEEDED"}}`,
+        `property string "__proto__"; expected only ${fields}`,
+      ],
+      [`{${succeededText},"constructor":{}}`, `property string "constructor"; expected only ${fields}`],
+      [
+        `{${succeededText.replace('"outcome":"SUCCEEDED"', '"outcome":"toString"')}}`,
+        'outcome string "toString"; expected "SUCCEEDED" or "REJECTED"',
+      ],
+    ];
+    for (const [text, expected] of cases) {
+      const failure = failureOf(respond({ payload: bytes(text) }));
+      assert.equal(failure.code, 'MALFORMED_RESPONSE', text);
+      assert.equal(failure.detail, expected);
+    }
+  });
+
+  it('keeps a diagnostic header verbatim up to its bound, then cuts it and names its length', () => {
+    const atBound = 'U'.repeat(RESPONSE_DIAGNOSTIC_MAX_CHARS);
+    assert.equal(RESPONSE_DIAGNOSTIC_MAX_CHARS, 1024);
+    assert.equal(boundedDiagnostic('Unhandled'), 'Unhandled');
+    assert.equal(boundedDiagnostic(atBound), atBound);
+    assert.equal(boundedDiagnostic(`${atBound}V`), `${atBound}…[truncated from 1025 chars]`);
+    // A cut never splits a surrogate pair: the pair straddling the bound is dropped whole.
+    const pair = '\u{1F600}';
+    const straddling = `${'U'.repeat(RESPONSE_DIAGNOSTIC_MAX_CHARS - 1)}${pair}`;
+    assert.equal(boundedDiagnostic(straddling), `${'U'.repeat(1023)}…[truncated from 1025 chars]`);
+    const whole = `${'U'.repeat(RESPONSE_DIAGNOSTIC_MAX_CHARS - 2)}${pair}W`;
+    assert.equal(boundedDiagnostic(whole), `${'U'.repeat(1022)}${pair}…[truncated from 1025 chars]`);
+    const parsed = parseProviderResponse(respond({ function_error: `${atBound}V`, executed_version: '7' }), EXPECTED);
+    assert.equal(parsed.function_error, `${atBound}…[truncated from 1025 chars]`);
+    assert.equal(parsed.executed_version, '7');
   });
 
   it('never throws and bounds its detail over arbitrary payload bytes (property)', () => {
@@ -283,7 +355,7 @@ describe('parseProviderResponse on hostile settlements', () => {
     );
   });
 
-  it('never throws and bounds its detail over arbitrary settlements (property)', () => {
+  it('never throws and bounds its detail, diagnostics and outcome event over arbitrary settlements (property)', () => {
     const text = fc.oneof(fc.string(), fc.string({ unit: 'binary', minLength: 300, maxLength: 2_000 }));
     const settlement = fc.oneof(
       fc.record({
@@ -303,10 +375,15 @@ describe('parseProviderResponse on hostile settlements', () => {
         { requiredKeys: ['kind', 'error_name', 'message'] },
       ),
     );
+    const encoder = new TextEncoder();
     fc.assert(
       fc.property(settlement, (result) => {
         const parsed = parseProviderResponse(result, EXPECTED);
         assert.ok(parsed.kind !== 'failed' || parsed.failure.detail.length <= MAX_DETAIL_CHARS, parsed.kind);
+        assert.ok((parsed.function_error?.length ?? 0) <= MAX_DIAGNOSTIC_CHARS);
+        assert.ok((parsed.executed_version?.length ?? 0) <= MAX_DIAGNOSTIC_CHARS);
+        const body = outcomeRecordBody(CORRELATION, resolutionFromResponse(parsed, '1' as DecimalString));
+        assert.ok(encoder.encode(JSON.stringify(body)).length <= MAX_OUTCOME_BODY_BYTES);
       }),
       fuzzParameters(),
     );

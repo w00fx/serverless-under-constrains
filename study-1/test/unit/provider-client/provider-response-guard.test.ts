@@ -38,6 +38,9 @@ const REJECTED: JsonObject = {
   rejection_reason: 'AUTHORIZATION_FAILED',
 };
 
+const RESPONSE_FIELDS =
+  'schema_version, record_type, outcome, provider_call_id, attempt_id, provider_request_id, provider_transaction_id, rejection_reason';
+
 function without(value: JsonObject, name: string): JsonObject {
   return Object.fromEntries(Object.entries(value).filter(([key]) => key !== name));
 }
@@ -56,27 +59,27 @@ describe('readProviderRefundResponse', () => {
 
   it('names the first broken rule with the offending value and the expected shape', () => {
     const cases: readonly (readonly [JsonValue, string])[] = [
-      [[1], 'payload an array of length 1; expected a JSON object'],
-      ['refund', 'payload "refund"; expected a JSON object'],
-      [{ ...SUCCEEDED, schema_version: { v: 1, w: 2 } }, 'schema_version an object with 2 key(s); expected 1'],
-      [{ ...SUCCEEDED, record_type: [] }, 'record_type an array of length 0; expected "provider_refund_response"'],
-      [null, 'payload null; expected a JSON object'],
-      [
-        { ...SUCCEEDED, extra: true },
-        'property "extra"; expected only schema_version, record_type, outcome, provider_call_id, attempt_id, provider_request_id, provider_transaction_id, rejection_reason',
-      ],
-      [{ ...SUCCEEDED, schema_version: 2 }, 'schema_version 2; expected 1'],
+      [[1], 'payload array [1]; expected a JSON object'],
+      ['refund', 'payload string "refund"; expected a JSON object'],
+      [{ ...SUCCEEDED, schema_version: { v: 1, w: 2 } }, 'schema_version object {"v":1,"w":2}; expected 1'],
+      [{ ...SUCCEEDED, record_type: [] }, 'record_type array []; expected "provider_refund_response"'],
+      [null, 'payload null null; expected a JSON object'],
+      [{ ...SUCCEEDED, extra: true }, `property string "extra"; expected only ${RESPONSE_FIELDS}`],
+      [{ ...SUCCEEDED, schema_version: 2 }, 'schema_version number 2; expected 1'],
       [
         { ...SUCCEEDED, record_type: 'provider_refund_call' },
-        'record_type "provider_refund_call"; expected "provider_refund_response"',
+        'record_type string "provider_refund_call"; expected "provider_refund_response"',
       ],
-      [without(SUCCEEDED, 'provider_call_id'), 'provider_call_id undefined; expected a lowercase UUIDv4'],
+      [without(SUCCEEDED, 'provider_call_id'), 'provider_call_id absent; expected a lowercase UUIDv4'],
       [
         { ...SUCCEEDED, attempt_id: FIRST_ATTEMPT_ID.toUpperCase() },
-        `attempt_id "${FIRST_ATTEMPT_ID.toUpperCase()}"; expected a lowercase UUIDv4`,
+        `attempt_id string "${FIRST_ATTEMPT_ID.toUpperCase()}"; expected a lowercase UUIDv4`,
       ],
-      [{ ...REJECTED, provider_request_id: 7 }, 'provider_request_id 7; expected a lowercase UUIDv4'],
-      [{ ...SUCCEEDED, provider_transaction_id: null }, 'provider_transaction_id null; expected a lowercase UUIDv4'],
+      [{ ...REJECTED, provider_request_id: 7 }, 'provider_request_id number 7; expected a lowercase UUIDv4'],
+      [
+        { ...SUCCEEDED, provider_transaction_id: null },
+        'provider_transaction_id null null; expected a lowercase UUIDv4',
+      ],
       [
         without(SUCCEEDED, 'attempt_id'),
         'SUCCEEDED response without attempt_id; expected attempt_id, provider_request_id and provider_transaction_id',
@@ -86,18 +89,18 @@ describe('readProviderRefundResponse', () => {
         'SUCCEEDED response without provider_transaction_id; expected attempt_id, provider_request_id and provider_transaction_id',
       ],
       [{ ...SUCCEEDED, rejection_reason: 'SCHEMA_INVALID' }, 'SUCCEEDED response with rejection_reason; expected none'],
-      [without(SUCCEEDED, 'outcome'), 'outcome undefined; expected "SUCCEEDED" or "REJECTED"'],
+      [without(SUCCEEDED, 'outcome'), 'outcome absent; expected "SUCCEEDED" or "REJECTED"'],
       [
         { ...REJECTED, provider_transaction_id: PROVIDER_TRANSACTION_ID },
         'REJECTED response with provider_transaction_id; expected none, because a rejection creates no transaction',
       ],
       [
         without(REJECTED, 'rejection_reason'),
-        `rejection_reason undefined; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+        `rejection_reason absent; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
       ],
       [
         { ...REJECTED, rejection_reason: 'TOO_LATE' },
-        `rejection_reason "TOO_LATE"; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+        `rejection_reason string "TOO_LATE"; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
       ],
     ];
     for (const [value, expected] of cases) {
@@ -107,31 +110,101 @@ describe('readProviderRefundResponse', () => {
 
   // Regression (WP-06 review round 1): a recursive JSON.stringify of the offending value threw
   // RangeError (Maximum call stack size exceeded) at a nesting depth of 10,000, about 20 KB.
-  it('rejects deeply nested payloads and fields without throwing', () => {
-    const deep = JSON.parse(`${'['.repeat(10_000)}${']'.repeat(10_000)}`) as JsonValue;
-    assert.equal(guardError(deep), 'payload an array of length 1; expected a JSON object');
-    assert.equal(guardError({ ...SUCCEEDED, schema_version: deep }), 'schema_version an array of length 1; expected 1');
+  // Owner amendment A-05.3 asks for at least 100,000 levels at every untrusted-input guard.
+  it('rejects payloads and fields nested 100,000 deep without throwing', () => {
+    const deep = JSON.parse(`${'['.repeat(100_000)}${']'.repeat(100_000)}`) as JsonValue;
+    const deepText = `array ${'['.repeat(200)}…[truncated]`;
+    assert.equal(guardError(deep), `payload ${deepText}; expected a JSON object`);
+    assert.equal(guardError({ ...SUCCEEDED, schema_version: deep }), `schema_version ${deepText}; expected 1`);
     assert.equal(
       guardError({ ...REJECTED, rejection_reason: deep }),
-      `rejection_reason an array of length 1; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+      `rejection_reason ${deepText}; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
     );
-    const deepObject = JSON.parse(`${'{"a":'.repeat(10_000)}1${'}'.repeat(10_000)}`) as JsonValue;
+    const deepObject = JSON.parse(`${'{"a":'.repeat(100_000)}1${'}'.repeat(100_000)}`) as JsonValue;
     assert.equal(
       guardError({ ...SUCCEEDED, outcome: deepObject }),
-      'outcome an object with 1 key(s); expected "SUCCEEDED" or "REJECTED"',
+      `outcome object ${'{"a":'.repeat(40)}…[truncated]; expected "SUCCEEDED" or "REJECTED"`,
     );
   });
 
-  it('repeats at most 256 characters of an offending string', () => {
+  it('quotes at most 200 characters of an offending string (kernel rendering)', () => {
     const huge = 'X'.repeat(1_000_000);
+    const cut = `"${'X'.repeat(199)}…[truncated]`;
     assert.equal(
       guardError({ ...REJECTED, rejection_reason: huge }),
-      `rejection_reason "${'X'.repeat(255)}... (1000002 chars); expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+      `rejection_reason string ${cut}; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+    );
+    assert.equal(guardError({ ...SUCCEEDED, [huge]: 1 }), `property string ${cut}; expected only ${RESPONSE_FIELDS}`);
+  });
+
+  // Owner amendment A-05.2/A-05.3: inherited member names are never fields. JSON.parse makes
+  // `__proto__` an own key, so it is an unexpected property like any other.
+  it('rejects inherited member names as keys or as enum values', () => {
+    const parsed = (text: string): JsonValue => JSON.parse(text) as JsonValue;
+    const succeededText = JSON.stringify(SUCCEEDED).slice(1, -1);
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+      assert.equal(
+        guardError(parsed(`{${succeededText},"${name}":{}}`)),
+        `property string "${name}"; expected only ${RESPONSE_FIELDS}`,
+        name,
+      );
+    }
+    for (const name of ['toString', 'constructor', '__proto__']) {
+      assert.equal(
+        guardError({ ...SUCCEEDED, outcome: name }),
+        `outcome string "${name}"; expected "SUCCEEDED" or "REJECTED"`,
+      );
+      assert.equal(
+        guardError({ ...REJECTED, rejection_reason: name }),
+        `rejection_reason string "${name}"; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+      );
+    }
+  });
+
+  it('reads only own properties: a field inherited through the prototype is absent', () => {
+    const inheriting = (proto: JsonObject, own: JsonObject): JsonValue =>
+      Object.assign(Object.create(proto) as JsonObject, own);
+    assert.equal(
+      guardError(inheriting({ schema_version: 1 }, without(SUCCEEDED, 'schema_version'))),
+      'schema_version absent; expected 1',
     );
     assert.equal(
-      guardError({ ...SUCCEEDED, [huge]: 1 }),
-      `property "${'X'.repeat(255)}... (1000002 chars); expected only schema_version, record_type, outcome, provider_call_id, attempt_id, provider_request_id, provider_transaction_id, rejection_reason`,
+      guardError(inheriting({ record_type: 'provider_refund_response' }, without(SUCCEEDED, 'record_type'))),
+      'record_type absent; expected "provider_refund_response"',
     );
+    assert.equal(
+      guardError(inheriting({ provider_call_id: PROVIDER_CALL_ID }, without(SUCCEEDED, 'provider_call_id'))),
+      'provider_call_id absent; expected a lowercase UUIDv4',
+    );
+    assert.equal(
+      guardError(inheriting({ outcome: 'SUCCEEDED' }, without(SUCCEEDED, 'outcome'))),
+      'outcome absent; expected "SUCCEEDED" or "REJECTED"',
+    );
+    assert.equal(
+      guardError(
+        inheriting({ provider_transaction_id: PROVIDER_TRANSACTION_ID }, without(SUCCEEDED, 'provider_transaction_id')),
+      ),
+      'SUCCEEDED response without provider_transaction_id; expected attempt_id, provider_request_id and provider_transaction_id',
+    );
+    assert.equal(
+      guardError(inheriting({ rejection_reason: 'AMOUNT_INVALID' }, without(REJECTED, 'rejection_reason'))),
+      `rejection_reason absent; expected one of ${PROVIDER_REJECTION_REASONS.join(', ')}`,
+    );
+    // Inherited members that would break the response are ignored, as JSON data has none.
+    assert.equal(guardError(inheriting({ rejection_reason: 'SCHEMA_INVALID' }, SUCCEEDED)), undefined);
+    assert.equal(guardError(inheriting({ provider_transaction_id: PROVIDER_TRANSACTION_ID }, REJECTED)), undefined);
+    assert.equal(guardError(inheriting({ attempt_id: 'not-a-uuid' }, REJECTED)), undefined);
+  });
+
+  it('rejects a non-finite number with the expected shape (A-05.3)', () => {
+    for (const nonFinite of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      const error = guardError({ ...SUCCEEDED, schema_version: nonFinite });
+      assert.ok(error?.startsWith('schema_version number ') === true && error.endsWith('; expected 1'), error);
+      assert.match(
+        guardError({ ...REJECTED, provider_request_id: nonFinite }) ?? '',
+        /^provider_request_id number .+; expected a lowercase UUIDv4$/u,
+      );
+    }
   });
 
   it('is total over arbitrary JSON values, deep ones included, with bounded errors (property)', () => {
@@ -173,11 +246,22 @@ describe('readProviderRefundResponse', () => {
         FIRST_ATTEMPT_ID.toUpperCase(),
         [],
         {},
+        // Inherited member names as values (Owner amendment A-05.3).
+        'toString',
+        'constructor',
       ),
       fc.string(),
       fc.integer(),
     );
-    const names = fc.constantFrom(...Object.keys(SUCCEEDED), 'rejection_reason', 'unexpected_property');
+    // A computed key makes even `__proto__` an own property, as JSON.parse does (A-05.3).
+    const names = fc.constantFrom(
+      ...Object.keys(SUCCEEDED),
+      'rejection_reason',
+      'unexpected_property',
+      '__proto__',
+      'constructor',
+      'toString',
+    );
     const mutation = fc.oneof(
       fc.record({ op: fc.constant('drop' as const), name: names }),
       fc.record({ op: fc.constant('set' as const), name: names, value: fieldValue }),

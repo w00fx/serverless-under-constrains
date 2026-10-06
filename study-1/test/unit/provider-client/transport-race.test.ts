@@ -11,6 +11,7 @@ import fc from 'fast-check';
 
 import { DeadlineTimer } from '../../../src/provider-client/deadline-timer.ts';
 import {
+  MALFORMED_PORT_RESULT_NAME,
   transportErrorFromThrown,
   UNREPRESENTABLE_THROWN_NAME,
 } from '../../../src/provider-client/provider-invocation-port.ts';
@@ -158,6 +159,23 @@ describe('raceTransportAgainstDeadline', () => {
     assert.ok(decision.winner === 'TRANSPORT');
     assert.deepEqual(decision.result, succeededResponder(CALL));
     assert.equal(decision.settled_after_ns, '0');
+    assert.equal(time.pendingTimerCount(), 0);
+  });
+
+  // Regression (WP-06 review round 2): a resolved value that is not a settlement reached the
+  // classification as is, and reading its `kind` threw after the dispatch boundary.
+  it('a port that resolves a malformed value is a transport win as MalformedPortResult', async () => {
+    const { time, invoker, race } = setup();
+    invoker.resolveMalformedAfter(100n * MS, undefined);
+    const pending = race();
+    await time.advanceBy(100);
+    const decision = await pending;
+    assert.ok(decision.winner === 'TRANSPORT');
+    assert.equal(
+      decision.result.kind === 'transport_error' ? decision.result.error_name : '',
+      MALFORMED_PORT_RESULT_NAME,
+    );
+    assert.equal(decision.settled_after_ns, '100000000');
     assert.equal(time.pendingTimerCount(), 0);
   });
 });

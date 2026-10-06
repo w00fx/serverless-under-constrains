@@ -2,9 +2,12 @@
 // the caller journal next to the caller's events, under `state#attempt#<attempt_id>` in the
 // partition of the journal event they travel with. Each operation is one `TransactWriteItems`
 // holding the journal put and the state write, so the event exists exactly when the state
-// changed (BR-RUA-021). The transaction token is the event id, which is fresh per transaction
-// and at most 36 characters (F-1); the client never retries a transaction, so the token never
-// guards a replay with changed parameters.
+// changed (BR-RUA-021). The transaction token is the event id, which is fresh per event and at
+// most 36 characters (F-1). The client resubmits a transaction only as the BR-RUA-033 identical
+// retry after a definitive failure: the same reserved event, so the same token with the same
+// actions, never a replay with changed parameters (`IdempotentParameterMismatchException`). What
+// DynamoDB returns for a replay after a cancelled transaction is UNVERIFIED (design U-14); a
+// repeated refusal only uses up the retry budget, and an ambiguous answer stops the writer.
 
 import type { DurableItemStore, StoredItem, WriteAction, WriteOutcome } from '../durable-store/item-store-port.ts';
 import { journalPutAction } from '../event-journal/journal-entry.ts';

@@ -1,9 +1,12 @@
 // What a caller asks the shared provider client to attempt (design §5.3 `AttemptInput`), and the
 // check that runs before anything is written. The `attempt_registered` event repeats these
 // fields, so an input its schema would reject must never reach the journal: such an input is a
-// defect of the calling variant, not an attempt outcome, and is refused with an error.
+// defect of the calling variant, not an attempt outcome, and is refused with an error. The
+// fields may come from untrusted message bytes, so an offending value is quoted only through
+// the kernel's bounded rendering (Owner amendment A-05.1).
 
 import { isUuid4 } from '../record-contract/identifiers.ts';
+import { boundedJsonText } from '../record-contract/json-value.ts';
 import type { Uuid4 } from '../record-contract/primitives.ts';
 import type { CallerId } from '../record-contract/records/group-b/vocabulary.ts';
 
@@ -43,20 +46,20 @@ export function assertValidAttemptInput(input: AttemptInput): void {
 function firstViolation(input: AttemptInput): string | undefined {
   for (const field of ['refund_request_id', 'payment_id'] as const) {
     if (!NONEMPTY_TRIMMED_PATTERN.test(input[field])) {
-      return `${field} ${JSON.stringify(input[field])}; expected a string without leading or trailing whitespace and at least one character`;
+      return `${field} ${boundedJsonText(input[field])}; expected a string without leading or trailing whitespace and at least one character`;
     }
   }
   if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor < 1) {
     return `amount_minor ${String(input.amount_minor)}; expected a safe integer >= 1`;
   }
   if (!PROVIDER_VERSION_PATTERN.test(input.provider_qualifier)) {
-    return `provider_qualifier ${JSON.stringify(input.provider_qualifier)}; expected a Lambda version number such as "7"`;
+    return `provider_qualifier ${boundedJsonText(input.provider_qualifier)}; expected a Lambda version number such as "7"`;
   }
   // Typed as UUIDs, but a variant may forward ids parsed from untrusted message bytes.
   const causes: readonly string[] = input.causation_event_ids;
   const badCause = causes.find((id) => !isUuid4(id));
   if (badCause !== undefined) {
-    return `causation event id ${JSON.stringify(badCause)}; expected a lowercase UUIDv4`;
+    return `causation event id ${boundedJsonText(badCause)}; expected a lowercase UUIDv4`;
   }
   return undefined;
 }
