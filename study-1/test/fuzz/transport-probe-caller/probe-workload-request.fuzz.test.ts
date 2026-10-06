@@ -3,7 +3,8 @@
 // checked differentially against the catalogue's Ajv validator: on near-valid requests (a valid
 // request with up to three properties removed or replaced by boundary values) it accepts exactly
 // what `probe_workload_request` accepts and that names this deployment's probe. It is total over
-// arbitrary JSON, and every refusal names the offending property.
+// arbitrary JSON, including payloads nested far deeper than the call stack (review r1: the guard
+// threw RangeError at 6,174 levels), and every refusal names the offending property.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -14,6 +15,7 @@ import type { JsonObject, JsonValue } from '../../../src/record-contract/primiti
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { parseProbeWorkloadRequest } from '../../../src/transport-probe-caller/probe-workload-request.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
+import { nestedArrays, nestedObjects } from '../../support/transport-rehearsal/deep-values.ts';
 import {
   MANIFEST_SHA,
   OTHER_RUN_ID,
@@ -90,6 +92,17 @@ const mutation: fc.Arbitrary<Mutation> = fc.tuple(
 );
 const nearValidRequest = fc.array(mutation, { maxLength: 3 }).map((mutations) => mutated(workloadRequest(), mutations));
 
+// Deeper than the 6,174 levels at which `JSON.stringify` overflowed in the reviewed guard.
+const deepValue: fc.Arbitrary<JsonValue> = fc
+  .tuple(fc.integer({ min: 7_000, max: 12_000 }), fc.boolean())
+  .map(([depth, arrays]) => (arrays ? nestedArrays(depth) : nestedObjects(depth)));
+const deepPayload: fc.Arbitrary<JsonValue> = fc.oneof(
+  deepValue,
+  fc
+    .tuple(fc.constantFrom(...PROPERTIES), deepValue)
+    .map(([property, value]) => mutated(workloadRequest(), [[property, value]])),
+);
+
 describe('probe workload request properties', () => {
   it('accepts exactly what the probe_workload_request schema accepts and names this probe', () => {
     // Both verdicts must be exercised, or the differential is vacuous.
@@ -108,7 +121,7 @@ describe('probe workload request properties', () => {
 
   it('judges any JSON value without throwing, and refuses with a prefixed reason', () => {
     fc.assert(
-      fc.property(fc.oneof(nearValidRequest, fc.jsonValue() as fc.Arbitrary<JsonValue>), (payload) => {
+      fc.property(fc.oneof(nearValidRequest, fc.jsonValue() as fc.Arbitrary<JsonValue>, deepPayload), (payload) => {
         const result = parseProbeWorkloadRequest(payload, PROBE);
         if (result.ok) {
           assert.equal(validator.validateAs('probe_workload_request', payload).valid, true);

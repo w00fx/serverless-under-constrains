@@ -9,6 +9,7 @@ import { encodeAttributeMap } from '../../../src/durable-store/attribute-value-c
 import { ControllerFault } from '../../../src/treatment-controller/controller-fault.ts';
 import { consumeStreamEvent } from '../../../src/treatment-controller/stream-consumer.ts';
 import { ControllerLogRecorder } from '../../support/transport-rehearsal/controller-log-recorder.ts';
+import { nestedMapAttribute } from '../../support/transport-rehearsal/deep-values.ts';
 import { PROBE_PK, callerTimeoutImage } from './support/controller-fixtures.ts';
 import { ScriptedStreamRecordHandler } from './support/scripted-stream-record-handler.ts';
 
@@ -47,6 +48,28 @@ describe('consumeStreamEvent', () => {
         detail: 'other',
       },
     ]);
+  });
+
+  it('logs and skips a record nested 20,000 levels deep instead of throwing (review r1)', async () => {
+    const handler = new ScriptedStreamRecordHandler();
+    const logs = new ControllerLogRecorder();
+    handler.returnNext({ outcome: 'signal', partition_key: PROBE_PK, detail: 'signalled' });
+    const deep = {
+      eventName: 'INSERT',
+      dynamodb: { SequenceNumber: '8', NewImage: { pk: { S: 'p' }, sk: { S: 's' }, x: nestedMapAttribute(20_000) } },
+    };
+    await consumeStreamEvent({ Records: [deep, record('9')] }, handler, logs.sink);
+    assert.deepEqual(
+      handler.handled().map((handled) => handled.sequence_number),
+      ['9'],
+    );
+    assert.deepEqual(logs.lines()[0], {
+      level: 'warn',
+      event: 'stream_record_unreadable',
+      code: 'STREAM_RECORD_MALFORMED',
+      detail: 'dynamodb.NewImage of 8: nests deeper than 130 containers; expected at most 64 nested attribute levels',
+    });
+    assert.equal(logs.lines().length, 2);
   });
 
   it('logs and skips a record it cannot read, then continues', async () => {

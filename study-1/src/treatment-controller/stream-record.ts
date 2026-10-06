@@ -2,7 +2,12 @@
 // F-2). The event source mapping filters to INSERTs of `caller_timeout_recorded`, but a filter
 // is configuration, so the controller checks both again before it acts (defense in depth).
 // `unmarshallStreamRecord` is total: any input yields a record or a structured reason, never an
-// exception, because a stream record the controller cannot read must not loop the shard.
+// exception, because a stream record the controller cannot read must not loop the shard. The
+// image decoder (WP-04 `decodeStoredItem`) recurses once per nesting level and overflowed the
+// stack at about 1,560 levels (WP-08 review r1). DynamoDB stores at most 32 nested levels
+// (https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html, "Nested
+// attribute depth"), so an image nested deeper cannot come from the table; it can only come from
+// a hand-made direct invocation. Nesting is measured iteratively and refused before decoding.
 //
 // The mapping's filter pattern is stated here once as data; the `ExperimentCore` synth test
 // compares the template's FilterCriteria with it, so configuration and code cannot drift.
@@ -31,6 +36,16 @@ const MALFORMED = 'STREAM_RECORD_MALFORMED';
 const SUBJECT = 'caller_journal_stream_record';
 
 /**
+ * The deepest image nesting read: twice DynamoDB's documented 32 nested attribute levels, so no
+ * image the table can store is refused whatever the level-counting convention, and far below
+ * the depth at which decoding overflowed.
+ */
+export const MAX_IMAGE_ATTRIBUTE_LEVELS = 64;
+// In the wire format each nested attribute level is two JavaScript containers (`{M: …}` or
+// `{L: …}` and the map or list itself); the item map and the innermost AttributeValue add two.
+const MAX_IMAGE_CONTAINER_DEPTH = 2 * MAX_IMAGE_ATTRIBUTE_LEVELS + 2;
+
+/**
  * Reads a raw DynamoDB stream record (`NEW_IMAGE` view) into its event name, its decoded new
  * image and its sequence number.
  *
@@ -53,6 +68,10 @@ export function unmarshallStreamRecord(raw: unknown): Result<StreamInsertRecord,
   if (typeof sequenceNumber !== 'string') {
     return malformed(`dynamodb.SequenceNumber is ${describeUnknown(sequenceNumber)}; expected a string`);
   }
+  const shapeProblem = imageContainerProblem(change['NewImage']);
+  if (shapeProblem !== undefined) {
+    return malformed(`dynamodb.NewImage of ${sequenceNumber}: ${shapeProblem}`);
+  }
   const image = decodeStoredItem(change['NewImage']);
   if (!image.ok) {
     return malformed(`dynamodb.NewImage of ${sequenceNumber}: ${image.error}`);
@@ -68,6 +87,30 @@ export function unmarshallStreamRecord(raw: unknown): Result<StreamInsertRecord,
  */
 export function isConsumableInsert(record: StreamInsertRecord): boolean {
   return record.event_name === 'INSERT' && record.new_image['record_type'] === CALLER_TIMEOUT_RECORD_TYPE;
+}
+
+// Walks the image without recursion. A JSON-parsed event is a tree, so a container met twice
+// (a shared or cyclic reference) is refused too, which also keeps the walk linear.
+function imageContainerProblem(image: unknown): string | undefined {
+  const visited = new Set<object>();
+  const pending: { readonly value: unknown; readonly depth: number }[] = [{ value: image, depth: 1 }];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const { value, depth } = next;
+    if (typeof value !== 'object' || value === null) {
+      continue;
+    }
+    if (depth > MAX_IMAGE_CONTAINER_DEPTH) {
+      return `nests deeper than ${String(MAX_IMAGE_CONTAINER_DEPTH)} containers; expected at most ${String(MAX_IMAGE_ATTRIBUTE_LEVELS)} nested attribute levels`;
+    }
+    if (visited.has(value)) {
+      return 'reuses a container; expected a tree of AttributeValues';
+    }
+    visited.add(value);
+    for (const child of Object.values(value)) {
+      pending.push({ value: child, depth: depth + 1 });
+    }
+  }
+  return undefined;
 }
 
 function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {

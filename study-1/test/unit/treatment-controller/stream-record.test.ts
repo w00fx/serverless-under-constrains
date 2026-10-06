@@ -5,12 +5,15 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { encodeAttributeMap } from '../../../src/durable-store/attribute-value-codec.ts';
+import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import {
   CALLER_TIMEOUT_RECORD_TYPE,
   CONTROLLER_STREAM_FILTER,
+  MAX_IMAGE_ATTRIBUTE_LEVELS,
   isConsumableInsert,
   unmarshallStreamRecord,
 } from '../../../src/treatment-controller/stream-record.ts';
+import { nestedMapAttribute } from '../../support/transport-rehearsal/deep-values.ts';
 import { callerTimeoutImage, streamInsert } from './support/controller-fixtures.ts';
 
 const IMAGE = callerTimeoutImage('probe');
@@ -68,6 +71,54 @@ describe('unmarshallStreamRecord', () => {
     assert.match(result.error.detail, /^dynamodb\.NewImage of 9: item key is pk=/);
     const removed = unmarshallStreamRecord(rawRecord({ eventName: 'REMOVE', dynamodb: { SequenceNumber: '9' } }));
     assert.equal(removed.ok, false);
+  });
+});
+
+function withImage(image: JsonValue): Readonly<Record<string, unknown>> {
+  return rawRecord({ dynamodb: { SequenceNumber: '5', NewImage: image } });
+}
+
+function nestedImage(levels: number): JsonValue {
+  return { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedMapAttribute(levels) };
+}
+
+const TOO_DEEP =
+  'dynamodb.NewImage of 5: nests deeper than 130 containers; expected at most 64 nested attribute levels';
+
+describe('unmarshallStreamRecord nesting bound (review r1: decodeStoredItem overflowed at 1,563 levels)', () => {
+  it('reads an image at the bound, twice the 32 levels DynamoDB stores, and refuses one level deeper', () => {
+    assert.equal(MAX_IMAGE_ATTRIBUTE_LEVELS, 64);
+    const atBound = unmarshallStreamRecord(withImage(nestedImage(64)));
+    assert.equal(atBound.ok, true);
+    let leaf: unknown = atBound.value.new_image['deep'];
+    for (let level = 0; level < 64; level += 1) {
+      leaf = (leaf as Readonly<Record<string, unknown>>)['a'];
+    }
+    assert.equal(leaf, 'leaf');
+    assert.deepEqual(unmarshallStreamRecord(withImage(nestedImage(65))), malformed(TOO_DEEP));
+  });
+
+  it('refuses an image nested 20,000 levels deep without throwing', () => {
+    assert.deepEqual(unmarshallStreamRecord(withImage(nestedImage(20_000))), malformed(TOO_DEEP));
+  });
+
+  it('refuses an image that reuses a container, and still reads nulls inside an image', () => {
+    const shared = { S: 'x' };
+    assert.deepEqual(
+      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, a: shared, b: shared })),
+      malformed('dynamodb.NewImage of 5: reuses a container; expected a tree of AttributeValues'),
+    );
+    assert.deepEqual(
+      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, a: { S: 'x' }, b: { S: 'x' } })),
+      {
+        ok: true,
+        value: { event_name: 'INSERT', new_image: { pk: 'p', sk: 's', a: 'x', b: 'x' }, sequence_number: '5' },
+      },
+    );
+    assert.deepEqual(
+      unmarshallStreamRecord(withImage({ pk: { S: 'p' }, sk: { S: 's' }, n: { L: [null] } })),
+      malformed('dynamodb.NewImage of 5: $.n[0] is null; expected an AttributeValue object'),
+    );
   });
 });
 
