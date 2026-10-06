@@ -13,7 +13,11 @@ import type {
 import type { SettlementSample } from '../../../../../src/record-contract/records/group-b/settlement_sample.ts';
 import type { ExecutionCorrelation } from '../../../../../src/record-contract/records/group-b/shared-shapes.ts';
 import type { TelemetryAvailabilityRecord } from '../../../../../src/record-contract/records/group-b/telemetry_availability.ts';
-import type { TreatmentStateSnapshot } from '../../../../../src/record-contract/records/group-b/treatment_state_snapshot.ts';
+import type {
+  TreatmentItem,
+  TreatmentStateSnapshot,
+} from '../../../../../src/record-contract/records/group-b/treatment_state_snapshot.ts';
+import type { TreatmentState } from '../../../../../src/record-contract/records/group-b/vocabulary.ts';
 import { DURABLE_EXECUTION_ARN } from './caller-examples.ts';
 import {
   ATTEMPT_CORRELATION,
@@ -192,6 +196,18 @@ export function ledgerSnapshotTwoPages(): LedgerSnapshot {
   };
 }
 
+// The identities the COMMITTED_WAITING transition records together (BR-RUA-025), and the two the
+// controller signal adds.
+const TREATMENT_COMMIT = {
+  targeted_attempt_id: ATTEMPT_CORRELATION.attempt_id,
+  provider_request_id: ATTEMPT_CORRELATION.provider_request_id,
+  provider_call_id: COMMIT_TRIPLE.provider_call_id,
+  provider_commit_id: COMMIT_TRIPLE.provider_commit_id,
+  provider_transaction_id: COMMIT_TRIPLE.provider_transaction_id,
+  commit_event_id: uuid(14),
+};
+const TREATMENT_SIGNAL = { signal_event_id: uuid(23), signal_caller_event_id: uuid(6) };
+
 /**
  * The trial's treatment item after its response was released.
  *
@@ -211,18 +227,31 @@ export function treatmentItemPresent(): TreatmentStateSnapshot {
     treatment: {
       state: 'RESPONSE_RELEASED',
       version: 5,
-      targeted_attempt_id: ATTEMPT_CORRELATION.attempt_id,
-      provider_request_id: ATTEMPT_CORRELATION.provider_request_id,
-      provider_call_id: COMMIT_TRIPLE.provider_call_id,
-      provider_commit_id: COMMIT_TRIPLE.provider_commit_id,
-      provider_transaction_id: COMMIT_TRIPLE.provider_transaction_id,
-      commit_event_id: uuid(14),
-      signal_event_id: uuid(23),
-      signal_caller_event_id: uuid(6),
+      ...TREATMENT_COMMIT,
+      ...TREATMENT_SIGNAL,
       observed_event_id: uuid(17),
       release_event_id: uuid(18),
     },
   };
+}
+
+/**
+ * The same partition read while the chain was still at `state`: the item keeps only the
+ * identities written up to that transition and the version it had then (BR-RUA-025).
+ *
+ * @example
+ * toJson(treatmentItemAt('TIMEOUT_SIGNALLED')).treatment; // commit and signal ids, version 3
+ */
+export function treatmentItemAt(
+  state: Exclude<TreatmentState, 'RESPONSE_RELEASED' | 'SAFETY_RELEASED'>,
+): TreatmentStateSnapshot {
+  const chain: Readonly<Record<typeof state, TreatmentItem>> = {
+    ARMED: { state, version: 1 },
+    COMMITTED_WAITING: { state, version: 2, ...TREATMENT_COMMIT },
+    TIMEOUT_SIGNALLED: { state, version: 3, ...TREATMENT_COMMIT, ...TREATMENT_SIGNAL },
+    TIMEOUT_OBSERVED: { state, version: 4, ...TREATMENT_COMMIT, ...TREATMENT_SIGNAL, observed_event_id: uuid(17) },
+  };
+  return { ...treatmentItemPresent(), item_present: true, treatment: chain[state] };
 }
 
 /**
@@ -246,12 +275,7 @@ export function treatmentItemSafetyReleased(): TreatmentStateSnapshot {
     treatment: {
       state: 'SAFETY_RELEASED',
       version: 3,
-      targeted_attempt_id: ATTEMPT_CORRELATION.attempt_id,
-      provider_request_id: ATTEMPT_CORRELATION.provider_request_id,
-      provider_call_id: COMMIT_TRIPLE.provider_call_id,
-      provider_commit_id: COMMIT_TRIPLE.provider_commit_id,
-      provider_transaction_id: COMMIT_TRIPLE.provider_transaction_id,
-      commit_event_id: uuid(14),
+      ...TREATMENT_COMMIT,
       safety_release_cause: 'SAFETY_DEADLINE',
     },
   };
@@ -385,23 +409,6 @@ export function coordinationPrefixCheckpoint(): CoordinationPrefixCheckpoint {
   };
 }
 
-// A treatment item carries its commit and signal identities only as far as they exist
-// (treatment_state_snapshot schema), so each one may be absent.
-const TREATMENT_COMMIT_IDENTITIES = [
-  'targeted_attempt_id',
-  'provider_request_id',
-  'provider_call_id',
-  'provider_commit_id',
-  'provider_transaction_id',
-  'commit_event_id',
-];
-const TREATMENT_IDENTITIES = [
-  ...TREATMENT_COMMIT_IDENTITIES,
-  'signal_event_id',
-  'signal_caller_event_id',
-  'observed_event_id',
-  'release_event_id',
-];
 // GetDurableExecutionHistory fills these per event type only; event type and time are always there.
 const DURABLE_HISTORY_DETAILS = [
   'history_event_id',
@@ -421,11 +428,14 @@ export const OBSERVATION_EXAMPLES: readonly RecordExample[] = [
   example('ledger_snapshot two pages', ledgerSnapshotTwoPages(), {
     nested_optional: ['/pages/*/start_cursor', '/pages/*/next_cursor'],
   }),
-  example('treatment_state_snapshot present', treatmentItemPresent(), {
-    nested_optional: TREATMENT_IDENTITIES.map((member) => `/treatment/${member}`),
-  }),
+  example('treatment_state_snapshot present', treatmentItemPresent()),
+  example('treatment_state_snapshot ARMED', treatmentItemAt('ARMED')),
+  example('treatment_state_snapshot COMMITTED_WAITING', treatmentItemAt('COMMITTED_WAITING')),
+  example('treatment_state_snapshot TIMEOUT_SIGNALLED', treatmentItemAt('TIMEOUT_SIGNALLED')),
+  example('treatment_state_snapshot TIMEOUT_OBSERVED', treatmentItemAt('TIMEOUT_OBSERVED')),
+  // The provider records no cause when cleanup released the wait (refund-provider barrier-decision).
   example('treatment_state_snapshot safety released', treatmentItemSafetyReleased(), {
-    nested_optional: [...TREATMENT_COMMIT_IDENTITIES, 'safety_release_cause'].map((member) => `/treatment/${member}`),
+    nested_optional: ['/treatment/safety_release_cause'],
   }),
   example('treatment_state_snapshot absent', treatmentItemAbsent()),
   example('durable_execution_metadata', durableExecutionMetadata(), {
