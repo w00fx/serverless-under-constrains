@@ -2,7 +2,9 @@
 // The generator picks any governed leaf of any example and replaces it with a value of another
 // JSON kind, or adds an unknown member to any governed object. Free-form values are skipped
 // (any non-null JSON is valid there) and a meaningful null (BR-RUA-033) is never the
-// replacement of a member that admits it.
+// replacement of a member that admits it. The A-05 hostile shapes are in the input space:
+// replacement numbers include the non-finite ones `JSON.parse('1e400')` yields, and added
+// members include the names every object inherits (A-07); a throw fails the property.
 // FC_RUNS sets the budget and FC_SEED replays a failure (test/support/kernel/fuzz-parameters.ts).
 
 import assert from 'node:assert/strict';
@@ -17,6 +19,7 @@ import { leavesOf, objectPathsOf, pointerOf, withValueAt } from '../group-b/supp
 import type { JsonPath } from '../group-b/support/json-paths.ts';
 import { toJson } from '../group-b/support/record-builders.ts';
 import { GROUP_C_EXAMPLES } from './examples/group-c-examples.ts';
+import { INHERITED_MEMBER_NAMES, NON_FINITE_NUMBERS } from './support/hostile-json.ts';
 import { isFreeForm, isNullable } from './support/json-scope.ts';
 
 interface MutationSite {
@@ -46,7 +49,12 @@ const unknownObject = fc.dictionary(
   fc.integer(),
   { maxKeys: 2 },
 );
-const numbers = fc.oneof(fc.integer(), fc.double({ noNaN: true, noDefaultInfinity: true }));
+// JSON text never yields NaN, but `1e400` parses to Infinity (A-05).
+const numbers = fc.oneof(
+  fc.integer(),
+  fc.double({ noNaN: true, noDefaultInfinity: true }),
+  fc.constantFrom(...NON_FINITE_NUMBERS),
+);
 const arrays = fc.array(fc.integer(), { maxLength: 2 });
 
 function replacementFor(site: MutationSite): fc.Arbitrary<JsonValue> {
@@ -70,7 +78,10 @@ const leafMutation = fc
 
 const extraMember = fc.record({
   site: fc.constantFrom(...OBJECT_SITES),
-  name: fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`),
+  name: fc.oneof(
+    fc.stringMatching(/^[a-z]{1,6}$/).map((name) => `x_${name}`),
+    fc.constantFrom(...INHERITED_MEMBER_NAMES),
+  ),
   member: fc.oneof(fc.constant<JsonValue>(null), fc.boolean(), fc.integer(), fc.string(), arrays),
 });
 
