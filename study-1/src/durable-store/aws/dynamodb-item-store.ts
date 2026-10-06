@@ -35,8 +35,9 @@ import type { DurableItemStore, QueryPage, StoredItem, StoreReadFailure, WriteOu
  */
 export function createDynamoDbItemStore(tables: StoreTableNames, client: DynamoDBClient): DurableItemStore {
   return {
-    write: (action) => sendWrite(client, planWrite(tables, action)),
-    transact: (actions, clientRequestToken) => sendWrite(client, planTransaction(tables, actions, clientRequestToken)),
+    write: (action) => sendWrite(client, () => planWrite(tables, action)),
+    transact: (actions, clientRequestToken) =>
+      sendWrite(client, () => planTransaction(tables, actions, clientRequestToken)),
     getConsistent: async (table, key): Promise<Result<StoredItem | undefined, StoreReadFailure>> => {
       const plan = planGetItem(tables, table, key);
       return plan.ok ? sendRead(() => client.send(new GetItemCommand(plan.value)), readGetItemOutput) : plan;
@@ -48,7 +49,13 @@ export function createDynamoDbItemStore(tables: StoreTableNames, client: DynamoD
   };
 }
 
-async function sendWrite(client: DynamoDBClient, plan: Result<PlannedWrite, RefusedRequest>): Promise<WriteOutcome> {
+// Planning runs inside the async function, so even an unforeseen throw while planning would
+// reject the returned promise instead of escaping `write()` synchronously (WP-04 review round 2).
+async function sendWrite(
+  client: DynamoDBClient,
+  planRequest: () => Result<PlannedWrite, RefusedRequest>,
+): Promise<WriteOutcome> {
+  const plan = planRequest();
   if (!plan.ok) {
     return plan.error;
   }

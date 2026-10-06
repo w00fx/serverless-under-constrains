@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { scalarAttributeValue, toConditionExpression } from '../../../src/durable-store/condition-expression.ts';
+import type { Condition } from '../../../src/durable-store/item-store-port.ts';
 
 describe('toConditionExpression', () => {
   it('item_absent tests the partition key through a name placeholder', () => {
@@ -65,6 +66,48 @@ describe('toConditionExpression', () => {
       toConditionExpression({ kind: 'all', conditions: [{ kind: 'item_absent' }] }).expression,
       '(attribute_not_exists(#c0))',
     );
+  });
+});
+
+describe('toConditionExpression on deep and wide conditions (WP-04 review round 2)', () => {
+  it('renders 100,000 levels of all iteratively, without overflowing the call stack', () => {
+    let condition: Condition = { kind: 'item_absent' };
+    for (let level = 0; level < 100_000; level += 1) {
+      condition = { kind: 'all', conditions: [condition] };
+    }
+    const parts = toConditionExpression(condition);
+    assert.equal(parts.expression, `${'('.repeat(100_000)}attribute_not_exists(#c0)${')'.repeat(100_000)}`);
+    assert.deepEqual(parts.names, { '#c0': 'pk' });
+  });
+
+  it('numbers placeholders left to right across a wide condition', () => {
+    const parts = toConditionExpression({
+      kind: 'all',
+      conditions: Array.from({ length: 12 }, (_, index) => ({
+        kind: 'attribute_equals' as const,
+        name: `n${String(index)}`,
+        value: index,
+      })),
+    });
+    assert.equal(parts.expression.split(' AND ').at(11), '(#c11 = :c11)');
+    assert.equal(parts.names['#c11'], 'n11');
+    assert.deepEqual(parts.values[':c11'], { N: '11' });
+  });
+
+  it('renders a 200,000-member all without overflowing the call stack, placeholders in order', () => {
+    const parts = toConditionExpression({
+      kind: 'all',
+      conditions: Array.from({ length: 200_000 }, () => ({ kind: 'item_absent' }) as const),
+    });
+    const members = parts.expression.split(' AND ');
+    assert.equal(members.length, 200_000);
+    assert.equal(members[0], '(attribute_not_exists(#c0))');
+    assert.equal(members.at(-1), '(attribute_not_exists(#c199999))');
+    assert.equal(Object.keys(parts.names).length, 200_000);
+  });
+
+  it('renders an empty all as nothing', () => {
+    assert.equal(toConditionExpression({ kind: 'all', conditions: [] }).expression, '');
   });
 });
 
