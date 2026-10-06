@@ -2,10 +2,12 @@
 // AC-RUA-026, AC-RUA-035, AC-RUA-036, AC-RUA-037). It reads an original validation package and its
 // explicitly selected amendment chain and states the effective implementation-validation status:
 // 1. the package verifier judges structure, integrity and the selected chain (eligibility);
-// 2. the original scientific evidence is read back from the original bytes (admission, manifest
-//    drift, both trials' oracle results and their anchors); no amendment can change it;
+// 2. the original evidence is read back from the original bytes (admission, manifest drift, both
+//    trials' oracle results and their anchors, and this validation's own safety and late-evidence
+//    assessments; original-evidence.ts); no amendment can change it;
 // 3. the declared status is re-derived from the original values with the BR-RUA-038 precedence; a
-//    summary whose status or validity disagrees is contradicted, so nothing it claims is trusted;
+//    summary whose status, validity, safety status or late-evidence status disagrees with them is
+//    contradicted, so nothing it claims is trusted;
 // 4. the effective operational values come from the OPERATIONAL_RECOVERY amendments of the
 //    selected chain (effective-operational-state.ts), the only values recovery may repair;
 // 5. the effective status applies the same precedence to the effective values, with the safety
@@ -13,30 +15,30 @@
 //    makes it `indeterminate`.
 // The original summary and every original file are only read, never rewritten (AC-RUA-026). The
 // record is written outside the package (`verifications/`), so every reference pins its package
-// index digest (BR-RUA-035).
+// index digest (BR-RUA-035), and it cites the stored oracle results the evidence was read from,
+// each once, never the summary's claimed references (evidence/WP-17/review-report.md).
 
 import { sortEvidenceRefs } from '../record-contract/evidence-refs.ts';
 import type { EvidenceRef } from '../record-contract/evidence-refs.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, Sha256Hex, Uuid4, UtcMillis } from '../record-contract/primitives.ts';
 import type { PackageVerification } from '../record-contract/records/group-c/package_verification.ts';
-import type { SafetyAssessment } from '../record-contract/records/group-c/safety_assessment.ts';
-import type { CrossPackageRef } from '../record-contract/records/group-c/shared-shapes.ts';
+import type { ArtifactRef, CrossPackageRef } from '../record-contract/records/group-c/shared-shapes.ts';
 import type { ValidationSummary } from '../record-contract/records/group-c/validation_summary.ts';
 import type { VariantValidationVerification } from '../record-contract/records/group-c/variant_validation_verification.ts';
+import type { LateEvidenceStatus } from '../record-contract/records/group-c/vocabulary.ts';
 import type { AmendmentSnapshot } from '../evidence-package/amendment-snapshots.ts';
 import { effectiveOperationalState } from '../evidence-package/effective-operational-state.ts';
 import type { EffectiveOperationalState } from '../evidence-package/effective-operational-state.ts';
 import { AMENDMENT_PATHS, EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
 import { verifyPackage } from '../evidence-package/package-verifier.ts';
 import type { PackageSnapshot, PackageVerifierDeps } from '../evidence-package/package-verifier.ts';
-import { readAdmissionEvidence } from './admission-evidence.ts';
 import { billedSafetyStanding } from './billing-safety.ts';
 import { effectiveOutcome } from './effective-outcome.ts';
-import { readPackageTrialEvidence } from './package-trial-evidence.ts';
-import { assessSafetyStanding } from './safety-standing.ts';
+import { readOriginalEvidence } from './original-evidence.ts';
+import type { OriginalEvidence } from './original-evidence.ts';
+import { assessSafetyStanding, unreadableSafetyStanding } from './safety-standing.ts';
 import type { SafetyStanding } from './safety-standing.ts';
-import { assessScientificEvidence } from './scientific-evidence.ts';
 import type { ScientificAssessment } from './scientific-evidence.ts';
 import { readValidationRecord } from './validation-records.ts';
 import { validationReason } from './validation-reasons.ts';
@@ -62,6 +64,8 @@ export type VariantValidationVerifierDeps = PackageVerifierDeps;
 interface StatusInputs {
   readonly scientific: ScientificAssessment;
   readonly summary: ValidationSummary;
+  /** The status this validation's late-evidence assessment records; `unverified` without one. */
+  readonly late_evidence_status: LateEvidenceStatus;
 }
 
 /**
@@ -102,8 +106,15 @@ export function verifyVariantValidation(
     },
     deps,
   );
-  const inputs: StatusInputs = { scientific: scientificAssessment(input, summary, deps), summary };
-  const originalSafety = assessSafetyStanding(safetyAssessmentOf(input, deps));
+  const original = readOriginalEvidence({ files, variant_validation_id: input.variant_validation_id, summary }, deps);
+  const inputs: StatusInputs = {
+    scientific: original.scientific,
+    summary,
+    late_evidence_status: original.late_evidence.ok ? original.late_evidence.value.late_evidence_status : 'unverified',
+  };
+  const originalSafety = original.safety.ok
+    ? assessSafetyStanding(original.safety.value)
+    : unreadableSafetyStanding(original.safety.error);
   const declared = deriveStatus(inputs, summary, 'declared', originalSafety);
   const state = effectiveOperationalState(
     { verification, original_closure: summary, amendments: input.amendments },
@@ -116,7 +127,7 @@ export function verifyVariantValidation(
   };
   const safety = billedSafetyStanding(originalSafety, verification, input.amendments, deps);
   const effective = deriveStatus(inputs, effectiveClosure, 'effective', safety);
-  const blocking = [...eligibilityReasons(verification), ...contradictionReasons(summary, declared)];
+  const blocking = [...eligibilityReasons(verification), ...contradictionReasons(summary, declared, original)];
   const outcome = effectiveOutcome({
     status: blocking.length > 0 ? 'indeterminate' : effective.implementation_validation_status,
     reasons: blocking.length > 0 ? [...blocking, ...unmetReasons(effective)] : effective.reasons,
@@ -140,45 +151,9 @@ export function verifyVariantValidation(
     ...outcome.outcome,
     operational_recovery_applied: state.operational_recovery_applied,
     effective_status_reasons: outcome.reasons,
-    evidence_refs: evidenceRefs(summaryRef, summary, verification, state),
+    evidence_refs: evidenceRefs(summaryRef, original.result_refs, verification, state),
     checked_at: input.checked_at,
   });
-}
-
-function scientificAssessment(
-  input: VariantValidationVerifierInput,
-  summary: ValidationSummary,
-  deps: VariantValidationVerifierDeps,
-): ScientificAssessment {
-  const { files } = input.original;
-  const admission = readAdmissionEvidence(files, input.variant_validation_id, deps);
-  if (!admission.ok) {
-    return {
-      validation_validity: 'invalid',
-      reasons: [admission.error],
-      control_verdict: undefined,
-      treatment_verdict: undefined,
-    };
-  }
-  return assessScientificEvidence(readPackageTrialEvidence({ files, admission: admission.value, summary }, deps));
-}
-
-// An assessment of another execution says nothing about this one's safety, so it counts as absent.
-function safetyAssessmentOf(
-  input: VariantValidationVerifierInput,
-  deps: VariantValidationVerifierDeps,
-): SafetyAssessment | undefined {
-  const read = readValidationRecord(
-    input.original.files,
-    EXECUTION_PATHS.safetyAssessment,
-    'safety_assessment',
-    deps.validator,
-  );
-  return read.ok &&
-    'variant_validation_id' in read.value.record &&
-    read.value.record.variant_validation_id === input.variant_validation_id
-    ? read.value.record
-    : undefined;
 }
 
 function deriveStatus(
@@ -194,7 +169,7 @@ function deriveStatus(
     closure,
     closure_basis: basis,
     safety,
-    late_evidence_status: summary.late_evidence_status,
+    late_evidence_status: inputs.late_evidence_status,
     evidence_integrity_status: summary.evidence_integrity_status,
   });
 }
@@ -213,21 +188,50 @@ function eligibilityReasons(verification: PackageVerification): readonly Validat
   ];
 }
 
-function contradictionReasons(summary: ValidationSummary, declared: ValidationStatus): readonly ValidationReason[] {
-  if (
+function contradictionReasons(
+  summary: ValidationSummary,
+  declared: ValidationStatus,
+  original: OriginalEvidence,
+): readonly ValidationReason[] {
+  const statusClaim =
     summary.implementation_validation_status === declared.implementation_validation_status &&
     summary.validation_validity === declared.validation_validity
-  ) {
-    return [];
+      ? []
+      : [
+          `the summary declares ${summary.implementation_validation_status} (${summary.validation_validity}); its original evidence derives ${declared.implementation_validation_status} (${declared.validation_validity})`,
+        ];
+  const { safety, late_evidence: late } = original;
+  const safetyClaim = fieldClaimProblem(
+    'safety_status',
+    summary.safety_status,
+    safety.ok ? ok(safety.value.safety_status) : safety,
+  );
+  const lateClaim = fieldClaimProblem(
+    'late_evidence_status',
+    summary.late_evidence_status,
+    late.ok ? ok(late.value.late_evidence_status) : late,
+  );
+  return [...statusClaim, ...safetyClaim, ...lateClaim].map((detail) =>
+    validationReason('DECLARED_STATUS_CONTRADICTED', 'validation summary', detail, EXECUTION_PATHS.validationSummary),
+  );
+}
+
+// A status the summary copies from an assessment must be that assessment's; without a readable
+// assessment of this validation, no claimed status is backed, so the claim is contradicted unless
+// it is the `unverified` that the missing assessment means.
+function fieldClaimProblem(
+  field: 'safety_status' | 'late_evidence_status',
+  claimed: string,
+  recorded: Result<string, string>,
+): readonly string[] {
+  if (!recorded.ok) {
+    return claimed === 'unverified'
+      ? []
+      : [`the summary declares ${field} ${claimed}; no assessment of this validation backs it (${recorded.error})`];
   }
-  return [
-    validationReason(
-      'DECLARED_STATUS_CONTRADICTED',
-      'validation summary',
-      `the summary declares ${summary.implementation_validation_status} (${summary.validation_validity}); its original evidence derives ${declared.implementation_validation_status} (${declared.validation_validity})`,
-      EXECUTION_PATHS.validationSummary,
-    ),
-  ];
+  return claimed === recorded.value
+    ? []
+    : [`the summary declares ${field} ${claimed}; its assessment records ${recorded.value}`];
 }
 
 /** The unmet conditions of a derivation; a conclusive one has none (its reason states a verdict). */
@@ -237,15 +241,14 @@ function unmetReasons(status: ValidationStatus): readonly ValidationReason[] {
 
 function evidenceRefs(
   summaryRef: CrossPackageRef,
-  summary: ValidationSummary,
+  storedResults: readonly ArtifactRef[],
   verification: PackageVerification,
   state: EffectiveOperationalState,
 ): readonly EvidenceRef[] {
-  const resultRefs = summary.trial_results.flatMap((entry) =>
-    'oracle_result_ref' in entry
-      ? [{ ...entry.oracle_result_ref, package_index_sha256: verification.original_package_index_sha256 }]
-      : [],
-  );
+  const resultRefs = storedResults.map((ref) => ({
+    ...ref,
+    package_index_sha256: verification.original_package_index_sha256,
+  }));
   const recoveries = state.operational_recovery_applied ? recoveryRefs(verification) : [];
   return sortEvidenceRefs([summaryRef, ...resultRefs, ...recoveries]);
 }

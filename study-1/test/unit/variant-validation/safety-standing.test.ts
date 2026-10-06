@@ -9,6 +9,7 @@ import {
   REAL_TIME_SAFEGUARDS,
   assessSafetyStanding,
   safetyReasons,
+  unreadableSafetyStanding,
 } from '../../../src/variant-validation/safety-standing.ts';
 import { SAFEGUARDS_WITHIN_LIMITS, safetyAssessment, safetyCheck } from './support/validation-inputs.ts';
 
@@ -17,10 +18,14 @@ function codes(standing: ReturnType<typeof assessSafetyStanding>): readonly stri
 }
 
 describe('assessSafetyStanding', () => {
-  it('is unverified when no readable assessment exists', () => {
-    const standing = assessSafetyStanding(undefined);
+  it('is unverified when no readable assessment exists, naming why', () => {
+    const standing = unreadableSafetyStanding('summary/safety-assessment.json is absent');
     assert.equal(standing.standing, 'unverified');
     assert.deepEqual(codes(standing), ['SAFETY_UNVERIFIED']);
+    assert.equal(
+      safetyReasons(standing)[0]?.detail,
+      'no safety assessment of this validation: summary/safety-assessment.json is absent',
+    );
   });
 
   it('is within limits when every check held', () => {

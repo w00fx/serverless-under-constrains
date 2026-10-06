@@ -38,8 +38,8 @@ const AC_CASE_FILES = [
     cases: ['missing-scientific-evidence', 'invalid-admission-or-fidelity', 'manifest-drift'],
   },
 ] as const;
-/** The WP-17 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 122, golden: 11, fuzz: 6 } as const;
+/** The WP-17 counts after its single-pass review (first delivery: unit 122, golden 11, fuzz 6). */
+const RATIFIED_FLOOR = { unit: 137, golden: 11, fuzz: 7 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));

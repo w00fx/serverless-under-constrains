@@ -7,6 +7,11 @@
 // acceptable when it pins that altered index's digest, never the original one (BR-RUA-035). The
 // FC_RUNS=10000 campaign found that case (seed -1827406168, path "8338:8:6:7", counterexample
 // [35,15,1]); its regression is the unit test "pins a re-sealed package index to its own digest".
+//
+// Every reference a verification cites names a stored file by the digest of its bytes. A summary
+// re-sealed with other claims (statuses from their vocabularies, oracle-result references drawn
+// from the stored results) concludes `verified` only when every claim is the sound package's: the
+// verifier reads the evidence and compares the claims with it, never the other way round.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -14,20 +19,28 @@ import { describe, it } from 'node:test';
 import fc from 'fast-check';
 
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
+import {
+  IMPLEMENTATION_VALIDATION_STATUSES,
+  LATE_EVIDENCE_STATUSES,
+  TRIAL_VALIDITIES,
+} from '../../../src/record-contract/records/group-c/vocabulary.ts';
 import type { PackageFile } from '../../../src/evidence-package/package-file-system.ts';
 import { EXECUTION_PATHS } from '../../../src/evidence-package/package-layout.ts';
 import { verifyVariantValidation } from '../../../src/variant-validation/variant-validation-verifier.ts';
 import { FIXTURE_DEPS } from '../../support/evidence-package/probe-package-fixtures.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
-import { validationPackage } from '../../golden/variant-validation/support/validation-package.ts';
+import { reindexed, validationPackage } from '../../golden/variant-validation/support/validation-package.ts';
 import { GOLDEN_VALIDATION_ID, goldenAt } from '../../golden/variant-validation/support/validation-records.ts';
+import { editRecord } from '../../unit/variant-validation/support/package-edits.ts';
+import type { RecordMembers } from '../../unit/variant-validation/support/package-edits.ts';
 
 const SOUND = validationPackage();
 const encoder = new TextEncoder();
 
-function assertNoVerdictOnOriginal(files: readonly PackageFile[]): void {
-  const storedIndex = files.find((file) => file.path === EXECUTION_PATHS.packageIndex)?.bytes ?? new Uint8Array();
-  const result = verifyVariantValidation(
+type Verification = ReturnType<typeof verifyVariantValidation>;
+
+function verificationOf(files: readonly PackageFile[]): Verification {
+  return verifyVariantValidation(
     {
       variant_validation_id: GOLDEN_VALIDATION_ID,
       original: { files, special_entries: [] },
@@ -38,6 +51,33 @@ function assertNoVerdictOnOriginal(files: readonly PackageFile[]): void {
     },
     FIXTURE_DEPS,
   );
+}
+
+// An error, or a schema-valid record whose every reference names a stored file by its digest.
+function assertWellFormed(files: readonly PackageFile[], result: Verification): void {
+  if (!result.ok) {
+    return;
+  }
+  const checked = FIXTURE_DEPS.validator.validateAs(
+    'variant_validation_verification',
+    JSON.parse(JSON.stringify(result.value)) as JsonValue,
+  );
+  assert.equal(checked.valid, true, JSON.stringify(checked.valid ? [] : checked.violations.slice(0, 2)));
+  for (const ref of result.value.evidence_refs) {
+    const stored = files.find((file) => file.path === ref.artifact_path);
+    assert.ok(stored, `cites ${ref.artifact_path}, which is not stored`);
+    assert.equal(
+      FIXTURE_DEPS.digest(stored.bytes),
+      ref.artifact_sha256,
+      `cites ${ref.artifact_path} by another digest`,
+    );
+  }
+}
+
+function assertNoVerdictOnOriginal(files: readonly PackageFile[]): void {
+  const storedIndex = files.find((file) => file.path === EXECUTION_PATHS.packageIndex)?.bytes ?? new Uint8Array();
+  const result = verificationOf(files);
+  assertWellFormed(files, result);
   if (!result.ok) {
     return;
   }
@@ -45,11 +85,6 @@ function assertNoVerdictOnOriginal(files: readonly PackageFile[]): void {
     assert.notEqual(result.value.original_package_index_sha256, SOUND.index_sha256, 'verified the original package');
     assert.equal(result.value.original_package_index_sha256, FIXTURE_DEPS.digest(storedIndex));
   }
-  const checked = FIXTURE_DEPS.validator.validateAs(
-    'variant_validation_verification',
-    JSON.parse(JSON.stringify(result.value)) as JsonValue,
-  );
-  assert.equal(checked.valid, true);
 }
 
 function replaced(index: number, bytes: Uint8Array): readonly PackageFile[] {
@@ -62,6 +97,56 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 
 const FILE_INDEX = fc.nat({ max: SOUND.files.length - 1 });
 const SUMMARY_INDEX = SOUND.files.findIndex((file) => file.path === EXECUTION_PATHS.validationSummary);
+const STORED_RESULT_REFS = SOUND.summary.trial_results.flatMap((entry) =>
+  'oracle_result_ref' in entry ? [entry.oracle_result_ref] : [],
+);
+
+/** The claims a re-sealed summary may make about the evidence it summarizes. */
+interface SummaryClaims {
+  readonly implementation_validation_status: (typeof IMPLEMENTATION_VALIDATION_STATUSES)[number];
+  readonly validation_validity: (typeof TRIAL_VALIDITIES)[number];
+  readonly safety_status: 'within_limits' | 'breached' | 'unverified';
+  readonly late_evidence_status: (typeof LATE_EVIDENCE_STATUSES)[number];
+  /** Positions in STORED_RESULT_REFS each trial entry claims as its result. */
+  readonly result_refs: readonly [number, number];
+}
+
+const SOUND_CLAIMS: SummaryClaims = {
+  implementation_validation_status: 'verified',
+  validation_validity: 'valid',
+  safety_status: 'within_limits',
+  late_evidence_status: 'none',
+  result_refs: [0, 1],
+};
+
+const claimsArbitrary: fc.Arbitrary<SummaryClaims> = fc.record({
+  implementation_validation_status: fc.constantFrom(...IMPLEMENTATION_VALIDATION_STATUSES),
+  validation_validity: fc.constantFrom(...TRIAL_VALIDITIES),
+  safety_status: fc.constantFrom('within_limits', 'breached', 'unverified'),
+  late_evidence_status: fc.constantFrom(...LATE_EVIDENCE_STATUSES),
+  result_refs: fc.tuple(fc.nat({ max: 1 }), fc.nat({ max: 1 })),
+});
+
+// The sound package with its summary re-sealed under `claims`: an edited summary, re-indexed so the
+// package stays eligible. A claim the summary schema forbids makes the verifier return an error.
+function claimedPackage(claims: SummaryClaims): readonly PackageFile[] {
+  const edit = (summary: RecordMembers): RecordMembers => ({
+    ...summary,
+    implementation_validation_status: claims.implementation_validation_status,
+    validation_validity: claims.validation_validity,
+    safety_status: claims.safety_status,
+    late_evidence_status: claims.late_evidence_status,
+    status_reasons:
+      claims.implementation_validation_status === 'verified'
+        ? []
+        : [{ code: 'CLAIMED', subject: 'validation summary', detail: 'claimed by the fuzz case' }],
+    trial_results: (summary['trial_results'] as readonly RecordMembers[]).map((entry, position) => ({
+      ...entry,
+      oracle_result_ref: STORED_RESULT_REFS[claims.result_refs[position] ?? position],
+    })),
+  });
+  return reindexed(SOUND, editRecord(SOUND.files, EXECUTION_PATHS.validationSummary, edit)).files;
+}
 
 describe('verifyVariantValidation over hostile bytes (property)', () => {
   it('the sound fixture verifies', () => {
@@ -96,6 +181,22 @@ describe('verifyVariantValidation over hostile bytes (property)', () => {
       fc.property(FILE_INDEX, fc.uint8Array({ maxLength: 512 }), (index, bytes) => {
         fc.pre(!sameBytes(bytes, SOUND.files[index]?.bytes ?? new Uint8Array()));
         assertNoVerdictOnOriginal(replaced(index, bytes));
+      }),
+      fuzzParameters(),
+    );
+  });
+
+  it('a re-sealed summary verifies only when every claim it makes is the sound one', () => {
+    assert.ok(verificationOf(claimedPackage(SOUND_CLAIMS)).ok, 'the sound claims re-seal to a readable summary');
+    fc.assert(
+      fc.property(claimsArbitrary, (claims) => {
+        const files = claimedPackage(claims);
+        const result = verificationOf(files);
+        assertWellFormed(files, result);
+        if (result.ok && result.value.effective_implementation_validation_status === 'verified') {
+          // fc.record builds null-prototype objects; compare the claims as plain values.
+          assert.deepEqual({ ...claims, result_refs: [...claims.result_refs] }, SOUND_CLAIMS);
+        }
       }),
       fuzzParameters(),
     );

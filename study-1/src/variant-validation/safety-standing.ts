@@ -29,23 +29,12 @@ export const REAL_TIME_SAFEGUARDS: readonly SafetyBoundary[] = ['ESTIMATED_COST'
 const SUBJECT = 'safety_status';
 
 /**
- * Judges a safety assessment; `undefined` means no readable assessment exists, which is itself an
- * unresolved safety condition.
+ * Judges a safety assessment.
  *
  * @example
  * assessSafetyStanding(withinLimitsAssessment); // { standing: 'within_limits' }
- * assessSafetyStanding(undefined).standing; // 'unverified'
  */
-export function assessSafetyStanding(assessment: SafetyAssessment | undefined): SafetyStanding {
-  if (assessment === undefined) {
-    return unverified([
-      validationReason(
-        'SAFETY_UNVERIFIED',
-        SUBJECT,
-        'no readable safety assessment; expected summary/safety-assessment.json',
-      ),
-    ]);
-  }
+export function assessSafetyStanding(assessment: SafetyAssessment): SafetyStanding {
   const breached = breachReasons(assessment);
   if (breached.length > 0) {
     return { standing: 'breached', reasons: breached };
@@ -56,6 +45,20 @@ export function assessSafetyStanding(assessment: SafetyAssessment | undefined): 
   }
   const uncertainty = otherUncertainty(assessment.checks, pending);
   return uncertainty.length === 0 ? { standing: 'billing_pending' } : unverified(uncertainty);
+}
+
+/**
+ * The standing when this validation has no readable safety assessment of its own, which is itself
+ * an unresolved safety condition; `problem` says why (absent, unreadable, another execution's).
+ *
+ * @example
+ * unreadableSafetyStanding('summary/safety-assessment.json is absent; expected a safety_assessment record').standing;
+ * // 'unverified'
+ */
+export function unreadableSafetyStanding(problem: string): SafetyStanding {
+  return unverified([
+    validationReason('SAFETY_UNVERIFIED', SUBJECT, `no safety assessment of this validation: ${problem}`),
+  ]);
 }
 
 /**

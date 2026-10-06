@@ -78,6 +78,10 @@ export function frozen(trial: DeclaredTrial, overrides: Partial<FrozenTrialEvide
     kind: 'frozen',
     declared: trial,
     oracle_result: inValidation(example, trial),
+    oracle_result_ref: {
+      artifact_path: `trials/${trial.trial_id}/derived/oracle-result.json`,
+      artifact_sha256: digest(`oracle result ${trial.trial_id}`),
+    },
     trial_manifest_sha256: trialManifestDigest(trial),
     anchor_problems: [],
     ...overrides,
