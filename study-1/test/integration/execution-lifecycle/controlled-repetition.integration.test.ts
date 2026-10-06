@@ -14,6 +14,7 @@ import { SessionExecutionLease } from '../../../src/execution-lifecycle/session-
 import { asTrialExecution } from '../../../src/execution-lifecycle/trial-plans.ts';
 import { EXECUTION_PATHS } from '../../../src/evidence-package/package-layout.ts';
 import { serializeRecordFile } from '../../../src/record-contract/canonical-json.ts';
+import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import { RUN_SAFETY } from '../../../src/safety/safety-limits.ts';
 import { SafetySupervisor } from '../../../src/safety/safety-supervisor.ts';
 import { stackName } from '../../../infra/ownership/resource-naming.ts';
@@ -108,7 +109,11 @@ describe('AC-RUA-008 controlled repetition', () => {
     assert.equal(outcome.package_finalized, true);
 
     const mutations = harness.mutationLog.entries();
-    assert.equal(mutations[0]?.target, 'coordination', 'the first mutation is the lease acquisition');
+    assert.deepEqual(
+      [mutations[0]?.port, mutations[0]?.operation, mutations[0]?.target],
+      ['dynamodb', 'PutItem', 'coordination'],
+      'the first mutation is the lease acquisition',
+    );
     const deploy = harness.mutationLog.firstSequenceOf('cloudformation', 'CreateStack');
     assert.ok(deploy !== undefined && deploy > 1);
     const lease = await harness.lease.read();
@@ -150,10 +155,22 @@ describe('AC-RUA-008 controlled repetition', () => {
       'published in the declared order',
     );
 
+    // Every trial ran the frozen inputs on the frozen deployment, and its result names both.
     const files = world.cloud.packageFiles();
-    for (const trialId of declared) {
+    const resourceManifestSha256 = sha256Hex(files.get(EXECUTION_PATHS.resourceManifest) ?? new Uint8Array());
+    for (const [index, trialId] of declared.entries()) {
       const manifest = world.record(`trials/${trialId}/trial-manifest.json`);
       assert.equal(manifest['execution_manifest_sha256'], world.admitted.manifest_sha256);
+      assert.equal(manifest['resource_manifest_sha256'], resourceManifestSha256);
+      assert.equal(manifest['sequence'], index + 1);
+      const payment = files.get(`trials/${trialId}/inputs/payment.json`) ?? new Uint8Array();
+      assert.equal(manifest['payment_sha256'], sha256Hex(payment));
+      const oracle = world.record(`trials/${trialId}/derived/oracle-result.json`);
+      assert.equal(oracle['execution_manifest_sha256'], world.admitted.manifest_sha256);
+      assert.equal(
+        oracle['trial_manifest_sha256'],
+        sha256Hex(files.get(`trials/${trialId}/trial-manifest.json`) ?? new Uint8Array()),
+      );
     }
     assert.deepEqual([...manifestDigestsNamed(files)], [world.admitted.manifest_sha256]);
     assert.equal(outcome.lease_status, 'released');
