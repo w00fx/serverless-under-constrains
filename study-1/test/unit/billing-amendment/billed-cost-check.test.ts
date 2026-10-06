@@ -72,6 +72,16 @@ describe('deriveBilledCostCheck compares the exact USD sum with the ceiling', ()
     });
   });
 
+  it('sums 150,000 attributed lines exactly (A-05: no argument spread per line)', () => {
+    const lines = Array.from({ length: 150_000 }, (_, index) => line(`row:${String(index + 1)}`, '0.0001'));
+    // 150,000 x 0.0001 = 15 > 5.00.
+    assert.deepEqual(deriveBilledCostCheck(attribution(lines), CEILING), {
+      billed_cost_check: 'breached',
+      attributed_total_usd: '15',
+      reasons: [],
+    });
+  });
+
   it('is within_limit with total 0 when nothing is attributable and nothing is missing', () => {
     assert.deepEqual(deriveBilledCostCheck(attribution([]), CEILING), {
       billed_cost_check: 'within_limit',

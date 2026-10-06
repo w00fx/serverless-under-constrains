@@ -99,6 +99,12 @@ describe('sumMoney and compareMoney', () => {
     assert.equal(compareMoney(money('10'), money('9.99')), 1);
   });
 
+  it('sums 200,000 amounts without exhausting the stack (A-05; one argument per line used to overflow it)', () => {
+    const amounts = Array.from({ length: 200_000 }, (_, index) => money(index % 2 === 0 ? '0.000001' : '1'));
+    // 100,000 x 0.000001 + 100,000 x 1 = 0.1 + 100000.
+    assert.equal(sumMoney(amounts), '100000.1');
+  });
+
   it('throws with the offending value on a non-money operand', () => {
     assert.throws(() => sumMoney([money('-1')]), {
       name: 'RangeError',
