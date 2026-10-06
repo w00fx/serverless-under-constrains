@@ -118,7 +118,7 @@ describe('AC-RUA-046 variant_validation_verification rules (CTR-RUA-004)', () =>
     assertRejected(
       edited(verified, { execution_manifest_sha256: digest('m') }),
       'manifest digest',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
     assertForbidden(edited(verified, { run_id: RUN_ID }), 'run identity', '/run_id');
   });
@@ -160,7 +160,7 @@ describe('AC-RUA-046 study_completion_assessment rules (BR-RUA-054, AC-RUA-038)'
     assertRejected(
       edited(complete, { selected_amendment_head_sha256: null }),
       'amendment head',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
   });
 });
@@ -212,7 +212,7 @@ describe('AC-RUA-046 oracle_revision_check rules (BR-RUA-055, AC-RUA-055)', () =
     assertRejected(
       edited(passed, { execution_manifest_sha256: digest('m') }),
       'manifest digest',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
   });
 });

@@ -90,7 +90,7 @@
     "late_evidence_assessment_ref",
     "created_at"
   ],
-  "unevaluatedProperties": false,
+  "additionalProperties": false,
   "allOf": [
     {
       "if": {

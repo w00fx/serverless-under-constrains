@@ -144,7 +144,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -366,5 +366,5 @@
     "comparison_assessment_ref",
     "created_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

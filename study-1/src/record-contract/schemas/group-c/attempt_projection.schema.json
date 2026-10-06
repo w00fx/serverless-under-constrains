@@ -349,7 +349,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     },
     "transaction": {
       "type": "object",
@@ -471,5 +471,5 @@
     "trial_id": ["trial_manifest_sha256"],
     "trial_manifest_sha256": ["trial_id"]
   },
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

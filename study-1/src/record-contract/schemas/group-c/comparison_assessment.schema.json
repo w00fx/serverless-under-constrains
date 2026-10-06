@@ -163,7 +163,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     },
     "comparison_check": {
       "type": "object",
@@ -627,5 +627,5 @@
     "comparison_ineligibility_reasons",
     "assessed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

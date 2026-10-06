@@ -59,7 +59,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -203,5 +203,5 @@
     "reasons",
     "assessed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

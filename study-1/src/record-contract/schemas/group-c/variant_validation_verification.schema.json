@@ -152,5 +152,5 @@
     "checked_at",
     "validation_validity"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

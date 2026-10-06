@@ -405,7 +405,7 @@ describe('AC-RUA-046 operational_recovery_record rules (BR-RUA-038)', () => {
     assertRejected(
       edited(recovery, { comparison_eligibility: 'eligible' }),
       'scientific repair',
-      ' unevaluatedProperties',
+      ' additionalProperties',
     );
     assertForbidden(edited(recovery, { trial_id: TRIAL_ID }), 'trial identity', '/trial_id');
     assertRejected(edited(recovery, { run_id: RUN_ID }), 'two executions', ' oneOf');

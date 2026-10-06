@@ -289,7 +289,7 @@ describe('AC-RUA-046 transport_probe_result rules', () => {
 
   it('orders by cross-source wall clock and never claims formal happened-before proof (AC-RUA-002)', () => {
     assertRejected(edited(passing, { ordering_basis: 'happened_before' }), 'formal ordering', '/ordering_basis enum');
-    assertRejected(edited(passing, { happened_before_proven: true }), 'proof claim', ' unevaluatedProperties');
+    assertRejected(edited(passing, { happened_before_proven: true }), 'proof claim', ' additionalProperties');
     const schema = readFileSync(join(DEFAULT_SCHEMA_ROOT, 'group-c', 'transport_probe_result.schema.json'), 'utf8');
     assert.doesNotMatch(schema, /"happened_before|"formal_order|"proof/);
     assertRejected(

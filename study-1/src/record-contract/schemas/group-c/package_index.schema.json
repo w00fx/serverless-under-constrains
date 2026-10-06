@@ -185,5 +185,5 @@
     }
   },
   "required": ["schema_version", "record_type", "execution_kind", "execution_manifest_sha256", "entries", "created_at"],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

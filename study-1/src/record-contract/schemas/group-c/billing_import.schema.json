@@ -248,5 +248,5 @@
     "reasons",
     "imported_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

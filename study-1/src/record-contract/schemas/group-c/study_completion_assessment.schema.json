@@ -272,5 +272,5 @@
     "evidence_refs",
     "assessed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

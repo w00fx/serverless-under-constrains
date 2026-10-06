@@ -166,5 +166,5 @@
     "entries",
     "created_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

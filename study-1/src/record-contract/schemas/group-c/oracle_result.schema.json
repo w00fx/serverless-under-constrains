@@ -2913,5 +2913,5 @@
     "monetary_observations",
     "checked_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

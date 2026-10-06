@@ -256,5 +256,5 @@
     "reasons",
     "completed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

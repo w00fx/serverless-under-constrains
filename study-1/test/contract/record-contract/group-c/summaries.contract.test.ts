@@ -117,7 +117,7 @@ describe('AC-RUA-046 validation_summary rules', () => {
     assertRejected(edited(verified, { trial_results: trials.slice(0, 1) }), 'one trial', '/trial_results minItems');
     assertForbidden(edited(verified, { run_id: RUN_ID }), 'run identity', '/run_id');
     assertForbidden(edited(verified, { trial_id: TRIAL_ID }), 'trial identity', '/trial_id');
-    assertRejected(edited(verified, { winner: 'durable' }), 'cross-variant field', ' unevaluatedProperties');
+    assertRejected(edited(verified, { winner: 'durable' }), 'cross-variant field', ' additionalProperties');
   });
 });
 
@@ -218,12 +218,12 @@ describe('AC-RUA-046 run_summary rules', () => {
       'wrong scenario',
       '/trial_results/1/scenario const',
     );
-    assertRejected(trialAt(eligible, 0, 'rank', 1), 'annotated trial', '/trial_results/0 unevaluatedProperties');
+    assertRejected(trialAt(eligible, 0, 'rank', 1), 'annotated trial', '/trial_results/0 additionalProperties');
   });
 
   it('has no winner, aggregate, ranking or statistic', () => {
     for (const member of ['winner', 'aggregate_verdict', 'ranking', 'pass_rate']) {
-      assertRejected(edited(eligible, { [member]: 'durable' }), member, ' unevaluatedProperties');
+      assertRejected(edited(eligible, { [member]: 'durable' }), member, ' additionalProperties');
     }
   });
 

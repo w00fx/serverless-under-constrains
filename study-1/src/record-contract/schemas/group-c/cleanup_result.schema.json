@@ -110,7 +110,7 @@
           }
         }
       ],
-      "unevaluatedProperties": false
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -270,5 +270,5 @@
     "duration_breach",
     "started_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

@@ -345,5 +345,5 @@
     "indeterminate_reasons",
     "checked_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }
