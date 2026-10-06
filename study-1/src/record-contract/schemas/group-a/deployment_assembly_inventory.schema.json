@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/deployment_assembly_inventory.schema.json",
   "title": "deployment_assembly_inventory (BR-RUA-042)",
-  "description": "The canonical inventory of the frozen deployment assembly copied into the evidence package (design §9.8 S3). Each entry is one regular file: its normalized path relative to assembly_path, byte count, permission bits as four octal digits, and SHA-256. Symlinks, special files and container-image assets are rejected before an inventory exists, so the inventory has no field to describe them. Entries are sorted by path in code-point order and inventory_sha256 is the digest of the canonical JSON of the entry list; sortedness and that digest are checked in code by the evidence-package inventory, not by this schema.",
+  "description": "The canonical inventory of the frozen deployment assembly copied into the evidence package (design §9.8 S3). Each entry is one regular file: its normalized path relative to assembly_path, byte count, permission bits as four octal digits, and SHA-256. Symlinks, special files and container-image assets are rejected before an inventory exists, so the inventory has no field to describe them. Entries are sorted by path in strictly ascending code-point order, so each path appears once, and inventory_sha256 is the digest of the canonical JSON of the entry list; path uniqueness, that order and that digest are checked in code by the assembly inventory builder and the evidence-package verifier, not by this schema, which rejects only byte-identical duplicate entries.",
   "type": "object",
   "properties": {
     "schema_version": { "const": 1 },

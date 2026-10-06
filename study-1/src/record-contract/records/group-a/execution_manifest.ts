@@ -2,7 +2,7 @@
 // transport probe, frozen before the first mutation. Any change to a declared field requires a
 // new execution identity.
 
-import type { JsonValue, MoneyDecimal, Scenario, Sha256Hex, UtcMillis, Uuid4, VariantId } from '../../primitives.ts';
+import type { MoneyDecimal, Scenario, Sha256Hex, UtcMillis, Uuid4, VariantId } from '../../primitives.ts';
 import type { ProviderWarmupPolicy } from './transport_scope_snapshot.ts';
 import type { ToolVersions } from './source_provenance.ts';
 
@@ -117,20 +117,30 @@ export interface ConservativeEstimates {
   readonly resource_counts: Readonly<Record<string, number>>;
 }
 
+/** The CA-1 scope, verbatim from the spec. */
+export const CA_1_SCOPE = 'same-account, same-Region AWS Lambda execution environments';
+
+/** The CA-1 statement, verbatim from the spec (its line break joined by one space). */
+export const CA_1_STATEMENT =
+  'UTC wall-clock timestamps preserve the ordering of the provider commit and caller timer events for this PoC.';
+
 /** CA-1, the PoC clock-alignment assumption, declared verbatim as a study assumption. */
 export interface ClockAssumptionDeclaration {
   readonly assumption_id: 'CA-1';
   readonly assumption_type: 'clock_alignment';
-  readonly scope: string;
-  readonly statement: string;
+  readonly scope: typeof CA_1_SCOPE;
+  readonly statement: typeof CA_1_STATEMENT;
   readonly status: 'declared_not_service_guaranteed';
 }
+
+/** One variant's side of a declared difference; never null, because both sides name a value. */
+export type DeclaredVariantValue = string | number | boolean;
 
 /** BR-RUA-007: a difference that is part of the variants' declared execution strategies. */
 export interface DeclaredVariantDifference {
   readonly parameter: string;
-  readonly conventional: JsonValue;
-  readonly durable: JsonValue;
+  readonly conventional: DeclaredVariantValue;
+  readonly durable: DeclaredVariantValue;
   readonly basis: string;
 }
 

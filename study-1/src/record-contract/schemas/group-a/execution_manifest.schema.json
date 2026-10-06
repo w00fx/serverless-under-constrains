@@ -84,8 +84,8 @@
         "type": "object",
         "properties": {
           "parameter": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-          "conventional": {},
-          "durable": {},
+          "conventional": { "$ref": "#/$defs/declared_value" },
+          "durable": { "$ref": "#/$defs/declared_value" },
           "basis": { "type": "string", "minLength": 1 }
         },
         "required": ["parameter", "conventional", "durable", "basis"],
@@ -284,6 +284,14 @@
       ],
       "additionalProperties": false
     },
+    "declared_value": {
+      "description": "One variant's value of a declared difference: a non-empty string, a safe integer or a boolean. Never null: a declared difference names a value on both sides.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+        { "type": "boolean" }
+      ]
+    },
     "positive_ms": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "timing": {
       "type": "object",
@@ -401,12 +409,15 @@
       "additionalProperties": false
     },
     "clock_assumption_ca_1": {
+      "description": "CA-1 exactly as the spec declares it: the scope and statement are the spec text (the statement's line break joined by one space), so a manifest cannot restate the assumption as a stronger claim.",
       "type": "object",
       "properties": {
         "assumption_id": { "const": "CA-1" },
         "assumption_type": { "const": "clock_alignment" },
-        "scope": { "type": "string", "minLength": 1 },
-        "statement": { "type": "string", "minLength": 1 },
+        "scope": { "const": "same-account, same-Region AWS Lambda execution environments" },
+        "statement": {
+          "const": "UTC wall-clock timestamps preserve the ordering of the provider commit and caller timer events for this PoC."
+        },
         "status": { "const": "declared_not_service_guaranteed" }
       },
       "required": ["assumption_id", "assumption_type", "scope", "statement", "status"],

@@ -7,6 +7,8 @@ import { describe, it } from 'node:test';
 
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import {
+  CA_1_SCOPE,
+  CA_1_STATEMENT,
   RUN_TRIAL_ORDER,
   VALIDATION_SCENARIO_ORDER,
 } from '../../../../src/record-contract/records/group-a/execution_manifest.ts';
@@ -226,6 +228,41 @@ describe('execution_manifest (BR-RUA-040)', () => {
 
   it('declares CA-1 verbatim as a non-guaranteed clock assumption', () => {
     const [ca1] = runExecutionManifest().clock_assumptions;
+    // The spec text of CA-1, written out here as the oracle rather than read from the module.
+    assert.deepEqual(ca1, {
+      assumption_id: 'CA-1',
+      assumption_type: 'clock_alignment',
+      scope: 'same-account, same-Region AWS Lambda execution environments',
+      statement:
+        'UTC wall-clock timestamps preserve the ordering of the provider commit and caller timer events for this PoC.',
+      status: 'declared_not_service_guaranteed',
+    });
+    assert.equal(CA_1_SCOPE, ca1.scope);
+    assert.equal(CA_1_STATEMENT, ca1.statement);
+    assertRejected(
+      withPath(
+        runExecutionManifest(),
+        ['clock_assumptions', 0, 'statement'],
+        'Lambda clocks give a formal happened-before proof.',
+      ),
+      '/clock_assumptions/0/statement const',
+      'statement claiming what CA-1 forbids',
+    );
+    assertRejected(
+      withPath(runExecutionManifest(), ['clock_assumptions', 0, 'statement'], `${CA_1_STATEMENT} `),
+      '/clock_assumptions/0/statement const',
+      'statement with a trailing space',
+    );
+    assertRejected(
+      withPath(runExecutionManifest(), ['clock_assumptions', 0, 'scope'], 'any AWS Region'),
+      '/clock_assumptions/0/scope const',
+      'wider scope',
+    );
+    assertRejected(
+      withPath(runExecutionManifest(), ['clock_assumptions', 0, 'assumption_type'], 'clock_accuracy'),
+      '/clock_assumptions/0/assumption_type const',
+      'type',
+    );
     assertRejected(withField(runExecutionManifest(), 'clock_assumptions', []), '/clock_assumptions minItems', 'none');
     assertRejected(
       withField(runExecutionManifest(), 'clock_assumptions', [ca1, ca1]),
@@ -245,6 +282,17 @@ describe('execution_manifest (BR-RUA-040)', () => {
   });
 
   it('records the declared variant differences of BR-RUA-007', () => {
+    const conventional = ['declared_variant_differences', 0, 'conventional'] as const;
+    for (const value of ['STANDARD', true, 9007199254740991]) {
+      assertAccepted(withPath(runExecutionManifest(), conventional, value), `scalar ${JSON.stringify(value)}`);
+    }
+    for (const value of [{ VisibilityTimeout: 60 }, [60], '', 60.5, 9007199254740992]) {
+      assertRejected(
+        withPath(runExecutionManifest(), conventional, value),
+        '/declared_variant_differences/0/conventional anyOf',
+        `declared value ${JSON.stringify(value)}`,
+      );
+    }
     assertRejected(
       withPath(runExecutionManifest(), ['declared_variant_differences', 0, 'basis'], ''),
       '/declared_variant_differences/0/basis minLength',

@@ -7,7 +7,10 @@ import type {
   ExecutionManifest,
 } from '../../../../../src/record-contract/records/group-a/execution_manifest.ts';
 import type { ProviderTrialConfiguration } from '../../../../../src/record-contract/records/group-a/provider_trial_configuration.ts';
-import type { ResourceManifest } from '../../../../../src/record-contract/records/group-a/resource_manifest.ts';
+import type {
+  OwnershipTagEntry,
+  ResourceManifest,
+} from '../../../../../src/record-contract/records/group-a/resource_manifest.ts';
 import type { TrialManifest } from '../../../../../src/record-contract/records/group-a/trial_manifest.ts';
 import type { TrialRegistration } from '../../../../../src/record-contract/records/group-a/trial_registration.ts';
 import {
@@ -175,6 +178,17 @@ export function probeExecutionManifest(): ExecutionManifest {
   };
 }
 
+/** The five BR-RUA-050 tags of the run's execution stack (expiry: admission plus OR-RUA-003 total). */
+export function runOwnershipTags(): readonly OwnershipTagEntry[] {
+  return [
+    { key: 'suc:project', value: 'serverless-under-constraints' },
+    { key: 'suc:study_id', value: 'study-1' },
+    { key: 'suc:run_id', value: IDS.run },
+    { key: 'suc:managed_by', value: 'rua-operator-cli' },
+    { key: 'suc:expires_at', value: instant('13:30:00.000') },
+  ];
+}
+
 export function succeededResourceManifest(): ResourceManifest {
   return {
     schema_version: 1,
@@ -192,13 +206,18 @@ export function succeededResourceManifest(): ResourceManifest {
         resource_status: 'CREATE_COMPLETE',
       },
     ],
-    ownership_tags: [
-      { key: 'suc:project', value: 'serverless-under-constraints' },
-      { key: 'suc:run_id', value: IDS.run },
-    ],
+    ownership_tags: runOwnershipTags(),
     outputs: [{ key: 'ProviderQualifier', value: '1' }],
     provider_version: '1',
-    configuration: { provider_version: '1', event_source_mappings: [{ batch_size: 1 }] },
+    configuration: [
+      { logical_id: 'ControllerStreamMapping5E6F7A8B', attribute_path: 'BatchSize', canonical_json: '1' },
+      {
+        logical_id: 'ControllerStreamMapping5E6F7A8B',
+        attribute_path: 'FilterCriteria',
+        canonical_json: '{"Filters":[{"Pattern":"{\\"eventName\\":[\\"INSERT\\"]}"}]}',
+      },
+      { logical_id: 'ConventionalSourceQueue9A0B1C2D', attribute_path: 'VisibilityTimeout', canonical_json: '"60"' },
+    ],
     deploy_started_at: instant('12:00:10.000'),
     deploy_completed_at: instant('12:03:10.000'),
     frozen_at: instant('12:03:11.000'),
@@ -215,7 +234,7 @@ export function failedResourceManifest(): ResourceManifest {
     provisioning_status: 'failed',
     stack_name: 'SucRua-run-00000000',
     resources: [],
-    ownership_tags: [{ key: 'suc:run_id', value: IDS.run }],
+    ownership_tags: runOwnershipTags(),
     outputs: [],
     deploy_started_at: instant('12:00:10.000'),
     frozen_at: instant('12:00:12.000'),

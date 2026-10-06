@@ -56,17 +56,57 @@ export function withoutField(record: object, field: string): JsonObject {
 }
 
 /**
- * Returns a deep copy of a record with the value at a JSON path replaced, e.g.
- * `withPath(manifest, ['safety', 'region'], 'eu-west-1')`. Throws when the path does not exist.
+ * Returns a deep copy of a record with the value at an existing JSON path replaced, e.g.
+ * `withPath(manifest, ['safety', 'region'], 'eu-west-1')`. Throws, naming the whole path, as
+ * soon as any segment is missing: it never adds a member, so a typo cannot pass as a mutation.
  */
 export function withPath(record: object, path: readonly (string | number)[], value: JsonFragment): JsonObject {
-  const copy = structuredClone(asJson(record)) as Record<string, unknown>;
-  const parentPath = path.slice(0, -1);
-  const last = path.at(-1);
-  const parent = parentPath.reduce<unknown>((node, key) => (node as Record<string | number, unknown>)[key], copy);
-  if (last === undefined || typeof parent !== 'object' || parent === null || !(last in parent)) {
-    throw new Error(`path ${JSON.stringify(path)} does not exist in the record; expected an existing property path`);
-  }
-  (parent as Record<string | number, unknown>)[last] = value;
+  const copy: unknown = structuredClone(asJson(record));
+  const { parent, key } = targetOf(copy, path);
+  parent[key] = value;
   return copy as JsonObject;
+}
+
+/**
+ * Returns a deep copy of a record without the object member at an existing JSON path, e.g.
+ * `withoutPath(manifest, ['configuration', 0, 'canonical_json'])`. Throws like `withPath`, and
+ * when the path addresses an array item (removing one would shift the others).
+ */
+export function withoutPath(record: object, path: readonly (string | number)[]): JsonObject {
+  const copy: unknown = structuredClone(asJson(record));
+  const { parent, key } = targetOf(copy, path);
+  if (Array.isArray(parent)) {
+    throw new Error(`path ${JSON.stringify(path)} addresses an array item; expected an object member`);
+  }
+  Reflect.deleteProperty(parent, key);
+  return copy as JsonObject;
+}
+
+interface PathTarget {
+  readonly parent: Record<string | number, unknown>;
+  readonly key: string | number;
+}
+
+function targetOf(root: unknown, path: readonly (string | number)[]): PathTarget {
+  const key = path.at(-1);
+  const parent = path.slice(0, -1).reduce<unknown>((node, segment) => memberOf(node, segment, path), root);
+  if (key === undefined || !hasMember(parent, key)) {
+    throw missingPath(path);
+  }
+  return { parent, key };
+}
+
+function memberOf(node: unknown, key: string | number, path: readonly (string | number)[]): unknown {
+  if (!hasMember(node, key)) {
+    throw missingPath(path);
+  }
+  return node[key];
+}
+
+function hasMember(node: unknown, key: string | number): node is Record<string | number, unknown> {
+  return typeof node === 'object' && node !== null && Object.hasOwn(node, key);
+}
+
+function missingPath(path: readonly (string | number)[]): Error {
+  return new Error(`path ${JSON.stringify(path)} does not exist in the record; expected an existing property path`);
 }

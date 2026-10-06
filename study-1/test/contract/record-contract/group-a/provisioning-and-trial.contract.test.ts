@@ -5,17 +5,36 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PROVISIONING_STATUSES } from '../../../../src/record-contract/records/group-a/resource_manifest.ts';
+import {
+  EXPIRES_AT_TAG_KEY,
+  MANAGED_BY_TAG,
+  PROJECT_TAG,
+  RUN_ID_TAG_KEY,
+  STUDY_TAG,
+  VARIANT_TAG_KEY,
+} from '../../../../infra/ownership/ownership-tags.ts';
+import {
+  OWNERSHIP_TAG_KEYS,
+  PROVISIONING_STATUSES,
+} from '../../../../src/record-contract/records/group-a/resource_manifest.ts';
 import {
   failedResourceManifest,
   probeProviderConfiguration,
+  runOwnershipTags,
   succeededResourceManifest,
   trialManifest,
   trialProviderConfiguration,
   trialRegistration,
 } from './support/manifest-examples.ts';
 import { FIXTURE, IDS } from './support/sample-values.ts';
-import { assertAccepted, assertRejected, withField, withPath, withoutField } from './support/validation-assertions.ts';
+import {
+  assertAccepted,
+  assertRejected,
+  withField,
+  withPath,
+  withoutField,
+  withoutPath,
+} from './support/validation-assertions.ts';
 
 describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
   it('accepts every provisioning status', () => {
@@ -41,6 +60,47 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
     );
   });
 
+  it('snapshots post-deploy configuration as attribute entries with canonical JSON text (BR-RUA-033)', () => {
+    const entry = ['configuration', 0] as const;
+    assertRejected(
+      withField(succeededResourceManifest(), 'configuration', { FunctionName: null, MemorySize: 512 }),
+      '/configuration type',
+      'AWS-keyed object with a null',
+    );
+    assertRejected(withField(succeededResourceManifest(), 'configuration', []), '/configuration minItems', 'empty');
+    assertAccepted(withField(failedResourceManifest(), 'configuration', []), 'a failed deploy read nothing');
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'canonical_json'], 1),
+      '/configuration/0/canonical_json type',
+      'raw value',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'canonical_json'], null),
+      '/configuration/0/canonical_json type',
+      'null value',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'canonical_json'], ''),
+      '/configuration/0/canonical_json minLength',
+      'empty text',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'attribute_path'], 'Batch Size'),
+      '/configuration/0/attribute_path pattern',
+      'attribute path',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), [...entry, 'logical_id'], 'Controller-Mapping'),
+      '/configuration/0/logical_id pattern',
+      'logical id',
+    );
+    assertRejected(
+      withoutPath(succeededResourceManifest(), [...entry, 'canonical_json']),
+      '/configuration/0 required',
+      'no value',
+    );
+  });
+
   it('records the immutable provider version, never $LATEST or an alias (BR-RUA-053)', () => {
     for (const version of ['$LATEST', 'live', '0', '01', '']) {
       assertRejected(
@@ -51,11 +111,66 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
     }
   });
 
-  it('records ownership tags and the deterministic stack name', () => {
+  it('records the BR-RUA-050 ownership tags, each once', () => {
+    assert.deepEqual(OWNERSHIP_TAG_KEYS, [
+      'suc:project',
+      'suc:study_id',
+      'suc:run_id',
+      'suc:managed_by',
+      'suc:expires_at',
+      'suc:variant_id',
+    ]);
+    // The keys the WP-00 infrastructure applies are the keys the manifest records.
+    assert.deepEqual(
+      [PROJECT_TAG.key, STUDY_TAG.key, RUN_ID_TAG_KEY, MANAGED_BY_TAG.key, EXPIRES_AT_TAG_KEY, VARIANT_TAG_KEY],
+      OWNERSHIP_TAG_KEYS,
+    );
+    const tags = runOwnershipTags();
+    for (const missing of OWNERSHIP_TAG_KEYS.slice(0, 5)) {
+      assertRejected(
+        withField(
+          succeededResourceManifest(),
+          'ownership_tags',
+          tags.filter((tag) => tag.key !== missing),
+        ),
+        '/ownership_tags contains',
+        `without ${missing}`,
+      );
+    }
+    assertRejected(
+      withField(succeededResourceManifest(), 'ownership_tags', [tags[0]]),
+      '/ownership_tags minItems',
+      'a generic project tag alone',
+    );
+    assertRejected(
+      withField(succeededResourceManifest(), 'ownership_tags', [...tags, { key: 'suc:run_id', value: IDS.trial1 }]),
+      '/ownership_tags contains',
+      'two run ids',
+    );
+    const variantTag = { key: 'suc:variant_id', value: 'durable' };
+    assertAccepted(withField(succeededResourceManifest(), 'ownership_tags', [...tags, variantTag]), 'variant tag');
+    assertRejected(
+      withField(succeededResourceManifest(), 'ownership_tags', [
+        ...tags,
+        variantTag,
+        { key: 'suc:variant_id', value: 'conventional' },
+      ]),
+      '/ownership_tags contains',
+      'two variant tags',
+    );
+    assertAccepted(
+      withField(succeededResourceManifest(), 'ownership_tags', tags.toReversed()),
+      'tag order has no meaning',
+    );
     assertRejected(
       withPath(succeededResourceManifest(), ['ownership_tags', 0, 'key'], 'Project'),
-      '/ownership_tags/0/key pattern',
+      '/ownership_tags/0/key enum',
       'key',
+    );
+    assertRejected(
+      withPath(succeededResourceManifest(), ['ownership_tags', 0, 'key'], 'suc:trial_id'),
+      '/ownership_tags/0/key enum',
+      'trial identity is never a resource tag',
     );
     assertRejected(
       withPath(succeededResourceManifest(), ['ownership_tags', 0, 'value'], 'a@b'),
@@ -67,6 +182,9 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       '/ownership_tags minItems',
       'untagged',
     );
+  });
+
+  it('names the stack deterministically and records CloudFormation statuses', () => {
     assertRejected(
       withField(succeededResourceManifest(), 'stack_name', 'MyStack'),
       '/stack_name pattern',

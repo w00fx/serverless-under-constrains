@@ -19,17 +19,25 @@ const FUNCTIONS = {
 } as const;
 
 describe('normalizeConfigurationProjection', () => {
-  it('selects only the selector construct, normalizes references and maps absent paths to null', () => {
+  it('selects only the selector construct, normalizes references and omits the value of absent paths', () => {
     const projected = normalizeConfigurationProjection(cdkTemplate({ providerTimeout: 29 }), FUNCTIONS);
     assert.deepEqual(projected, {
       ok: true,
       value: [
-        // canonical order: the controller's `"Properties.Role":null` sorts before the provider's object
-        { 'Properties.Timeout': 30, 'Properties.Role': null, 'Properties.ReservedConcurrentExecutions': null },
+        // canonical order: the provider's first value "29" sorts before the controller's "30"
         {
-          'Properties.Timeout': 29,
-          'Properties.Role': { 'Fn::GetAtt': ['<AWS::IAM::Role>', 'Arn'] },
-          'Properties.ReservedConcurrentExecutions': null,
+          property_values: [
+            { property_path: 'Properties.Timeout', canonical_json: '29' },
+            { property_path: 'Properties.Role', canonical_json: '{"Fn::GetAtt":["<AWS::IAM::Role>","Arn"]}' },
+            { property_path: 'Properties.ReservedConcurrentExecutions' },
+          ],
+        },
+        {
+          property_values: [
+            { property_path: 'Properties.Timeout', canonical_json: '30' },
+            { property_path: 'Properties.Role' },
+            { property_path: 'Properties.ReservedConcurrentExecutions' },
+          ],
         },
       ],
     });
@@ -58,13 +66,18 @@ describe('normalizeConfigurationProjection', () => {
     assert.deepEqual(probe, {
       ok: true,
       value: [
-        { 'Properties.Environment': null, 'Properties.Role': null },
+        // canonical order: a set first property ("canonical_json") sorts before an unset one
         {
-          'Properties.Environment': {
-            Variables: { SUC_EXECUTION_ID: '<uuid>', SUC_TABLE_LEDGER: { Ref: '<AWS::DynamoDB::Table>' } },
-          },
-          'Properties.Role': { 'Fn::GetAtt': ['<AWS::IAM::Role>', 'Arn'] },
+          property_values: [
+            {
+              property_path: 'Properties.Environment',
+              canonical_json:
+                '{"Variables":{"SUC_EXECUTION_ID":"<uuid>","SUC_TABLE_LEDGER":{"Ref":"<AWS::DynamoDB::Table>"}}}',
+            },
+            { property_path: 'Properties.Role', canonical_json: '{"Fn::GetAtt":["<AWS::IAM::Role>","Arn"]}' },
+          ],
         },
+        { property_values: [{ property_path: 'Properties.Environment' }, { property_path: 'Properties.Role' }] },
       ],
     });
   });
@@ -116,7 +129,7 @@ describe('normalizeConfigurationProjection', () => {
     } as const;
     assert.deepEqual(normalizeConfigurationProjection(cdkTemplate(), projection), {
       ok: true,
-      value: [{ 'Properties.MemorySize': 512 }],
+      value: [{ property_values: [{ property_path: 'Properties.MemorySize', canonical_json: '512' }] }],
     });
   });
 });

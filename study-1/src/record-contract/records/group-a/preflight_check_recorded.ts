@@ -3,11 +3,17 @@
 // value, the observed value when available, the result, evidence and check time.
 
 import type { EvidenceRef } from '../../evidence-refs.ts';
-import type { JsonValue, StructuredReason, UtcMillis, Uuid4 } from '../../primitives.ts';
+import type { StructuredReason, UtcMillis, Uuid4 } from '../../primitives.ts';
 import type { AdmissionCheckId, AdmissionRejectionClass } from './admission_rejection.ts';
 
 export const PREFLIGHT_CHECK_RESULTS = ['passed', 'failed'] as const;
 export type PreflightCheckResult = (typeof PREFLIGHT_CHECK_RESULTS)[number];
+
+/**
+ * A declared limit or observed value as record JSON (BR-RUA-033): never null at any depth, and
+ * every object member name is snake_case (the schema checks the names).
+ */
+export type CheckValue = string | number | boolean | readonly CheckValue[] | { readonly [member: string]: CheckValue };
 
 interface PreflightCheckFields {
   readonly schema_version: 1;
@@ -19,9 +25,9 @@ interface PreflightCheckFields {
   /** The boundary or input the step checked, for example `estimated_attributable_cost`. */
   readonly subject: string;
   /** The declared limit or expected value. */
-  readonly expected: JsonValue;
+  readonly expected: CheckValue;
   /** Omitted when the value could not be observed. */
-  readonly observed?: JsonValue;
+  readonly observed?: CheckValue;
   readonly evidence_refs: readonly EvidenceRef[];
   readonly checked_at: UtcMillis;
 }

@@ -224,11 +224,11 @@ function configurationProjections(
   const projections: NormalizedConfigurationProjection[] = [];
   const reasons: StructuredReason[] = [];
   for (const projection of policy.configuration_projections) {
-    const values = normalizeConfigurationProjection(template, projection);
-    if (values.ok) {
-      projections.push({ projection_id: projection.projection_id, values: values.value });
+    const resources = normalizeConfigurationProjection(template, projection);
+    if (resources.ok) {
+      projections.push({ projection_id: projection.projection_id, resources: resources.value });
     } else {
-      reasons.push(values.error);
+      reasons.push(resources.error);
     }
   }
   projections.sort((a, b) => compareCodeUnits(a.projection_id, b.projection_id));

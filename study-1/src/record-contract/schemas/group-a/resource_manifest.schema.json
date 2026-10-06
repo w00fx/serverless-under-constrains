@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/resource_manifest.schema.json",
   "title": "resource_manifest (BR-RUA-040, BR-RUA-050)",
-  "description": "The frozen result of provisioning (design §9.8 D4): succeeded, partial or failed, the stack name and unique stack id, every discovered stack resource, the ownership tags, the stack outputs, the immutable provider version, the post-deploy configuration snapshot and the timestamps. Tags and outputs are key/value lists because their keys (suc:run_id, CloudFormation output names) are not snake_case property names. A succeeded manifest has a stack id, a provider version, a configuration snapshot and a completion time, because trials may start only after successful provisioning.",
+  "description": "The frozen result of provisioning (design §9.8 D4): succeeded, partial or failed, the stack name and unique stack id, every discovered stack resource, the ownership tags, the stack outputs, the immutable provider version, the post-deploy configuration snapshot and the timestamps. Tags and outputs are key/value lists, and the configuration snapshot is a list of attribute entries, because their keys (suc:run_id, CloudFormation output names, AWS attribute names) are not snake_case property names. A succeeded manifest has a stack id, a provider version, a configuration snapshot and a completion time, because trials may start only after successful provisioning.",
   "type": "object",
   "properties": {
     "schema_version": { "const": 1 },
@@ -33,17 +33,52 @@
       "uniqueItems": true
     },
     "ownership_tags": {
+      "description": "The BR-RUA-050 ownership tags of the execution stack: each of suc:project, suc:study_id, suc:run_id, suc:managed_by and suc:expires_at exactly once, and suc:variant_id at most once (variant-specific resources only). A generic project tag alone never authorizes deletion.",
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "key": { "type": "string", "pattern": "^suc:[a-z][a-z_]*$" },
+          "key": {
+            "enum": ["suc:project", "suc:study_id", "suc:run_id", "suc:managed_by", "suc:expires_at", "suc:variant_id"]
+          },
           "value": { "type": "string", "minLength": 1, "pattern": "^[^@]*$" }
         },
         "required": ["key", "value"],
         "additionalProperties": false
       },
-      "minItems": 1,
+      "allOf": [
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:project" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:study_id" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:run_id" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:managed_by" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:expires_at" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      ],
+      "minItems": 5,
       "uniqueItems": true
     },
     "outputs": {
@@ -60,7 +95,12 @@
       "uniqueItems": true
     },
     "provider_version": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-    "configuration": { "type": "object" },
+    "configuration": {
+      "description": "The post-deploy configuration snapshot (design §9.8 D4): one entry per read attribute of a stack resource, such as an event source mapping's BatchSize or a queue's VisibilityTimeout. The value is the canonical JSON text of what the AWS API returned, because AWS member names are not BR-RUA-033 property names. One entry per (logical_id, attribute_path) is a code-level check of the manifest builder.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/configuration_attribute" },
+      "uniqueItems": true
+    },
     "deploy_started_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" },
     "deploy_completed_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" },
     "frozen_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
@@ -100,10 +140,22 @@
       "stack_id": { "type": "string" },
       "resources": { "type": "array", "minItems": 1 },
       "provider_version": { "type": "string" },
-      "configuration": { "type": "object" },
+      "configuration": { "type": "array", "minItems": 1 },
       "deploy_completed_at": { "type": "string" }
     },
     "required": ["stack_id", "provider_version", "configuration", "deploy_completed_at"]
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "configuration_attribute": {
+      "type": "object",
+      "properties": {
+        "logical_id": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+        "attribute_path": { "type": "string", "pattern": "^[A-Za-z0-9]+(\\.[A-Za-z0-9]+)*$" },
+        "canonical_json": { "type": "string", "minLength": 1 }
+      },
+      "required": ["logical_id", "attribute_path", "canonical_json"],
+      "additionalProperties": false
+    }
+  }
 }

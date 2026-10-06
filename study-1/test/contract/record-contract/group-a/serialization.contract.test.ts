@@ -36,20 +36,19 @@ interface FieldSite {
   readonly path: Path;
 }
 
-// Free-form data payloads (normalized CloudFormation values, observed values) keep the casing of
-// their source; BR-RUA-033 casing governs record properties, which the schemas declare.
-const FREE_FORM_FIELDS = new Set(['values', 'configuration', 'expected', 'observed', 'conventional', 'durable']);
-
-function propertyNames(value: JsonValue, path: string): readonly string[] {
+// Every object member name at any depth, with its JSON Pointer for the assertion label. No
+// member is exempt: foreign payloads (CloudFormation and AWS configuration) are carried as
+// canonical JSON text, so their names never become record property names.
+function memberNames(value: JsonValue, path: string): readonly (readonly [string, string])[] {
   if (Array.isArray(value)) {
-    return value.flatMap((item: JsonValue, index) => propertyNames(item, `${path}/${String(index)}`));
+    return value.flatMap((item: JsonValue, index) => memberNames(item, `${path}/${String(index)}`));
   }
   if (typeof value !== 'object' || value === null) {
     return [];
   }
   return Object.entries(value).flatMap(([name, child]) => [
-    `${path}/${name}`,
-    ...(FREE_FORM_FIELDS.has(name) ? [] : propertyNames(child, `${path}/${name}`)),
+    [name, `${path}/${name}`] as const,
+    ...memberNames(child, `${path}/${name}`),
   ]);
 }
 
@@ -91,6 +90,15 @@ const UUID_SITES: readonly FieldSite[] = [
   { type: 'trial_registration', path: ['trial_id'] },
 ];
 
+// Fixed lowercase v4 identifiers, one per RFC 9562 variant nibble (8, 9, a, b), so the case is
+// repeatable instead of drawing crypto.randomUUID() on every run.
+const VALID_UUID4S: readonly string[] = [
+  '00000000-0000-4000-8000-000000000000',
+  'ffffffff-ffff-4fff-9fff-ffffffffffff',
+  '3f1c2a9e-8b4d-4c1e-af00-1a2b3c4d5e6f',
+  '0a1b2c3d-4e5f-4a7b-bc9d-0e1f2a3b4c5d',
+];
+
 const AMOUNT_SITES: readonly FieldSite[] = [
   { type: 'payment', path: ['captured_amount_minor'] },
   { type: 'approved_decision', path: ['approved_amount_minor'] },
@@ -103,10 +111,25 @@ const AMOUNT_SITES: readonly FieldSite[] = [
 describe('AC-RUA-046 serialization rules (group A)', () => {
   it('casing', () => {
     for (const { name, record } of allValidExamples()) {
-      for (const property of propertyNames(record, '')) {
-        assert.match(property.split('/').at(-1) ?? '', /^([a-z][a-z0-9_]*|[0-9]+)$/, `${name}: ${property}`);
+      for (const [member, pointerToMember] of memberNames(record, '')) {
+        assert.match(member, /^[a-z][a-z0-9_]*$/, `${name}: ${pointerToMember}`);
       }
     }
+    // Nested free values keep the casing rule too.
+    assertRejected(
+      withPath(failedPreflightCheck(), ['observed'], { ApprovedAmountMinor: 5000 }),
+      '/observed propertyNames',
+      'PascalCase member in an observed value',
+    );
+    assertRejected(
+      withPath(passedPreflightCheck(), ['expected'], { limits: [{ 'ceiling-usd': '5.00' }] }),
+      '/expected/limits/0 propertyNames',
+      'kebab-case member deep in an expected value',
+    );
+    assertAccepted(
+      withPath(passedPreflightCheck(), ['expected'], { limits: [{ ceiling_usd: '5.00' }], strict: true }),
+      'nested snake_case members',
+    );
     for (const type of GROUP_A) {
       const example = CANONICAL_EXAMPLES[type]();
       const renameable = Object.keys(example).filter((key) => key !== 'record_type' && camelCase(key) !== key);
@@ -183,7 +206,9 @@ describe('AC-RUA-046 serialization rules (group A)', () => {
   it('lowercase UUIDv4', () => {
     for (const { type, path } of UUID_SITES) {
       const example = CANONICAL_EXAMPLES[type]();
-      assertAccepted(withPath(example, path, crypto.randomUUID()), `${type} ${pointer(path)} random v4`);
+      for (const value of VALID_UUID4S) {
+        assertAccepted(withPath(example, path, value), `${type} ${pointer(path)} ${value}`);
+      }
       for (const value of [
         '3F1C2A9E-8B4D-4C1E-9F00-1A2B3C4D5E6F',
         '3f1c2a9e-8b4d-1c1e-9f00-1a2b3c4d5e6f',
@@ -243,8 +268,25 @@ describe('AC-RUA-046 serialization rules (group A)', () => {
     assertAccepted(detached, 'branch omitted on a detached HEAD');
     assertRejected(withField(sourceProvenance(), 'branch', null), '/branch type', 'branch as null');
     assertAccepted(withoutField(failedPreflightCheck(), 'observed'), 'observed omitted when unavailable');
-    assertRejected(withField(failedPreflightCheck(), 'observed', null), '/observed not', 'observed as null');
-    assertRejected(withField(failedPreflightCheck(), 'expected', null), '/expected not', 'expected as null');
+    assertRejected(withField(failedPreflightCheck(), 'observed', null), '/observed anyOf', 'observed as null');
+    assertRejected(withField(failedPreflightCheck(), 'expected', null), '/expected anyOf', 'expected as null');
+    assertRejected(
+      withPath(failedPreflightCheck(), ['observed', 'approved_amount_minor'], null),
+      '/observed/approved_amount_minor anyOf',
+      'null nested in an observed value',
+    );
+    assertRejected(
+      withPath(passedPreflightCheck(), ['expected'], [null]),
+      '/expected/0 anyOf',
+      'null item in an expected value',
+    );
+    for (const side of ['conventional', 'durable']) {
+      assertRejected(
+        withPath(runExecutionManifest(), ['declared_variant_differences', 0, side], null),
+        `/declared_variant_differences/0/${side} anyOf`,
+        `${side} side of a declared difference as null`,
+      );
+    }
     assertRejected(
       withPath(validationExecutionManifest(), ['qualification', 'amendment_head_sha256'], null),
       '/qualification/amendment_head_sha256 type',

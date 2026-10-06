@@ -11,8 +11,8 @@
     "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "check_id": { "type": "string", "pattern": "^A([1-9]|1[0-5])$" },
     "subject": { "type": "string", "minLength": 1 },
-    "expected": { "not": { "type": "null" } },
-    "observed": { "not": { "type": "null" } },
+    "expected": { "$ref": "#/$defs/check_value" },
+    "observed": { "$ref": "#/$defs/check_value" },
     "result": { "enum": ["passed", "failed"] },
     "rejection_class": {
       "enum": [
@@ -71,5 +71,21 @@
       "reasons": { "type": "array", "maxItems": 0 }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "check_value": {
+      "description": "A declared limit or observed value as record JSON (BR-RUA-033): a string, number, boolean, array or object, never null at any depth, whose object member names are all snake_case. An unavailable observed value is omitted.",
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "$ref": "#/$defs/check_value" } },
+        {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "additionalProperties": { "$ref": "#/$defs/check_value" }
+        }
+      ]
+    }
+  }
 }

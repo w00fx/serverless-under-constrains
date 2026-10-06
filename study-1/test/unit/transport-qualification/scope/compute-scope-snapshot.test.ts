@@ -68,6 +68,15 @@ const KEY_SCHEMA = [
   { AttributeName: 'sk', KeyType: 'RANGE' },
 ];
 
+// A sample function without reserved concurrency: the unset property keeps only its path.
+const UNRESERVED_FUNCTION = {
+  property_values: [
+    { property_path: 'Properties.MemorySize', canonical_json: '512' },
+    { property_path: 'Properties.ReservedConcurrentExecutions' },
+    { property_path: 'Properties.Timeout', canonical_json: '30' },
+  ],
+} as const;
+
 describe('computeScopeSnapshot', () => {
   it('binds every BR-RUA-028 snapshot element in canonical order', () => {
     const snapshot = snapshotOf(sampleSnapshotInput());
@@ -105,16 +114,24 @@ describe('computeScopeSnapshot', () => {
       configuration_projections: [
         {
           projection_id: 'experiment_core__functions',
-          values: [
-            { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': null, 'Properties.Timeout': 30 },
-            { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': null, 'Properties.Timeout': 30 },
-          ],
+          resources: [UNRESERVED_FUNCTION, UNRESERVED_FUNCTION],
         },
         {
           projection_id: 'experiment_core__tables',
-          values: [
-            { 'Properties.KeySchema': KEY_SCHEMA, 'Properties.StreamSpecification': null },
-            { 'Properties.KeySchema': KEY_SCHEMA, 'Properties.StreamSpecification': { StreamViewType: 'NEW_IMAGE' } },
+          // canonical order: the table that sets its stream sorts before the one that does not
+          resources: [
+            {
+              property_values: [
+                { property_path: 'Properties.KeySchema', canonical_json: canonicalJson(KEY_SCHEMA) },
+                { property_path: 'Properties.StreamSpecification', canonical_json: '{"StreamViewType":"NEW_IMAGE"}' },
+              ],
+            },
+            {
+              property_values: [
+                { property_path: 'Properties.KeySchema', canonical_json: canonicalJson(KEY_SCHEMA) },
+                { property_path: 'Properties.StreamSpecification' },
+              ],
+            },
           ],
         },
       ],
@@ -151,9 +168,15 @@ describe('computeScopeSnapshot', () => {
     const base = snapshotOf(sampleSnapshotInput());
     const changed = snapshotOf(sampleSnapshotInput({ template: cdkTemplate({ providerReservedConcurrency: 1 }) }));
     assert.notEqual(scopeSnapshotSha256(changed), scopeSnapshotSha256(base));
-    assert.deepEqual(changed.configuration_projections[0].values, [
-      { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': 1, 'Properties.Timeout': 30 },
-      { 'Properties.MemorySize': 512, 'Properties.ReservedConcurrentExecutions': null, 'Properties.Timeout': 30 },
+    assert.deepEqual(changed.configuration_projections[0].resources, [
+      {
+        property_values: [
+          { property_path: 'Properties.MemorySize', canonical_json: '512' },
+          { property_path: 'Properties.ReservedConcurrentExecutions', canonical_json: '1' },
+          { property_path: 'Properties.Timeout', canonical_json: '30' },
+        ],
+      },
+      UNRESERVED_FUNCTION,
     ]);
   });
 
