@@ -41,6 +41,32 @@ describe('captureTelemetryAvailability', () => {
     );
   });
 
+  it('records a rejected lookup as that signal unavailable and still probes the others (AC-RUA-054)', async () => {
+    const probe = new ScriptedTelemetryProbe({ logs: ['/aws/lambda/suc1-caller'], traces: ['1-abc'] });
+    const failure = new Error('socket hang up');
+    failure.name = 'TimeoutError';
+    probe.scriptRejection('metrics', failure);
+    const record = await captureTelemetryAvailability(probe, TRIAL_SCOPE, collectionClock());
+    assertValidRecord(record, 'telemetry_availability with a rejected lookup');
+    assert.deepEqual(record['metrics'], {
+      availability: 'unavailable',
+      locators: [],
+      reasons: [
+        {
+          code: 'TELEMETRY_UNAVAILABLE',
+          subject: 'BR-RUA-037',
+          detail: 'metrics could not be located: TimeoutError; expected a successful lookup',
+        },
+      ],
+    });
+    assert.deepEqual(record['logs'], { availability: 'available', locators: ['/aws/lambda/suc1-caller'], reasons: [] });
+    assert.deepEqual(record['traces'], { availability: 'available', locators: ['1-abc'], reasons: [] });
+    assert.deepEqual(
+      probe.lookups().map((lookup) => lookup.signal),
+      [...TELEMETRY_SIGNALS],
+    );
+  });
+
   it('records the probe without a trial identity', async () => {
     const record = await captureTelemetryAvailability(new ScriptedTelemetryProbe(), PROBE_SCOPE, collectionClock());
     assertValidRecord(record, 'probe telemetry_availability');

@@ -233,6 +233,40 @@ describe('collectTrialEvidence', () => {
     assert.equal(fileRecord(collection.files, 'durableExecutions')['list_complete'], false);
   });
 
+  it('still collects every artifact when each telemetry lookup rejects (AC-RUA-054, BR-RUA-037)', async () => {
+    const { store } = storeHarness();
+    seedTrial(store);
+    const telemetry = new ScriptedTelemetryProbe();
+    for (const signal of ['logs', 'metrics', 'traces'] as const) {
+      telemetry.scriptRejection(signal, new Error(`${signal} lookup crashed`));
+    }
+    const collection = await collectTrialEvidence(
+      { ...ports(store), telemetry },
+      { scope: TRIAL_SCOPE, variant: 'conventional', dlq: DLQ },
+    );
+    assert.deepEqual(collection.failures, []);
+    assert.equal(collection.files.at(-1)?.key, 'telemetryAvailability');
+    const record = fileRecord(collection.files, 'telemetryAvailability');
+    assertValidRecord(record, 'telemetry_availability');
+    for (const signal of ['logs', 'metrics', 'traces']) {
+      assert.deepEqual(
+        record[signal],
+        {
+          availability: 'unavailable',
+          locators: [],
+          reasons: [
+            {
+              code: 'TELEMETRY_UNAVAILABLE',
+              subject: 'BR-RUA-037',
+              detail: `${signal} could not be located: Error; expected a successful lookup`,
+            },
+          ],
+        },
+        signal,
+      );
+    }
+  });
+
   it('reports a record JSON cannot represent instead of writing it (A-05)', async () => {
     const { store } = storeHarness();
     seedTrial(store);
