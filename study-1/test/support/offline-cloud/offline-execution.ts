@@ -22,6 +22,7 @@ import {
   trialIdOf,
 } from '../golden-builder/execution-files.ts';
 import { declaredTrialsOf } from '../golden-builder/golden-plan.ts';
+import type { GoldenExecution } from '../golden-builder/golden-plan.ts';
 import {
   FINANCIAL_FIXTURE,
   GOLDEN_ACCOUNT_ID,
@@ -50,6 +51,14 @@ export interface OfflineExecution {
   readonly declared: readonly DeclaredTrial[];
 }
 
+/** The files admission and provisioning froze for an execution, and the two manifest digests. */
+export interface FrozenCoreFiles {
+  /** Package-relative path to exact bytes. */
+  readonly core_files: ReadonlyMap<string, Uint8Array>;
+  readonly execution_manifest_sha256: Sha256Hex;
+  readonly resource_manifest_sha256: Sha256Hex;
+}
+
 /**
  * Builds the offline execution and its core files.
  *
@@ -62,6 +71,24 @@ export function offlineExecution(name: OfflineExecutionName): OfflineExecution {
     name === 'run'
       ? { execution_kind: 'RUN', run_id: context.execution_id }
       : { execution_kind: 'VARIANT_VALIDATION', variant_validation_id: context.execution_id };
+  return {
+    name,
+    context,
+    identity,
+    package_directory: PACKAGE_LAYOUT.executionDirectory(identity),
+    ...frozenCoreFiles(name),
+    declared: declaredTrialsOf(name).map((trial) => ({ ...trial, trial_id: trialIdOf(name, trial.sequence) })),
+  };
+}
+
+/**
+ * The core files of a golden execution, the probe included: the admission files from the record
+ * contract's canonical examples and the golden manifests, pinned to those exact bytes.
+ *
+ * @example
+ * frozenCoreFiles('probe').core_files.has('admission/execution-manifest.json'); // true
+ */
+export function frozenCoreFiles(name: GoldenExecution): FrozenCoreFiles {
   const admission = new Map<string, Uint8Array>([
     [EXECUTION_PATHS.environmentInput, recordBytes(GROUP_A_EXAMPLES.environment_input())],
     [EXECUTION_PATHS.sourceProvenance, recordBytes(GROUP_A_EXAMPLES.source_provenance())],
@@ -81,14 +108,9 @@ export function offlineExecution(name: OfflineExecutionName): OfflineExecution {
   }
   const coreFiles = new Map([...admission, ...manifests.value]);
   return {
-    name,
-    context,
-    identity,
-    package_directory: PACKAGE_LAYOUT.executionDirectory(identity),
     core_files: coreFiles,
     execution_manifest_sha256: digestOf(coreFiles, EXECUTION_MANIFEST_PATH),
     resource_manifest_sha256: digestOf(coreFiles, RESOURCE_MANIFEST_PATH),
-    declared: declaredTrialsOf(name).map((trial) => ({ ...trial, trial_id: trialIdOf(name, trial.sequence) })),
   };
 }
 
@@ -164,7 +186,7 @@ export function queueTarget(
 
 // The golden manifest names label digests for files a golden base does not carry; the offline
 // execution carries them, so the manifest names their exact bytes instead.
-function pinnedManifest(name: OfflineExecutionName, admission: ReadonlyMap<string, Uint8Array>): JsonObject {
+function pinnedManifest(name: GoldenExecution, admission: ReadonlyMap<string, Uint8Array>): JsonObject {
   const manifest = executionManifest(name);
   const digest = (path: string): Sha256Hex => digestOf(admission, path);
   return {

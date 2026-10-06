@@ -15,10 +15,6 @@ import { EXECUTION_PATHS } from '../../../src/evidence-package/package-layout.ts
 import { composeConventionalConsumer } from '../../../src/conventional-variant/conventional-composition.ts';
 import { consumeSqsEvent } from '../../../src/conventional-variant/sqs-event-consumption.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
-import { composeRefundProvider } from '../../../src/refund-provider/provider-composition.ts';
-import { composeTreatmentController } from '../../../src/treatment-controller/controller-composition.ts';
-import { consumeStreamEvent } from '../../../src/treatment-controller/stream-consumer.ts';
-import { CONTROLLER_STREAM_FILTER } from '../../../src/treatment-controller/stream-record.ts';
 import { writeExecutionConfiguration } from '../../../src/trial-execution/execution-configuration.ts';
 import { TrialExecutor } from '../../../src/trial-execution/trial-executor.ts';
 import type {
@@ -27,7 +23,7 @@ import type {
   TrialPlan,
 } from '../../../src/trial-execution/trial-execution-ports.ts';
 import { InMemoryItemStore } from '../durable-store/in-memory-item-store.ts';
-import { StreamFeed } from '../durable-store/stream-feed.ts';
+import type { StreamFeed } from '../durable-store/stream-feed.ts';
 import { FakeSqsEsmDriver } from '../fifo-queue/fake-sqs-esm-driver.ts';
 import { InMemoryFifoQueue } from '../fifo-queue/in-memory-fifo-queue.ts';
 import { ScriptedDurableExecutionReader } from '../evidence-collection/scripted-durable-execution-reader.ts';
@@ -35,9 +31,7 @@ import { GOLDEN_PROVIDER_VERSION, TIMELINE_ORIGIN_MS } from '../golden-builder/g
 import { EXECUTION_OFFSETS } from '../golden-builder/execution-files.ts';
 import { SequentialUuidSource } from '../kernel/sequential-uuid-source.ts';
 import { VirtualTimeScheduler } from '../kernel/virtual-time-scheduler.ts';
-import { ProviderLogRecorder } from '../refund-provider/provider-log-recorder.ts';
-import { ControllerLogRecorder } from '../transport-rehearsal/controller-log-recorder.ts';
-import { InProcessProviderInvoker } from '../transport-rehearsal/in-process-provider-invoker.ts';
+import type { InProcessProviderInvoker } from '../transport-rehearsal/in-process-provider-invoker.ts';
 import { OfflineDlqReceiver } from './offline-dlq-receiver.ts';
 import { OfflineEsmPump } from './offline-esm-pump.ts';
 import { offlineExecution, offlineTrialPlan, queueTarget } from './offline-execution.ts';
@@ -48,6 +42,7 @@ import { OfflineProviderWarmupInvoker } from './offline-provider-warmup-invoker.
 import { OfflineQueueCounterReader } from './offline-queue-counter-reader.ts';
 import { OfflineTelemetryProbe } from './offline-telemetry-probe.ts';
 import { OfflineTrialMessagePublisher } from './offline-trial-message-publisher.ts';
+import { composeOfflineTransport } from './offline-transport.ts';
 import { ScriptedPublicationGate } from './scripted-publication-gate.ts';
 
 /** How far one drive step moves the clock. */
@@ -98,31 +93,9 @@ export class OfflineCloud {
     const { time, store } = this;
     this.execution = offlineExecution(name);
     const deployment = this.execution.identity;
-    const provider = composeRefundProvider({
-      deployment,
-      store,
-      ids: new SequentialUuidSource('99999999'),
-      wall: time,
-      monotonic: time,
-      sleeper: time,
-      log: new ProviderLogRecorder().sink,
-    });
-    this.invoker = new InProcessProviderInvoker(provider, GOLDEN_PROVIDER_VERSION);
-    const controller = composeTreatmentController({
-      deployment,
-      store,
-      ids: new SequentialUuidSource('cccccccc'),
-      wall: time,
-    });
-    const controllerLogs = new ControllerLogRecorder();
-    this.#feed = new StreamFeed({
-      source: store,
-      table: 'caller_journal',
-      scheduler: time,
-      clock: time,
-      consumer: (event): Promise<void> => consumeStreamEvent(event, controller, controllerLogs.sink),
-      filters: [CONTROLLER_STREAM_FILTER],
-    });
+    const transport = composeOfflineTransport(deployment, store, time);
+    this.invoker = transport.invoker;
+    this.#feed = transport.feed;
     this.dlq = new InMemoryFifoQueue({
       clock: time,
       ids: this.#queueIds,
