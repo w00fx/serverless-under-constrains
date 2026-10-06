@@ -3,9 +3,7 @@
 // Without --check it writes the fixture of every case that has none and refuses to replace a
 // committed fixture unless its case id is named with --overwrite. With --check it regenerates
 // every case in memory and exits 1 on any missing, extra or differing file, any orphan fixture
-// directory beside a cases/ directory or any case that fails to load, parse or build; a fixture
-// directory in a golden directory without cases is hand-authored and only listed in the report.
-// The process exit status is the result.
+// directory or any case that fails to load, parse or build. The process exit status is the result.
 
 import process from 'node:process';
 

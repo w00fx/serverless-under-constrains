@@ -1,9 +1,7 @@
 // Every committed golden fixture follows byte for byte from its case file (design §12.4): the
 // cases under `test/golden/` are discovered by glob, regenerated in memory and compared with the
-// committed bytes, one test per case, and no fixture directory beside a `cases/` directory exists
-// without its case (a golden directory without cases holds hand-authored fixtures, which the
-// generator lists but does not own). This is the in-suite twin of `generate-fixtures.ts --check`,
-// so a failing case is named in the report.
+// committed bytes, one test per case, and no fixture directory exists without its case. This is
+// the in-suite twin of `generate-fixtures.ts --check`, so a failing case is named in the report.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -34,7 +32,7 @@ describe('golden fixtures reproduce from their cases', () => {
     });
   }
 
-  it('leaves no fixture directory beside the cases without a case', () => {
+  it('leaves no fixture directory without a case', () => {
     assert.deepEqual(orphanFixtureDirectories(files, report.fixtures), []);
   });
 });

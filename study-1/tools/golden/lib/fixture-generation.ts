@@ -3,13 +3,6 @@
 // reports every missing, extra or differing file and every fixture directory without a case.
 // Writing creates a missing fixture only: committed fixtures are truth-layer material, so
 // replacing one needs an explicit `--overwrite <case-id>` (`.claude/rules/truth-layer.md`).
-//
-// The generator manages the golden directories of the design §5.1 layout
-// `test/golden/<feature>/{cases/*.case.ts, fixtures/<case-id>/**}`: a directory with at least one
-// case file. A fixture directory there without its case is an orphan. A fixture directory in a
-// golden directory with no case file at all was written by hand (the WP-13 evidence-index tree
-// of d24f678, whose expected digests were computed with `shasum`); the generator neither writes
-// nor checks it, and lists it in its report instead of failing on it (WP-09 single-pass review).
 
 import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { FixtureBytes } from '../../../test/support/golden-builder/digest-links.ts';
@@ -134,8 +127,7 @@ export function compareFixture(files: FixtureFileSystem, fixture: GeneratedFixtu
 }
 
 /**
- * Fixture directories that no regenerated case owns, in the golden directories that hold case
- * files. A case that failed to load still marks its golden directory as managed.
+ * Fixture directories that no regenerated case owns.
  *
  * @example
  * orphanFixtureDirectories(files, report.fixtures); // ['test/golden/x/fixtures/deleted-case']
@@ -145,35 +137,7 @@ export function orphanFixtureDirectories(
   fixtures: readonly GeneratedFixture[],
 ): readonly string[] {
   const owned = new Set(fixtures.map((fixture) => fixture.fixture_directory));
-  const managed = managedGoldenDirectories(files);
-  return files
-    .findFixtureDirectories()
-    .filter((directory) => !owned.has(directory) && managed.has(goldenDirectoryBefore(directory, 'fixtures')));
-}
-
-/**
- * Fixture directories in golden directories without any case file: hand-written evidence the
- * generator neither writes nor checks, listed so a report never hides them.
- *
- * @example
- * handAuthoredFixtureDirectories(files); // ['test/golden/evidence-package/fixtures/durable-run-trial']
- */
-export function handAuthoredFixtureDirectories(files: FixtureFileSystem): readonly string[] {
-  const managed = managedGoldenDirectories(files);
-  return files
-    .findFixtureDirectories()
-    .filter((directory) => !managed.has(goldenDirectoryBefore(directory, 'fixtures')));
-}
-
-function managedGoldenDirectories(files: FixtureFileSystem): ReadonlySet<string> {
-  return new Set(files.findCaseFiles().map((caseFile) => goldenDirectoryBefore(caseFile, 'cases')));
-}
-
-// The directory holding `cases/` and `fixtures/`: `test/golden/x/cases/a.case.ts` and
-// `test/golden/x/fixtures/a` -> `test/golden/x/`. The ports return only paths of that layout, and
-// neither a case file name nor a fixture name holds a `/`, so the last `/<segment>/` is the layout's.
-function goldenDirectoryBefore(path: string, segment: 'cases' | 'fixtures'): string {
-  return path.slice(0, path.lastIndexOf(`/${segment}/`) + 1);
+  return files.findFixtureDirectories().filter((directory) => !owned.has(directory));
 }
 
 /**
