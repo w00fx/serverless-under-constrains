@@ -61,6 +61,8 @@ type DlqMessageAttributes = Omit<DlqMessage, 'message_id' | 'body' | 'body_sha25
 interface CaptureState {
   readonly messages: Map<string, DlqMessage>;
   readonly failures: StructuredReason[];
+  /** Details of the malformed messages already reported: every round receives them again. */
+  readonly reported: Set<string>;
   complete: boolean;
 }
 
@@ -77,7 +79,7 @@ export async function captureDlq(
   scope: TrialCaptureScope,
   clock: WallClock,
 ): Promise<DlqCapture> {
-  const state: CaptureState = { messages: new Map(), failures: [], complete: false };
+  const state: CaptureState = { messages: new Map(), failures: [], reported: new Set(), complete: false };
   await receiveRounds(receiver, target, state);
   const captured = [...state.messages.values()];
   const correlated = captured.filter((message) => message.message_group_id === scope.unit.trial_id);
@@ -155,7 +157,7 @@ function keepNewMessages(batch: readonly ReceivedSqsMessage[], target: QueueTarg
   for (const received of batch) {
     const mapped = mapDlqMessage(received);
     if (!mapped.ok) {
-      state.failures.push(malformed(target, received, mapped.error));
+      reportOnce(state, malformed(target, received, mapped.error));
       continue;
     }
     if (!state.messages.has(mapped.value.message_id)) {
@@ -164,6 +166,15 @@ function keepNewMessages(batch: readonly ReceivedSqsMessage[], target: QueueTarg
     }
   }
   return unseen;
+}
+
+// A message left on the queue comes back on every round; one reason per distinct problem is enough.
+function reportOnce(state: CaptureState, reason: StructuredReason): void {
+  if (state.reported.has(reason.detail)) {
+    return;
+  }
+  state.reported.add(reason.detail);
+  state.failures.push(reason);
 }
 
 function attributesOf(attributes: unknown): Result<DlqMessageAttributes, string> {
