@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { isJsonArray } from '../../../../src/record-contract/json-value.ts';
+import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
@@ -115,6 +115,23 @@ function site(rule: string, values: readonly string[], recordType: GroupBRecordT
   };
 }
 
+// A FAILED carrier takes a failure code that admits `state` (design §5.3 C2/C3, §9.9), and only a
+// dispatched attempt keeps its dispatch-to-settlement time, so the dispatch implication is the
+// only rule each variant can break.
+const FAILURE_CODE_FOR_STATE: Readonly<Record<string, string>> = {
+  NOT_DISPATCHED: 'CALL_BUILD_FAILED',
+  DISPATCHED: 'TRANSPORT_ERROR',
+  UNKNOWN: 'DISPATCH_TRANSITION_AMBIGUOUS',
+};
+
+function withDispatchState(carrier: JsonObject, state: string): JsonObject {
+  const { dispatch_to_settlement_ns: settlement, ...rest } = carrier;
+  const timed = state === 'DISPATCHED' && settlement !== undefined ? { dispatch_to_settlement_ns: settlement } : {};
+  const failure = carrier['failure'];
+  const coded = isJsonObject(failure) ? { failure: { ...failure, code: FAILURE_CODE_FOR_STATE[state] ?? state } } : {};
+  return { ...rest, ...timed, ...coded, dispatch_state: state };
+}
+
 /** The value in the other case (BR-RUA-033 fixes the case of each list, so a flip is foreign). */
 function caseFlipped(value: string): string {
   return value === value.toUpperCase() ? value.toLowerCase() : value.toUpperCase();
@@ -188,7 +205,7 @@ describe('AC-RUA-046 group-B enums hold the spec value lists', () => {
       const carrier = outcomes.find((json) => json['outcome'] === outcome);
       assert.ok(carrier !== undefined, `an example records ${outcome}`);
       for (const state of SPEC_DISPATCH_STATES) {
-        const record: JsonObject = { ...carrier, dispatch_state: state };
+        const record = withDispatchState(carrier, state);
         const accepted: boolean = violationsOf(record).length === 0;
         const expected = outcome === 'FAILED' || state === 'DISPATCHED';
         assert.equal(accepted, expected, `${outcome} with ${state}`);

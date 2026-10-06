@@ -65,7 +65,7 @@ describe('AC-RUA-046 closed records over group B', () => {
 
   it('every object rejects each inherited Object.prototype name as an unknown member', () => {
     const sites = EXAMPLES.flatMap(({ label, json }) => objectPathsOf(json).map((path) => ({ label, json, path })));
-    assert.equal(sites.length, 109);
+    assert.equal(sites.length, 111);
     for (const { label, json, path } of sites) {
       for (const name of INHERITED_MEMBER_NAMES) {
         const where = `${label}${pointerOf(path)}/${name}`;
