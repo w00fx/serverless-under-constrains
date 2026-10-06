@@ -135,7 +135,7 @@ export class ExecutionRunner {
     const provisioned = await this.#provision();
     const { targets } = provisioned;
     const mode =
-      targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned.resource_manifest_sha256, targets, safety);
+      targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned.resource_manifest_sha256, targets);
     safety.markActiveEnded();
     const cleanup = await this.#cleanUp(mode, provisioned, held);
     const leaseStatus = await this.#finalizeLease(cleanup);
@@ -176,17 +176,14 @@ export class ExecutionRunner {
     return outcome;
   }
 
-  // P3, P4 and P6; the cleanup mode they leave.
-  async #execute(
-    resourceManifestSha256: Sha256Hex,
-    targets: ExecutionTargets,
-    safety: ExecutionSafety,
-  ): Promise<CleanupMode> {
+  // P3, P4 and P6; the cleanup mode they leave. Monitoring is active time: the active-time
+  // deadline interrupts it like a trial, so the ACTIVE_TIME check measures it too (`run` ends
+  // active time just before cleanup).
+  async #execute(resourceManifestSha256: Sha256Hex, targets: ExecutionTargets): Promise<CleanupMode> {
     if (!(await this.#ready(targets)) || !(await this.#runTrials(resourceManifestSha256, targets))) {
       await this.#journal.phase('LATE_MONITORING', 'skipped', [this.#stopReason()]);
       return 'EMERGENCY';
     }
-    safety.markActiveEnded();
     await this.#journal.phase('LATE_MONITORING', 'started');
     const monitoring = await this.#monitor.observe(this.#gate);
     // Journaled before the outcome is judged: a shortened window means an interruption no trial

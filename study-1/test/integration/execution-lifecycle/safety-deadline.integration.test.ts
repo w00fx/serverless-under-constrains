@@ -114,6 +114,38 @@ describe('AC-RUA-049 the safety deadline is reached', () => {
     assert.equal(oracle['processing_terminal_reason'], 'SAFETY_DEADLINE');
   });
 
+  // Beyond the two AC-RUA-049 cases: monitoring is active work, so the deadline shortens it and the
+  // ACTIVE_TIME check counts it.
+  it('deadline-during-late-monitoring', async () => {
+    const calibration = await RunnerWorld.create();
+    await calibration.run();
+    const monitoring = calibration.elapsedMsAt(
+      (event) => event['phase'] === 'LATE_MONITORING' && event['status'] === 'started',
+    );
+    const deadline = monitoring + 60_000;
+
+    const world = await RunnerWorld.create({ limits: compressed(deadline) });
+    const outcome = await world.run();
+
+    assert.equal(outcome.interruption?.cause, 'SAFETY_DEADLINE');
+    assert.deepEqual(
+      outcome.trials.map((report) => report.kind === 'frozen' && report.interruption === undefined),
+      [true, true, true, true],
+      'every trial froze whole before the deadline',
+    );
+    const phases = world.runnerEvents();
+    assert.ok(phases.includes('LATE_MONITORING:failed'));
+    assert.equal(world.record(EXECUTION_PATHS.lateEvidenceAssessment)['monitoring'], 'shortened');
+    assert.equal(world.record(EXECUTION_PATHS.cleanupResult)['cleanup_mode'], 'EMERGENCY');
+    assert.equal(world.record(EXECUTION_PATHS.runSummary)['run_terminal_reason'], 'SAFETY_DEADLINE');
+    const checks = world.record(EXECUTION_PATHS.safetyAssessment)['checks'] as readonly JsonObject[];
+    const active = checks.find((check) => check['boundary'] === 'ACTIVE_TIME');
+    assert.ok(
+      Number.parseInt(String(active?.['observed']), 10) >= deadline,
+      `active time runs until the deadline cut monitoring short; observed ${String(active?.['observed'])}`,
+    );
+  });
+
   it('deadline-between-trials', async () => {
     const calibration = await RunnerWorld.create({ deps: latentDeps });
     await calibration.run();
