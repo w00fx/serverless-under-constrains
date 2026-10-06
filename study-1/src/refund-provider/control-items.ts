@@ -7,6 +7,10 @@
 // compilation on the call path, RK-01). A reader checks only the attributes the provider uses
 // and refuses an item whose used attributes are malformed, because acting on a misread
 // configuration or treatment state would corrupt the experiment.
+//
+// The configuration also declares the barrier timing. The provider runs the coded OR-RUA-002
+// values (BARRIER_TIMING), so a configuration that declares other values is refused rather than
+// silently misdescribing the run it is evidence for (WP-07 review round 1).
 
 import { isSha256Hex } from '../record-contract/digests.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
@@ -18,6 +22,7 @@ import type { TreatmentItem } from '../record-contract/records/group-b/treatment
 import type { SafetyReleaseCause, TreatmentState } from '../record-contract/records/group-b/vocabulary.ts';
 import { SAFETY_RELEASE_CAUSES, TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.ts';
 import type { StoredItem } from '../durable-store/item-store-port.ts';
+import { BARRIER_TIMING } from './barrier-timing.ts';
 import type { CallTrial } from './refund-call-shape.ts';
 import { describeUntrusted } from './untrusted-json.ts';
 
@@ -67,7 +72,8 @@ export function paymentSortKey(paymentId: string): string {
 }
 
 /**
- * Reads a `config` item. A trial configuration must name the trial of its partition.
+ * Reads a `config` item. A trial configuration must name the trial of its partition and declare
+ * the barrier timing the provider runs (`BARRIER_TIMING`).
  *
  * @example
  * const config = decodeConfigItem(item, { trial_id }); // ok when item.trial_id === trial_id
@@ -76,7 +82,7 @@ export function decodeConfigItem(
   item: StoredItem,
   partitionTrial: Uuid4 | undefined,
 ): Result<ProviderConfigView, string> {
-  const scope = configScopeProblem(item, partitionTrial);
+  const scope = configScopeProblem(item, partitionTrial) ?? configTimingProblem(item);
   if (scope !== undefined) {
     return refuse(item, scope);
   }
@@ -168,6 +174,19 @@ function configScopeProblem(item: StoredItem, partitionTrial: Uuid4 | undefined)
     return `trial_manifest_sha256 ${describeUntrusted(item['trial_manifest_sha256'])}; expected 64 lowercase hex digits`;
   }
   return undefined;
+}
+
+function configTimingProblem(item: StoredItem): string | undefined {
+  const declared = [
+    ['safety_release_ms', BARRIER_TIMING.safety_release_ms],
+    ['treatment_poll_interval_ms', BARRIER_TIMING.poll_interval_ms],
+  ] as const;
+  const mismatch = declared.find(([field, coded]) => item[field] !== coded);
+  if (mismatch === undefined) {
+    return undefined;
+  }
+  const [field, coded] = mismatch;
+  return `${field} ${describeUntrusted(item[field])}; expected ${String(coded)}, the provider's coded OR-RUA-002 value`;
 }
 
 function trialOf(item: StoredItem, partitionTrial: Uuid4): CallTrial {

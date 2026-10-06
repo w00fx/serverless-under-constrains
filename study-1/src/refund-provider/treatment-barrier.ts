@@ -20,8 +20,7 @@ import { decideBarrierStep, isCommittedWaitState } from './barrier-decision.ts';
 import { ProviderFault } from './provider-fault.ts';
 import type { ProviderStatePort } from './provider-state-port.ts';
 
-/** OR-RUA-002 timing of the barrier; code constants, never configuration. */
-export const BARRIER_TIMING = { poll_interval_ms: 250, safety_release_ms: 15_000 } as const;
+export { BARRIER_TIMING } from './barrier-timing.ts';
 
 const NS_PER_MS = 1_000_000n;
 
