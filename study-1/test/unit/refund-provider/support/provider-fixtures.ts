@@ -22,6 +22,7 @@ import { InMemoryItemStore } from '../../../support/durable-store/in-memory-item
 import { RecordingMutationLog } from '../../../support/kernel/recording-mutation-log.ts';
 import { SequentialUuidSource } from '../../../support/kernel/sequential-uuid-source.ts';
 import { VirtualTimeScheduler } from '../../../support/kernel/virtual-time-scheduler.ts';
+import { ProviderLogRecorder } from './provider-log-recorder.ts';
 
 export const RUN_ID = 'aaaaaaaa-0000-4000-8000-000000000001' as Uuid4;
 export const PROBE_ID = 'aaaaaaaa-0000-4000-8000-000000000002' as Uuid4;
@@ -157,6 +158,8 @@ export interface ProviderHarness {
   readonly time: VirtualTimeScheduler;
   readonly ids: SequentialUuidSource;
   readonly log: RecordingMutationLog;
+  /** The provider's diagnostic log lines. */
+  readonly providerLogs: ProviderLogRecorder;
   readonly provider: RefundProvider;
 }
 
@@ -166,8 +169,17 @@ export function providerHarness(deployment: ExecutionIdentity = RUN): ProviderHa
   const log = new RecordingMutationLog();
   const store = new InMemoryItemStore({ clock: time, mutationLog: log });
   const ids = new SequentialUuidSource('99999999');
-  const provider = composeRefundProvider({ deployment, store, ids, wall: time, monotonic: time, sleeper: time });
-  return { store, time, ids, log, provider };
+  const providerLogs = new ProviderLogRecorder();
+  const provider = composeRefundProvider({
+    deployment,
+    store,
+    ids,
+    wall: time,
+    monotonic: time,
+    sleeper: time,
+    log: providerLogs.sink,
+  });
+  return { store, time, ids, log, providerLogs, provider };
 }
 
 /** Seeds a run trial: configuration, payment and, for COMMIT_THEN_TIMEOUT, the armed treatment. */

@@ -1,6 +1,7 @@
-// The provider's total, bounded handling of runtime-parsed values (WP-07 review round 1): the
-// describer echoes a bounded excerpt in member order and names non-finite numbers, and the
-// request digest equals the canonical-JSON digest for every finite payload while staying total
+// The provider's total, bounded handling of runtime-parsed values (WP-07 review round 1), now
+// built on the kernel helpers (Owner amendment A-05, policy 1): the describers are the kernel's
+// `describeJson` and `boundedJsonText`, made well formed and naming a top-level non-finite number;
+// the request digest equals the canonical-JSON digest for every finite payload while staying total
 // over Infinity and nesting of any depth.
 
 import assert from 'node:assert/strict';
@@ -8,17 +9,19 @@ import { describe, it } from 'node:test';
 
 import { canonicalJson } from '../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import {
-  DESCRIBED_VALUE_MAX_CHARS,
   describeUntrusted,
+  describeWriteOutcome,
   excerptUntrusted,
   requestDigest,
-  TRUNCATION_MARKER,
 } from '../../../src/refund-provider/untrusted-json.ts';
 
 const UTF8 = new TextEncoder();
 const DEEP = 100_000;
+/** The marker the kernel's `boundedJsonText` appends to a cut text. */
+const TRUNCATED = '…[truncated]';
 
 function digestOfText(text: string): string {
   return sha256Hex(UTF8.encode(text));
@@ -39,39 +42,55 @@ describe('describeUntrusted', () => {
     assert.equal(describeUntrusted(nested), 'object {"b":[1,{"z":null,"a":"x"}],"a":[[],{}]}');
   });
 
-  it('names non-finite numbers instead of printing null', () => {
+  it('names a non-finite number instead of printing null, and keeps JSON text for nested ones', () => {
     assert.equal(describeUntrusted(Number.POSITIVE_INFINITY), 'number Infinity');
     assert.equal(describeUntrusted(Number.NEGATIVE_INFINITY), 'number -Infinity');
     assert.equal(describeUntrusted(Number.NaN), 'number NaN');
-    assert.equal(describeUntrusted([Number.POSITIVE_INFINITY, 1]), 'array [Infinity,1]');
+    // Nested values are the kernel's JSON text, which spells a non-finite number as JSON does.
+    assert.equal(describeUntrusted([Number.POSITIVE_INFINITY, 1]), 'array [null,1]');
   });
 
-  it('echoes exactly the bound and cuts what goes one code unit beyond it', () => {
-    const atBound = 'x'.repeat(DESCRIBED_VALUE_MAX_CHARS - 2);
+  it('echoes exactly the kernel bound and cuts what goes one code unit beyond it', () => {
+    const atBound = 'x'.repeat(QUOTED_JSON_LIMIT - 2);
     assert.equal(excerptUntrusted(atBound), `"${atBound}"`);
-    const overBound = 'x'.repeat(DESCRIBED_VALUE_MAX_CHARS - 1);
-    assert.equal(excerptUntrusted(overBound), `"${'x'.repeat(DESCRIBED_VALUE_MAX_CHARS - 1)}${TRUNCATION_MARKER}`);
-    assert.equal(DESCRIBED_VALUE_MAX_CHARS, 120);
-    assert.equal(TRUNCATION_MARKER, '… (truncated)');
+    const overBound = 'x'.repeat(QUOTED_JSON_LIMIT - 1);
+    assert.equal(excerptUntrusted(overBound), `"${'x'.repeat(QUOTED_JSON_LIMIT - 1)}${TRUNCATED}`);
+    assert.equal(excerptUntrusted('y'.repeat(1_000_000)), `"${'y'.repeat(QUOTED_JSON_LIMIT - 1)}${TRUNCATED}`);
+    assert.equal(excerptUntrusted({ ['k'.repeat(500)]: 1 }), `{"${'k'.repeat(QUOTED_JSON_LIMIT - 2)}${TRUNCATED}`);
   });
 
-  it('slices long strings and keys before quoting, and never splits a surrogate pair', () => {
-    assert.equal(excerptUntrusted('y'.repeat(1_000_000)), `"${'y'.repeat(119)}${TRUNCATION_MARKER}`);
-    assert.equal(excerptUntrusted({ ['k'.repeat(500)]: 1 }), `{"${'k'.repeat(118)}${TRUNCATION_MARKER}`);
-    // 120 code units of the quoted text end in the high half of the 60th pair, which is dropped.
+  it('keeps a detail well formed when the cut splits a surrogate pair', () => {
+    // 200 code units of the quoted text end in the high half of the 100th pair.
     const emoji = '\u{1F600}';
     const cutInsidePair = excerptUntrusted(emoji.repeat(200));
-    assert.equal(cutInsidePair, `"${emoji.repeat(59)}${TRUNCATION_MARKER}`);
+    assert.equal(cutInsidePair, `"${emoji.repeat(99)}\u{FFFD}${TRUNCATED}`);
     assert.equal(cutInsidePair.isWellFormed(), true);
+    assert.equal(describeUntrusted(emoji.repeat(200)).isWellFormed(), true);
     const cutBetweenPairs = excerptUntrusted(`a${emoji.repeat(200)}`);
-    assert.equal(cutBetweenPairs, `"a${emoji.repeat(59)}${TRUNCATION_MARKER}`);
+    assert.equal(cutBetweenPairs, `"a${emoji.repeat(99)}${TRUNCATED}`);
   });
 
   it('describes nesting of any depth without throwing, within the bound', () => {
     const deep = JSON.parse(`${'['.repeat(DEEP)}${']'.repeat(DEEP)}`) as JsonValue;
-    assert.equal(describeUntrusted(deep), `array ${'['.repeat(120)}${TRUNCATION_MARKER}`);
+    assert.equal(describeUntrusted(deep), `array ${'['.repeat(QUOTED_JSON_LIMIT)}${TRUNCATED}`);
     const wide = Array.from({ length: 10_000 }, (_, index) => index);
-    assert.equal(excerptUntrusted(wide), `${JSON.stringify(wide).slice(0, 120)}${TRUNCATION_MARKER}`);
+    assert.equal(excerptUntrusted(wide), `${JSON.stringify(wide).slice(0, QUOTED_JSON_LIMIT)}${TRUNCATED}`);
+  });
+});
+
+describe('describeWriteOutcome', () => {
+  it('renders a small outcome as its JSON text', () => {
+    assert.equal(
+      describeWriteOutcome({ kind: 'ambiguous', code: 'TimeoutError' }),
+      '{"kind":"ambiguous","code":"TimeoutError"}',
+    );
+  });
+
+  it('bounds the item a failed condition returned, however large', () => {
+    const existing = { pk: 'p', sk: 's', refund_request_id: 'r'.repeat(300_000) };
+    const described = describeWriteOutcome({ kind: 'condition_failed', failed_action_index: 0, existing });
+    assert.ok(described.startsWith('{"kind":"condition_failed","failed_action_index":0,"existing":{"pk":"p"'));
+    assert.equal(described.length, QUOTED_JSON_LIMIT + TRUNCATED.length);
   });
 });
 
@@ -93,6 +112,11 @@ describe('requestDigest', () => {
 
   it('digests nesting of any depth without throwing', () => {
     const text = `${'{"a":'.repeat(DEEP)}[]${'}'.repeat(DEEP)}`;
+    assert.equal(requestDigest(JSON.parse(text) as JsonValue), digestOfText(text));
+  });
+
+  it('digests an own member named like an Object.prototype member as an ordinary key', () => {
+    const text = '{"__proto__":{"a":1},"constructor":2,"toString":3}';
     assert.equal(requestDigest(JSON.parse(text) as JsonValue), digestOfText(text));
   });
 });

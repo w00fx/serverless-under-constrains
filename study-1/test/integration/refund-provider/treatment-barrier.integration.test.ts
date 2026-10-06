@@ -46,6 +46,7 @@ async function startBarrier(harness: StateHarness): Promise<RunningBarrier> {
     monotonic: harness.time,
     sleeper: harness.time,
     ids: harness.ids,
+    log: harness.logs.sink,
     pollIntervalMs: BARRIER_TIMING.poll_interval_ms,
     safetyReleaseMs: BARRIER_TIMING.safety_release_ms,
   });
@@ -138,14 +139,25 @@ describe('TreatmentBarrier', () => {
     assert.equal(field(journalEvents(harness)[0], 'from_state'), 'TIMEOUT_SIGNALLED');
   });
 
-  it('treats a failed read as no news: waits one poll and reads again', async () => {
+  it('treats a failed read as no news: logs it, waits one poll and reads again', async () => {
     const harness = stateHarness();
     seedWait(harness, 'TIMEOUT_SIGNALLED', { signal_event_id: SIGNAL_EVENT_ID });
     harness.store.scriptReadFault('InternalServerError', { table: 'control', operation: 'getConsistent' });
     const running = await startBarrier(harness);
     assert.equal(running.settled(), false);
+    // WP-07 review round 0: the failed read used to be swallowed without a trace.
+    assert.deepEqual(harness.logs.lines(), [
+      {
+        level: 'warn',
+        event: 'treatment_read_failed',
+        provider_call_id: CALL_ID,
+        code: 'InternalServerError',
+        detail: `control read ${TRIAL_PK}/treatment failed: InternalServerError`,
+      },
+    ]);
     await harness.time.advanceBy(BARRIER_TIMING.poll_interval_ms);
     assert.deepEqual(await running.result, { kind: 'released' });
+    assert.equal(harness.logs.lines().length, 1);
   });
 
   it('records the cleanup release that won the race against its observation', async () => {
@@ -301,6 +313,8 @@ describe('TreatmentBarrier', () => {
     );
     assert.deepEqual(eventTypes(harness), ['treatment_timeout_observed', 'treatment_response_released']);
     assert.deepEqual(field(journalEvents(harness)[0], 'causation_event_ids'), [SIGNAL_EVENT_ID]);
+    assert.deepEqual(new Set(harness.logs.lines().map((line) => line.event)), new Set(['treatment_read_failed']));
+    assert.equal(harness.logs.lines().length, harness.state.treatmentReadCount());
   });
 
   it('faults STATE_UNREADABLE when the superseding item cannot be decoded, after one transition', async () => {
@@ -324,6 +338,10 @@ describe('TreatmentBarrier', () => {
     );
     assert.deepEqual(eventTypes(harness), []);
     assert.equal(field(harness.store.peek('control', TREATMENT_KEY), 'state'), 'TIMEOUT_SIGNALLED');
+    const [firstLog] = harness.logs.lines();
+    assert.ok(firstLog?.event === 'treatment_read_failed');
+    assert.equal(firstLog.code, 'UndecodableItem');
+    assert.match(firstLog.detail, /safety_release_cause string "BOGUS"/u);
   });
 
   it('decides from the superseding item without another read', async () => {

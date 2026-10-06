@@ -32,6 +32,7 @@ import { executeCommit } from './commit-execution.ts';
 import type { ProviderConfigView } from './control-items.ts';
 import type { FaultPhase } from './provider-fault.ts';
 import { ProviderFault } from './provider-fault.ts';
+import type { ProviderLogSink } from './provider-log.ts';
 import type { CallPartition } from './provider-partition.ts';
 import { callJournalScope, resolveCallPartition } from './provider-partition.ts';
 import type { ProviderStatePort, ProviderStateRead } from './provider-state-port.ts';
@@ -49,6 +50,8 @@ export interface RefundProviderDeps {
   readonly wall: WallClock;
   readonly monotonic: MonotonicClock;
   readonly sleeper: Sleeper;
+  /** Diagnostics the provider tolerates but must not swallow, such as a failed treatment read. */
+  readonly log: ProviderLogSink;
 }
 
 /** What one invocation returns: a refund response, or the recorded warm-up completion. */
@@ -79,7 +82,7 @@ const RECEIVED_COPY_FIELDS = [
  * and serves the warm-up. Compose it with `composeRefundProvider` over a durable store.
  *
  * @example
- * const provider = new RefundProvider({ deployment, state, openJournal, ids, wall, monotonic, sleeper });
+ * const provider = new RefundProvider({ deployment, state, openJournal, ids, wall, monotonic, sleeper, log });
  * const response = await provider.handle(event); // a refund response or a warm-up completion
  */
 export class RefundProvider {

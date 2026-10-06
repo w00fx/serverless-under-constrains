@@ -8,8 +8,9 @@
 // transaction or none, never anything in between.
 //
 // The inputs include what the Lambda runtime's JSON.parse can deliver beyond fc.jsonValue():
-// ±Infinity (from literals such as `1e400`), nesting thousands of levels deep and oversized
-// strings (WP-07 review round 1: these made the digest and the guards' details throw).
+// ±Infinity (from literals such as `1e400`), nesting thousands of levels deep, oversized strings
+// (WP-07 review round 1: these made the digest and the guards' details throw), and own members
+// named like Object.prototype members, which JSON.parse creates as ordinary keys (A-05).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -30,12 +31,8 @@ import {
   identityStructureViolation,
   REFUND_CALL_PROPERTIES,
 } from '../../../src/refund-provider/refund-call-shape.ts';
-import {
-  DESCRIBED_VALUE_MAX_CHARS,
-  describeUntrusted,
-  requestDigest,
-  TRUNCATION_MARKER,
-} from '../../../src/refund-provider/untrusted-json.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
+import { describeUntrusted, requestDigest } from '../../../src/refund-provider/untrusted-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 import {
   ATTEMPT_ID,
@@ -58,6 +55,11 @@ import {
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
 
 const validator = createRecordValidator();
+
+/** Member names JSON.parse makes own properties but a prototype-chain read would also find. */
+const INHERITED_MEMBER_NAMES = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf'] as const;
+/** The marker the kernel's `boundedJsonText` appends to a cut text. */
+const TRUNCATED = '…[truncated]';
 
 const TRIAL_CONTEXT: AcceptanceContext = {
   deployment_execution: RUN,
@@ -95,18 +97,16 @@ function runtimeOnlyValues(maxDepth: number): fc.Arbitrary<JsonValue> {
   );
 }
 
-/** Runtime-only values for the totality properties: nesting up to 20,000 levels. */
+/**
+ * Runtime-only values, nesting up to 20,000 levels. The differential properties draw them too:
+ * their Ajv oracle, the kernel validator, is total at that depth since the WP-00 kernel fix
+ * (dbcec34) replaced its `JSON.stringify` details, which WP-07 review round 1 had reported.
+ */
 const runtimeOnlyValue = runtimeOnlyValues(20_000);
-// The Ajv oracle of the differential properties is the kernel validator, which itself throws
-// RangeError on a `record_type` nested about 7,000 levels deep (schema-registry.ts
-// `JSON.stringify(declared)`; reported to the Owner as a kernel item by WP-07 review round 1).
-// The differential therefore draws nesting from the depth where its oracle is total; the
-// provider's own totality is held to 20,000 levels by the properties below.
-const oracleSafeRuntimeValue = runtimeOnlyValues(2_000);
 
 /** Values at the edges of every rule the call and warm-up schemas state. */
 const boundaryValue: fc.Arbitrary<JsonValue> = fc.oneof(
-  oracleSafeRuntimeValue,
+  runtimeOnlyValue,
   fc.constantFrom<JsonValue>(
     0,
     1,
@@ -163,6 +163,8 @@ const boundaryValue: fc.Arbitrary<JsonValue> = fc.oneof(
 
 type Mutation = readonly [string, JsonValue | undefined];
 
+// Members are defined, never assigned, so `__proto__` becomes an own member as JSON.parse makes
+// it instead of replacing the prototype.
 function mutated(base: JsonObject, mutations: readonly Mutation[]): JsonObject {
   const call: Record<string, JsonValue> = { ...base };
   for (const [property, value] of mutations) {
@@ -170,7 +172,7 @@ function mutated(base: JsonObject, mutations: readonly Mutation[]): JsonObject {
       Reflect.deleteProperty(call, property);
       continue;
     }
-    call[property] = value;
+    Object.defineProperty(call, property, { value, enumerable: true, writable: true, configurable: true });
   }
   return call;
 }
@@ -179,9 +181,10 @@ function nearValid(
   base: fc.Arbitrary<JsonObject>,
   properties: readonly string[],
   values: fc.Arbitrary<JsonValue> = boundaryValue,
+  extraKeys: readonly string[] = INHERITED_MEMBER_NAMES,
 ): fc.Arbitrary<JsonObject> {
   const mutation: fc.Arbitrary<Mutation> = fc.tuple(
-    fc.constantFrom(...properties, 'unexpected_property'),
+    fc.constantFrom(...properties, 'unexpected_property', ...extraKeys),
     fc.option(values, { nil: undefined, freq: 4 }),
   );
   return fc.tuple(base, fc.array(mutation, { maxLength: 3 })).map(([call, mutations]) => mutated(call, mutations));
@@ -189,7 +192,7 @@ function nearValid(
 
 const callBase = fc.constantFrom(validCall(), validProbeCall(), validCall({ caller_id: 'durable' }));
 const nearValidCall = nearValid(callBase, REFUND_CALL_PROPERTIES);
-/** Near-valid calls whose replaced members also reach the full 20,000-level nesting. */
+/** Near-valid calls whose replaced members are often runtime-only values. */
 const hostileCall = nearValid(callBase, REFUND_CALL_PROPERTIES, fc.oneof(boundaryValue, runtimeOnlyValue));
 const warmupBase = fc.constantFrom<JsonObject>(
   {
@@ -208,7 +211,13 @@ const warmupBase = fc.constantFrom<JsonObject>(
     warmup_id: WARMUP_ID,
   },
 );
-const nearValidWarmup = nearValid(warmupBase, WARMUP_REQUEST_PROPERTIES);
+// The warm-up oracle, the group-B `provider_warmup_request` schema, still closes its root with
+// `unevaluatedProperties: false` on this branch, which accepts inherited names (Owner amendment
+// A-07; counterexample seed 1709518504 path "0:3": a valid request plus `"hasOwnProperty":0` is
+// schema-valid but refused by the guard). WP-02's A-07 fix (`wip/rua/wp-02-fix-r2`) closes it with
+// `additionalProperties: false`; once it is integrated this differential draws INHERITED_MEMBER_NAMES
+// too. Until then the guard's refusal of those names is pinned by hostile-payloads.integration.
+const nearValidWarmup = nearValid(warmupBase, WARMUP_REQUEST_PROPERTIES, boundaryValue, []);
 
 function guardAccepts(raw: JsonValue): boolean {
   const shape = guardRefundCallShape(raw);
@@ -326,7 +335,7 @@ describe('refund-provider acceptance properties', () => {
     fc.assert(
       fc.property(fc.oneof(runtimeOnlyValue, fc.jsonValue() as fc.Arbitrary<JsonValue>, hostileCall), (raw) => {
         const described = describeUntrusted(raw);
-        assert.ok(described.length <= 'boolean '.length + DESCRIBED_VALUE_MAX_CHARS + TRUNCATION_MARKER.length);
+        assert.ok(described.length <= 'boolean '.length + QUOTED_JSON_LIMIT + TRUNCATED.length);
         assert.equal(described.isWellFormed(), true);
       }),
       fuzzParameters(),

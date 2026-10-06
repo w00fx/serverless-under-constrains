@@ -36,6 +36,7 @@ import {
   probeConfigItem,
   REFUND_REQUEST_ID,
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import { ProviderLogRecorder } from '../../unit/refund-provider/support/provider-log-recorder.ts';
 import { ControllerLogRecorder } from './controller-log-recorder.ts';
 import { InProcessProviderInvoker } from './in-process-provider-invoker.ts';
 
@@ -71,6 +72,7 @@ export class TransportRehearsal {
       wall: time,
       monotonic: time,
       sleeper: time,
+      log: new ProviderLogRecorder().sink,
     });
     this.invoker = new InProcessProviderInvoker(this.provider, REHEARSAL_QUALIFIER);
     const controller = composeTreatmentController({

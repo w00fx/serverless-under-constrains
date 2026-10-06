@@ -191,3 +191,62 @@ describe('decodeTreatmentItem', () => {
     );
   });
 });
+
+// Store items are untrusted input too (Owner amendment A-05): the readers refuse, never throw, on
+// nesting of 100,000 levels and non-finite numbers, and never read an attribute through an own
+// member named like an Object.prototype member.
+describe('control-item readers over hostile items', () => {
+  const DEEP = 100_000;
+  const deepArray = JSON.parse(`${'['.repeat(DEEP)}${']'.repeat(DEEP)}`) as StoredItem[string];
+
+  /** `item` without `attribute`, plus an own `__proto__` member that holds it, as JSON.parse builds it. */
+  function hiddenBehindProto(item: StoredItem, attribute: string): StoredItem {
+    const rest = Object.fromEntries(Object.entries(item).filter(([key]) => key !== attribute));
+    const hidden = JSON.stringify({ [attribute]: item[attribute] });
+    return JSON.parse(`${JSON.stringify(rest).slice(0, -1)},"__proto__":${hidden}}`) as StoredItem;
+  }
+
+  it('refuses deeply nested attributes with a bounded detail', () => {
+    const scenario = refusal(decodeConfigItem(trialConfigItem('CONTROL', { scenario: deepArray }), TRIAL_ID));
+    assert.match(scenario, /scenario array \[{200}…\[truncated\]; expected one of CONTROL, COMMIT_THEN_TIMEOUT$/u);
+    const state = refusal(decodeTreatmentItem({ pk: TRIAL_PK, sk: 'treatment', state: deepArray, version: 1 }));
+    assert.match(state, /state array \[{200}…\[truncated\]; expected one of ARMED, /u);
+    assert.match(
+      refusal(decodePaymentItem(paymentItem(TRIAL_PK, { currency: deepArray }))),
+      /currency array \[{200}…/u,
+    );
+  });
+
+  it('refuses non-finite numbers and names them', () => {
+    const infinite = Number.POSITIVE_INFINITY;
+    assert.match(
+      refusal(decodeConfigItem(trialConfigItem('CONTROL', { safety_release_ms: infinite }), TRIAL_ID)),
+      /safety_release_ms number Infinity; expected 15000, the provider's coded OR-RUA-002 value$/u,
+    );
+    assert.match(
+      refusal(decodeTreatmentItem({ pk: TRIAL_PK, sk: 'treatment', state: 'ARMED', version: infinite })),
+      /version number Infinity; expected a safe integer >= 1$/u,
+    );
+  });
+
+  it('never reads an attribute through an own __proto__ member', () => {
+    const config = hiddenBehindProto(trialConfigItem('CONTROL'), 'scenario');
+    assert.ok(Object.hasOwn(config, '__proto__'));
+    assert.match(refusal(decodeConfigItem(config, TRIAL_ID)), /scenario absent; expected one of /u);
+    const payment = hiddenBehindProto(paymentItem(TRIAL_PK), 'currency');
+    assert.match(refusal(decodePaymentItem(payment)), /currency absent; expected a string$/u);
+    const treatment = hiddenBehindProto({ pk: TRIAL_PK, sk: 'treatment', state: 'ARMED', version: 1 }, 'state');
+    assert.match(refusal(decodeTreatmentItem(treatment)), /state absent; expected one of /u);
+  });
+
+  it('refuses state and cause values named like Object.prototype members', () => {
+    const base: StoredItem = { pk: TRIAL_PK, sk: 'treatment', state: 'ARMED', version: 1 };
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      assert.match(refusal(decodeTreatmentItem({ ...base, state: name })), /expected one of ARMED, /u);
+      assert.match(
+        refusal(decodeTreatmentItem({ ...base, safety_release_cause: name })),
+        /expected one of SAFETY_DEADLINE, CLEANUP_REQUEST$/u,
+      );
+    }
+  });
+});

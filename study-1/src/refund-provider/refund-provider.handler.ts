@@ -2,7 +2,8 @@
 // published version, 30 s timeout). Clients are created lazily on the first invocation, and
 // nothing compiles a schema at load time (RK-01). Every invocation gets a new journal source
 // instance through the composition. A ProviderFault, or any other error, is logged as one JSON
-// line and rethrown, so Lambda returns a function error (design §9.9 FAILED/DISPATCHED).
+// line and rethrown, so Lambda returns a function error (design §9.9 FAILED/DISPATCHED). The
+// provider's own diagnostics go to the same stderr sink.
 
 import { createStoreDynamoDbClient } from '../durable-store/aws/dynamodb-client.ts';
 import { createDynamoDbItemStore } from '../durable-store/aws/dynamodb-item-store.ts';
@@ -11,7 +12,12 @@ import { systemRuntime } from './node/system-runtime.ts';
 import { composeRefundProvider } from './provider-composition.ts';
 import { parseProviderEnvironment } from './provider-environment.ts';
 import { ProviderFault, unexpectedErrorLog } from './provider-fault.ts';
+import { jsonLineLogSink } from './provider-log.ts';
 import type { ProviderInvocationResult, RefundProvider } from './refund-provider.ts';
+
+const writeLog = jsonLineLogSink((text) => {
+  process.stderr.write(text);
+});
 
 let provider: RefundProvider | undefined;
 
@@ -24,7 +30,8 @@ function providerInstance(): RefundProvider {
     throw new Error(environment.error);
   }
   const store = createDynamoDbItemStore(environment.value.tables, createStoreDynamoDbClient());
-  provider = composeRefundProvider({ deployment: environment.value.deployment, store, ...systemRuntime() });
+  const deployment = environment.value.deployment;
+  provider = composeRefundProvider({ deployment, store, ...systemRuntime(), log: writeLog });
   return provider;
 }
 
@@ -39,8 +46,7 @@ export async function handler(event: JsonValue): Promise<ProviderInvocationResul
   try {
     return await providerInstance().handle(event);
   } catch (error) {
-    const line = error instanceof ProviderFault ? error.toLog() : unexpectedErrorLog(error);
-    process.stderr.write(`${JSON.stringify(line)}\n`);
+    writeLog(error instanceof ProviderFault ? error.toLog() : unexpectedErrorLog(error));
     throw error;
   }
 }

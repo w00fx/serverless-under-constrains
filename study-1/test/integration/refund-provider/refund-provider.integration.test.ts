@@ -40,7 +40,7 @@ import {
   validCall,
   validProbeCall,
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
-import { consumeTreatmentOnAccept, startInvocation } from './support/provider-run.ts';
+import { afterProviderEvent, consumeTreatmentOnAccept, startInvocation } from './support/provider-run.ts';
 
 const UNTARGETED_EVENTS = [
   'provider_call_received',
@@ -171,6 +171,28 @@ describe('RefundProvider over the store emulator', () => {
     assert.equal(field(released, 'elapsed_since_commit_ns'), '15000000000');
     assert.deepEqual(field(released, 'causation_event_ids'), [
       eventId(harness, TRIAL_PK, 'provider_transaction_committed'),
+    ]);
+  });
+
+  it('logs a treatment read its barrier could not use through the provider log sink', async () => {
+    const harness = providerHarness();
+    seedRunTrial(harness, 'COMMIT_THEN_TIMEOUT');
+    afterProviderEvent(harness, 'provider_commit_confirmed', () => {
+      harness.store.scriptReadFault('ThrottlingException', { table: 'control', operation: 'getConsistent' });
+    });
+    const running = await startInvocation(harness, validCall());
+    await harness.time.advanceBy(15_000);
+
+    const response = await running.result;
+    assertSucceeded(response, harness, TRIAL_PK);
+    assert.deepEqual(harness.providerLogs.lines(), [
+      {
+        level: 'warn',
+        event: 'treatment_read_failed',
+        provider_call_id: field(response, 'provider_call_id'),
+        code: 'ThrottlingException',
+        detail: `control read ${TRIAL_PK}/treatment failed: ThrottlingException`,
+      },
     ]);
   });
 

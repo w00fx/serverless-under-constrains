@@ -52,7 +52,7 @@ export class ProviderFault extends Error {
    * The structured log line the handler writes before it rethrows.
    *
    * @example
-   * process.stderr.write(`${JSON.stringify(fault.toLog())}\n`);
+   * writeLog(fault.toLog()); // a ProviderLogSink
    */
   toLog(): ProviderFaultLog {
     return {

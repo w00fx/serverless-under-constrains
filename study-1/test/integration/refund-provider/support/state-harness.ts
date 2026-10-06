@@ -18,6 +18,7 @@ import {
   TRIAL_MANIFEST_SHA,
   TRIAL_PK,
 } from '../../../unit/refund-provider/support/provider-fixtures.ts';
+import { ProviderLogRecorder } from '../../../unit/refund-provider/support/provider-log-recorder.ts';
 import { ScriptedProviderStatePort } from './scripted-provider-state-port.ts';
 
 export interface StateHarness {
@@ -26,9 +27,10 @@ export interface StateHarness {
   readonly ids: SequentialUuidSource;
   readonly state: ScriptedProviderStatePort;
   readonly journal: JournalWriter;
+  readonly logs: ProviderLogRecorder;
 }
 
-/** A fresh emulator, scripted state port and trial-partition provider journal. */
+/** A fresh emulator, scripted state port, trial-partition provider journal and log recorder. */
 export function stateHarness(): StateHarness {
   const time = new VirtualTimeScheduler({ wallEpochMs: EPOCH_MS, monotonicOriginNs: 7_000_000_000n });
   const store = new InMemoryItemStore({ clock: time });
@@ -46,7 +48,8 @@ export function stateHarness(): StateHarness {
     ids,
     maxDefinitiveRetries: PROVIDER_JOURNAL_DEFINITIVE_RETRIES,
   });
-  return { store, time, ids, state: new ScriptedProviderStatePort(createProviderStatePort(store)), journal };
+  const state = new ScriptedProviderStatePort(createProviderStatePort(store));
+  return { store, time, ids, state, journal, logs: new ProviderLogRecorder() };
 }
 
 /** The journal events of the trial partition, in journal order. */

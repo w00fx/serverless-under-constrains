@@ -86,7 +86,7 @@ function judgeShape(shape: RefundCallShape, ctx: AcceptanceContext): AcceptanceD
   if (shape.currency !== payment.currency) {
     return reject(
       'CURRENCY_MISMATCH',
-      `currency ${JSON.stringify(shape.currency)}; expected the payment currency ${JSON.stringify(payment.currency)}`,
+      `currency ${JSON.stringify(shape.currency)}; expected the payment currency ${excerptUntrusted(payment.currency)}`,
     );
   }
   return { accepted: true, call: acceptedCallOf(shape) };
