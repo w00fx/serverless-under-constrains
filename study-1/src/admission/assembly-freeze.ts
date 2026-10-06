@@ -3,8 +3,9 @@
 // directory, read it back and inventory it as the package will hold it
 // (`admission/deployment-assembly`). The synthesized template is what A13 recomputes the transport
 // scope from and what the manifest pins by digest. A failed synthesis, an unreadable assembly, a
-// symlink, special file or container-image asset, or an unreadable template rejects admission:
-// the execution could not prove which resources it would own.
+// symlink, special file or container-image asset, an unreadable template, or a stack that does not
+// declare the BR-RUA-050 ownership tags (`ownership-strategy.ts`) rejects admission: the execution
+// could not prove which resources it would own (BR-RUA-046 "missing ownership strategy").
 
 import { sha256Hex } from '../record-contract/digests.ts';
 import { describeJson, isJsonObject } from '../record-contract/json-value.ts';
@@ -19,6 +20,7 @@ import { EXECUTION_DIRECTORIES } from '../evidence-package/package-layout.ts';
 import { admissionReason } from './admission-reason.ts';
 import { readAssemblyDirectory } from './assembly-files.ts';
 import type { AssemblyDirectory } from './assembly-files.ts';
+import { ownershipStrategyReasons } from './ownership-strategy.ts';
 import { failed, failedWithAll, passed } from './preflight-check.ts';
 import type { CheckStatement, StepVerdict } from './preflight-check.ts';
 
@@ -79,6 +81,10 @@ export async function synthesizeAssembly(
   const template = templateOf(directory.value, synth.value.template_file);
   if (template.reason !== undefined) {
     return failed('SAFETY', statement, [template.reason]);
+  }
+  const [ownership, ...moreOwnership] = ownershipStrategyReasons(context, directory.value, synth.value.stack_name);
+  if (ownership !== undefined) {
+    return failed('SAFETY', statement, [ownership, ...moreOwnership]);
   }
   return passed(
     {
