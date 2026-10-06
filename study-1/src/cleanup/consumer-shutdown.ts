@@ -6,7 +6,7 @@
 
 import { boundedJsonText } from '../record-contract/json-value.ts';
 import type { Sleeper, StructuredReason } from '../record-contract/primitives.ts';
-import type { ConsumerControlPort } from './cleanup-ports.ts';
+import type { ConsumerControlPort, ConsumerStateRead } from './cleanup-ports.ts';
 import { ITEM_ACTIONS } from './cleanup-steps.ts';
 import { EVENT_SOURCE_MAPPING_RESOURCE_TYPE } from './resource-types.ts';
 import type { ItemRecorder, StepOutcome } from './step-recording.ts';
@@ -54,17 +54,29 @@ async function disableOne(mappingId: string, port: ConsumerControlPort, sleeper:
   if (request.kind !== 'requested') {
     return request;
   }
-  let lastState = 'unread';
-  for (let poll = 1; poll <= CONSUMER_MAX_POLLS; poll += 1) {
-    const read = await port.readState(mappingId);
-    if (read.kind === 'absent' || (read.kind === 'state' && read.state === DISABLED_STATE)) {
-      return { kind: read.kind === 'absent' ? 'absent' : 'disabled' };
+  for (let poll = 1; ; poll += 1) {
+    const settled = consumerPollOutcome(mappingId, await port.readState(mappingId), poll);
+    if (settled !== undefined) {
+      return settled;
     }
-    lastState = read.kind === 'state' ? read.state : `unreadable (${read.reason.code})`;
-    if (poll < CONSUMER_MAX_POLLS) {
-      await sleeper.sleep(CONSUMER_POLL_INTERVAL_MS);
-    }
+    await sleeper.sleep(CONSUMER_POLL_INTERVAL_MS);
   }
+}
+
+// What one `State` read shows: how the disable ended, or undefined while the mapping is still
+// disabling (or unreadable) and reads remain, at most CONSUMER_MAX_POLLS with no sleep after the
+// last. The failure names the last read itself, so no placeholder state exists to go stale.
+function consumerPollOutcome(mappingId: string, read: ConsumerStateRead, poll: number): DisableResult | undefined {
+  if (read.kind === 'absent') {
+    return { kind: 'absent' };
+  }
+  if (read.kind === 'state' && read.state === DISABLED_STATE) {
+    return { kind: 'disabled' };
+  }
+  if (poll < CONSUMER_MAX_POLLS) {
+    return undefined;
+  }
+  const lastState = read.kind === 'state' ? read.state : `unreadable (${read.reason.code})`;
   return {
     kind: 'failed',
     reason: {

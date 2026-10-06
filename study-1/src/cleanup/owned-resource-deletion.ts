@@ -135,26 +135,35 @@ async function deleteStackAndWait(stackId: string, ports: DeletionPorts): Promis
   if (request.kind === 'failed') {
     return { action: 'DELETE_FAILED', reason: request.reason };
   }
-  let lastObserved = 'no read';
-  for (let poll = 1; poll <= STACK_DELETE_MAX_POLLS; poll += 1) {
+  for (let poll = 1; ; poll += 1) {
     await ports.sleeper.sleep(STACK_DELETE_POLL_INTERVAL_MS);
-    const read = await ports.stacks.describe(stackId);
-    if (read.kind === 'failed') {
-      lastObserved = `an unreadable stack (${read.reason.code})`;
-      continue;
+    const settled = stackPollOutcome(stackId, await ports.stacks.describe(stackId), poll);
+    if (settled !== undefined) {
+      return settled;
     }
-    if (read.kind === 'absent' || read.status === DELETE_COMPLETE) {
-      return { action: 'DELETED' };
-    }
-    if (read.status === DELETE_FAILED) {
-      return {
-        action: 'DELETE_FAILED',
-        reason: stackReason('STACK_DELETE_FAILED', stackId, `status ${DELETE_FAILED}`),
-      };
-    }
-    lastObserved = `status ${boundedJsonText(read.status)}`;
   }
-  const observed = `${lastObserved} after ${String(STACK_DELETE_MAX_POLLS)} reads`;
+}
+
+// What one read after the deletion request shows: how the deletion ended, or undefined while the
+// stack is still deleting (or unreadable) and reads remain, at most STACK_DELETE_MAX_POLLS. The
+// timeout names the last read itself, so no placeholder "last observation" exists to go stale.
+function stackPollOutcome(stackId: string, read: StackRead, poll: number): StackDeletion | undefined {
+  if (read.kind === 'absent') {
+    return { action: 'DELETED' };
+  }
+  const status = read.kind === 'present' ? read.status : undefined;
+  if (status === DELETE_COMPLETE) {
+    return { action: 'DELETED' };
+  }
+  if (status === DELETE_FAILED) {
+    return { action: 'DELETE_FAILED', reason: stackReason('STACK_DELETE_FAILED', stackId, `status ${DELETE_FAILED}`) };
+  }
+  if (poll < STACK_DELETE_MAX_POLLS) {
+    return undefined;
+  }
+  const last =
+    read.kind === 'failed' ? `an unreadable stack (${read.reason.code})` : `status ${boundedJsonText(read.status)}`;
+  const observed = `${last} after ${String(STACK_DELETE_MAX_POLLS)} reads`;
   return { action: 'DELETE_FAILED', reason: stackReason('STACK_DELETE_TIMED_OUT', stackId, observed) };
 }
 
