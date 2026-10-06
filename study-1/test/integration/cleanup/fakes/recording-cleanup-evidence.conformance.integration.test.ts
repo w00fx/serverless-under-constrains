@@ -42,4 +42,11 @@ describe('RecordingCleanupEvidence conformance', () => {
     await assert.rejects(evidence.capturePreCleanupSnapshot('NORMAL'), /scripted snapshot evidence fault/);
     assert.deepEqual(await evidence.freezeLateEvidenceAssessment('NORMAL'), { status: 'succeeded', reasons: [] });
   });
+
+  it('rejects with exactly the scripted thrown value', async () => {
+    const evidence = new RecordingCleanupEvidence();
+    const hostile = Symbol('hostile');
+    evidence.throwOn('dlq', hostile);
+    await assert.rejects(evidence.captureDlqEvidence('NORMAL'), (thrown) => thrown === hostile);
+  });
 });

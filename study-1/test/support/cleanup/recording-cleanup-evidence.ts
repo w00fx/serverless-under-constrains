@@ -30,7 +30,7 @@ const SUCCEEDED: StepReport = { status: 'succeeded', reasons: [] };
 export class RecordingCleanupEvidence implements CleanupEvidencePort {
   readonly #calls: EvidenceCall[] = [];
   readonly #reports = new Map<EvidenceOperation, StepReport>();
-  readonly #throwing = new Set<EvidenceOperation>();
+  readonly #throwing = new Map<EvidenceOperation, unknown>();
   readonly #frozen: CleanupResults[] = [];
   #captured: string[] = [];
 
@@ -39,9 +39,9 @@ export class RecordingCleanupEvidence implements CleanupEvidencePort {
     this.#reports.set(operation, report);
   }
 
-  /** Every later call of `operation` throws. */
-  throwOn(operation: EvidenceOperation): void {
-    this.#throwing.add(operation);
+  /** Every later call of `operation` rejects with `thrown` (a scripted Error by default). */
+  throwOn(operation: EvidenceOperation, thrown: unknown = new Error(`scripted ${operation} evidence fault`)): void {
+    this.#throwing.set(operation, thrown);
   }
 
   /** The DLQ messages the next captures report. */
@@ -83,7 +83,9 @@ export class RecordingCleanupEvidence implements CleanupEvidencePort {
   #answer(operation: EvidenceOperation, mode: CleanupMode | undefined): Promise<StepReport> {
     this.#calls.push(mode === undefined ? { operation } : { operation, mode });
     if (this.#throwing.has(operation)) {
-      return Promise.reject(new Error(`scripted ${operation} evidence fault`));
+      // Whatever was scripted, a hostile non-Error included, is what the step sees thrown.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      return Promise.reject(this.#throwing.get(operation));
     }
     return Promise.resolve(this.#reports.get(operation) ?? SUCCEEDED);
   }

@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 
 import { conformingReason, upperSnakeCode } from '../../../src/cleanup/reason-conformance.ts';
 import { outcomeFromFailures } from '../../../src/cleanup/step-recording.ts';
-import { reasonFromThrown } from '../../../src/cleanup/thrown-reason.ts';
+import { reasonFromThrown, UNREADABLE_THROWN } from '../../../src/cleanup/thrown-reason.ts';
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
 
 describe('reasonFromThrown', () => {
@@ -25,6 +25,45 @@ describe('reasonFromThrown', () => {
     assert.ok(long.detail.length < 400, `detail of ${String(long.detail.length)} characters`);
     assert.equal(reasonFromThrown('text', 'C', 's').detail, 'threw a non-Error string; expected a result value');
     assert.equal(reasonFromThrown(undefined, 'C', 's').detail, 'threw a non-Error undefined; expected a result value');
+  });
+
+  it('bounds a long error name (WP-19 review)', () => {
+    const named = Object.assign(new Error('m'), { name: 'N'.repeat(5_000) });
+    const reason = reasonFromThrown(named, 'C', 's');
+    assert.ok(reason.detail.length < 400, `detail of ${String(reason.detail.length)} characters`);
+    assert.match(reason.detail, /^threw N{200}…\[truncated\]: m; expected a result value$/);
+  });
+
+  it('never throws on a hostile Error or a revoked proxy (A-05, WP-19 review)', () => {
+    // Regression: `${thrown.name}` ran a throwing getter (or converted a Symbol) inside the catch
+    // block meant to keep cleanup going, so the step's failure escaped as a rejection.
+    class ThrowingNameError extends Error {
+      override get name(): string {
+        throw new Error('name getter');
+      }
+    }
+    // `new Error('m')` holds `message` as its own member, so the getter must replace that member.
+    const throwingMessage = Object.defineProperty(new Error('m'), 'message', {
+      get(): string {
+        throw new Error('message getter');
+      },
+    });
+    const symbolNamed = Object.assign(new Error('m'), { name: Symbol('n') as unknown as string });
+    const objectMessage = Object.assign(new Error(), {
+      message: { toString: (): string => 'x'.repeat(10_000) } as unknown as string,
+    });
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    const described = [new ThrowingNameError('m'), throwingMessage, symbolNamed, objectMessage, proxy].map(
+      (thrown) => reasonFromThrown(thrown, 'C', 's').detail,
+    );
+    assert.deepEqual(described, [
+      `threw ${UNREADABLE_THROWN}; expected a result value`,
+      `threw ${UNREADABLE_THROWN}; expected a result value`,
+      'threw a non-string symbol: m; expected a result value',
+      'threw Error: a non-string object; expected a result value',
+      `threw ${UNREADABLE_THROWN}; expected a result value`,
+    ]);
   });
 });
 

@@ -40,6 +40,28 @@ describe('CleanupOrchestrator', () => {
     assert.equal(stepStatuses(result)[11], 'succeeded');
   });
 
+  it('records a step that throws a hostile Error and still runs every later step (A-05)', async () => {
+    // Regression (WP-19 review): describing the thrown value read its `name` getter inside the
+    // catch block, so the step's failure escaped and cleanup abandoned the remaining steps.
+    const world = cleanupWorld();
+    const hostile = Object.defineProperty(new Error('m'), 'name', {
+      get(): string {
+        throw new Error('name getter');
+      },
+    });
+    world.evidence.throwOn('snapshot', hostile);
+    const outcome = await cleanupOrchestrator(world).runNormal(cleanupInput(world));
+    assertConsistentOutcome(world, outcome);
+    const result = outcome.cleanup_result;
+    assert.equal(stepStatuses(result)[4], 'failed');
+    assert.equal(
+      result.steps.find((step) => step.step === 4)?.reasons[0]?.detail,
+      'threw an unreadable value; expected a result value',
+    );
+    assert.equal(stepStatuses(result)[11], 'succeeded');
+    assert.equal(result.cleanup_status, 'succeeded');
+  });
+
   it('freezes an inconclusive audit when the audit throws', async () => {
     const world = cleanupWorld();
     const auditor = new ThrowingLeakAuditRunner('audit bug');
