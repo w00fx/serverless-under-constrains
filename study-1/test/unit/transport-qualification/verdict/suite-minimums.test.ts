@@ -3,7 +3,7 @@
 // feature has. §14 traces four golden files here: AC-RUA-002 and AC-RUA-021 (three cases in
 // probe-pass), AC-RUA-031 (six in probe-fail), AC-RUA-032 (four in probe-indeterminate) and
 // AC-RUA-056 (five in probe-usability), which set the golden floor of 18; the fuzz floor holds the
-// verdict precedence, result and usability properties.
+// verdict precedence, result, counted-artifact, ledger-row and usability properties.
 //
 // Values only ratchet upward (A-03), so the test pins the first counts as a floor: a downward edit
 // of the committed file fails here. Raise both together.
@@ -49,8 +49,8 @@ const SECTION_14_CASES: Readonly<Record<string, readonly string[]>> = {
     'known-safety-breach',
   ],
 };
-/** The WP-10 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 75, golden: 18, fuzz: 3 } as const;
+/** The WP-10 counts after its single-pass review (first delivery: 75 unit, 18 golden, 3 fuzz). */
+const RATIFIED_FLOOR = { unit: 86, golden: 19, fuzz: 5 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));

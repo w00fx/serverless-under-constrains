@@ -2,7 +2,9 @@
 // and probe-verdict properties (design §12.5): a member of any event set to a value drawn from the
 // probe's own identities, instants and vocabulary (so edits reach the conditions' joins, not only
 // schema rejection) or from arbitrary JSON, an event dropped or duplicated. The edited files are
-// ingested with the real validator, as production ingests them.
+// ingested with the real validator, as production ingests them. A second arbitrary edits the
+// artifacts the probe counts and settles by (ledger snapshot, settlement samples, runner journal)
+// with their own members and values, so neither arbitrary dilutes the other.
 
 import fc from 'fast-check';
 
@@ -17,14 +19,21 @@ import {
 } from '../../../golden/transport-qualification/verdict/support/probe-golden.ts';
 import { PROBE_IDS, probeFiles } from '../../../unit/treatment-fidelity/support/treatment-evidence.ts';
 
-/** The probe files the edits touch. */
+/** The probe files the journal edits touch. */
 export const EDITED_FILES = [
   'probe/journals/caller-journal.jsonl',
   'probe/journals/provider-journal.jsonl',
   'probe/journals/controller-journal.jsonl',
   'probe/state/treatment-state-snapshot.json',
 ] as const;
-type EditedFile = (typeof EDITED_FILES)[number];
+
+/** The probe files the counted-artifact edits touch. */
+export const COUNTED_FILES = [
+  'probe/ledger/ledger-snapshot.json',
+  'probe/settlement/settlement-samples.jsonl',
+  'runner/runner-journal.jsonl',
+] as const;
+type EditedFile = (typeof EDITED_FILES)[number] | (typeof COUNTED_FILES)[number];
 
 /** Members the six conditions and fidelity read. */
 const MEMBERS = [
@@ -56,6 +65,27 @@ const MEMBERS = [
   'item_present',
 ] as const;
 
+/** Members the probe counts and its settlement re-derivation read. */
+const COUNTED_MEMBERS = [
+  'record_type',
+  'event_id',
+  'source_sequence',
+  'occurred_at',
+  'lambda_request_id',
+  'provider_transaction_id',
+  'transactions',
+  'complete',
+  'consistent_read',
+  'status',
+  'window_start',
+  'established_at',
+  'rechecked_at',
+  'phase',
+  'observed_at',
+  'provider_active_calls',
+  'processing_terminal',
+] as const;
+
 const IDS = Object.values(PROBE_IDS);
 const INSTANTS = [
   '2026-10-05T12:05:05.130Z',
@@ -76,11 +106,23 @@ const WORDS = [
   '3000000000',
 ];
 
-const valueArbitrary: fc.Arbitrary<JsonValue> = fc.oneof(
-  fc.constantFrom<JsonValue>(...IDS, ...INSTANTS, ...WORDS, true, false, null, 0, 1, 5, 6),
-  fc.subarray([...IDS], { maxLength: 3 }),
-  fc.jsonValue({ maxDepth: 2 }) as fc.Arbitrary<JsonValue>,
-);
+/** The base probe's settlement instants (window, establishment, recheck) and one long before. */
+const SETTLEMENT_INSTANTS = [
+  '2026-10-05T11:55:00.000Z',
+  '2026-10-05T12:05:35.000Z',
+  '2026-10-05T12:07:05.000Z',
+  '2026-10-05T12:07:35.000Z',
+  '2026-10-05T12:07:40.000Z',
+];
+const SETTLEMENT_WORDS = ['established', 'not_established', 'observation', 'pre_freeze_recheck'];
+
+function valueArbitraryOf(constants: readonly JsonValue[]): fc.Arbitrary<JsonValue> {
+  return fc.oneof(
+    fc.constantFrom<JsonValue>(...constants, true, false, null, 0, 1, 5, 6),
+    fc.subarray([...IDS], { maxLength: 3 }),
+    fc.jsonValue({ maxDepth: 2 }) as fc.Arbitrary<JsonValue>,
+  );
+}
 
 /** One edit of one probe file. */
 export type JournalEdit =
@@ -93,26 +135,45 @@ export type JournalEdit =
     }
   | { readonly kind: 'drop' | 'duplicate'; readonly file: EditedFile; readonly line: number };
 
-const fileArbitrary = fc.constantFrom(...EDITED_FILES);
 const lineArbitrary = fc.nat({ max: 7 });
 
+function editsArbitrary(
+  files: readonly EditedFile[],
+  members: readonly string[],
+  constants: readonly JsonValue[],
+): fc.Arbitrary<readonly JournalEdit[]> {
+  const fileArbitrary = fc.constantFrom(...files);
+  return fc.array(
+    fc.oneof(
+      fc.record({
+        kind: fc.constant('set' as const),
+        file: fileArbitrary,
+        line: lineArbitrary,
+        member: fc.constantFrom(...members),
+        value: valueArbitraryOf(constants),
+      }),
+      fc.record({
+        kind: fc.constantFrom('drop' as const, 'duplicate' as const),
+        file: fileArbitrary,
+        line: lineArbitrary,
+      }),
+    ),
+    { maxLength: 4 },
+  );
+}
+
 /** Up to four edits of the probe's journals and snapshot. */
-export const journalEditsArbitrary: fc.Arbitrary<readonly JournalEdit[]> = fc.array(
-  fc.oneof(
-    fc.record({
-      kind: fc.constant('set' as const),
-      file: fileArbitrary,
-      line: lineArbitrary,
-      member: fc.constantFrom(...MEMBERS),
-      value: valueArbitrary,
-    }),
-    fc.record({
-      kind: fc.constantFrom('drop' as const, 'duplicate' as const),
-      file: fileArbitrary,
-      line: lineArbitrary,
-    }),
-  ),
-  { maxLength: 4 },
+export const journalEditsArbitrary: fc.Arbitrary<readonly JournalEdit[]> = editsArbitrary(EDITED_FILES, MEMBERS, [
+  ...IDS,
+  ...INSTANTS,
+  ...WORDS,
+]);
+
+/** Up to four edits of the ledger snapshot, settlement samples and runner journal. */
+export const countedEditsArbitrary: fc.Arbitrary<readonly JournalEdit[]> = editsArbitrary(
+  COUNTED_FILES,
+  COUNTED_MEMBERS,
+  [...IDS, ...SETTLEMENT_INSTANTS, ...SETTLEMENT_WORDS],
 );
 
 const BASE_FILES = probeFiles();
