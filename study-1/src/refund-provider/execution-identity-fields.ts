@@ -2,6 +2,7 @@
 // `run_id`, `variant_validation_id` and `transport_probe_id`, as a lowercase UUIDv4 (BR-RUA-033).
 // Shared by the refund-call guard and the warm-up guard.
 
+import { executionIdOf } from '../event-journal/journal-scope.ts';
 import { isUuid4 } from '../record-contract/identifiers.ts';
 import type { ExecutionIdentity, JsonObject, Result, Uuid4 } from '../record-contract/primitives.ts';
 import { describeUntrusted } from './untrusted-json.ts';
@@ -45,7 +46,7 @@ export function parseExecutionIdentityFields(payload: JsonObject): Result<Execut
  * sameExecution({ execution_kind: 'RUN', run_id: a }, { execution_kind: 'RUN', run_id: a }); // true
  */
 export function sameExecution(a: ExecutionIdentity, b: ExecutionIdentity): boolean {
-  return a.execution_kind === b.execution_kind && executionIdValue(a) === executionIdValue(b);
+  return a.execution_kind === b.execution_kind && executionIdOf(a) === executionIdOf(b);
 }
 
 /**
@@ -55,18 +56,7 @@ export function sameExecution(a: ExecutionIdentity, b: ExecutionIdentity): boole
  * describeExecution({ execution_kind: 'RUN', run_id }); // 'RUN <run_id>'
  */
 export function describeExecution(execution: ExecutionIdentity): string {
-  return `${execution.execution_kind} ${executionIdValue(execution)}`;
-}
-
-function executionIdValue(execution: ExecutionIdentity): Uuid4 {
-  switch (execution.execution_kind) {
-    case 'RUN':
-      return execution.run_id;
-    case 'VARIANT_VALIDATION':
-      return execution.variant_validation_id;
-    case 'TRANSPORT_PROBE':
-      return execution.transport_probe_id;
-  }
+  return `${execution.execution_kind} ${executionIdOf(execution)}`;
 }
 
 /**
