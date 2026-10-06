@@ -44,7 +44,12 @@ export const DURABLE_EXECUTION_ARN =
   'arn:aws:lambda:eu-west-1:111122223333:function:rua-durable-caller:7/durable-execution/refund-0001/run-1';
 const DISPATCH_EVENT_ID = uuid(5);
 
-/** The conventional caller starting on an SQS receive. */
+/**
+ * The conventional caller starting on an SQS receive.
+ *
+ * @example
+ * toJson(conventionalInvocationStarted());
+ */
 export function conventionalInvocationStarted(): ConventionalInvocationStarted {
   return {
     ...trialEnvelope('caller_invocation_started', 1, 1),
@@ -55,7 +60,12 @@ export function conventionalInvocationStarted(): ConventionalInvocationStarted {
   };
 }
 
-/** The durable caller starting a replayed step of its execution. */
+/**
+ * The durable caller starting a replayed step of its execution.
+ *
+ * @example
+ * toJson(durableInvocationStarted());
+ */
 export function durableInvocationStarted(): DurableInvocationStarted {
   return {
     ...trialEnvelope('caller_invocation_started', 1, 1),
@@ -68,7 +78,12 @@ export function durableInvocationStarted(): DurableInvocationStarted {
   };
 }
 
-/** The transport probe caller, invoked directly (no queue message). */
+/**
+ * The transport probe caller, invoked directly (no queue message).
+ *
+ * @example
+ * toJson(probeInvocationStarted());
+ */
 export function probeInvocationStarted(): ProbeInvocationStarted {
   return {
     ...executionEnvelope('caller_invocation_started', 'probe', 1, 1),
@@ -77,7 +92,12 @@ export function probeInvocationStarted(): ProbeInvocationStarted {
   };
 }
 
-/** A trial message refused before any attempt, with the offending value kept verbatim. */
+/**
+ * A trial message refused before any attempt, with the offending value kept verbatim.
+ *
+ * @example
+ * toJson(trialMessageRejected());
+ */
 export function trialMessageRejected(): TrialMessageRejected {
   return {
     ...trialEnvelope('trial_message_rejected', 2, 2),
@@ -93,7 +113,12 @@ export function trialMessageRejected(): TrialMessageRejected {
   };
 }
 
-/** A new attempt and the refund it requests. */
+/**
+ * A new attempt and the refund it requests.
+ *
+ * @example
+ * toJson(attemptRegistered());
+ */
 export function attemptRegistered(): AttemptRegistered {
   return {
     ...trialEnvelope('attempt_registered', 3, 3),
@@ -107,7 +132,12 @@ export function attemptRegistered(): AttemptRegistered {
   };
 }
 
-/** An attempt that failed before the call left the caller. */
+/**
+ * An attempt that failed before the call left the caller.
+ *
+ * @example
+ * toJson(attemptNotDispatched());
+ */
 export function attemptNotDispatched(): AttemptNotDispatched {
   return {
     ...trialEnvelope('attempt_not_dispatched', 4, 4),
@@ -117,7 +147,12 @@ export function attemptNotDispatched(): AttemptNotDispatched {
   };
 }
 
-/** The dispatch of an attempt with its monotonic deadline. */
+/**
+ * The dispatch of an attempt with its monotonic deadline.
+ *
+ * @example
+ * toJson(dispatchStarted());
+ */
 export function dispatchStarted(): DispatchStarted {
   return {
     ...trialEnvelope('dispatch_started', 5, 4),
@@ -129,7 +164,12 @@ export function dispatchStarted(): DispatchStarted {
   };
 }
 
-/** The caller timeout of the dispatched attempt, timer won. */
+/**
+ * The caller timeout of the dispatched attempt, timer won.
+ *
+ * @example
+ * toJson(callerTimeoutRecorded());
+ */
 export function callerTimeoutRecorded(): CallerTimeoutRecorded {
   return {
     ...trialEnvelope('caller_timeout_recorded', 6, 5),
@@ -148,7 +188,12 @@ export function callerTimeoutRecorded(): CallerTimeoutRecorded {
   };
 }
 
-/** The transport settling after the timeout claim. */
+/**
+ * The transport settling after the timeout claim.
+ *
+ * @example
+ * toJson(transportSettledAfterTimeout());
+ */
 export function transportSettledAfterTimeout(): TransportSettledAfterTimeout {
   return {
     ...trialEnvelope('transport_settled_after_timeout', 7, 6),
@@ -159,7 +204,12 @@ export function transportSettledAfterTimeout(): TransportSettledAfterTimeout {
   };
 }
 
-/** An attempt the provider committed and answered. */
+/**
+ * An attempt the provider committed and answered.
+ *
+ * @example
+ * toJson(succeededOutcome());
+ */
 export function succeededOutcome(): SucceededOutcome {
   return {
     ...trialEnvelope('attempt_outcome_recorded', 8, 7),
@@ -174,7 +224,12 @@ export function succeededOutcome(): SucceededOutcome {
   };
 }
 
-/** An attempt the provider rejected. */
+/**
+ * An attempt the provider rejected.
+ *
+ * @example
+ * toJson(rejectedOutcome());
+ */
 export function rejectedOutcome(): RejectedOutcome {
   return {
     ...trialEnvelope('attempt_outcome_recorded', 8, 7),
@@ -187,7 +242,12 @@ export function rejectedOutcome(): RejectedOutcome {
   };
 }
 
-/** An attempt that timed out after dispatch. */
+/**
+ * An attempt that timed out after dispatch.
+ *
+ * @example
+ * toJson(timedOutOutcome());
+ */
 export function timedOutOutcome(): TimedOutOutcome {
   return {
     ...trialEnvelope('attempt_outcome_recorded', 8, 7),
@@ -199,7 +259,12 @@ export function timedOutOutcome(): TimedOutOutcome {
   };
 }
 
-/** An attempt that failed with an unknown dispatch state. */
+/**
+ * An attempt that failed with an unknown dispatch state.
+ *
+ * @example
+ * toJson(failedOutcome());
+ */
 export function failedOutcome(): FailedOutcome {
   return {
     ...trialEnvelope('attempt_outcome_recorded', 8, 7),
@@ -212,7 +277,12 @@ export function failedOutcome(): FailedOutcome {
   };
 }
 
-/** The refund request finished with exactly one confirmed effect. */
+/**
+ * The refund request finished with exactly one confirmed effect.
+ *
+ * @example
+ * toJson(finishedRequestState());
+ */
 export function finishedRequestState(): FinishedRequestState {
   return {
     ...trialEnvelope('request_state_recorded', 9, 8),
@@ -226,7 +296,12 @@ export function finishedRequestState(): FinishedRequestState {
   };
 }
 
-/** The refund request still running. */
+/**
+ * The refund request still running.
+ *
+ * @example
+ * toJson(runningRequestState());
+ */
 export function runningRequestState(): OpenRequestState {
   return {
     ...trialEnvelope('request_state_recorded', 9, 8),
@@ -239,7 +314,12 @@ export function runningRequestState(): OpenRequestState {
   };
 }
 
-/** The refund request finished because its message was rejected. */
+/**
+ * The refund request finished because its message was rejected.
+ *
+ * @example
+ * toJson(messageRejectedRequestState());
+ */
 export function messageRejectedRequestState(): MessageRejectedRequestState {
   return {
     ...trialEnvelope('request_state_recorded', 9, 8),
@@ -253,7 +333,12 @@ export function messageRejectedRequestState(): MessageRejectedRequestState {
   };
 }
 
-/** The durable caller exhausting its inner step attempts. */
+/**
+ * The durable caller exhausting its inner step attempts.
+ *
+ * @example
+ * toJson(innerExecutionExhausted());
+ */
 export function innerExecutionExhausted(): InnerExecutionExhausted {
   return {
     ...trialEnvelope('inner_execution_exhausted', 10, 9),

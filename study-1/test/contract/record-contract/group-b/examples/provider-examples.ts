@@ -38,7 +38,12 @@ const WARMUP_ID = uuid(0x500);
 const SIGNAL_EVENT_ID = uuid(23);
 const OBSERVED_EVENT_ID = uuid(17);
 
-/** The provider's first record of a call: identities copied verbatim before validation. */
+/**
+ * The provider's first record of a call: identities copied verbatim before validation.
+ *
+ * @example
+ * toJson(providerCallReceived());
+ */
 export function providerCallReceived(): ProviderCallReceived {
   return {
     ...trialEnvelope('provider_call_received', 11, 1),
@@ -53,7 +58,12 @@ export function providerCallReceived(): ProviderCallReceived {
   };
 }
 
-/** A call the provider refused before any ledger write. */
+/**
+ * A call the provider refused before any ledger write.
+ *
+ * @example
+ * toJson(providerCallRejected());
+ */
 export function providerCallRejected(): ProviderCallRejected {
   return {
     ...trialEnvelope('provider_call_rejected', 12, 2),
@@ -64,7 +74,12 @@ export function providerCallRejected(): ProviderCallRejected {
   };
 }
 
-/** A validated call, before the commit plan. */
+/**
+ * A validated call, before the commit plan.
+ *
+ * @example
+ * toJson(providerCallAccepted());
+ */
 export function providerCallAccepted(): ProviderCallAccepted {
   return {
     ...trialEnvelope('provider_call_accepted', 13, 2),
@@ -78,7 +93,12 @@ export function providerCallAccepted(): ProviderCallAccepted {
   };
 }
 
-/** The ledger commit of the targeted attempt. */
+/**
+ * The ledger commit of the targeted attempt.
+ *
+ * @example
+ * toJson(providerTransactionCommitted());
+ */
 export function providerTransactionCommitted(): ProviderTransactionCommitted {
   return {
     ...trialEnvelope('provider_transaction_committed', 14, 3),
@@ -93,7 +113,12 @@ export function providerTransactionCommitted(): ProviderTransactionCommitted {
   };
 }
 
-/** The read-back confirmation of the commit. */
+/**
+ * The read-back confirmation of the commit.
+ *
+ * @example
+ * toJson(providerCommitConfirmed());
+ */
 export function providerCommitConfirmed(): ProviderCommitConfirmed {
   return {
     ...trialEnvelope('provider_commit_confirmed', 15, 4),
@@ -103,7 +128,12 @@ export function providerCommitConfirmed(): ProviderCommitConfirmed {
   };
 }
 
-/** A commit the ledger refused. */
+/**
+ * A commit the ledger refused.
+ *
+ * @example
+ * toJson(providerCommitFailed());
+ */
 export function providerCommitFailed(): ProviderCommitFailed {
   return {
     ...trialEnvelope('provider_commit_failed', 16, 4),
@@ -115,7 +145,12 @@ export function providerCommitFailed(): ProviderCommitFailed {
   };
 }
 
-/** The held call observing the controller's timeout signal. */
+/**
+ * The held call observing the controller's timeout signal.
+ *
+ * @example
+ * toJson(treatmentTimeoutObserved());
+ */
 export function treatmentTimeoutObserved(): TreatmentTimeoutObserved {
   return {
     ...trialEnvelope('treatment_timeout_observed', 17, 5),
@@ -128,7 +163,12 @@ export function treatmentTimeoutObserved(): TreatmentTimeoutObserved {
   };
 }
 
-/** The held response released after the observation. */
+/**
+ * The held response released after the observation.
+ *
+ * @example
+ * toJson(treatmentResponseReleased());
+ */
 export function treatmentResponseReleased(): TreatmentResponseReleased {
   return {
     ...trialEnvelope('treatment_response_released', 18, 6),
@@ -140,7 +180,12 @@ export function treatmentResponseReleased(): TreatmentResponseReleased {
   };
 }
 
-/** A safety release of a committed, still-held treatment. */
+/**
+ * A safety release of a committed, still-held treatment.
+ *
+ * @example
+ * toJson(committedSafetyRelease());
+ */
 export function committedSafetyRelease(): CommittedSafetyRelease {
   return {
     ...trialEnvelope('treatment_safety_released', 19, 6),
@@ -154,7 +199,12 @@ export function committedSafetyRelease(): CommittedSafetyRelease {
   };
 }
 
-/** A safety release of a treatment that never committed. */
+/**
+ * A safety release of a treatment that never committed.
+ *
+ * @example
+ * toJson(armedSafetyRelease());
+ */
 export function armedSafetyRelease(): ArmedSafetyRelease {
   return {
     ...trialEnvelope('treatment_safety_released', 19, 6),
@@ -164,7 +214,12 @@ export function armedSafetyRelease(): ArmedSafetyRelease {
   };
 }
 
-/** The provider's response to the caller after release. */
+/**
+ * The provider's response to the caller after release.
+ *
+ * @example
+ * toJson(providerResponseReturned());
+ */
 export function providerResponseReturned(): ProviderResponseReturned {
   return {
     ...trialEnvelope('provider_response_returned', 20, 7),
@@ -175,7 +230,12 @@ export function providerResponseReturned(): ProviderResponseReturned {
   };
 }
 
-/** A completed readiness warm-up call (execution level, never a trial). */
+/**
+ * A completed readiness warm-up call (execution level, never a trial).
+ *
+ * @example
+ * toJson(providerWarmupCompleted());
+ */
 export function providerWarmupCompleted(): ProviderWarmupCompleted {
   return {
     ...executionEnvelope('provider_warmup_completed', 'run', 21, 8),
@@ -188,7 +248,12 @@ export function providerWarmupCompleted(): ProviderWarmupCompleted {
   };
 }
 
-/** The warm-up request body; `trial_id` may correlate it but no trial digest is carried. */
+/**
+ * The warm-up request body; `trial_id` may correlate it but no trial digest is carried.
+ *
+ * @example
+ * toJson(providerWarmupRequest());
+ */
 export function providerWarmupRequest(): ProviderWarmupRequest {
   return {
     schema_version: 1,

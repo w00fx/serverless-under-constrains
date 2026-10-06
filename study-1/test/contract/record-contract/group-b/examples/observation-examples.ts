@@ -36,7 +36,12 @@ const RUN_CORRELATION: ExecutionCorrelation = { run_id: RUN_ID, execution_manife
 const SOURCE_QUEUE = 'rua-run-0100-source.fifo';
 const DLQ = 'rua-run-0100-dlq.fifo';
 
-/** Source-queue counters read successfully. */
+/**
+ * Source-queue counters read successfully.
+ *
+ * @example
+ * toJson(queueCountersObserved());
+ */
 export function queueCountersObserved(): ExecutionCorrelation & QueueCountersObserved {
   return {
     schema_version: 1,
@@ -51,7 +56,12 @@ export function queueCountersObserved(): ExecutionCorrelation & QueueCountersObs
   };
 }
 
-/** A DLQ read that failed. */
+/**
+ * A DLQ read that failed.
+ *
+ * @example
+ * toJson(queueCountersUnavailable());
+ */
 export function queueCountersUnavailable(): ExecutionCorrelation & QueueCountersUnavailable {
   return {
     schema_version: 1,
@@ -66,7 +76,12 @@ export function queueCountersUnavailable(): ExecutionCorrelation & QueueCounters
   };
 }
 
-/** One settlement-loop sample of a trial. */
+/**
+ * One settlement-loop sample of a trial.
+ *
+ * @example
+ * toJson(settlementSample());
+ */
 export function settlementSample(): SettlementSample {
   return {
     schema_version: 1,
@@ -92,7 +107,12 @@ export function settlementSample(): SettlementSample {
   };
 }
 
-/** The trial's DLQ contents, captured in full. */
+/**
+ * The trial's DLQ contents, captured in full.
+ *
+ * @example
+ * toJson(dlqSnapshot());
+ */
 export function dlqSnapshot(): DlqSnapshot {
   return {
     schema_version: 1,
@@ -109,8 +129,8 @@ export function dlqSnapshot(): DlqSnapshot {
         body_sha256: digest('dlq-body'),
         md5_of_body: 'fedcba9876543210fedcba9876543210',
         approximate_receive_count: 3,
-        approximate_first_receive_timestamp: '1791201600000',
-        sent_timestamp: '1791201599000',
+        approximate_first_receive_timestamp: at(59_500),
+        sent_timestamp: at(59_000),
         message_group_id: 'group-0001',
         message_deduplication_id: 'dedup-0001',
         sequence_number: '18889000000000000002',
@@ -119,7 +139,12 @@ export function dlqSnapshot(): DlqSnapshot {
   };
 }
 
-/** The trial's ledger partition, read consistently in one page. */
+/**
+ * The trial's ledger partition, read consistently in one page.
+ *
+ * @example
+ * toJson(ledgerSnapshot());
+ */
 export function ledgerSnapshot(): LedgerSnapshot {
   return {
     schema_version: 1,
@@ -148,7 +173,12 @@ export function ledgerSnapshot(): LedgerSnapshot {
   };
 }
 
-/** The trial's treatment item after its response was released. */
+/**
+ * The trial's treatment item after its response was released.
+ *
+ * @example
+ * toJson(treatmentItemPresent());
+ */
 export function treatmentItemPresent(): TreatmentStateSnapshot {
   return {
     schema_version: 1,
@@ -172,12 +202,48 @@ export function treatmentItemPresent(): TreatmentStateSnapshot {
       signal_caller_event_id: uuid(6),
       observed_event_id: uuid(17),
       release_event_id: uuid(18),
+    },
+  };
+}
+
+/**
+ * A treatment item the provider released at its safety deadline while it waited after commit:
+ * the barrier writes `safety_release_cause` only on the transition to SAFETY_RELEASED
+ * (refund-provider treatment-barrier), so only this state carries it.
+ *
+ * @example
+ * toJson(treatmentItemSafetyReleased());
+ */
+export function treatmentItemSafetyReleased(): TreatmentStateSnapshot {
+  return {
+    schema_version: 1,
+    record_type: 'treatment_state_snapshot',
+    ...RUN_CORRELATION,
+    ...TRIAL_SCOPE,
+    partition_key: TRIAL_PARTITION,
+    captured_at: at(63_000),
+    consistent_read: true,
+    item_present: true,
+    treatment: {
+      state: 'SAFETY_RELEASED',
+      version: 3,
+      targeted_attempt_id: ATTEMPT_CORRELATION.attempt_id,
+      provider_request_id: ATTEMPT_CORRELATION.provider_request_id,
+      provider_call_id: COMMIT_TRIPLE.provider_call_id,
+      provider_commit_id: COMMIT_TRIPLE.provider_commit_id,
+      provider_transaction_id: COMMIT_TRIPLE.provider_transaction_id,
+      commit_event_id: uuid(14),
       safety_release_cause: 'SAFETY_DEADLINE',
     },
   };
 }
 
-/** A treatment partition with no item (a CONTROL trial). */
+/**
+ * A treatment partition with no item (a CONTROL trial).
+ *
+ * @example
+ * toJson(treatmentItemAbsent());
+ */
 export function treatmentItemAbsent(): TreatmentStateSnapshot {
   return {
     schema_version: 1,
@@ -191,7 +257,12 @@ export function treatmentItemAbsent(): TreatmentStateSnapshot {
   };
 }
 
-/** The trial's Durable executions and their history. */
+/**
+ * The trial's Durable executions and their history.
+ *
+ * @example
+ * toJson(durableExecutionMetadata());
+ */
 export function durableExecutionMetadata(): DurableExecutionMetadata {
   return {
     schema_version: 1,
@@ -214,7 +285,7 @@ export function durableExecutionMetadata(): DurableExecutionMetadata {
         history_complete: true,
         history: [
           {
-            event_id: 1,
+            history_event_id: 1,
             event_type: 'StepStarted',
             event_timestamp: at(2),
             name: 'refund',
@@ -229,7 +300,12 @@ export function durableExecutionMetadata(): DurableExecutionMetadata {
   };
 }
 
-/** Telemetry availability of the run (execution level). */
+/**
+ * Telemetry availability of the run (execution level).
+ *
+ * @example
+ * toJson(telemetryAvailability());
+ */
 export function telemetryAvailability(): TelemetryAvailabilityRecord {
   return {
     schema_version: 1,
@@ -242,7 +318,12 @@ export function telemetryAvailability(): TelemetryAvailabilityRecord {
   };
 }
 
-/** The operational state before an emergency cleanup. */
+/**
+ * The operational state before an emergency cleanup.
+ *
+ * @example
+ * toJson(preCleanupSnapshot());
+ */
 export function preCleanupSnapshot(): PreCleanupSnapshot {
   return {
     schema_version: 1,
@@ -264,7 +345,12 @@ export function preCleanupSnapshot(): PreCleanupSnapshot {
   };
 }
 
-/** A checkpoint of the probe's coordination journal prefix. */
+/**
+ * A checkpoint of the probe's coordination journal prefix.
+ *
+ * @example
+ * toJson(coordinationPrefixCheckpoint());
+ */
 export function coordinationPrefixCheckpoint(): CoordinationPrefixCheckpoint {
   return {
     schema_version: 1,
@@ -280,15 +366,53 @@ export function coordinationPrefixCheckpoint(): CoordinationPrefixCheckpoint {
   };
 }
 
+// A treatment item carries its commit and signal identities only as far as they exist
+// (treatment_state_snapshot schema), so each one may be absent.
+const TREATMENT_COMMIT_IDENTITIES = [
+  'targeted_attempt_id',
+  'provider_request_id',
+  'provider_call_id',
+  'provider_commit_id',
+  'provider_transaction_id',
+  'commit_event_id',
+];
+const TREATMENT_IDENTITIES = [
+  ...TREATMENT_COMMIT_IDENTITIES,
+  'signal_event_id',
+  'signal_caller_event_id',
+  'observed_event_id',
+  'release_event_id',
+];
+// GetDurableExecutionHistory fills these per event type only; event type and time are always there.
+const DURABLE_HISTORY_DETAILS = [
+  'history_event_id',
+  'name',
+  'current_attempt',
+  'next_attempt_delay_seconds',
+  'request_id',
+  'error_type',
+];
+
 export const OBSERVATION_EXAMPLES: readonly RecordExample[] = [
   example('queue_observation ok', queueCountersObserved()),
   example('queue_observation unavailable', queueCountersUnavailable()),
   example('settlement_sample', settlementSample()),
   example('dlq_snapshot', dlqSnapshot()),
-  example('ledger_snapshot', ledgerSnapshot()),
-  example('treatment_state_snapshot present', treatmentItemPresent()),
+  example('ledger_snapshot', ledgerSnapshot(), { nested_optional: ['/pages/*/start_cursor', '/pages/*/next_cursor'] }),
+  example('treatment_state_snapshot present', treatmentItemPresent(), {
+    nested_optional: TREATMENT_IDENTITIES.map((member) => `/treatment/${member}`),
+  }),
+  example('treatment_state_snapshot safety released', treatmentItemSafetyReleased(), {
+    nested_optional: [...TREATMENT_COMMIT_IDENTITIES, 'safety_release_cause'].map((member) => `/treatment/${member}`),
+  }),
   example('treatment_state_snapshot absent', treatmentItemAbsent()),
-  example('durable_execution_metadata', durableExecutionMetadata()),
+  example('durable_execution_metadata', durableExecutionMetadata(), {
+    nested_optional: [
+      '/executions/*/ended_at',
+      '/executions/*/version',
+      ...DURABLE_HISTORY_DETAILS.map((member) => `/executions/*/history/*/${member}`),
+    ],
+  }),
   example('telemetry_availability', telemetryAvailability()),
   example('pre_cleanup_snapshot', preCleanupSnapshot()),
   example('coordination_prefix_checkpoint', coordinationPrefixCheckpoint()),

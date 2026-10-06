@@ -32,7 +32,12 @@ import {
 import { example } from '../support/record-example.ts';
 import type { RecordExample } from '../support/record-example.ts';
 
-/** The run entering its TRIALS phase. */
+/**
+ * The run entering its TRIALS phase.
+ *
+ * @example
+ * toJson(phaseTransitionRecorded());
+ */
 export function phaseTransitionRecorded(): PhaseTransitionRecorded {
   return {
     ...executionEnvelope('phase_transition_recorded', 'run', 30, 1),
@@ -43,7 +48,12 @@ export function phaseTransitionRecorded(): PhaseTransitionRecorded {
   };
 }
 
-/** Provisioning verified the deploy copy against the inventory digest. */
+/**
+ * Provisioning verified the deploy copy against the inventory digest.
+ *
+ * @example
+ * toJson(deployCopyVerified());
+ */
 export function deployCopyVerified(): ProvisioningEventRecorded {
   return {
     ...executionEnvelope('provisioning_event_recorded', 'run', 31, 2),
@@ -54,7 +64,12 @@ export function deployCopyVerified(): ProvisioningEventRecorded {
   };
 }
 
-/** Provisioning started the stack deploy. */
+/**
+ * Provisioning started the stack deploy.
+ *
+ * @example
+ * toJson(deployStarted());
+ */
 export function deployStarted(): ProvisioningEventRecorded {
   return {
     ...executionEnvelope('provisioning_event_recorded', 'run', 31, 2),
@@ -65,7 +80,12 @@ export function deployStarted(): ProvisioningEventRecorded {
   };
 }
 
-/** Provisioning recorded the deployed stack id. */
+/**
+ * Provisioning recorded the deployed stack id.
+ *
+ * @example
+ * toJson(stackIdRecorded());
+ */
 export function stackIdRecorded(): ProvisioningEventRecorded {
   return {
     ...executionEnvelope('provisioning_event_recorded', 'run', 31, 2),
@@ -76,7 +96,12 @@ export function stackIdRecorded(): ProvisioningEventRecorded {
   };
 }
 
-/** A failed deploy, which must name at least one reason. */
+/**
+ * A failed deploy, which must name at least one reason.
+ *
+ * @example
+ * toJson(deployFailed());
+ */
 export function deployFailed(): ProvisioningEventRecorded {
   return {
     ...executionEnvelope('provisioning_event_recorded', 'run', 31, 2),
@@ -87,7 +112,12 @@ export function deployFailed(): ProvisioningEventRecorded {
   };
 }
 
-/** The pre-trial check that no trial partition exists yet. */
+/**
+ * The pre-trial check that no trial partition exists yet.
+ *
+ * @example
+ * toJson(trialPartitionsVerifiedAbsent());
+ */
 export function trialPartitionsVerifiedAbsent(): TrialPartitionsVerifiedAbsent {
   return {
     ...trialEnvelope('trial_partitions_verified_absent', 32, 3),
@@ -97,7 +127,12 @@ export function trialPartitionsVerifiedAbsent(): TrialPartitionsVerifiedAbsent {
   };
 }
 
-/** The runner arming the treatment of a COMMIT_THEN_TIMEOUT trial. */
+/**
+ * The runner arming the treatment of a COMMIT_THEN_TIMEOUT trial.
+ *
+ * @example
+ * toJson(treatmentArmed());
+ */
 export function treatmentArmed(): TreatmentArmed {
   return {
     ...trialEnvelope('treatment_armed', 33, 4),
@@ -108,7 +143,12 @@ export function treatmentArmed(): TreatmentArmed {
   };
 }
 
-/** The trial message as SQS accepted it. */
+/**
+ * The trial message as SQS accepted it.
+ *
+ * @example
+ * toJson(trialMessagePublished());
+ */
 export function trialMessagePublished(): TrialMessagePublished {
   return {
     ...trialEnvelope('trial_message_published', 34, 5),
@@ -123,7 +163,12 @@ export function trialMessagePublished(): TrialMessagePublished {
   };
 }
 
-/** A transport-probe workload invocation (probe execution, no trial). */
+/**
+ * A transport-probe workload invocation (probe execution, no trial).
+ *
+ * @example
+ * toJson(probeWorkloadInvoked());
+ */
 export function probeWorkloadInvoked(): ProbeWorkloadInvoked {
   return {
     ...executionEnvelope('probe_workload_invoked', 'probe', 35, 1),
@@ -135,7 +180,12 @@ export function probeWorkloadInvoked(): ProbeWorkloadInvoked {
   };
 }
 
-/** Settlement established after one restart. */
+/**
+ * Settlement established after one restart.
+ *
+ * @example
+ * toJson(establishedSettlement());
+ */
 export function establishedSettlement(): EstablishedSettlement {
   return {
     ...trialEnvelope('settlement_assessed', 36, 6),
@@ -150,7 +200,12 @@ export function establishedSettlement(): EstablishedSettlement {
   };
 }
 
-/** Settlement not established within the window. */
+/**
+ * Settlement not established within the window.
+ *
+ * @example
+ * toJson(notEstablishedSettlement());
+ */
 export function notEstablishedSettlement(): NotEstablishedSettlement {
   return {
     ...trialEnvelope('settlement_assessed', 36, 6),
@@ -162,7 +217,12 @@ export function notEstablishedSettlement(): NotEstablishedSettlement {
   };
 }
 
-/** The trial's evidence index frozen. */
+/**
+ * The trial's evidence index frozen.
+ *
+ * @example
+ * toJson(trialEvidenceFrozen());
+ */
 export function trialEvidenceFrozen(): TrialEvidenceFrozen {
   return {
     ...trialEnvelope('trial_evidence_frozen', 37, 7),
@@ -172,7 +232,12 @@ export function trialEvidenceFrozen(): TrialEvidenceFrozen {
   };
 }
 
-/** A trial interrupted by the operator. */
+/**
+ * A trial interrupted by the operator.
+ *
+ * @example
+ * toJson(trialInterrupted());
+ */
 export function trialInterrupted(): TrialInterrupted {
   return {
     ...trialEnvelope('trial_interrupted', 38, 7),
@@ -182,7 +247,12 @@ export function trialInterrupted(): TrialInterrupted {
   };
 }
 
-/** An active-time safety check within its declared limit. */
+/**
+ * An active-time safety check within its declared limit.
+ *
+ * @example
+ * toJson(safetyCheckWithinLimits());
+ */
 export function safetyCheckWithinLimits(): SafetyCheckRecorded {
   return {
     ...executionEnvelope('safety_check_recorded', 'run', 39, 8),
@@ -196,7 +266,12 @@ export function safetyCheckWithinLimits(): SafetyCheckRecorded {
   };
 }
 
-/** A billed-cost check that could not be verified (no observation required). */
+/**
+ * A billed-cost check that could not be verified (no observation required).
+ *
+ * @example
+ * toJson(safetyCheckUnverified());
+ */
 export function safetyCheckUnverified(): SafetyCheckRecorded {
   return {
     ...executionEnvelope('safety_check_recorded', 'run', 39, 8),
@@ -210,7 +285,12 @@ export function safetyCheckUnverified(): SafetyCheckRecorded {
   };
 }
 
-/** A failed lease acquisition naming the current holder. */
+/**
+ * A failed lease acquisition naming the current holder.
+ *
+ * @example
+ * toJson(leaseEventRecorded());
+ */
 export function leaseEventRecorded(): LeaseEventRecorded {
   return {
     ...executionEnvelope('lease_event_recorded', 'run', 40, 1),
@@ -228,7 +308,12 @@ export function leaseEventRecorded(): LeaseEventRecorded {
   };
 }
 
-/** A cleanup step deleting the recorded stack. */
+/**
+ * A cleanup step deleting the recorded stack.
+ *
+ * @example
+ * toJson(cleanupResourceAction());
+ */
 export function cleanupResourceAction(): CleanupActionRecorded {
   return {
     ...executionEnvelope('cleanup_action_recorded', 'run', 41, 1),
@@ -245,7 +330,12 @@ export function cleanupResourceAction(): CleanupActionRecorded {
   };
 }
 
-/** A cleanup step that names no resource. */
+/**
+ * A cleanup step that names no resource.
+ *
+ * @example
+ * toJson(cleanupStepAction());
+ */
 export function cleanupStepAction(): CleanupActionRecorded {
   return {
     ...executionEnvelope('cleanup_action_recorded', 'run', 41, 1),

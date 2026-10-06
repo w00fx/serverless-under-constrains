@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_call_received.schema.json",
   "title": "provider_call_received (catalogue group B, row 29)",
-  "description": "Provider journal: every received call gets a fresh provider_call_id, rejected calls included (BR-RUA-018). The caller identifiers are copied verbatim when present as strings, so they are not shape-checked here; raw_request_sha256 digests the exact request bytes.",
+  "description": "Provider journal: every received call gets a fresh provider_call_id, rejected calls included (BR-RUA-018). The caller identifiers are copied verbatim when present as strings, so they are not shape-checked here; raw_request_sha256 digests the canonical JSON bytes of the request as parsed by the Lambda runtime, which never exposes the raw invocation bytes.",
   "type": "object",
   "allOf": [
     {

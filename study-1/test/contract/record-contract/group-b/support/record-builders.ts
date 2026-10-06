@@ -181,8 +181,15 @@ export function trialEnvelope<T extends EventRecordType>(
  */
 export function toJson(record: StudyRecord): JsonObject {
   const parsed = parseJsonDocument(serializeRecordFile(record));
-  if (!parsed.ok || !isJsonObject(parsed.value)) {
-    throw new Error(`record ${record.record_type} did not round-trip; expected a JSON object document`);
+  if (!parsed.ok) {
+    throw new Error(
+      `record ${record.record_type} did not parse back (${JSON.stringify(parsed.error)}); expected a JSON object document`,
+    );
+  }
+  if (!isJsonObject(parsed.value)) {
+    throw new Error(
+      `record ${record.record_type} parsed back as ${JSON.stringify(parsed.value)}; expected a JSON object document`,
+    );
   }
   return parsed.value;
 }

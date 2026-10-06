@@ -3,24 +3,22 @@
 // closed vocabularies the TypeScript modules export are the ones the schemas enforce.
 
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { EVENT_SOURCES } from '../../../../src/record-contract/envelope.ts';
-import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
-import { parseJsonDocument } from '../../../../src/record-contract/parsing.ts';
 import { EXECUTION_KINDS, VARIANT_IDS } from '../../../../src/record-contract/primitives.ts';
-import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { EVENT_RECORD_TYPES, RECORD_TYPES, RECORD_TYPE_GROUPS } from '../../../../src/record-contract/record-types.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
 import * as vocabulary from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import { findSchemaConventionViolations } from '../../../../src/record-contract/schema-conventions.ts';
-import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
+import { listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
 import { CANONICAL_EXAMPLES, GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { toJson } from './support/record-builders.ts';
 import { groupBValidator } from './support/group-b-validation.ts';
+import { resolvePointer, schemaOf } from './support/schema-reading.ts';
 
 const GROUP_B: readonly GroupBRecordType[] = RECORD_TYPE_GROUPS['group-b'];
 const RECORD_MODULE_DIRECTORY = fileURLToPath(
@@ -29,24 +27,6 @@ const RECORD_MODULE_DIRECTORY = fileURLToPath(
 const SHARED_MODULES = ['record-map.ts', 'shared-shapes.ts', 'vocabulary.ts'];
 
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-
-function schemaOf(recordType: GroupBRecordType): JsonValue {
-  const parsed = parseJsonDocument(readFileSync(join(DEFAULT_SCHEMA_ROOT, 'group-b', `${recordType}.schema.json`)));
-  assert.ok(parsed.ok, `${recordType} schema parses`);
-  return parsed.value;
-}
-
-function resolvePointer(root: JsonValue, pointer: string): JsonValue | undefined {
-  return pointer
-    .split('/')
-    .slice(1)
-    .reduce<JsonValue | undefined>((node, segment) => {
-      if (isJsonArray(node)) {
-        return node[Number(segment)];
-      }
-      return isJsonObject(node) ? node[segment] : undefined;
-    }, root);
-}
 
 // Each closed vocabulary and the schema locations that must enforce exactly it.
 const VOCABULARY_SITES: readonly (readonly [readonly string[], GroupBRecordType, string])[] = [

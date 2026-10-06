@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rua.serverless-under-constraints.invalid/schemas/durable_execution_metadata.schema.json",
   "title": "durable_execution_metadata (catalogue group B, row 62)",
-  "description": "execution-metadata/durable-executions.json (Durable trials only): every durable execution of the caller version started after publication, from ListDurableExecutionsByFunction, GetDurableExecution and GetDurableExecutionHistory (BR-RUA-037, BR-RUA-020). History event types keep the service spelling.",
+  "description": "execution-metadata/durable-executions.json (Durable trials only): every durable execution of the caller version started after publication, from ListDurableExecutionsByFunction, GetDurableExecution and GetDurableExecutionHistory (BR-RUA-037, BR-RUA-020). History event types keep the service spelling. history_event_id is the service's integer history EventId, named apart from the study's UUIDv4 event_id (BR-RUA-033).",
   "type": "object",
   "$defs": {
     "history_event": {
       "type": "object",
       "properties": {
-        "event_id": {
+        "history_event_id": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
