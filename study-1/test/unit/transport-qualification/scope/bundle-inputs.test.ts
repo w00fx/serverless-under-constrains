@@ -1,10 +1,9 @@
 // Splitting the bundler's input list into project sources and lockfile install paths, the
-// basis of the transitive production closure (BR-RUA-028). Includes a partition property.
+// basis of the transitive production closure (BR-RUA-028). The partition property is in
+// test/fuzz/transport-qualification/scope/bundle-inputs.fuzz.test.ts (Owner amendment A-11).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-
-import fc from 'fast-check';
 
 import {
   classifyBundleInputs,
@@ -12,7 +11,6 @@ import {
   packageInstallPath,
   sortedCodeUnits,
 } from '../../../../src/transport-qualification/scope/bundle-inputs.ts';
-import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
 
 describe('packageInstallPath', () => {
   it('returns the innermost package install path, scoped or not', () => {
@@ -51,24 +49,6 @@ describe('classifyBundleInputs', () => {
         local_sources: ['src/a.ts', 'src/b.ts'],
         packages: ['node_modules/@s/y', 'node_modules/z'],
       },
-    );
-  });
-
-  it('partitions every input exactly once (property)', () => {
-    const segment = fc.constantFrom('node_modules', '@s', 'pkg', 'lib', 'src', 'x.js', 'a.ts');
-    const path = fc.array(segment, { minLength: 1, maxLength: 6 }).map((segments) => segments.join('/'));
-    fc.assert(
-      fc.property(fc.array(path, { maxLength: 12 }), (paths) => {
-        const classified = classifyBundleInputs('entry.ts', paths);
-        const local = new Set(paths.filter((p) => packageInstallPath(p) === undefined));
-        assert.deepEqual(classified.local_sources, sortedCodeUnits(local));
-        for (const installPath of classified.packages) {
-          assert.ok(paths.some((p) => packageInstallPath(p) === installPath));
-          assert.ok(paths.some((p) => p.startsWith(`${installPath}/`)));
-        }
-        assert.equal(new Set(classified.packages).size, classified.packages.length);
-      }),
-      fuzzParameters(),
     );
   });
 });

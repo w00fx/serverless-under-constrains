@@ -1,6 +1,6 @@
 // The places of a valid group A record that the catalogue-wide checks mutate: every governed
 // leaf and every governed object at any depth (support/json-scope.ts lists the open members),
-// and every number leaf. The §12.5 property (single-field-mutation.contract.test.ts) and the
+// and every number leaf. The §12.5 sweeps and property (single-field-mutations.ts) and the
 // hostile-input cases (hostile-input.contract.test.ts) draw from these lists, so both always
 // cover the same sites.
 

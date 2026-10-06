@@ -1,1 +1,1 @@
-{ "unit": 138, "contract": 4, "integration": 85 }
+{ "unit": 130, "contract": 4, "integration": 85, "fuzz": 9 }

@@ -7,6 +7,8 @@
 //
 // Values only ratchet upward (A-03), so the test pins the last ratified counts as a floor: a
 // downward edit of the committed file fails here (WP-11 review round 1). Raise both together.
+// M0 chores (Owner amendment A-11, decision 23): the five property tests moved from unit to
+// test/fuzz/transport-qualification/scope/, so 5 of the unit floor moved to the fuzz floor.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -25,8 +27,8 @@ const AC_RUA_051_FILE = fileURLToPath(
   ),
 );
 const AC_RUA_051_CASES = ['scoped-source-change', 'scoped-dependency-change', 'unrelated-oracle-change'] as const;
-/** The counts ratified at the WP-11 single-pass review (143 unit, 66 integration cases). */
-const RATIFIED_FLOOR = { unit: 143, integration: 66 } as const;
+/** The WP-11 single-pass review counts (143 unit, 66 integration), with 5 unit moved to fuzz (A-11). */
+const RATIFIED_FLOOR = { unit: 138, integration: 66, fuzz: 5 } as const;
 
 describe('transport-qualification scope suite minimums', () => {
   it('hold at least the three §14 AC-RUA-051 integration cases and a positive unit minimum', () => {
@@ -47,6 +49,10 @@ describe('transport-qualification scope suite minimums', () => {
     assert.ok(
       (minimums.integration ?? 0) >= RATIFIED_FLOOR.integration,
       `integration minimum ${String(minimums.integration)}; expected >= ${String(RATIFIED_FLOOR.integration)}`,
+    );
+    assert.ok(
+      (minimums.fuzz ?? 0) >= RATIFIED_FLOOR.fuzz,
+      `fuzz minimum ${String(minimums.fuzz)}; expected >= ${String(RATIFIED_FLOOR.fuzz)}`,
     );
   });
 

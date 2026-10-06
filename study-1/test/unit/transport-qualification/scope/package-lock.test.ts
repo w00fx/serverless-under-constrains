@@ -1,19 +1,14 @@
 // The lockfile read model behind "resolved dependency versions" (BR-RUA-028). The parser
-// reads untrusted bytes, so a property test checks it is total and faithful.
+// reads untrusted bytes, so a property checks it is total and faithful; it is in
+// test/fuzz/transport-qualification/scope/package-lock.fuzz.test.ts (Owner amendment A-11).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import fc from 'fast-check';
-
 import { installDirectoryName, parsePackageLock } from '../../../../src/transport-qualification/scope/package-lock.ts';
-import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
+import { lockBytes } from './support/lockfile-bytes.ts';
 
 const encoder = new TextEncoder();
-
-function lockBytes(document: unknown): Uint8Array {
-  return encoder.encode(JSON.stringify(document));
-}
 
 describe('parsePackageLock', () => {
   it('reads every installed package keyed by install path, without the root entry', () => {
@@ -94,46 +89,6 @@ describe('parsePackageLock', () => {
         error: { code: 'LOCKFILE_INVALID', subject: 'BR-RUA-028', detail },
       });
     }
-  });
-
-  it('is total over arbitrary bytes and faithful to generated lockfiles (property)', () => {
-    const name = fc.stringMatching(/^(@[a-z]{1,3}\/)?[a-z]{1,6}$/);
-    const entry = fc.record(
-      { version: fc.string(), resolved: fc.string(), integrity: fc.string(), dev: fc.boolean() },
-      { requiredKeys: [] },
-    );
-    const lockfile = fc.dictionary(
-      name.map((n) => `node_modules/${n}`),
-      entry,
-      { maxKeys: 6 },
-    );
-    fc.assert(
-      fc.property(
-        fc.oneof(
-          fc.uint8Array({ maxLength: 40 }),
-          fc.jsonValue().map((v) => lockBytes(v)),
-        ),
-        (bytes) => {
-          const parsed = parsePackageLock(bytes);
-          assert.equal(typeof parsed.ok, 'boolean');
-        },
-      ),
-      fuzzParameters(),
-    );
-    fc.assert(
-      fc.property(lockfile, (packages) => {
-        const parsed = parsePackageLock(lockBytes({ lockfileVersion: 3, packages }));
-        assert.ok(parsed.ok);
-        assert.deepEqual([...parsed.value.packages.keys()], Object.keys(packages));
-        for (const [installPath, locked] of parsed.value.packages) {
-          const source = packages[installPath];
-          assert.equal(locked.version, source?.version);
-          assert.equal(locked.dev, source?.dev === true);
-          assert.equal(locked.name, installPath.slice('node_modules/'.length));
-        }
-      }),
-      fuzzParameters(),
-    );
   });
 });
 
