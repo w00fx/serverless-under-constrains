@@ -116,7 +116,7 @@ export async function recoverExecution(
   const { cleanup_result: result, leak_audit_result: audit } = cleanup.value;
   const recoveredCleanup = terminalStatus(result.cleanup_status);
   const clean = recoveredCleanup === 'succeeded' && audit.leak_audit_status === 'clean';
-  const lease = await repairLease(admitted, clean, deps);
+  const lease = await repairLease(admitted, original.value.closure.lease_status, clean, deps);
   const record: OperationalRecoveryRecord = {
     schema_version: 1,
     record_type: 'operational_recovery_record',
@@ -243,11 +243,18 @@ async function rerunCleanup(
   return ok(await orchestrator.runEmergency(plan.value.input));
 }
 
+// A lease the original closure released stays released. The lease item is shared by every
+// execution, so a later one may hold it now; reading its owner as this execution's would turn a
+// proven release into `unverified`, and recovery repairs a closure, it never degrades it.
 async function repairLease(
   admitted: AdmittedExecution,
+  original: LeaseStatus,
   clean: boolean,
   deps: RecoveryDeps,
 ): Promise<{ readonly status: LeaseStatus; readonly reasons: readonly StructuredReason[] }> {
+  if (original === 'released') {
+    return { status: 'released', reasons: [] };
+  }
   const verdict = await finalizeLease({
     store: deps.lease,
     owner: leaseOwnerOf(admitted.identity, admitted.manifest_sha256),
