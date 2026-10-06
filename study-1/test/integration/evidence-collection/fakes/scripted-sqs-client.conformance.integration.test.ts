@@ -4,6 +4,11 @@
 // does for a receive without delete: the same head messages, at most 10, one more receive counted
 // each time, no Messages member when the queue is empty. Operations the collector never sends are
 // refused.
+//
+// Sources (RK-17): [R-aws] §3 (GetQueueAttributes counters; FIFO dead-letter queues keep the
+// original message id); https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html
+// (at most 10 messages per receive; `ApproximateReceiveCount` grows on every receive without a
+// delete). The empty answer without `Messages` follows the SDK's optional `Messages?` member.
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';

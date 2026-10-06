@@ -3,6 +3,9 @@
 // over a real LambdaClient — listing, detail and history, paged — and an unknown execution fails
 // with the same code. Scripted failures and the repeated marker have no real counterpart: they
 // emulate a service that fails one call or a broken endpoint that never advances.
+//
+// Sources (RK-17): [R-durable] §5 (the three read calls, their output members and `NextMarker`
+// paging), checked differentially against the real LambdaClient over ScriptedDurableExecutionClient.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

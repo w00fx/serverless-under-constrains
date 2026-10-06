@@ -1,6 +1,6 @@
-// The collector names its files by the evidence-package layout keys and its control items by the
-// spellings the provider writes; it cannot import either feature (same layer, design §5.4), so
-// this test is the one place that ties them together.
+// The collector names its files by the evidence-package layout keys and its control and registry
+// items by the spellings the provider and the trial registry write; it cannot import those
+// features (same layer, design §5.4), so this test is the one place that ties them together.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -15,6 +15,7 @@ import {
   TREATMENT_SORT_KEY,
 } from '../../../src/refund-provider/control-items.ts';
 import type { CollectedFileKey } from '../../../src/evidence-collection/collection-buffer.ts';
+import { trialRegistryItemKey } from '../../../src/trial-message/trial-registry.ts';
 
 /** Every unit file key a trial collection produces. */
 const UNIT_KEYS: readonly CollectedFileKey[] = [
@@ -50,5 +51,14 @@ describe('layout keys and control item spellings', () => {
     assert.equal(CONTROL_ITEM_KEYS.configuration, CONFIG_SORT_KEY);
     assert.equal(CONTROL_ITEM_KEYS.treatment, TREATMENT_SORT_KEY);
     assert.equal(CONTROL_ITEM_KEYS.executionPartitionSuffix, EXECUTION_PARTITION_SUFFIX);
+  });
+
+  it('spells the registry item as the trial registry writes it (D-21)', () => {
+    for (const variant of ['conventional', 'durable'] as const) {
+      assert.deepEqual(trialRegistryItemKey(variant), {
+        pk: `${CONTROL_ITEM_KEYS.registryPartitionPrefix}${variant}`,
+        sk: CONTROL_ITEM_KEYS.registryActive,
+      });
+    }
   });
 });

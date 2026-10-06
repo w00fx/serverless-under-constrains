@@ -4,6 +4,13 @@
 // entries (the binding's entries also carry a receipt handle the collector never reads). The
 // `rotating` mode and receive-numbered failures have no real counterpart: they emulate a queue
 // whose visible window moves and a service failing one particular receive.
+//
+// Sources (RK-17): [R-aws] §3 (a FIFO dead-letter queue keeps the original message id; FIFO
+// receives return a group's messages in order and no more of that group while one is in flight);
+// https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html
+// (`MaxNumberOfMessages` 1 to 10; `ApproximateReceiveCount` counts every receive not followed by
+// a delete; `VisibilityTimeout` is how long a received message stays hidden, so 0 hides it from
+// no later receive).
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';

@@ -3,6 +3,12 @@
 // a missing execution as the SDK's ResourceNotFoundException class, a scripted error by its type —
 // and its model filters a listing by function, Qualifier and StartedAfter and pages by Marker.
 // The collector only reads, so any other operation is refused.
+//
+// Sources (RK-17): [R-durable] §5 (ListDurableExecutionsByFunction with Qualifier, StartedAfter
+// and Marker, answering `DurableExecutions[]` and `NextMarker`; GetDurableExecution;
+// GetDurableExecutionHistory `Events[]` paged by `NextMarker`; Status RUNNING, SUCCEEDED, FAILED,
+// TIMED_OUT, STOPPED) and the `@aws-sdk/client-lambda@3.1146.0` models those calls decode with.
+// StopDurableExecution (RK-10) is modelled by the cleanup fakes, which own that call (WP-19).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
