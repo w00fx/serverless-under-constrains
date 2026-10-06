@@ -134,14 +134,18 @@ export async function failedStep(
   delivery: DurableDelivery,
   invocation: DurableInvocation,
 ): Promise<unknown> {
-  try {
-    const result = await runStep(harness, delivery, invocation);
+  // The completion is checked outside the rejection handler, so its assertion is never mistaken
+  // for the step attempt's own throw.
+  const outcome = await runStep(harness, delivery, invocation).then(
+    (result) => ({ completed: true as const, result }),
+    (error: unknown) => ({ completed: false as const, error }),
+  );
+  if (outcome.completed) {
     assert.fail(
-      `step attempt ${String(invocation.step_attempt)} completed with ${JSON.stringify(result)}; expected a throw`,
+      `step attempt ${String(invocation.step_attempt)} completed with ${JSON.stringify(outcome.result)}; expected a throw`,
     );
-  } catch (error: unknown) {
-    return error;
   }
+  return outcome.error;
 }
 
 /** Scripts `faults` on the next caller-journal writes once an event of `recordType` is committed. */

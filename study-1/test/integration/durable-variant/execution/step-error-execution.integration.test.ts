@@ -58,12 +58,8 @@ describe('the Durable handler on unexpected step errors', () => {
       [
         ['durable_step_attempt_error', 1, 'NonErrorThrown', 'a thrown value that is not an Error instance'],
         ['durable_step_attempt_error', 2, 'TypeError', 'registry item decoder crashed'],
-        [
-          'durable_execution_failed',
-          undefined,
-          'StepError',
-          lines[2] !== undefined && 'detail' in lines[2] ? lines[2].detail : '',
-        ],
+        // The SDK's StepError carries the last step attempt's error message.
+        ['durable_execution_failed', undefined, 'StepError', 'registry item decoder crashed'],
       ],
     );
     assert.ok(
