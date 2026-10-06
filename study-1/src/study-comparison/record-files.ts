@@ -193,11 +193,10 @@ function parseFailureText(failure: JsonParseFailure): string {
 // The count and the first violation, bounded: Ajv builds the instance path from untrusted member
 // names, so it is quoted through the kernel's bounded renderer (A-05).
 function describeViolations(violations: readonly SchemaViolation[]): string {
-  const [first] = violations;
-  const firstText =
-    first === undefined
-      ? ''
-      : `, first ${first.keyword} at ${boundedJsonText(first.instance_path)}: ${boundedText(first.detail)}`;
+  const firstText = violations
+    .slice(0, 1)
+    .map((first) => `, first ${first.keyword} at ${boundedJsonText(first.instance_path)}: ${boundedText(first.detail)}`)
+    .join('');
   return `${String(violations.length)} schema violation(s)${firstText}`;
 }
 

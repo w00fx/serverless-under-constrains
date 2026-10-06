@@ -91,7 +91,12 @@ export function uniqueReasons(reasons: readonly StructuredReason[]): readonly St
  * uniqueSortedRefs([manifestRef, paymentRef, manifestRef]); // [manifestRef, paymentRef] in canonical order
  */
 export function uniqueSortedRefs(refs: readonly EvidenceRef[]): readonly EvidenceRef[] {
-  return sortEvidenceRefs(refs).filter(
-    (ref, index, sorted) => index === 0 || compareEvidenceRefs(sorted[index - 1] ?? ref, ref) !== 0,
-  );
+  const kept: EvidenceRef[] = [];
+  for (const ref of sortEvidenceRefs(refs)) {
+    const last = kept.at(-1);
+    if (last === undefined || compareEvidenceRefs(last, ref) !== 0) {
+      kept.push(ref);
+    }
+  }
+  return kept;
 }

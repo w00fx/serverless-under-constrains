@@ -234,7 +234,7 @@ class CorrelatedReader {
       return `names execution_manifest_sha256 ${record.execution_manifest_sha256}; expected ${this.#manifestDigest}`;
     }
     if (trialId !== undefined && record.trial_id !== trialId) {
-      return `names trial ${record.trial_id ?? 'none'}; expected ${trialId}`;
+      return `names trial ${String(record.trial_id)}; expected ${trialId}`;
     }
     return undefined;
   }
