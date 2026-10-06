@@ -5,7 +5,7 @@
 
 import { isSha256Hex } from './digests.ts';
 import { isUuid4 } from './identifiers.ts';
-import { describeJson, isJsonObject } from './json-value.ts';
+import { boundedJsonText, describeJson, isJsonObject } from './json-value.ts';
 import type { JsonValue, Sha256Hex, StructuredReason, Uuid4 } from './primitives.ts';
 
 export interface EvidenceRef {
@@ -53,7 +53,9 @@ const REF_FIELDS: ReadonlySet<string> = new Set([
 /** The members that order references, in comparison order (BR-RUA-035 canonical sort). */
 const ORDER_KEYS = ['artifact_path', 'artifact_sha256', 'event_id', 'json_pointer', 'package_index_sha256'] as const;
 const JSON_POINTER_PATTERN = /^(\/([^/~]|~[01])*)*$/;
-const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/;
+// A drive root such as `C:/` or `C:\` is absolute on Windows. `c:relative` or `a:b.json` is a
+// legal relative POSIX name, so only the rooted form is rejected (WP-00 review round 1).
+const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:[/\\]/;
 
 /**
  * Classifies a path against BR-RUA-035; `undefined` means it is a normalized
@@ -164,7 +166,9 @@ export function validateEvidenceRefList(
 
 /**
  * Applies the result-level rules of BR-RUA-035: `pass` and `fail` need at least one
- * reference; an empty `indeterminate` list needs a reason naming the missing artifact or event.
+ * reference. An empty `indeterminate` list is allowed only when the result is "caused entirely
+ * by missing evidence": there is at least one reason, and every reason names the missing
+ * artifact or event. A reason naming any other cause makes the empty list a violation.
  *
  * @example
  * validateResultReferences('pass', [], []); // ['MISSING_REFERENCE_FOR_CONCLUSIVE_RESULT']
@@ -180,10 +184,10 @@ export function validateResultReferences(
   if (result !== 'indeterminate') {
     return ['MISSING_REFERENCE_FOR_CONCLUSIVE_RESULT'];
   }
-  const namesMissingEvidence = reasons.some(
-    (reason) => reason.artifact_path !== undefined || reason.event_id !== undefined,
-  );
-  return namesMissingEvidence ? [] : ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON'];
+  const entirelyMissingEvidence =
+    reasons.length > 0 &&
+    reasons.every((reason) => reason.artifact_path !== undefined || reason.event_id !== undefined);
+  return entirelyMissingEvidence ? [] : ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON'];
 }
 
 function validateEntry(entry: JsonValue, index: number, location: ReferenceLocation): readonly EvidenceRefFinding[] {
@@ -216,7 +220,7 @@ function pathFindings(entry: Readonly<Record<string, JsonValue>>, at: string): r
   return [
     {
       violation,
-      detail: `${at}.artifact_path ${JSON.stringify(path)}; expected a normalized package-relative POSIX path`,
+      detail: `${at}.artifact_path ${boundedJsonText(path)}; expected a normalized package-relative POSIX path`,
     },
   ];
 }

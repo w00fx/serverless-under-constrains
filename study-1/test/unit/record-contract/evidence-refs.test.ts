@@ -111,7 +111,14 @@ describe('AC-RUA-048 evidence references are well formed', () => {
     const byEvent = { code: 'EVENT_MISSING', subject: 'BR-RUA-004', event_id: EVENT_1, detail: 'absent' };
     const vague = { code: 'UNKNOWN', subject: 'BR-RUA-001', detail: 'no idea' };
     assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact]), []);
-    assert.deepEqual(validateResultReferences('indeterminate', [], [vague, byEvent]), []);
+    assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact, byEvent]), []);
+    // BR-RUA-035: only a result caused ENTIRELY by missing evidence may carry an empty list.
+    assert.deepEqual(validateResultReferences('indeterminate', [], [vague, byEvent]), [
+      'EMPTY_WITHOUT_MISSING_EVIDENCE_REASON',
+    ]);
+    assert.deepEqual(validateResultReferences('indeterminate', [], [byArtifact, vague]), [
+      'EMPTY_WITHOUT_MISSING_EVIDENCE_REASON',
+    ]);
     assert.deepEqual(validateResultReferences('indeterminate', [], [vague]), ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON']);
     assert.deepEqual(validateResultReferences('indeterminate', [], []), ['EMPTY_WITHOUT_MISSING_EVIDENCE_REASON']);
     assert.deepEqual(validateResultReferences('indeterminate', [ref('ledger/a.json')], []), []);
@@ -126,7 +133,12 @@ describe('artifact path classification', () => {
     ['a..b/c', undefined],
     ['/abs', 'ABSOLUTE_PATH'],
     ['C:/windows/x', 'ABSOLUTE_PATH'],
-    ['c:relative', 'ABSOLUTE_PATH'],
+    ['C:\\windows\\x', 'ABSOLUTE_PATH'],
+    ['z:/', 'ABSOLUTE_PATH'],
+    // A colon is legal in a relative POSIX name; only a rooted drive is absolute.
+    ['c:relative', undefined],
+    ['a:b.json', undefined],
+    ['ab:/x', undefined],
     ['..', 'PARENT_TRAVERSAL'],
     ['a/../b', 'PARENT_TRAVERSAL'],
     ['a/..', 'PARENT_TRAVERSAL'],
