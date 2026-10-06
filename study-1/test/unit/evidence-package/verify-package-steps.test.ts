@@ -7,11 +7,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { compareCodePoints, inventoryDigest } from '../../../src/evidence-package/assembly-inventory.ts';
 import { verifyPackage } from '../../../src/evidence-package/package-verifier.ts';
 import type { PackageFile } from '../../../src/evidence-package/package-file-system.ts';
 import { serializeRecordFile } from '../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
-import type { PackageVerification } from '../../../src/record-contract/records/group-c/package_verification.ts';
+import type { DeploymentAssemblyInventory } from '../../../src/record-contract/records/group-a/deployment_assembly_inventory.ts';
+import type {
+  PackageIneligibilityReason,
+  PackageVerification,
+} from '../../../src/record-contract/records/group-c/package_verification.ts';
 import { uuid } from '../../support/record-contract/record-builders.ts';
 import { utf8 } from '../../support/evidence-package/package-files.ts';
 import {
@@ -38,9 +43,13 @@ function verifyFiles(fixture: ProbePackage, files: readonly PackageFile[]): read
   );
 }
 
-function verifyRebuilt(files: readonly PackageFile[]): readonly string[] {
+function rebuiltReasons(files: readonly PackageFile[]): readonly PackageIneligibilityReason[] {
   const rebuilt = indexedProbePackage(files);
-  return codesOf(verifyPackage(verificationInput(rebuilt, [], null), FIXTURE_DEPS));
+  return verifyPackage(verificationInput(rebuilt, [], null), FIXTURE_DEPS).package_ineligibility_reasons;
+}
+
+function verifyRebuilt(files: readonly PackageFile[]): readonly string[] {
+  return rebuiltReasons(files).map((reason) => reason.code);
 }
 
 function bytesOf(files: readonly PackageFile[], path: string): Uint8Array {
@@ -167,6 +176,38 @@ describe('§8.16 steps 2-3: indexed bytes and unindexed entries', () => {
     for (const bytes of [utf8('{'), elsewhere, forged]) {
       const codes = verifyRebuilt(replaceFile(fixture.files, path, bytes));
       assert.ok(codes.length >= 1 && codes.every((code) => code === 'ALTERED_BYTES'), JSON.stringify(codes));
+    }
+  });
+
+  // Each entry still matches its stored file and the digest is recomputed over the list as
+  // written, so only the code-point order rule (the inventory schema leaves it to this verifier)
+  // can reject a reordered or duplicated list.
+  it('ALTERED_BYTES for an inventory out of code-point order or listing a path twice', () => {
+    const fixture = probePackage();
+    const path = 'admission/deployment-assembly.inventory.json';
+    const inventory = JSON.parse(new TextDecoder().decode(bytesOf(fixture.files, path))) as DeploymentAssemblyInventory;
+    const [first, second] = inventory.files;
+    assert.ok(second !== undefined && compareCodePoints(first.path, second.path) < 0, 'the fixture lists two files');
+    const reordered = [second, first];
+    const duplicated = [first, { ...first, mode: first.mode === '0755' ? '0644' : '0755' }, second];
+    for (const [listed, found] of [
+      [reordered, `files[1].path "${first.path}" follows "${second.path}"`],
+      [duplicated, `files[1].path "${first.path}" follows "${first.path}"`],
+    ] as const) {
+      const bytes = editedJson(fixture.files, path, { files: listed, inventory_sha256: inventoryDigest(listed) });
+      const reasons = rebuiltReasons(replaceFile(fixture.files, path, bytes));
+      // The probe's evidence index froze the inventory file too, so rewriting it also trips that
+      // older digest; the inventory's own reason is the one this rule adds.
+      const [frozen, ...own] = reasons;
+      assert.ok(frozen?.detail.startsWith('evidence index "probe/evidence-index.json"'), JSON.stringify(reasons));
+      assert.deepEqual(own, [
+        {
+          code: 'ALTERED_BYTES',
+          subject: 'BR-RUA-044',
+          detail: `"${path}" cannot vouch for the bytes it froze: ${found}; expected each path once, in strictly ascending code-point order`,
+          artifact_path: path,
+        },
+      ]);
     }
   });
 

@@ -51,15 +51,12 @@ export function readAmendments(
   snapshots: readonly AmendmentSnapshot[],
   deps: AmendmentReadDeps,
 ): ReadAmendments {
-  const amendments: ParsedAmendment[] = [];
-  const reasons: PackageIneligibilityReason[] = [];
-  for (const snapshot of snapshots) {
-    const location = `${amendmentsDirectory}/${snapshot.directory}/`;
-    const read = readAmendment(location, snapshot, deps);
-    reasons.push(...read.reasons);
-    amendments.push(...read.amendments);
-  }
-  return { amendments, reasons };
+  const reads = snapshots.map((snapshot) =>
+    readAmendment(`${amendmentsDirectory}/${snapshot.directory}/`, snapshot, deps),
+  );
+  // flatMap, not a spread push: one reason per unindexed or altered file can exceed the engine's
+  // argument limit, and a spread push then throws RangeError (A-05 totality).
+  return { amendments: reads.flatMap((read) => read.amendments), reasons: reads.flatMap((read) => read.reasons) };
 }
 
 function readAmendment(location: string, snapshot: AmendmentSnapshot, deps: AmendmentReadDeps): ReadAmendments {

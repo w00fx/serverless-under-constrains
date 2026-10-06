@@ -9,7 +9,7 @@ import { boundedJsonText } from '../record-contract/json-value.ts';
 import type { PackageIneligibilityReason } from '../record-contract/records/group-c/package_verification.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
 import { classifyPackageArtifact } from './artifact-classification.ts';
-import { inventoryDigest } from './assembly-inventory.ts';
+import { compareCodePoints, inventoryDigest } from './assembly-inventory.ts';
 import { fileAt } from './index-entries.ts';
 import { alteredEntryReason, ineligibility } from './package-integrity.ts';
 import type { ByteDigest } from './package-integrity.ts';
@@ -118,6 +118,7 @@ function inventoryReasons(files: readonly PackageFile[], deps: NestedIndexDeps):
     recomputed === recorded
       ? []
       : [unreadable(path, `inventory_sha256 is ${recorded}; expected ${recomputed}, the digest of its files`)];
+  const orderReasons = inventoryOrderReasons(path, listed);
   const fileReasons = listed.flatMap((entry) => {
     const packagePath = `${assemblyPath}/${entry.path}`;
     const stored = { artifact_path: packagePath, bytes: entry.bytes, sha256: entry.sha256 };
@@ -136,7 +137,28 @@ function inventoryReasons(files: readonly PackageFile[], deps: NestedIndexDeps):
         stored.path,
       ),
     );
-  return [...digestReasons, ...fileReasons, ...extraReasons];
+  return [...digestReasons, ...orderReasons, ...fileReasons, ...extraReasons];
+}
+
+// The canonical inventory lists each path once, in strictly ascending code-point order (spec
+// design "The canonical inventory sorts normalized relative paths"; the inventory schema leaves
+// path uniqueness and order to this verifier). A recomputed digest cannot catch a reordered or
+// duplicated list, because the digest covers the list as written.
+function inventoryOrderReasons(
+  path: string,
+  listed: readonly { readonly path: string }[],
+): readonly PackageIneligibilityReason[] {
+  const reasons: PackageIneligibilityReason[] = [];
+  let previous: string | undefined;
+  for (const [index, entry] of listed.entries()) {
+    if (previous !== undefined && compareCodePoints(previous, entry.path) >= 0) {
+      const order = 'expected each path once, in strictly ascending code-point order';
+      const found = `files[${String(index)}].path ${boundedJsonText(entry.path)} follows ${boundedJsonText(previous)}`;
+      reasons.push(unreadable(path, `${found}; ${order}`));
+    }
+    previous = entry.path;
+  }
+  return reasons;
 }
 
 function unreadable(path: string, detail: string): PackageIneligibilityReason {
