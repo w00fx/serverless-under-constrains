@@ -10,7 +10,13 @@
 // The response payload is untrusted bytes: it is parsed strictly and checked against the
 // `provider_warmup_completed` schema before any field is read (A-05: reject, never throw).
 
-import type { ProviderTransportResult } from '../provider-client/provider-invocation-port.ts';
+import { ownValue } from '../evidence-collection/sdk-values.ts';
+import { transportErrorFromThrown } from '../provider-client/provider-invocation-port.ts';
+import type {
+  ProviderResponseSettlement,
+  ProviderTransportError,
+  ProviderTransportResult,
+} from '../provider-client/provider-invocation-port.ts';
 import { executionIdentityFields } from '../record-contract/envelope.ts';
 import { boundedJsonText, boundedText } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
@@ -26,6 +32,7 @@ import type {
 import type { ProviderWarmupCompleted } from '../record-contract/records/group-b/provider_warmup_completed.ts';
 import type { ProviderWarmupRequest } from '../record-contract/records/group-b/provider_warmup_request.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
+import { lambdaInvokeResponseOf } from './probe-invocation.ts';
 import type { ProviderWarmupInvoker } from './trial-execution-ports.ts';
 
 const SUBJECT = 'addendum §2';
@@ -104,6 +111,41 @@ export async function warmUpProvider(
   const request = warmupRequestOf(subject, ids);
   const settlement = await invoker.invokeWarmup(request);
   return warmupSettlementProblem(settlement, request, subject.provider_version, validator);
+}
+
+/**
+ * The settlement of a warm-up Invoke that returned, read from the SDK output member by member
+ * (A-05): the same `response` the provider client's invoker settles with.
+ *
+ * @example
+ * warmupResponseOf({ StatusCode: 200, ExecutedVersion: '1', Payload: bytes }).status_code; // 200
+ */
+export function warmupResponseOf(output: unknown): ProviderResponseSettlement {
+  const response = lambdaInvokeResponseOf(output);
+  return {
+    kind: 'response',
+    status_code: response.status_code,
+    executed_version: response.executed_version,
+    function_error: response.function_error,
+    payload: response.payload,
+  };
+}
+
+/**
+ * The settlement of a warm-up Invoke that threw: a transport error named after what was thrown,
+ * with the HTTP status of a service exception. Any transport error fails the warm-up.
+ *
+ * @example
+ * warmupTransportErrorOf(new Error('socket hang up')); // { kind: 'transport_error', error_name: 'Error', message: 'socket hang up' }
+ */
+export function warmupTransportErrorOf(thrown: unknown): ProviderTransportError {
+  const error = transportErrorFromThrown(thrown);
+  try {
+    const status = ownValue(ownValue(thrown, '$metadata'), 'httpStatusCode');
+    return typeof status === 'number' ? { ...error, http_status: status } : error;
+  } catch {
+    return error;
+  }
 }
 
 function completionProblem(

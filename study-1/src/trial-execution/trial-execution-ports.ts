@@ -3,7 +3,9 @@
 // validation: it freezes the trial inputs, prepares the partitions, warms the provider, publishes
 // the trial message, observes settlement, collects, rechecks and freezes the evidence. Every
 // effect crosses one of these ports, so the offline cloud (test/support/offline-cloud) and the
-// AWS composition root bind the same executor. Type-only: no runtime part (A-10).
+// AWS composition root bind the same executor. The probe workload executor (design §10.2 P4 for
+// the probe, T6 = the synchronous Invoke of the probe caller, P5) runs the same phases through the
+// probe ports below. Type-only: no runtime part (A-10).
 
 import type { DurableItemStore } from '../durable-store/item-store-port.ts';
 import type { AppendOnlyFile } from '../event-journal/append-only-file.ts';
@@ -26,6 +28,7 @@ import type {
 } from '../record-contract/primitives.ts';
 import type { ApprovedDecision } from '../record-contract/records/group-a/approved_decision.ts';
 import type { Payment } from '../record-contract/records/group-a/payment.ts';
+import type { ProbeWorkloadRequest } from '../record-contract/records/group-a/probe_workload_request.ts';
 import type { ProviderWarmupRequest } from '../record-contract/records/group-b/provider_warmup_request.ts';
 import type { InterruptionCause } from '../record-contract/records/group-b/vocabulary.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
@@ -176,3 +179,105 @@ export interface TrialFreezeFailed {
 }
 
 export type TrialExecutionReport = TrialNotStarted | TrialFrozen | TrialFreezeFailed;
+
+/** The transport probe's execution: its identity names the probe (D-06: the probe has no trial). */
+export type ProbeExecution = Extract<ExecutionIdentity, { readonly execution_kind: 'TRANSPORT_PROBE' }>;
+
+/** Everything the probe workload needs from the frozen probe manifest and the deployed stack. */
+export interface ProbeWorkloadPlan {
+  readonly execution: ProbeExecution;
+  readonly execution_manifest_sha256: Sha256Hex;
+  readonly payment: Payment;
+  readonly approved_decision: ApprovedDecision;
+  readonly provider_timing: ProviderTiming;
+  /** The provider's published version the warm-up must report as executed (BR-RUA-053). */
+  readonly provider_version: string;
+  /** The probe caller's published version the Invoke targets and must report (AC-RUA-053). */
+  readonly probe_caller_version: string;
+  /** The payload of the probe caller's single Invoke (BR-RUA-027). */
+  readonly request: ProbeWorkloadRequest;
+}
+
+/**
+ * How the probe caller's single synchronous Invoke settled:
+ * - `response`: Lambda answered, with its status, executed version, function error, payload and
+ *   request id (`$metadata.requestId`, the probe caller's `awsRequestId`);
+ * - `rejected`: Lambda definitively refused the Invoke, so the probe caller never ran;
+ * - `ambiguous`: no response, and the probe caller may have run.
+ */
+export type ProbeWorkloadInvokeResult =
+  | {
+      readonly kind: 'response';
+      readonly status_code: number;
+      readonly executed_version?: string;
+      readonly function_error?: string;
+      readonly payload: Uint8Array;
+      readonly request_id?: string;
+    }
+  | { readonly kind: 'rejected'; readonly code: string; readonly detail: string }
+  | { readonly kind: 'ambiguous'; readonly code: string; readonly detail: string };
+
+/** Invokes the probe caller's published version once, `RequestResponse`, never retried (design §9.4). */
+export interface ProbeWorkloadInvoker {
+  invokeWorkload(request: ProbeWorkloadRequest): Promise<ProbeWorkloadInvokeResult>;
+}
+
+/**
+ * Writes `coordination/coordination-prefix-checkpoint.json` at transport freeze (P5, BR-RUA-044):
+ * the execution runner binds it over the coordination journal it owns. `undefined` when written.
+ */
+export interface CoordinationCheckpointWriter {
+  writeCheckpoint(): Promise<StructuredReason | undefined>;
+}
+
+/** A structured JSON log line of the probe workload: diagnostics, never evidence. */
+export interface ProbeExecutionLogLine {
+  readonly level: 'info' | 'warn' | 'error';
+  readonly event: string;
+  readonly transport_probe_id: Uuid4;
+  readonly detail: string;
+}
+
+/** The ports and services the probe workload executor runs on. */
+export interface ProbeWorkloadExecutorDeps {
+  readonly store: DurableItemStore;
+  readonly telemetry: TelemetryProbe;
+  readonly warmup: ProviderWarmupInvoker;
+  readonly workload: ProbeWorkloadInvoker;
+  readonly checkpoint: CoordinationCheckpointWriter;
+  readonly files: PackageFileSystem;
+  readonly runner_journal: AppendOnlyFile;
+  readonly clock: WallClock;
+  readonly sleeper: Sleeper;
+  readonly ids: UuidSource;
+  readonly validator: RecordValidator;
+  readonly log: (line: ProbeExecutionLogLine) => void;
+}
+
+/** A probe that never invoked its caller: setup was rejected, the gate refused or Lambda rejected the Invoke. */
+export interface ProbeNotStarted {
+  readonly kind: 'not_started';
+  readonly transport_probe_id: Uuid4;
+  readonly reasons: readonly StructuredReason[];
+}
+
+/** An invoked (or ambiguously invoked) probe whose evidence was frozen, settled or not (D-29). */
+export interface ProbeFrozen {
+  readonly kind: 'frozen';
+  readonly transport_probe_id: Uuid4;
+  readonly settlement: SettlementAssessment;
+  readonly interruption?: TrialInterruption;
+  readonly evidence_index_path: string;
+  readonly evidence_index_sha256: Sha256Hex;
+  /** Invocation, collection, derivation and journal problems that did not stop the freeze. */
+  readonly failures: readonly StructuredReason[];
+}
+
+/** An invoked probe whose evidence index could not be written. */
+export interface ProbeFreezeFailed {
+  readonly kind: 'freeze_failed';
+  readonly transport_probe_id: Uuid4;
+  readonly reasons: readonly StructuredReason[];
+}
+
+export type ProbeExecutionReport = ProbeNotStarted | ProbeFrozen | ProbeFreezeFailed;
