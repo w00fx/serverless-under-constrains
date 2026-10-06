@@ -115,13 +115,14 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
 
   it('a canonical example is never valid as another type', () => {
     const validator = createRecordValidator();
-    RECORD_TYPES.forEach((recordType, index) => {
-      const other = RECORD_TYPES[(index + 1) % RECORD_TYPES.length] ?? recordType;
-      assert.equal(
-        validator.validateAs(other, canonicalExampleOf(recordType)).valid,
-        false,
-        `${recordType} as ${other}`,
-      );
-    });
+    let checked = 0;
+    for (const recordType of RECORD_TYPES) {
+      const example = canonicalExampleOf(recordType);
+      for (const other of RECORD_TYPES.filter((candidate) => candidate !== recordType)) {
+        assert.equal(validator.validateAs(other, example).valid, false, `${recordType} as ${other}`);
+        checked += 1;
+      }
+    }
+    assert.equal(checked, 90 * 89);
   });
 });

@@ -1,0 +1,30 @@
+// The group-C suite minimums (design §12.1, §14, D-33, Owner amendment A-03): WP-03 owns only
+// contract tests, and §14 lists seven AC-RUA-046 contract cases for the catalogue (casing,
+// millisecond UTC, lowercase UUIDv4, safe-integer amounts, decimal aggregates, omitted versus
+// null, schema_version and record_type present), so the contract minimum is at least seven.
+// The committed value sits at the count that exists today and only ratchets upward, which is a
+// review rule.
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import { parseSuiteMinimums } from '../../../../tools/lib/suite-accounting.ts';
+
+const MINIMUMS_PATH = fileURLToPath(
+  new URL('../../../../quality/suite-minimums/record-contract-group-c.json', import.meta.url),
+);
+/** The AC-RUA-046 contract cases design §14 lists. */
+const SECTION_14_CONTRACT_CASES = 7;
+
+describe('record-contract group-C suite minimums', () => {
+  it('hold a contract minimum of at least the §14 AC-RUA-046 cases, and no other suite', () => {
+    const minimums = parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));
+    assert.deepEqual(Object.keys(minimums), ['contract']);
+    assert.ok(
+      (minimums.contract ?? 0) >= SECTION_14_CONTRACT_CASES,
+      `contract minimum ${String(minimums.contract)}; expected >= ${String(SECTION_14_CONTRACT_CASES)}`,
+    );
+  });
+});
