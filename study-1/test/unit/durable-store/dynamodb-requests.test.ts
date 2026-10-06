@@ -303,9 +303,9 @@ describe('readQueryOutput', () => {
 });
 
 describe('planning and reading stay total on deep or forged input (WP-04 review round 1)', () => {
-  // 10,000 levels, parsed from JSON text without recursion: deeper than any recursive walk
-  // could follow, as an untrusted reply or event might be.
-  const deepAttribute = JSON.parse(`${'{"M":{"k":'.repeat(10_000)}{"N":"1"}${'}}'.repeat(10_000)}`) as never;
+  // 100,000 levels (A-05), parsed from JSON text without recursion: deeper than any recursive
+  // walk could follow, as an untrusted reply or event might be.
+  const deepAttribute = JSON.parse(`${'{"M":{"k":'.repeat(100_000)}{"N":"1"}${'}}'.repeat(100_000)}`) as never;
   const deepItem = { pk: { S: PK }, sk: { S: 'deep' }, deep: deepAttribute };
   const base64url = (text: string): string => Buffer.from(text, 'utf8').toString('base64url');
 
@@ -314,9 +314,28 @@ describe('planning and reading stay total on deep or forged input (WP-04 review 
     assert.deepEqual(readQueryOutput({ Items: [deepItem] }), { ok: false, error: { code: 'UndecodableItem' } });
   });
 
+  it('refuses non-finite numbers and reads inherited names only as own attributes (A-05)', () => {
+    const nonFinite = JSON.parse(`{"pk":{"S":"${PK}"},"sk":{"S":"s"},"n":{"N":1e400}}`) as never;
+    assert.deepEqual(readGetItemOutput({ Item: nonFinite }), { ok: false, error: { code: 'UndecodableItem' } });
+    const overflowing = JSON.parse(`{"pk":{"S":"${PK}"},"sk":{"S":"s"},"n":{"N":"1e400"}}`) as never;
+    assert.deepEqual(readQueryOutput({ Items: [overflowing] }), { ok: false, error: { code: 'UndecodableItem' } });
+    const inherited = JSON.parse(
+      `{"pk":{"S":"${PK}"},"sk":{"S":"s"},"constructor":{"S":"c"},"toString":{"NULL":true}}`,
+    ) as never;
+    assert.deepEqual(readGetItemOutput({ Item: inherited }), {
+      ok: true,
+      value: JSON.parse(`{"pk":"${PK}","sk":"s","constructor":"c","toString":null}`) as never,
+    });
+    const inheritedKey = JSON.parse('{"constructor":{"S":"p"},"toString":{"S":"s"}}') as never;
+    assert.deepEqual(readQueryOutput({ Items: [], LastEvaluatedKey: inheritedKey }), {
+      ok: false,
+      error: { code: 'UndecodableItem' },
+    });
+  });
+
   it('refuses a write with a deep value as a definitive ValidationException', () => {
     let deep: JsonValue = 1;
-    for (let level = 0; level < 10_000; level += 1) {
+    for (let level = 0; level < 100_000; level += 1) {
       deep = [deep];
     }
     const put: WriteAction = { kind: 'put', table: 'ledger', item: { pk: PK, sk: 's', deep } };

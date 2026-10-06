@@ -3,7 +3,8 @@
 // API_TransactWriteItems (F-1 token window and IdempotentParameterMismatch), API_Query and
 // Query.Pagination ([R-aws] §1.1-§1.3), HowItWorks.NamingRulesDataTypes (UTF-8 byte order and
 // the number range), Constraints.html (32 nesting levels), ServiceQuotas.html and
-// CapacityUnitCalculations.html (400 KB item size).
+// CapacityUnitCalculations.html (400 KB item size). The round-2 expression, attribute-name and
+// transaction limits are in in-memory-item-store-limits.conformance.integration.test.ts.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

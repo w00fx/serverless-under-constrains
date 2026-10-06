@@ -8,9 +8,12 @@
 // and the emulator must refuse it the same way (WP-04 review round 1).
 // Error messages never re-serialize the decoded payload: a hostile cursor may nest deeper than
 // any recursive serializer can follow, so they name only its member names and value types.
+// Nor do they echo the cursor: a refused cursor is described by its length, and decoded strings
+// are quoted through the kernel's bounded `boundedJsonText` (WP-04 review round 2, Owner
+// amendment A-05), so a message stays short however long the cursor is.
 
 import { canonicalJson } from '../record-contract/canonical-json.ts';
-import { isJsonObject } from '../record-contract/json-value.ts';
+import { boundedJsonText, isJsonObject } from '../record-contract/json-value.ts';
 import { parseJsonDocument } from '../record-contract/parsing.ts';
 import type { JsonValue, Result } from '../record-contract/primitives.ts';
 import type { ItemKey } from './item-store-port.ts';
@@ -27,7 +30,8 @@ export function encodePageCursor(key: ItemKey): string {
 }
 
 /**
- * Decodes a cursor for the partition `pk`. Total over arbitrary strings: it never throws.
+ * Decodes a cursor for the partition `pk`. Total over arbitrary strings: it never throws, and
+ * its error messages are bounded whatever the cursor's length.
  *
  * @example
  * const start = decodePageCursor(cursor, pk);
@@ -38,30 +42,35 @@ export function decodePageCursor(cursor: string, pk: string): Result<ItemKey, st
   // Node's base64url decoder accepts the base64 alphabet and padding and skips other
   // characters, so only a cursor that re-encodes to itself is one this module produced.
   if (bytes.toString('base64url') !== cursor) {
-    return { ok: false, error: `cursor ${JSON.stringify(cursor)} is not canonical base64url; expected a page cursor` };
+    return { ok: false, error: `${describeCursor(cursor)} is not canonical base64url; expected a page cursor` };
   }
   const parsed = parseJsonDocument(bytes);
   if (!parsed.ok || !isJsonObject(parsed.value)) {
-    return { ok: false, error: `cursor ${JSON.stringify(cursor)} does not hold a JSON object; expected {"pk","sk"}` };
+    return { ok: false, error: `${describeCursor(cursor)} does not hold a JSON object; expected {"pk","sk"}` };
   }
   const { pk: cursorPk, sk: cursorSk } = parsed.value;
   const names = Object.keys(parsed.value);
   if (names.length !== 2 || typeof cursorPk !== 'string' || typeof cursorSk !== 'string') {
     return {
       ok: false,
-      error: `cursor ${JSON.stringify(cursor)} holds members ${JSON.stringify(names)} with pk ${jsonTypeOf(cursorPk)} and sk ${jsonTypeOf(cursorSk)}; expected exactly string pk and sk`,
+      error: `${describeCursor(cursor)} holds members ${boundedJsonText(names)} with pk ${jsonTypeOf(cursorPk)} and sk ${jsonTypeOf(cursorSk)}; expected exactly string pk and sk`,
     };
   }
   if (cursorPk !== pk) {
     return {
       ok: false,
-      error: `cursor belongs to partition ${JSON.stringify(cursorPk)}; expected partition ${JSON.stringify(pk)}`,
+      error: `cursor belongs to partition ${boundedJsonText(cursorPk)}; expected partition ${boundedJsonText(pk)}`,
     };
   }
   const [keyViolation] = keyViolations({ pk: cursorPk, sk: cursorSk }, 'cursor');
   return keyViolation === undefined
     ? { ok: true, value: { pk: cursorPk, sk: cursorSk } }
     : { ok: false, error: keyViolation };
+}
+
+// A cursor is named by its length only: it is opaque, and it may be arbitrarily long.
+function describeCursor(cursor: string): string {
+  return `cursor of ${String(cursor.length)} characters`;
 }
 
 // Names a parsed JSON value's type without serializing it.

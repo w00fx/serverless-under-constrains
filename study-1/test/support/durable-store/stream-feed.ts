@@ -268,8 +268,18 @@ export class StreamFeed {
     } catch (error) {
       return error instanceof Error
         ? { name: error.name, message: error.message }
-        : { name: 'NonErrorThrown', message: String(error) };
+        : { name: 'NonErrorThrown', message: describeNonError(error) };
     }
+  }
+}
+
+// `String()` throws on an object with no primitive conversion (`Object.create(null)`), and
+// that throw would escape the scheduled delivery and stall the shard (WP-04 review round 2).
+function describeNonError(value: unknown): string {
+  try {
+    return String(value);
+  } catch {
+    return 'a value with no string conversion';
   }
 }
 

@@ -133,8 +133,8 @@ describe('classifyDynamoError', () => {
   });
 
   it('stays total when the ALL_OLD item nests past the limit (WP-04 review round 1)', () => {
-    // JSON.parse builds 10,000 levels without recursion; the old decoder overflowed the stack.
-    const deep = JSON.parse(`${'{"L":['.repeat(10_000)}{"S":"x"}${']}'.repeat(10_000)}`) as unknown;
+    // JSON.parse builds 100,000 levels without recursion (A-05); the old decoder overflowed the stack.
+    const deep = JSON.parse(`${'{"L":['.repeat(100_000)}{"S":"x"}${']}'.repeat(100_000)}`) as unknown;
     const item = { pk: { S: 'p' }, sk: { S: 's' }, deep };
     assert.deepEqual(classifyDynamoError(new ConditionalCheckFailedException({ ...META, Item: item as never })), {
       kind: 'condition_failed',
@@ -144,6 +144,34 @@ describe('classifyDynamoError', () => {
       kind: 'condition_failed',
       failed_action_index: 0,
     });
+  });
+
+  it('keeps a certain condition failure on a non-finite or inherited-name ALL_OLD item (A-05)', () => {
+    // JSON.parse('1e400') is Infinity: an N member decoded from an untrusted reply may be any text.
+    const nonFinite = JSON.parse('{"pk":{"S":"p"},"sk":{"S":"s"},"n":{"N":"1e400"}}') as never;
+    assert.deepEqual(classifyDynamoError(new ConditionalCheckFailedException({ ...META, Item: nonFinite })), {
+      kind: 'condition_failed',
+      failed_action_index: 0,
+    });
+    const numberNonFinite = JSON.parse('{"pk":{"S":"p"},"sk":{"S":"s"},"n":{"N":1e400}}') as never;
+    assert.deepEqual(classifyDynamoError(cancelled([{ Code: 'ConditionalCheckFailed', Item: numberNonFinite }])), {
+      kind: 'condition_failed',
+      failed_action_index: 0,
+    });
+    const inherited = JSON.parse(
+      '{"pk":{"S":"p"},"sk":{"S":"s"},"constructor":{"S":"c"},"toString":{"BOOL":true}}',
+    ) as never;
+    assert.deepEqual(classifyDynamoError(new ConditionalCheckFailedException({ ...META, Item: inherited })), {
+      kind: 'condition_failed',
+      failed_action_index: 0,
+      existing: JSON.parse('{"pk":"p","sk":"s","constructor":"c","toString":true}') as never,
+    });
+    assert.deepEqual(
+      classifyDynamoError(
+        cancelled([{ Code: 'None' }, { Code: 'ConditionalCheckFailed', Item: { constructor: { S: 'c' } } }]),
+      ),
+      { kind: 'condition_failed', failed_action_index: 1 },
+    );
   });
 
   it('server faults, in-progress tokens, timeouts, network and unknown errors are ambiguous', () => {

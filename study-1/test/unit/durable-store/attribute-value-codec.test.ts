@@ -167,13 +167,13 @@ describe('decodeAttributeValue nesting limit (WP-04 review round 1)', () => {
     });
   });
 
-  it('returns an error instead of overflowing the call stack on 10,000 levels', () => {
+  it('returns an error instead of overflowing the call stack on 100,000 levels (A-05)', () => {
     const limit = 'nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)';
-    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('L', 10_000)), {
+    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('L', 100_000)), {
       ok: false,
       error: `$${'[0]'.repeat(32)} ${limit}`,
     });
-    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('M', 10_000)), {
+    assert.deepEqual(decodeAttributeValue(nestedAttributeValue('M', 100_000)), {
       ok: false,
       error: `$${'.a'.repeat(32)} ${limit}`,
     });
@@ -182,7 +182,7 @@ describe('decodeAttributeValue nesting limit (WP-04 review round 1)', () => {
   it('does not count the item map as a level', () => {
     const item = { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedAttributeValue('M', 32) };
     assert.equal(decodeStoredItem(item).ok, true);
-    const tooDeep = { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedAttributeValue('L', 10_000) };
+    const tooDeep = { pk: { S: 'p' }, sk: { S: 's' }, deep: nestedAttributeValue('L', 100_000) };
     assert.deepEqual(decodeStoredItem(tooDeep), {
       ok: false,
       error: `$.deep${'[0]'.repeat(32)} nests deeper than 32 levels; expected at most 32 levels of lists and maps (DynamoDB limit)`,
@@ -242,6 +242,59 @@ describe('decodeStoredItem', () => {
       ok: false,
       error: '$.x has member "SS"; expected exactly one of S, N, BOOL, NULL, L or M',
     });
+  });
+
+  it('keeps inherited member names as own attributes and refuses them as AttributeValue members (A-05)', () => {
+    const decoded = decodeStoredItem(
+      JSON.parse('{"pk":{"S":"p"},"sk":{"S":"s"},"constructor":{"N":"1"},"toString":{"M":{"valueOf":{"S":"v"}}}}'),
+    );
+    assert.ok(decoded.ok);
+    assert.deepEqual(Object.keys(decoded.value), ['pk', 'sk', 'constructor', 'toString']);
+    assert.deepEqual(decoded.value, JSON.parse('{"pk":"p","sk":"s","constructor":1,"toString":{"valueOf":"v"}}'));
+    assert.deepEqual(decodeStoredItem(JSON.parse('{"pk":{"S":"p"},"sk":{"S":"s"},"x":{"constructor":"S"}}')), {
+      ok: false,
+      error: '$.x has member "constructor"; expected exactly one of S, N, BOOL, NULL, L or M',
+    });
+    assert.deepEqual(decodeStoredItem(JSON.parse('{"toString":{"S":"p"},"hasOwnProperty":{"S":"s"}}')), {
+      ok: false,
+      error: 'item key is pk=absent, sk=absent; expected string pk and sk attributes',
+    });
+  });
+
+  it('keeps every refusal short however large the offending value is (WP-04 review round 2)', () => {
+    const megabyte = 'x'.repeat(1024 * 1024);
+    assert.deepEqual(decodeAttributeValue({ N: megabyte }), {
+      ok: false,
+      error: `$.N is "${'x'.repeat(199)}…[truncated]; expected a decimal number string`,
+    });
+    assert.deepEqual(decodeAttributeValue({ [megabyte]: 1 }), {
+      ok: false,
+      error: `$ has member "${'x'.repeat(199)}…[truncated]; expected exactly one of S, N, BOOL, NULL, L or M`,
+    });
+    const wide = Object.fromEntries(Array.from({ length: 50_000 }, (_, index) => [`m${String(index)}`, 0]));
+    const wideRefusal = decodeAttributeValue(wide);
+    assert.ok(!wideRefusal.ok && wideRefusal.error.length < 400, String(!wideRefusal.ok && wideRefusal.error.length));
+    const wideList = decodeAttributeValue({ L: wide });
+    assert.ok(!wideList.ok && wideList.error.length < 400, String(!wideList.ok && wideList.error.length));
+    assert.deepEqual(decodeStoredItem({ pk: { S: 'p' }, sk: { S: megabyte, N: '1' } }), {
+      ok: false,
+      error: '$.sk has members ["S","N"]; expected exactly one of S, N, BOOL, NULL, L or M',
+    });
+  });
+
+  it('names a long attribute in a path by a bounded quotation, decoding and encoding (A-05)', () => {
+    const long = 'n'.repeat(1_000_000);
+    const quoted = `"${'n'.repeat(199)}…[truncated]`;
+    assert.deepEqual(decodeStoredItem({ pk: { S: 'p' }, sk: { S: 's' }, m: { M: { [long]: { N: 'x' } } } }), {
+      ok: false,
+      error: `$.m.${quoted}.N is "x"; expected a decimal number string`,
+    });
+    assert.throws(
+      () => encodeAttributeMap({ pk: 'p', sk: 's', [long]: Number.NaN }),
+      new RangeError(
+        `number at $.${quoted}: NaN is not a finite number; expected a finite number, safe when integral, zero or of magnitude at least 1E-130`,
+      ),
+    );
   });
 
   it('keeps an attribute named __proto__ as an own attribute', () => {

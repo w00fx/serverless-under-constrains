@@ -7,12 +7,14 @@ import { describe, it } from 'node:test';
 
 import {
   estimatedItemBytes,
+  estimatedValueBytes,
   itemSizeViolation,
   MAX_ITEM_BYTES,
   MAX_NESTING_DEPTH,
   MIN_NUMBER_MAGNITUDE,
   nestingViolation,
   storableValueViolations,
+  utf8Bytes,
 } from '../../../src/durable-store/attribute-value-limits.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 
@@ -66,6 +68,28 @@ describe('estimatedItemBytes', () => {
   it('sizes a value of any depth without recursion', () => {
     // name 1, outer list 3, 99,999 nested lists of 3 + 1, innermost number 1 + 2.
     assert.equal(estimatedItemBytes({ v: nestedList(100_000) }), 400_003);
+  });
+});
+
+describe('estimatedValueBytes and utf8Bytes (WP-04 review round 2)', () => {
+  it('sizes one value without a name, by the same rules as an item attribute', () => {
+    assert.equal(estimatedValueBytes('ab'), 2);
+    assert.equal(estimatedValueBytes(null), 1);
+    assert.equal(estimatedValueBytes(false), 1);
+    assert.equal(estimatedValueBytes(123.45), 4);
+    // List 3, one byte per element (2), 'ab' 2, true 1.
+    assert.equal(estimatedValueBytes(['ab', true]), 8);
+    // Map 3, member name 'k' 1 plus element 1, value 1.
+    assert.equal(estimatedValueBytes({ k: null }), 6);
+    assert.equal(estimatedItemBytes({ name: ['ab', true] }), 4 + estimatedValueBytes(['ab', true]));
+    assert.equal(estimatedValueBytes(nestedMap(100_000)), 100_000 * 5 + 1);
+  });
+
+  it('counts UTF-8 bytes, not UTF-16 code units', () => {
+    assert.equal(utf8Bytes(''), 0);
+    assert.equal(utf8Bytes('a'), 1);
+    assert.equal(utf8Bytes('é'), 2);
+    assert.equal(utf8Bytes('\u{1F600}'), 4);
   });
 });
 

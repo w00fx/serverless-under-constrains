@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 
 import { createDynamoDbItemStore } from '../../../src/durable-store/aws/dynamodb-item-store.ts';
 import type { StoreTableNames } from '../../../src/durable-store/dynamodb-requests.ts';
-import type { StoredItem, WriteAction } from '../../../src/durable-store/item-store-port.ts';
+import type { Condition, StoredItem, WriteAction } from '../../../src/durable-store/item-store-port.ts';
 import type { JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { RecordingDynamoDbClient } from '../../support/durable-store/aws/recording-dynamodb-client.ts';
 import type { ScriptedDynamoDbResponse } from '../../support/durable-store/aws/recording-dynamodb-client.ts';
@@ -318,6 +318,72 @@ describe('createDynamoDbItemStore on deep or forged input (WP-04 review round 1)
     const { recording, store } = setup();
     const forged = Buffer.from(`{"pk":"${PK}","sk":""}`, 'utf8').toString('base64url');
     assert.deepEqual(await store.queryPartitionPage('ledger', PK, forged), {
+      ok: false,
+      error: { code: 'InvalidCursor' },
+    });
+    assert.deepEqual(recording.calls(), []);
+  });
+});
+
+describe('createDynamoDbItemStore on hostile conditions and limits (WP-04 review round 2)', () => {
+  const refused = { kind: 'definitive_failure', code: 'ValidationException' };
+
+  function nestedAll(depth: number): Condition {
+    let condition: Condition = { kind: 'item_absent' };
+    for (let level = 0; level < depth; level += 1) {
+      condition = { kind: 'all', conditions: [condition] };
+    }
+    return condition;
+  }
+
+  it('resolves a 100,000-level condition to ValidationException, never throwing, sending nothing', async () => {
+    const { recording, store } = setup();
+    const deep: WriteAction = { ...ledgerPut, condition: nestedAll(100_000) };
+    const written = store.write(deep);
+    assert.ok(written instanceof Promise);
+    assert.deepEqual(await written, refused);
+    const transacted = store.transact([deep], TOKEN);
+    assert.ok(transacted instanceof Promise);
+    assert.deepEqual(await transacted, refused);
+    assert.deepEqual(recording.calls(), []);
+  });
+
+  it('resolves a 200,000-member condition to ValidationException, never throwing, sending nothing', async () => {
+    const { recording, store } = setup();
+    const wide: WriteAction = {
+      ...ledgerPut,
+      condition: { kind: 'all', conditions: Array.from({ length: 200_000 }, () => ({ kind: 'item_absent' }) as const) },
+    };
+    assert.deepEqual(await store.write(wide), refused);
+    assert.deepEqual(await store.transact([wide], TOKEN), refused);
+    assert.deepEqual(recording.calls(), []);
+  });
+
+  it('refuses what the service would refuse by its expression, name and transaction limits, sending nothing', async () => {
+    const { recording, store } = setup();
+    const overOperators: WriteAction = {
+      ...ledgerPut,
+      condition: {
+        kind: 'all',
+        conditions: Array.from({ length: 151 }, () => ({ kind: 'attribute_equals', name: 'a', value: 1 }) as const),
+      },
+    };
+    const longName: WriteAction = { kind: 'put', table: 'ledger', item: { pk: PK, sk: 'n', ['n'.repeat(65_537)]: 1 } };
+    const big = (sk: string, length: number): WriteAction => ({
+      kind: 'put',
+      table: 'ledger',
+      item: { pk: 'p', sk, v: 'x'.repeat(length) },
+    });
+    const overFourMegabytes = [...'abcdefghij'.split('').map((sk) => big(sk, 409_593)), big('k', 98_298)];
+    assert.deepEqual(await store.write(overOperators), refused);
+    assert.deepEqual(await store.write(longName), refused);
+    assert.deepEqual(await store.transact(overFourMegabytes, TOKEN), refused);
+    assert.deepEqual(recording.calls(), []);
+  });
+
+  it('refuses a 1 MB cursor as InvalidCursor before sending', async () => {
+    const { recording, store } = setup();
+    assert.deepEqual(await store.queryPartitionPage('ledger', PK, `${'A'.repeat(1024 * 1024)}=`), {
       ok: false,
       error: { code: 'InvalidCursor' },
     });

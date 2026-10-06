@@ -299,6 +299,29 @@ describe('StreamFeed at-least-once delivery and errors', () => {
     assert.equal(odd.feed.deliveries()[1]?.error, undefined);
   });
 
+  it('records a rejection with no string conversion and keeps the shard moving (WP-04 review round 2)', async () => {
+    const opaque = harness({}, { remaining: 1, reason: Object.create(null) as unknown });
+    opaque.feed.enable();
+    await opaque.store.write(event('e#1', 'a'));
+    await opaque.store.write(event('e#2', 'a'));
+    await opaque.time.advanceUntilIdle();
+    assert.deepEqual(
+      opaque.feed.deliveries().map(({ event_id, attempt, outcome, error }) => ({ event_id, attempt, outcome, error })),
+      [
+        {
+          event_id: '00000000000000000000000000000001',
+          attempt: 1,
+          outcome: 'failed',
+          error: { name: 'NonErrorThrown', message: 'a value with no string conversion' },
+        },
+        { event_id: '00000000000000000000000000000001', attempt: 2, outcome: 'succeeded', error: undefined },
+        { event_id: '00000000000000000000000000000002', attempt: 1, outcome: 'succeeded', error: undefined },
+      ],
+    );
+    assert.deepEqual(sks(opaque.delivered), ['e#1', 'e#1', 'e#2']);
+    assert.equal(opaque.feed.pendingCount(), 0);
+  });
+
   it('after MaximumRetryAttempts the record goes to the on-failure destination as metadata and the shard advances', async () => {
     const failures = { remaining: 3 };
     const { time, store, delivered, feed } = harness({}, failures);

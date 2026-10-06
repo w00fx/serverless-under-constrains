@@ -8,6 +8,7 @@
 
 import type { AttributeValue } from '@aws-sdk/client-dynamodb';
 
+import { memberPath } from './attribute-path.ts';
 import { encodeAttributeValue } from './attribute-value-codec.ts';
 import type { ExpressionParts } from './condition-expression.ts';
 import type { JsonValue } from '../record-contract/primitives.ts';
@@ -31,7 +32,7 @@ export function toUpdateExpression(
   const placeholderPair = (name: string, value: JsonValue): readonly [string, string] => {
     const index = String(Object.keys(names).length);
     names[`#u${index}`] = name;
-    values[`:u${index}`] = encodeAttributeValue(value, `$.${name}`);
+    values[`:u${index}`] = encodeAttributeValue(value, memberPath('$', name));
     return [`#u${index}`, `:u${index}`];
   };
   const setTerms = sortedEntries(set).map(([name, value]) => placeholderPair(name, value).join(' = '));

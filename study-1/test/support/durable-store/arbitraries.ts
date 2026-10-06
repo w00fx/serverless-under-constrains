@@ -3,7 +3,7 @@
 
 import fc from 'fast-check';
 
-import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
+import type { Condition, StoredItem, TableRole, WriteAction } from '../../../src/durable-store/item-store-port.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 
 /** Numbers the store accepts: finite, safe when integral, and zero or of magnitude ≥ 1E-130. */
@@ -88,3 +88,70 @@ export const attributeValueLike: fc.Arbitrary<unknown> = fc.letrec<{ value: unkn
     fc.dictionary(fc.constantFrom('S', 'N', 'BOOL', 'NULL', 'L', 'M', 'SS', 'B'), tie('value'), { maxKeys: 3 }),
   ),
 })).value;
+
+const conditionLeaf: fc.Arbitrary<Condition> = fc.oneof(
+  fc.constant({ kind: 'item_absent' } as const),
+  fc.record({
+    kind: fc.constant('attribute_equals' as const),
+    name: fc.oneof(attributeName, fc.constant('')),
+    value: fc.oneof(fc.string({ maxLength: 8 }), fc.double(), fc.boolean()),
+  }),
+  fc.record({
+    kind: fc.constant('attribute_in' as const),
+    name: fc.oneof(attributeName, fc.constant('')),
+    values: fc.array(fc.string({ maxLength: 4 }), { maxLength: 110 }),
+  }),
+);
+
+/**
+ * Conditions of every shape the validator must survive: shallow trees, single-member chains up
+ * to 100,000 levels (past the 2043-level bound) and `all` lists up to 400 members wide (past the
+ * 300-operator limit), with valid and invalid leaves.
+ */
+export const hostileCondition: fc.Arbitrary<Condition> = fc.oneof(
+  fc.letrec<{ condition: Condition }>((tie) => ({
+    condition: fc.oneof(
+      { depthSize: 'small' },
+      conditionLeaf,
+      fc.record({ kind: fc.constant('all' as const), conditions: fc.array(tie('condition'), { maxLength: 4 }) }),
+    ),
+  })).condition,
+  fc
+    .tuple(fc.integer({ min: 0, max: 100_000 }), conditionLeaf)
+    .map(([depth, leaf]) =>
+      Array.from({ length: depth }).reduce<Condition>((inner) => ({ kind: 'all', conditions: [inner] }), leaf),
+    ),
+  fc.array(conditionLeaf, { maxLength: 400 }).map((conditions): Condition => ({ kind: 'all', conditions })),
+);
+
+const tableRole: fc.Arbitrary<TableRole> = fc.constantFrom('ledger', 'control', 'caller_journal');
+const keyPart: fc.Arbitrary<string> = fc.oneof(fc.string({ minLength: 1, maxLength: 6 }), fc.constant(''));
+
+/** Write actions with hostile conditions, possibly invalid keys, names and values. */
+export const hostileWriteAction: fc.Arbitrary<WriteAction> = fc.oneof(
+  fc.record(
+    {
+      kind: fc.constant('put' as const),
+      table: tableRole,
+      item: fc
+        .tuple(keyPart, keyPart, fc.dictionary(attributeName, storableJson, { maxKeys: 3 }))
+        .map(([pk, sk, attributes]): StoredItem => ({ ...attributes, pk, sk })),
+      condition: hostileCondition,
+    },
+    { requiredKeys: ['kind', 'table', 'item'] },
+  ),
+  fc.record({
+    kind: fc.constant('update' as const),
+    table: tableRole,
+    key: fc.record({ pk: keyPart, sk: keyPart }),
+    set: fc.dictionary(fc.oneof(attributeName, fc.constant('pk')), storableJson, { maxKeys: 3 }),
+    increment: fc.dictionary(attributeName, fc.oneof(fc.integer(), fc.double()), { maxKeys: 2 }),
+    condition: hostileCondition,
+  }),
+  fc.record({
+    kind: fc.constant('condition_check' as const),
+    table: tableRole,
+    key: fc.record({ pk: keyPart, sk: keyPart }),
+    condition: hostileCondition,
+  }),
+);
