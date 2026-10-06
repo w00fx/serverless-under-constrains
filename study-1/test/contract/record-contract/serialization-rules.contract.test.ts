@@ -20,7 +20,7 @@ import { CANONICAL_EXAMPLES as GROUP_A } from './group-a/support/canonical-examp
 import { CANONICAL_EXAMPLES as GROUP_B } from './group-b/examples/group-b-examples.ts';
 import { toJson } from './group-b/support/record-builders.ts';
 import { CANONICAL_EXAMPLES as GROUP_C } from './group-c/examples/group-c-examples.ts';
-import { indeterminateOracleResult } from './group-c/examples/trial-evidence-examples.ts';
+import { indeterminateOracleResult } from './group-c/examples/oracle-examples.ts';
 
 const validator = createRecordValidator();
 const LOWER_V4 = '3f1c2a9e-8b4d-4c1e-9f00-1a2b3c4d5e6f';
