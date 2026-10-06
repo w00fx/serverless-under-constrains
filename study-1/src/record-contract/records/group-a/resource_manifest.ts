@@ -24,7 +24,8 @@ export interface KeyValueEntry {
 
 /**
  * The BR-RUA-050 ownership tag keys. A manifest lists each of the first five exactly once and
- * `suc:variant_id` at most once (variant-specific resources only).
+ * `suc:variant_id` at most once, valued `conventional` or `durable`, and only on a variant
+ * validation's stack: the run stack is shared and the probe stack belongs to no variant.
  */
 export const OWNERSHIP_TAG_KEYS = [
   'suc:project',
@@ -43,7 +44,9 @@ export interface OwnershipTagEntry extends KeyValueEntry {
 /**
  * One attribute of the post-deploy configuration snapshot, for example the `BatchSize` of an
  * event source mapping. The value is the canonical JSON text of what the AWS API returned,
- * because AWS member names are not BR-RUA-033 property names.
+ * because AWS member names are not BR-RUA-033 property names. The schema checks only that the
+ * text is non-empty; its canonical form and one entry per (logical_id, attribute_path) are
+ * checks of the manifest builder (WP-24 `buildResourceManifest`).
  */
 export interface ConfigurationAttribute {
   readonly logical_id: string;
