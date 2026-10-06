@@ -12,7 +12,11 @@
     "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
     "execution_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
     "provisioning_status": { "enum": ["succeeded", "partial", "failed"] },
-    "stack_name": { "type": "string", "pattern": "^SucRua-(run|probe|validation)-[0-9a-f]{8}$" },
+    "stack_name": {
+      "description": "SucRua-<kind>-<first 8 hex digits of the execution id> (design §9.7): the kind is run, validation or probe, as the execution identity of the manifest says. That the digits are the identity's prefix is a check of the manifest builder.",
+      "type": "string",
+      "pattern": "^SucRua-(run|probe|validation)-[0-9a-f]{8}$"
+    },
     "stack_id": {
       "type": "string",
       "pattern": "^arn:aws:cloudformation:[a-z]{2}(-[a-z]+)+-[0-9]+:[0-9]{12}:stack/[A-Za-z][A-Za-z0-9-]{0,127}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -136,11 +140,25 @@
   "allOf": [
     {
       "if": { "required": ["run_id"] },
-      "then": { "properties": { "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } } } }
+      "then": {
+        "properties": {
+          "stack_name": { "type": "string", "pattern": "^SucRua-run-" },
+          "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } }
+        }
+      }
+    },
+    {
+      "if": { "required": ["variant_validation_id"] },
+      "then": { "properties": { "stack_name": { "type": "string", "pattern": "^SucRua-validation-" } } }
     },
     {
       "if": { "required": ["transport_probe_id"] },
-      "then": { "properties": { "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } } } }
+      "then": {
+        "properties": {
+          "stack_name": { "type": "string", "pattern": "^SucRua-probe-" },
+          "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } }
+        }
+      }
     }
   ],
   "if": {

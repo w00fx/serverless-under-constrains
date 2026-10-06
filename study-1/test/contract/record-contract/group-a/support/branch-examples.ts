@@ -1,10 +1,11 @@
 // Valid examples of the schema branches the canonical examples do not take: the variant-validation
 // side of every run-or-validation oneOf (BR-RUA-038), a conventional variant validation, the
-// variant-specific validation stack (BR-RUA-050) and a detached source checkout (BR-RUA-042).
+// variant-specific validation stack and the probe stack (BR-RUA-050) and a detached source
+// checkout (BR-RUA-042).
 // Each is derived from its canonical example, so the two cannot drift apart except in the
 // branch-selecting members.
 
-import type { JsonObject } from '../../../../../src/record-contract/primitives.ts';
+import type { JsonObject, Uuid4 } from '../../../../../src/record-contract/primitives.ts';
 import type { OwnershipTagEntry } from '../../../../../src/record-contract/records/group-a/resource_manifest.ts';
 import { sourceProvenance } from './admission-examples.ts';
 import { trialMessage, trialProviderRefundCall } from './input-examples.ts';
@@ -52,6 +53,29 @@ export function conventionalValidationExecutionManifest(): JsonObject {
   });
 }
 
+// The run's succeeded stack moved to another execution: its identity, stack name and id, and
+// the `suc:run_id` tag, which carries the execution identity (design §9.7, D-07), plus any
+// extra ownership tags.
+function restackedManifest(
+  identity: 'variant_validation_id' | 'transport_probe_id',
+  executionId: Uuid4,
+  kind: 'validation' | 'probe',
+  extraTags: readonly OwnershipTagEntry[],
+): JsonObject {
+  const run = succeededResourceManifest();
+  const tags: readonly OwnershipTagEntry[] = [
+    ...run.ownership_tags.map((tag) => (tag.key === 'suc:run_id' ? { ...tag, value: executionId } : tag)),
+    ...extraTags,
+  ];
+  const moved: JsonObject = {
+    ...withoutField(run, 'run_id'),
+    [identity]: executionId,
+    stack_name: `SucRua-${kind}-00000000`,
+    stack_id: (run.stack_id ?? '').replaceAll('SucRua-run-', `SucRua-${kind}-`),
+  };
+  return withField(moved, 'ownership_tags', tags);
+}
+
 /**
  * The Durable variant validation's stack: variant-specific, so its ownership tags add
  * `suc:variant_id` (BR-RUA-050), and its run tag carries the validation identity.
@@ -60,14 +84,20 @@ export function conventionalValidationExecutionManifest(): JsonObject {
  * validationResourceManifest()['stack_name']; // 'SucRua-validation-00000000'
  */
 export function validationResourceManifest(): JsonObject {
-  const run = succeededResourceManifest();
-  const tags: readonly OwnershipTagEntry[] = [
-    ...run.ownership_tags.map((tag) => (tag.key === 'suc:run_id' ? { ...tag, value: IDS.variantValidation } : tag)),
+  return restackedManifest('variant_validation_id', IDS.variantValidation, 'validation', [
     { key: 'suc:variant_id', value: 'durable' },
-  ];
-  const stackId = (run.stack_id ?? '').replaceAll('SucRua-run-', 'SucRua-validation-');
-  const renamed = withField(inVariantValidation(run), 'stack_name', 'SucRua-validation-00000000');
-  return withField(withField(renamed, 'stack_id', stackId), 'ownership_tags', tags);
+  ]);
+}
+
+/**
+ * The transport probe's stack: it belongs to no variant, so it has no `suc:variant_id`
+ * (BR-RUA-050), and its run tag carries the probe identity.
+ *
+ * @example
+ * probeResourceManifest()['stack_name']; // 'SucRua-probe-00000000'
+ */
+export function probeResourceManifest(): JsonObject {
+  return restackedManifest('transport_probe_id', IDS.transportProbe, 'probe', []);
 }
 
 /**
@@ -94,6 +124,7 @@ export function branchExamples(): readonly { readonly name: string; readonly rec
     { name: 'trial_manifest (variant validation)', record: validationTrialManifest() },
     { name: 'execution_manifest (conventional variant validation)', record: conventionalValidationExecutionManifest() },
     { name: 'resource_manifest (variant validation stack)', record: validationResourceManifest() },
+    { name: 'resource_manifest (transport probe stack)', record: probeResourceManifest() },
     { name: 'source_provenance (detached HEAD)', record: detachedSourceProvenance() },
   ];
 }

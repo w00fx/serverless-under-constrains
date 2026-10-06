@@ -13,6 +13,7 @@ import {
   STUDY_TAG,
   VARIANT_TAG_KEY,
 } from '../../../../infra/ownership/ownership-tags.ts';
+import { stackName } from '../../../../infra/ownership/resource-naming.ts';
 import {
   RUN_TRIAL_ORDER,
   VALIDATION_SCENARIO_ORDER,
@@ -30,7 +31,12 @@ import {
   trialProviderConfiguration,
   trialRegistration,
 } from './support/manifest-examples.ts';
-import { inVariantValidation, validationResourceManifest, validationTrialManifest } from './support/branch-examples.ts';
+import {
+  inVariantValidation,
+  probeResourceManifest,
+  validationResourceManifest,
+  validationTrialManifest,
+} from './support/branch-examples.ts';
 import { FIXTURE, IDS } from './support/sample-values.ts';
 import {
   assertAccepted,
@@ -221,11 +227,7 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       '/ownership_tags not',
       'the run stack is shared by both variants',
     );
-    const probeStack = {
-      ...withoutField(succeededResourceManifest(), 'run_id'),
-      transport_probe_id: IDS.transportProbe,
-      stack_name: 'SucRua-probe-00000000',
-    };
+    const probeStack = probeResourceManifest();
     assertAccepted(probeStack, 'probe stack without a variant tag');
     assertRejected(
       withField(probeStack, 'ownership_tags', [...runTags, variantTag]),
@@ -240,6 +242,22 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
       '/stack_name pattern',
       'stack name',
     );
+    // design §9.7: the name's kind follows the execution identity, as the WP-00 infrastructure names it.
+    const stacks = [
+      ['RUN', IDS.run, succeededResourceManifest()],
+      ['VARIANT_VALIDATION', IDS.variantValidation, validationResourceManifest()],
+      ['TRANSPORT_PROBE', IDS.transportProbe, probeResourceManifest()],
+    ] as const;
+    for (const [kind, id, manifest] of stacks) {
+      assertAccepted(withField(manifest, 'stack_name', stackName(kind, id)), `${kind} stack name`);
+      for (const [otherKind, otherId] of stacks.filter(([other]) => other !== kind)) {
+        assertRejected(
+          withField(manifest, 'stack_name', stackName(otherKind, otherId)),
+          '/stack_name pattern',
+          `${kind} manifest named like a ${otherKind} stack`,
+        );
+      }
+    }
     assertRejected(
       withPath(succeededResourceManifest(), ['resources', 0, 'resource_status'], 'create_complete'),
       '/resources/0/resource_status pattern',

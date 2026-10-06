@@ -115,18 +115,20 @@ function assertRejectedMutation(mutated: JsonValue, describeMutation: () => stri
 describe('record validators (group A)', () => {
   it('generates over every governed leaf and object of the 18 record types', () => {
     assert.equal(new Set(EXAMPLES.map(({ record }) => record['record_type'])).size, 18);
-    assert.equal(EXAMPLES.length, 32);
-    assert.equal(LEAF_SITES.length, 701);
-    assert.equal(OBJECT_SITES.length, 137);
-    assert.equal(REMOVAL_SITES.length, 318);
+    assert.equal(EXAMPLES.length, 33);
+    assert.equal(LEAF_SITES.length, 737);
+    assert.equal(OBJECT_SITES.length, 148);
+    assert.equal(REMOVAL_SITES.length, 328);
     // Nested sites are generated, not only top-level members.
     assert.ok(LEAF_SITES.some((site) => pointerOf(site.path) === '/timing/provider_client_deadline_ms'));
     assert.ok(LEAF_SITES.some((site) => pointerOf(site.path) === '/files/1/sha256'));
     assert.ok(OBJECT_SITES.some((site) => pointerOf(site.path) === '/configuration_projections/0/resources/0'));
-    // The branch examples are swept too: the validation stack's variant tag and a validation identity.
+    // The branch examples are swept too: the validation stack's variant tag, the probe stack and a
+    // validation identity.
     const labelled = (label: string, pointer: string): boolean =>
       LEAF_SITES.some((site) => site.label === label && pointerOf(site.path) === pointer);
     assert.ok(labelled('resource_manifest (variant validation stack)', '/ownership_tags/5/value'));
+    assert.ok(labelled('resource_manifest (transport probe stack)', '/transport_probe_id'));
     assert.ok(labelled('trial_registration (variant validation)', '/variant_validation_id'));
     for (const valid of EXAMPLES) {
       assert.equal(catalogueValidator.validate(valid.record).valid, true, valid.name);

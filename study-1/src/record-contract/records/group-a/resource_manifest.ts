@@ -58,7 +58,7 @@ interface ResourceManifestFields {
   readonly schema_version: 1;
   readonly record_type: 'resource_manifest';
   readonly execution_manifest_sha256: Sha256Hex;
-  /** `SucRua-<kind>-<first 8 hex digits of the execution id>`. */
+  /** `SucRua-<kind>-<first 8 hex digits of the execution id>`; the kind matches the identity. */
   readonly stack_name: string;
   readonly resources: readonly StackResourceEntry[];
   /** The `suc:*` ownership tags of BR-RUA-050. */
