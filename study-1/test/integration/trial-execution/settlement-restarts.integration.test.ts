@@ -109,6 +109,9 @@ describe('AC-RUA-020 settlement restarts on activity before freeze', () => {
     assertFrozenAndAgreed(cloud, trialId, report);
   });
 
+  // The injected DLQ copy is a fiction of this case: the trial message itself was consumed and
+  // finished SUCCEEDED, so the oracle's G6 finds a terminal conflict (D-17) and is not compared
+  // with the runner's judgement here. What AC-RUA-020 asks is the restart, and the capture.
   it('new-correlated-dlq-message: a new DLQ message of the trial restarts the window with NEW_CORRELATED_DLQ_MESSAGE', async () => {
     const { cloud, running } = await startControlTrial();
     const trialId = running.plan.trial.trial_id;
