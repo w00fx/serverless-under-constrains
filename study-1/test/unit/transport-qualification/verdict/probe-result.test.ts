@@ -89,6 +89,17 @@ describe('buildProbeResult', () => {
     }
   });
 
+  // Review regression (WP-10): BR-RUA-027 makes the probe invalid only for an additional
+  // transaction; a row read twice is not one, so an unaffected failure still fails the transport.
+  it('fails on an unaffected failed condition over a ledger that repeats a transaction row', () => {
+    const result = resultOf([...PROBE_EDITS.ledger_duplicate, ...PROBE_EDITS.elapsed_short]);
+    assert.equal(result.ok, true);
+    assertWellFormed(result.value);
+    assert.equal(result.value.probe_validity, 'indeterminate');
+    assert.equal(result.value.probe_cardinality.committed_transactions, 1);
+    assert.equal(result.value.transport_probe_verdict, 'fail');
+  });
+
   it('records an invalid probe as indeterminate, with the validity reasons', () => {
     const result = resultOf([], EXTRA_CALL_PLAN);
     assert.equal(result.ok, true);

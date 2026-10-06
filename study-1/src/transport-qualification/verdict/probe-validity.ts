@@ -4,12 +4,15 @@
 //   cross-checked against the runner's `probe_workload_invoked` by Lambda request id; the larger
 //   of the two counts is kept, so an invocation that never wrote its start still counts;
 // - `accepted_provider_calls` counts `provider_call_accepted`;
-// - `committed_transactions` is the ledger's length.
+// - `committed_transactions` counts the ledger's distinct `provider_transaction_id`s: design §9.3
+//   keys a ledger item by `tx#<provider_transaction_id>`, so a repeated id is one transaction read
+//   twice (G5 judges that snapshot invalid), never an additional transaction, and it leaves the
+//   count unestablished rather than exceeded (evidence/WP-10/decisions.md).
 // Any count above 1 makes the probe `invalid`. A count that cannot be established (its journal or
 // ledger missing, gapped or unusable, or the cross-check failing) makes it `indeterminate`. Counts of
 // 0 are left to the conditions.
 
-import type { IngestedEvidence } from '../../evidence-ingestion/ingestion-model.ts';
+import type { IngestedEvidence, LedgerView } from '../../evidence-ingestion/ingestion-model.ts';
 import type { EvidenceRef } from '../../record-contract/evidence-refs.ts';
 import type { StructuredReason } from '../../record-contract/primitives.ts';
 import type { ProbeCardinality } from '../../record-contract/records/group-c/transport_probe_result.ts';
@@ -100,20 +103,27 @@ function acceptedCallCount(evidence: IngestedEvidence, provider: SubjectArtifact
 
 function transactionCount(evidence: IngestedEvidence, state: SubjectArtifactState): CountJudgement {
   const ledger = evidence.ledger;
-  const usable = ledger.status === 'present' && ledger.pagination_complete;
-  if (usable) {
-    return { field: 'committed_transactions', count: ledger.transactions.length, unestablished: [] };
+  const count = new Set(ledger.transactions.map((transaction) => transaction.provider_transaction_id)).size;
+  const problem = ledgerCountProblem(ledger);
+  if (problem === undefined) {
+    return { field: 'committed_transactions', count, unestablished: [] };
   }
   const reason =
     state.ref === undefined
       ? incompleteArtifactReason(state, SUBJECT)
-      : {
-          code: 'LEDGER_NOT_USABLE',
-          subject: SUBJECT,
-          artifact_path: state.path,
-          detail: `the ledger is ${ledger.status} with pagination ${ledger.pagination_complete ? 'complete' : 'incomplete'}; expected a complete ledger to count transactions`,
-        };
-  return { field: 'committed_transactions', count: ledger.transactions.length, unestablished: [reason] };
+      : { code: 'LEDGER_NOT_USABLE', subject: SUBJECT, artifact_path: state.path, detail: problem };
+  return { field: 'committed_transactions', count, unestablished: [reason] };
+}
+
+// Why the ledger cannot establish the transaction count, or undefined when it can.
+function ledgerCountProblem(ledger: LedgerView): string | undefined {
+  if (ledger.status !== 'present' || !ledger.pagination_complete) {
+    return `the ledger is ${ledger.status} with pagination ${ledger.pagination_complete ? 'complete' : 'incomplete'}; expected a complete ledger to count transactions`;
+  }
+  if (ledger.duplicate_transaction_ids.length > 0) {
+    return `the ledger repeats transaction ids [${ledger.duplicate_transaction_ids.join(', ')}]; expected each transaction id once to count transactions`;
+  }
+  return undefined;
 }
 
 function exceededReason(judgement: CountJudgement): StructuredReason {

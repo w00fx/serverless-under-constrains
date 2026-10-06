@@ -5,9 +5,33 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { assessProbeValidity } from '../../../../src/transport-qualification/verdict/probe-validity.ts';
-import { EXTRA_CALL_PLAN, probeEvidence, SUBJECT_FILES } from '../../treatment-fidelity/support/treatment-evidence.ts';
+import {
+  documentOp,
+  EXTRA_CALL_PLAN,
+  PROBE_IDS,
+  probeEvidence,
+  SUBJECT_FILES,
+} from '../../treatment-fidelity/support/treatment-evidence.ts';
 import { PROBE_EDITS } from '../../treatment-fidelity/support/treatment-scenarios.ts';
-import { codes } from '../../treatment-fidelity/support/view-edits.ts';
+import { codes, present } from '../../treatment-fidelity/support/view-edits.ts';
+
+/** The ledger holds a second transaction under another provider transaction id. */
+const SECOND_TRANSACTION = [
+  documentOp(SUBJECT_FILES.ledger, '/transactions/1', {
+    amount_minor: 10000,
+    attempt_id: PROBE_IDS.attempt,
+    commit_requested_at: '2026-10-05T12:05:05.120Z',
+    currency: 'BRL',
+    payment_id: 'pay-poc-001',
+    provider_call_id: PROBE_IDS.call,
+    provider_commit_id: PROBE_IDS.commit,
+    provider_request_id: '58ae07f2-4809-4e4c-9659-f16beb4cfb68',
+    provider_transaction_id: PROBE_IDS.absent,
+    refund_request_id: 'ref-poc-001',
+    status: 'SUCCEEDED',
+  }),
+  documentOp(SUBJECT_FILES.ledger, '/pages/0/item_count', 2),
+];
 
 /** The runner invoked the probe workload a second time, under another Lambda request id. */
 const SECOND_INVOCATION = [
@@ -56,10 +80,27 @@ describe('assessProbeValidity', () => {
     assert.match(validity.reasons[0]?.detail ?? '', /accepted_provider_calls is 2; expected exactly 1/u);
   });
 
-  it('is invalid for a ledger holding two transactions', () => {
-    const validity = assessProbeValidity(probeEvidence(PROBE_EDITS.ledger_duplicate));
+  it('is invalid for a ledger holding two distinct transactions', () => {
+    const validity = assessProbeValidity(probeEvidence(SECOND_TRANSACTION));
     assert.equal(validity.probe_validity, 'invalid');
     assert.equal(validity.cardinality.committed_transactions, 2);
+    assert.deepEqual(codes(validity.reasons), ['PROBE_CARDINALITY_EXCEEDED']);
+    assert.match(validity.reasons[0]?.detail ?? '', /committed_transactions is 2; expected exactly 1/u);
+  });
+
+  // Review regression (WP-10): one transaction read twice was counted as two, so a collection
+  // artifact made the probe invalid and hid an unaffected failing condition behind indeterminate.
+  it('counts a transaction id read twice once, leaving the count unestablished', () => {
+    const validity = assessProbeValidity(probeEvidence(PROBE_EDITS.ledger_duplicate));
+    assert.equal(validity.probe_validity, 'indeterminate');
+    assert.equal(validity.cardinality.committed_transactions, 1);
+    assert.deepEqual(codes(validity.reasons), ['LEDGER_NOT_USABLE']);
+    const reason = present(validity.reasons[0], 'ledger reason');
+    assert.equal(reason.artifact_path, 'probe/ledger/ledger-snapshot.json');
+    assert.equal(
+      reason.detail,
+      `the ledger repeats transaction ids [${PROBE_IDS.transaction}]; expected each transaction id once to count transactions`,
+    );
   });
 
   it('counts an invocation the runner made that never wrote its start', () => {
