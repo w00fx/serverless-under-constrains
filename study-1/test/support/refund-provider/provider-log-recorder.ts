@@ -3,7 +3,7 @@
 // stderr. Its conformance test is
 // `test/integration/refund-provider/fakes/provider-log-recorder.conformance.integration.test.ts`.
 
-import type { ProviderLogLine, ProviderLogSink } from '../../../../src/refund-provider/provider-log.ts';
+import type { ProviderLogLine, ProviderLogSink } from '../../../src/refund-provider/provider-log.ts';
 
 export class ProviderLogRecorder {
   readonly #lines: ProviderLogLine[] = [];

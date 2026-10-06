@@ -9,7 +9,7 @@ import {
   ProviderFault,
   unexpectedErrorLog,
 } from '../../../src/refund-provider/provider-fault.ts';
-import { ATTEMPT_ID } from './support/provider-fixtures.ts';
+import { ATTEMPT_ID } from '../../support/refund-provider/provider-fixtures.ts';
 
 describe('ProviderFault', () => {
   it('carries its code, phase and call id, and prefixes the message with the code', () => {

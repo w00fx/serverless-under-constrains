@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { parseProviderEnvironment } from '../../../src/refund-provider/provider-environment.ts';
-import { PROBE_ID, RUN_ID, VALIDATION_ID } from './support/provider-fixtures.ts';
+import { PROBE_ID, RUN_ID, VALIDATION_ID } from '../../support/refund-provider/provider-fixtures.ts';
 
 const TABLES = {
   SUC_TABLE_LEDGER: 'suc1-aaaaaaaa-ledger',

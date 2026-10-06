@@ -7,7 +7,7 @@ import type { EventRecordType } from '../../../../src/record-contract/record-typ
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import type { ProviderInvocationResult } from '../../../../src/refund-provider/refund-provider.ts';
 import type { ScriptedWriteFault } from '../../../support/durable-store/in-memory-item-store.ts';
-import type { ProviderHarness } from '../../../unit/refund-provider/support/provider-fixtures.ts';
+import type { ProviderHarness } from '../../../support/refund-provider/provider-fixtures.ts';
 
 export interface RunningCall {
   readonly result: Promise<ProviderInvocationResult>;

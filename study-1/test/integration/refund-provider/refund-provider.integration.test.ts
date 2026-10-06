@@ -11,7 +11,7 @@ import { canonicalJson } from '../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../src/record-contract/identifiers.ts';
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
-import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import type { ProviderHarness } from '../../support/refund-provider/provider-fixtures.ts';
 import {
   ATTEMPT_ID,
   cleanupRelease,
@@ -39,7 +39,7 @@ import {
   VALIDATION_ID,
   validCall,
   validProbeCall,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 import { afterProviderEvent, consumeTreatmentOnAccept, startInvocation } from './support/provider-run.ts';
 
 const UNTARGETED_EVENTS = [

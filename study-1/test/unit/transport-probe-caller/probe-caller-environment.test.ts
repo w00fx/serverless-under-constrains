@@ -7,7 +7,7 @@ import {
   PROBE_CALLER_ENVIRONMENT_VARIABLES,
   parseProbeCallerEnvironment,
 } from '../../../src/transport-probe-caller/probe-caller-environment.ts';
-import { PROBE, PROBE_ID } from '../refund-provider/support/provider-fixtures.ts';
+import { PROBE, PROBE_ID } from '../../support/refund-provider/provider-fixtures.ts';
 
 const VALID = {
   SUC_EXECUTION_KIND: 'TRANSPORT_PROBE',

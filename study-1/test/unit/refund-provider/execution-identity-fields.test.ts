@@ -10,7 +10,14 @@ import {
   parseExecutionIdentityFields,
   sameExecution,
 } from '../../../src/refund-provider/execution-identity-fields.ts';
-import { PROBE, PROBE_ID, RUN, RUN_ID, VALIDATION, VALIDATION_ID } from './support/provider-fixtures.ts';
+import {
+  PROBE,
+  PROBE_ID,
+  RUN,
+  RUN_ID,
+  VALIDATION,
+  VALIDATION_ID,
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 describe('parseExecutionIdentityFields', () => {
   it('reads each of the three execution kinds', () => {

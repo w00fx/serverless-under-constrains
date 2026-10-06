@@ -10,7 +10,7 @@ import type { JsonObject, Uuid4 } from '../../../src/record-contract/primitives.
 import type { TreatmentState } from '../../../src/record-contract/records/group-b/vocabulary.ts';
 import type { BarrierCommit, BarrierOutcome } from '../../../src/refund-provider/treatment-barrier.ts';
 import { BARRIER_TIMING, TreatmentBarrier } from '../../../src/refund-provider/treatment-barrier.ts';
-import { ATTEMPT_ID, field, SIGNAL_EVENT_ID, TRIAL_PK } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import { ATTEMPT_ID, field, SIGNAL_EVENT_ID, TRIAL_PK } from '../../support/refund-provider/provider-fixtures.ts';
 import { expectProviderFault } from './support/fault-assertions.ts';
 import type { StateHarness } from './support/state-harness.ts';
 import { journalEvents, stateHarness, stopJournal } from './support/state-harness.ts';

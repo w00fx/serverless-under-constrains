@@ -23,7 +23,7 @@ import {
   armedTreatmentItem,
   validCall,
   WARMUP_ID,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 import { expectProviderFault } from './support/fault-assertions.ts';
 
 function warmupRequest(overrides: JsonObject = {}): JsonObject {

@@ -33,7 +33,7 @@ import {
   TRIAL_ID,
   TRIAL_MANIFEST_SHA,
   TRIAL_PK,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 const CALL: AcceptedCall = {
   caller_id: 'conventional',

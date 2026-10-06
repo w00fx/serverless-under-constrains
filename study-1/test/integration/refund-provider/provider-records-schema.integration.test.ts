@@ -13,7 +13,7 @@ import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import type { RecordType } from '../../../src/record-contract/record-types.ts';
 import type { StudyRecord } from '../../../src/record-contract/records/index.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
-import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import type { ProviderHarness } from '../../support/refund-provider/provider-fixtures.ts';
 import {
   cleanupRelease,
   executionConfigItem,
@@ -36,7 +36,7 @@ import {
   validCall,
   validProbeCall,
   WARMUP_ID,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 import { startInvocation } from './support/provider-run.ts';
 
 const validator = createRecordValidator();

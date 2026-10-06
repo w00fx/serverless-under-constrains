@@ -54,8 +54,8 @@ import {
   validProbeCall,
   VALIDATION_ID,
   WARMUP_ID,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
-import type { ProviderHarness } from '../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
+import type { ProviderHarness } from '../../support/refund-provider/provider-fixtures.ts';
 
 const validator = createRecordValidator();
 

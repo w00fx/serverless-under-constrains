@@ -26,7 +26,7 @@ import {
   validCall,
   validProbeCall,
   withoutProperty,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 function problemOf(raw: JsonValue): string {
   const result = guardRefundCallShape(raw);

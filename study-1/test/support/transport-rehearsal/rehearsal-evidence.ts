@@ -24,7 +24,7 @@ import type { JsonObject } from '../../../src/record-contract/primitives.ts';
 import type { StudyRecord } from '../../../src/record-contract/records/index.ts';
 import type { RecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { formatUtcMillis } from '../../../src/record-contract/timestamps.ts';
-import { MANIFEST_SHA, PAYMENT_ID, PROBE_ID, PROBE_PK } from '../../unit/refund-provider/support/provider-fixtures.ts';
+import { MANIFEST_SHA, PAYMENT_ID, PROBE_ID, PROBE_PK } from '../refund-provider/provider-fixtures.ts';
 import { CANARY_PK, WARMUP_PK } from './transport-rehearsal.ts';
 import type { TransportRehearsal } from './transport-rehearsal.ts';
 

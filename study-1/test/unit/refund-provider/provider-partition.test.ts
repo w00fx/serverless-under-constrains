@@ -25,7 +25,7 @@ import {
   VALIDATION,
   VALIDATION_ID,
   validCall,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 describe('resolveCallPartition', () => {
   it('uses the fixed probe partition in a transport-probe deployment, whatever the call says', () => {

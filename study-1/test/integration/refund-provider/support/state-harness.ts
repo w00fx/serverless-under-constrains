@@ -17,8 +17,8 @@ import {
   TRIAL_ID,
   TRIAL_MANIFEST_SHA,
   TRIAL_PK,
-} from '../../../unit/refund-provider/support/provider-fixtures.ts';
-import { ProviderLogRecorder } from '../../../unit/refund-provider/support/provider-log-recorder.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
+import { ProviderLogRecorder } from '../../../support/refund-provider/provider-log-recorder.ts';
 import { ScriptedProviderStatePort } from './scripted-provider-state-port.ts';
 
 export interface StateHarness {

@@ -25,7 +25,7 @@ import {
   TRIAL_MANIFEST_SHA,
   validCall,
   validProbeCall,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 const TRIAL_CONTEXT: AcceptanceContext = {
   deployment_execution: RUN,

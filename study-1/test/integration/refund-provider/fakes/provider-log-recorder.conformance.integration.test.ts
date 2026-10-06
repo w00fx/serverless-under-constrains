@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 
 import type { ProviderLogLine } from '../../../../src/refund-provider/provider-log.ts';
 import { jsonLineLogSink } from '../../../../src/refund-provider/provider-log.ts';
-import { ProviderLogRecorder } from '../../../unit/refund-provider/support/provider-log-recorder.ts';
+import { ProviderLogRecorder } from '../../../support/refund-provider/provider-log-recorder.ts';
 
 const LINES: readonly ProviderLogLine[] = [
   {

@@ -35,7 +35,7 @@ import {
   TRIAL_MANIFEST_SHA,
   TRIAL_PK,
   trialConfigItem,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 function refusal(result: Result<unknown, string>): string {
   assert.equal(result.ok, false);

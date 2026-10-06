@@ -13,7 +13,7 @@ import { isUuid4 } from '../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import { judgeUnattributedCall } from '../../../src/refund-provider/acceptance.ts';
 import type { ProviderRejectionReason } from '../../../src/record-contract/records/group-b/vocabulary.ts';
-import type { ProviderHarness } from './support/provider-fixtures.ts';
+import type { ProviderHarness } from '../../support/refund-provider/provider-fixtures.ts';
 import {
   armedTreatmentItem,
   ATTEMPT_ID,
@@ -40,7 +40,7 @@ import {
   VALIDATION_ID,
   validCall,
   withoutProperty,
-} from './support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 /** A trial_id that is not lowercase, so no partition can be derived from it. */
 const TRIAL_ID_UPPER = 'BBBBBBBB-0000-4000-8000-000000000001';

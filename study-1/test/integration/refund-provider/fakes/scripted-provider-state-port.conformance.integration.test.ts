@@ -29,7 +29,7 @@ import {
   TRIAL_ID,
   TRIAL_PK,
   trialConfigItem,
-} from '../../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../../support/refund-provider/provider-fixtures.ts';
 import {
   journalHolderOf,
   journalKeyHeldBy,

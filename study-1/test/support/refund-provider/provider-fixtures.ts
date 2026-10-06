@@ -1,13 +1,13 @@
 // Shared fixtures of the refund-provider tests: fixed identities (the OR-RUA-001 financial
 // fixture), valid calls, the control items the runner writes (design §9.3), and a harness that
 // composes the real provider over the InMemoryItemStore emulator (WP-04) on virtual time.
-// WP-07 owns no `test/support/refund-provider/`, so these helpers live with the unit tests and
-// the integration and fuzz suites import them from here.
+// They live in `test/support/refund-provider/` (WP-07 by Owner amendment A-11) because the unit,
+// integration and fuzz suites of the provider and WP-08's transport rehearsal all import them.
 
-import type { StoredItem } from '../../../../src/durable-store/item-store-port.ts';
-import type { JournalEvent } from '../../../../src/event-journal/journal-event.ts';
-import { executionIdOf } from '../../../../src/event-journal/journal-scope.ts';
-import type { EventRecordType } from '../../../../src/record-contract/record-types.ts';
+import type { StoredItem } from '../../../src/durable-store/item-store-port.ts';
+import type { JournalEvent } from '../../../src/event-journal/journal-event.ts';
+import { executionIdOf } from '../../../src/event-journal/journal-scope.ts';
+import type { EventRecordType } from '../../../src/record-contract/record-types.ts';
 import type {
   ExecutionIdentity,
   JsonObject,
@@ -15,14 +15,14 @@ import type {
   Scenario,
   Sha256Hex,
   Uuid4,
-} from '../../../../src/record-contract/primitives.ts';
-import type { TreatmentState } from '../../../../src/record-contract/records/group-b/vocabulary.ts';
-import { composeRefundProvider } from '../../../../src/refund-provider/provider-composition.ts';
-import type { RefundProvider } from '../../../../src/refund-provider/refund-provider.ts';
-import { InMemoryItemStore } from '../../../support/durable-store/in-memory-item-store.ts';
-import { RecordingMutationLog } from '../../../support/kernel/recording-mutation-log.ts';
-import { SequentialUuidSource } from '../../../support/kernel/sequential-uuid-source.ts';
-import { VirtualTimeScheduler } from '../../../support/kernel/virtual-time-scheduler.ts';
+} from '../../../src/record-contract/primitives.ts';
+import type { TreatmentState } from '../../../src/record-contract/records/group-b/vocabulary.ts';
+import { composeRefundProvider } from '../../../src/refund-provider/provider-composition.ts';
+import type { RefundProvider } from '../../../src/refund-provider/refund-provider.ts';
+import { InMemoryItemStore } from '../durable-store/in-memory-item-store.ts';
+import { RecordingMutationLog } from '../kernel/recording-mutation-log.ts';
+import { SequentialUuidSource } from '../kernel/sequential-uuid-source.ts';
+import { VirtualTimeScheduler } from '../kernel/virtual-time-scheduler.ts';
 import { ProviderLogRecorder } from './provider-log-recorder.ts';
 
 export const RUN_ID = 'aaaaaaaa-0000-4000-8000-000000000001' as Uuid4;

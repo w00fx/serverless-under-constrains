@@ -35,8 +35,8 @@ import {
   PROBE_PK,
   probeConfigItem,
   REFUND_REQUEST_ID,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
-import { ProviderLogRecorder } from '../../unit/refund-provider/support/provider-log-recorder.ts';
+} from '../refund-provider/provider-fixtures.ts';
+import { ProviderLogRecorder } from '../refund-provider/provider-log-recorder.ts';
 import { ControllerLogRecorder } from './controller-log-recorder.ts';
 import { InProcessProviderInvoker } from './in-process-provider-invoker.ts';
 

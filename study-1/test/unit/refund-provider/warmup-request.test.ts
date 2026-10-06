@@ -7,7 +7,15 @@ import { describe, it } from 'node:test';
 
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import { guardWarmupRequest, WARMUP_REQUEST_PROPERTIES } from '../../../src/refund-provider/provider-warmup.ts';
-import { MANIFEST_SHA, PROBE, PROBE_ID, RUN, RUN_ID, TRIAL_ID, WARMUP_ID } from './support/provider-fixtures.ts';
+import {
+  MANIFEST_SHA,
+  PROBE,
+  PROBE_ID,
+  RUN,
+  RUN_ID,
+  TRIAL_ID,
+  WARMUP_ID,
+} from '../../support/refund-provider/provider-fixtures.ts';
 
 function request(overrides: JsonObject = {}): JsonObject {
   return {

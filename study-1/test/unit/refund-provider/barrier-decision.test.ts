@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
 import type { TreatmentItem } from '../../../src/record-contract/records/group-b/treatment_state_snapshot.ts';
 import { decideBarrierStep, isCommittedWaitState } from '../../../src/refund-provider/barrier-decision.ts';
-import { SIGNAL_EVENT_ID } from './support/provider-fixtures.ts';
+import { SIGNAL_EVENT_ID } from '../../support/refund-provider/provider-fixtures.ts';
 
 const COMMIT = '44444444-0000-4000-8000-000000000001' as Uuid4;
 const OTHER_COMMIT = '44444444-0000-4000-8000-000000000002' as Uuid4;

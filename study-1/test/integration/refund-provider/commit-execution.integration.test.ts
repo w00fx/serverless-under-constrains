@@ -21,7 +21,7 @@ import {
   PROVIDER_REQUEST_ID,
   REFUND_REQUEST_ID,
   TRIAL_PK,
-} from '../../unit/refund-provider/support/provider-fixtures.ts';
+} from '../../support/refund-provider/provider-fixtures.ts';
 import { expectProviderFault } from './support/fault-assertions.ts';
 import { journalKeyHeldBy, ledgerItemAlreadyExists } from './support/scripted-provider-state-port.ts';
 import type { StateHarness } from './support/state-harness.ts';
