@@ -106,6 +106,19 @@ describe('resource_manifest (BR-RUA-040, BR-RUA-050)', () => {
     );
   });
 
+  it('leaves the canonical form of canonical_json and one entry per attribute to the manifest builder', () => {
+    // The schema checks only non-empty text (see its description): WP-24 buildResourceManifest
+    // writes canonicalJson output once per (logical_id, attribute_path).
+    for (const text of ['not json', '{"b":1, "a":2}', 'null']) {
+      assertAccepted(withPath(succeededResourceManifest(), ['configuration', 0, 'canonical_json'], text), text);
+    }
+    const [batchSize] = succeededResourceManifest().configuration ?? [];
+    assertAccepted(
+      withField(succeededResourceManifest(), 'configuration', [batchSize, { ...batchSize, canonical_json: '10' }]),
+      'one attribute read twice with different values',
+    );
+  });
+
   it('records the immutable provider version, never $LATEST or an alias (BR-RUA-053)', () => {
     for (const version of ['$LATEST', 'live', '0', '01', '']) {
       assertRejected(

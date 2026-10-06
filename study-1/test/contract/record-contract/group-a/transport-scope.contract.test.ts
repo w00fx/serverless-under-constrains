@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import { serializeRecordFile } from '../../../../src/record-contract/canonical-json.ts';
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import { transportScopePolicy, transportScopeSnapshot } from './support/admission-examples.ts';
-import { IDS } from './support/sample-values.ts';
+import { CONTROLLER_FILTER_CRITERIA_JSON, IDS } from './support/sample-values.ts';
 import { pointerOf as pointer, withValueAt } from '../group-b/support/json-paths.ts';
 import {
   asJson,
@@ -16,6 +16,7 @@ import {
   withField,
   withPath,
   withoutField,
+  withoutPath,
 } from './support/validation-assertions.ts';
 
 describe('transport_scope_policy (BR-RUA-028)', () => {
@@ -168,11 +169,16 @@ describe('transport_scope_snapshot (BR-RUA-028)', () => {
   it('carries each projected CloudFormation value as canonical JSON text under a snake_case member (BR-RUA-033)', () => {
     const resource = ['configuration_projections', 1, 'resources', 0] as const;
     const timeout = [...resource, 'property_values', 0] as const;
-    // The canonical snapshot leaves FilterCriteria unset: the entry keeps only its path.
-    assert.deepEqual(transportScopeSnapshot().configuration_projections[0].resources[0].property_values[2], {
+    // The controller mapping reads from TRIM_HORIZON through the INSERT filter (BR-RUA-025).
+    const mapping = transportScopeSnapshot().configuration_projections[0].resources[0].property_values;
+    assert.deepEqual(mapping[1], { property_path: 'Properties.StartingPosition', canonical_json: '"TRIM_HORIZON"' });
+    assert.deepEqual(mapping[2], {
       property_path: 'Properties.FilterCriteria',
+      canonical_json: CONTROLLER_FILTER_CRITERIA_JSON,
     });
-    assertAccepted(transportScopeSnapshot(), 'set and unset properties');
+    // A property the resource does not set keeps only its path: absence is configuration too.
+    const filter = ['configuration_projections', 0, 'resources', 0, 'property_values', 2, 'canonical_json'];
+    assertAccepted(withoutPath(transportScopeSnapshot(), filter), 'unset property');
     // An object keyed by CloudFormation names, as an earlier projection format wrote it, is refused.
     assertRejected(
       withValueAt(
@@ -229,6 +235,21 @@ describe('transport_scope_snapshot (BR-RUA-028)', () => {
       withPath(transportScopeSnapshot(), [...resource, 'property_values'], [timeoutEntry, timeoutEntry]),
       `${pointer([...resource, 'property_values'])} uniqueItems`,
       'one property listed twice',
+    );
+  });
+
+  it('leaves the canonical form of canonical_json and one entry per path to the snapshot builder', () => {
+    // The schema checks only non-empty text (see its description): the WP-11 builder writes
+    // canonicalJson output once per policy path, and scope drift compares the texts byte for byte.
+    const timeout = ['configuration_projections', 1, 'resources', 0, 'property_values', 0];
+    for (const text of ['not json', '{"b":1, "a":2}', 'null']) {
+      assertAccepted(withPath(transportScopeSnapshot(), [...timeout, 'canonical_json'], text), `text ${text}`);
+    }
+    const values = transportScopeSnapshot().configuration_projections[1]?.resources[0]?.property_values ?? [];
+    const repeated = [...values, { property_path: 'Properties.Timeout', canonical_json: '60' }];
+    assertAccepted(
+      withPath(transportScopeSnapshot(), ['configuration_projections', 1, 'resources', 0, 'property_values'], repeated),
+      'one path listed twice with different values',
     );
   });
 

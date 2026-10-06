@@ -116,7 +116,7 @@ describe('record validators (group A)', () => {
   it('generates over every governed leaf and object of the 18 record types', () => {
     assert.equal(new Set(EXAMPLES.map(({ record }) => record['record_type'])).size, 18);
     assert.equal(EXAMPLES.length, 32);
-    assert.equal(LEAF_SITES.length, 700);
+    assert.equal(LEAF_SITES.length, 701);
     assert.equal(OBJECT_SITES.length, 137);
     assert.equal(REMOVAL_SITES.length, 318);
     // Nested sites are generated, not only top-level members.

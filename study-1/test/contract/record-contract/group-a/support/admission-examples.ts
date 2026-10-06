@@ -8,7 +8,15 @@ import type { PreflightCheckRecorded } from '../../../../../src/record-contract/
 import type { SourceProvenance } from '../../../../../src/record-contract/records/group-a/source_provenance.ts';
 import type { TransportScopePolicy } from '../../../../../src/record-contract/records/group-a/transport_scope_policy.ts';
 import type { TransportScopeSnapshot } from '../../../../../src/record-contract/records/group-a/transport_scope_snapshot.ts';
-import { COMMIT_SHA, DIGESTS, IDS, TREE_SHA, digest, instant } from './sample-values.ts';
+import {
+  COMMIT_SHA,
+  CONTROLLER_FILTER_CRITERIA_JSON,
+  DIGESTS,
+  IDS,
+  TREE_SHA,
+  digest,
+  instant,
+} from './sample-values.ts';
 
 /** A financial-input rejection: the approved amount differs from the captured amount (D-31). */
 export function admissionRejection(): AdmissionRejection {
@@ -154,8 +162,8 @@ export function transportScopeSnapshot(): TransportScopeSnapshot {
           {
             property_values: [
               { property_path: 'Properties.BatchSize', canonical_json: '1' },
-              { property_path: 'Properties.StartingPosition', canonical_json: '"LATEST"' },
-              { property_path: 'Properties.FilterCriteria' },
+              { property_path: 'Properties.StartingPosition', canonical_json: '"TRIM_HORIZON"' },
+              { property_path: 'Properties.FilterCriteria', canonical_json: CONTROLLER_FILTER_CRITERIA_JSON },
             ],
           },
         ],

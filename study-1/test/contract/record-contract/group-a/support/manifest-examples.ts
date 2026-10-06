@@ -16,6 +16,7 @@ import type { TrialRegistration } from '../../../../../src/record-contract/recor
 import {
   ACCOUNT_ID,
   COMMIT_SHA,
+  CONTROLLER_FILTER_CRITERIA_JSON,
   COORDINATION_STACK_ID,
   COORDINATION_TABLE_ARN,
   DIGESTS,
@@ -214,7 +215,7 @@ export function succeededResourceManifest(): ResourceManifest {
       {
         logical_id: 'ControllerStreamMapping5E6F7A8B',
         attribute_path: 'FilterCriteria',
-        canonical_json: '{"Filters":[{"Pattern":"{\\"eventName\\":[\\"INSERT\\"]}"}]}',
+        canonical_json: CONTROLLER_FILTER_CRITERIA_JSON,
       },
       { logical_id: 'ConventionalSourceQueue9A0B1C2D', attribute_path: 'VisibilityTimeout', canonical_json: '"60"' },
     ],
