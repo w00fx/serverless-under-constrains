@@ -71,6 +71,22 @@ export function isSourceSequence(sequence: number): boolean {
 }
 
 /**
+ * Throws a RangeError, naming `subject` (the event type or key being built), when `sequence`
+ * is not a valid `source_sequence`. The one range check of the module, so every caller reports
+ * the same expected shape.
+ *
+ * @example
+ * assertSourceSequence(0, 'dispatch_started'); // RangeError: source_sequence 0 of dispatch_started; expected an integer from 1 to 999999999999
+ */
+export function assertSourceSequence(sequence: number, subject: string): void {
+  if (!isSourceSequence(sequence)) {
+    throw new RangeError(
+      `source_sequence ${String(sequence)} of ${subject}; expected an integer from 1 to ${String(MAX_SOURCE_SEQUENCE)}`,
+    );
+  }
+}
+
+/**
  * The item key of one journal event. Throws a RangeError for a sequence outside
  * `1..MAX_SOURCE_SEQUENCE`, because such a key would break sort order or density.
  *
@@ -78,11 +94,7 @@ export function isSourceSequence(sequence: number): boolean {
  * journalItemKey(scope, 'refund_provider', instanceId, 1).sk; // 'refund_provider#<instanceId>#000000000001'
  */
 export function journalItemKey(scope: JournalScope, source: EventSource, instance: Uuid4, sequence: number): ItemKey {
-  if (!isSourceSequence(sequence)) {
-    throw new RangeError(
-      `source_sequence ${String(sequence)}; expected an integer from 1 to ${String(MAX_SOURCE_SEQUENCE)}`,
-    );
-  }
+  assertSourceSequence(sequence, `the item key of ${source}`);
   const paddedSequence = String(sequence).padStart(SEQUENCE_DIGITS, '0');
   return { pk: journalPartitionKey(scope), sk: `${source}#${instance}#${paddedSequence}` };
 }

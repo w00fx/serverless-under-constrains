@@ -64,7 +64,7 @@ describe('journal scope', () => {
       assert.equal(isSourceSequence(invalid), false, String(invalid));
       assert.throws(() => journalItemKey(TRIAL_SCOPE, 'runner', INSTANCE_ID, invalid), {
         name: 'RangeError',
-        message: `source_sequence ${String(invalid)}; expected an integer from 1 to 999999999999`,
+        message: `source_sequence ${String(invalid)} of the item key of runner; expected an integer from 1 to 999999999999`,
       });
     }
   });

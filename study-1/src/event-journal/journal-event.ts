@@ -9,7 +9,7 @@ import type { Uuid4, UtcMillis } from '../record-contract/primitives.ts';
 import type { EventRecordType } from '../record-contract/record-types.ts';
 import type { GroupBRecordByType } from '../record-contract/records/group-b/record-map.ts';
 import type { JournalScope } from './journal-scope.ts';
-import { isSourceSequence } from './journal-scope.ts';
+import { assertSourceSequence } from './journal-scope.ts';
 
 /** Any journal event record (catalogue kind E, all in group B). */
 export type JournalEvent = GroupBRecordByType[EventRecordType];
@@ -73,11 +73,7 @@ export function buildJournalEvent<T extends EventRecordType>(
   body: EventBody<T>,
   input: EventEnvelopeInput,
 ): JournalEvent {
-  if (!isSourceSequence(input.source_sequence)) {
-    throw new RangeError(
-      `source_sequence ${String(input.source_sequence)} for ${type}; expected a positive integer of at most 12 digits`,
-    );
-  }
+  assertSourceSequence(input.source_sequence, type);
   const partition = input.scope.partition;
   const trialFields =
     partition.kind === 'trial'

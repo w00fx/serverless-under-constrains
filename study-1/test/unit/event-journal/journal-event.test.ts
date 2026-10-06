@@ -155,7 +155,7 @@ describe('buildJournalEvent', () => {
         () => buildJournalEvent('dispatch_started', dispatchStartedBody(), envelopeInput({ source_sequence: invalid })),
         {
           name: 'RangeError',
-          message: `source_sequence ${String(invalid)} for dispatch_started; expected a positive integer of at most 12 digits`,
+          message: `source_sequence ${String(invalid)} of dispatch_started; expected an integer from 1 to 999999999999`,
         },
       );
     }
