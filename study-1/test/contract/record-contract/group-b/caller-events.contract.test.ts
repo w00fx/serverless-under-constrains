@@ -1,17 +1,43 @@
 // Caller-journal records (catalogue rows 19-28): the field rules that depend on the caller
 // variant, the attempt outcome and the processing state (BR-RUA-012..021, BR-RUA-033).
 
+import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
+import { ATTEMPT_FAILURE_CODES, DISPATCH_STATES } from '../../../../src/record-contract/records/group-b/vocabulary.ts';
+import type { AttemptFailureCode, DispatchState } from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import * as caller from './examples/caller-examples.ts';
 import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { textOf, withMember, withValueAt } from './support/json-paths.ts';
+import { objectAt, textOf, withMember, withValueAt, withoutMembers } from './support/json-paths.ts';
 import { ATTEMPT_CORRELATION, toJson, uuid } from './support/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
   return toJson(record);
+}
+
+// The dispatch states each failure code admits. A pre-dispatch failure is NOT_DISPATCHED only
+// when the conditional transition applied, UNKNOWN otherwise (BR-RUA-021; provider-client
+// `#recordNotDispatched`); C3 condition_failed and ambiguous give UNKNOWN; §9.9 codes DISPATCHED.
+const FAILURE_DISPATCH_STATES: readonly (readonly [AttemptFailureCode, readonly DispatchState[]])[] = [
+  ['CALL_BUILD_FAILED', ['NOT_DISPATCHED', 'UNKNOWN']],
+  ['DISPATCH_TRANSITION_REJECTED', ['NOT_DISPATCHED', 'UNKNOWN']],
+  ['DISPATCH_TRANSITION_CONDITION_FAILED', ['UNKNOWN']],
+  ['DISPATCH_TRANSITION_AMBIGUOUS', ['UNKNOWN']],
+  ['FUNCTION_ERROR', ['DISPATCHED']],
+  ['VERSION_MISMATCH', ['DISPATCHED']],
+  ['MALFORMED_RESPONSE', ['DISPATCHED']],
+  ['ABORTED_WITHOUT_DEADLINE', ['DISPATCHED']],
+  ['TRANSPORT_ERROR', ['DISPATCHED']],
+  ['TIMEOUT_RECORD_NOT_DURABLE', ['DISPATCHED']],
+];
+
+/** The canonical FAILED outcome with `code` and `state`; only a dispatched attempt keeps its time. */
+function failedWith(code: AttemptFailureCode, state: DispatchState): JsonObject {
+  const failed = withValueAt(json(caller.failedOutcome()), ['failure', 'code'], code);
+  const stated = withMember(objectAt(failed, []), 'dispatch_state', state);
+  return state === 'DISPATCHED' ? stated : withMember(stated, 'dispatch_to_settlement_ns', undefined);
 }
 
 describe('AC-RUA-046 caller_invocation_started', () => {
@@ -101,7 +127,15 @@ describe('AC-RUA-046 caller_timeout_recorded', () => {
     assertAccepted(withMember(timeout, 'arbiter_winner', 'TRANSPORT'), 'transport won');
     assertAccepted(withMember(timeout, 'transport_settled_at_claim', true), 'settled at claim');
     assertRejected(withMember(timeout, 'arbiter_winner', 'NONE'), 'unknown winner', '/arbiter_winner enum');
-    assertAccepted(withMember(timeout, 'source', 'runner'), 'recorded by the runner');
+  });
+
+  it('the runner writes one only at execution level, in the canary partition (D-10)', () => {
+    const timeout = json(caller.callerTimeoutRecorded());
+    const executionLevel = withoutMembers(timeout, ['trial_id', 'trial_manifest_sha256']);
+    assertAccepted(withMember(executionLevel, 'source', 'runner'), 'runner canary');
+    const inTrial = withMember(timeout, 'source', 'runner');
+    assertForbidden(inTrial, 'runner inside a trial', '/trial_id');
+    assertForbidden(inTrial, 'runner inside a trial', '/trial_manifest_sha256');
   });
 });
 
@@ -116,8 +150,50 @@ describe('AC-RUA-046 attempt_outcome_recorded', () => {
         );
       }
     }
-    for (const state of ['NOT_DISPATCHED', 'DISPATCHED', 'UNKNOWN']) {
-      assertAccepted(withMember(json(caller.failedOutcome()), 'dispatch_state', state), `FAILED ${state}`);
+    for (const [code, states] of FAILURE_DISPATCH_STATES) {
+      for (const state of states) {
+        assertAccepted(failedWith(code, state), `FAILED ${code} ${state}`);
+      }
+    }
+  });
+
+  it('each failure code fixes the dispatch state (design §5.3 C2/C3, §9.9)', () => {
+    let checked = 0;
+    for (const [code, states] of FAILURE_DISPATCH_STATES) {
+      for (const state of DISPATCH_STATES.filter((candidate) => !states.includes(candidate))) {
+        assertRejected(failedWith(code, state), `FAILED ${code} ${state}`, '/dispatch_state');
+        checked += 1;
+      }
+    }
+    // 2 pre-dispatch codes x 1 + 2 transition codes x 2 + 6 transport-side codes x 2.
+    assert.equal(checked, 18);
+    assert.deepEqual(
+      FAILURE_DISPATCH_STATES.map(([code]) => code),
+      [...ATTEMPT_FAILURE_CODES],
+    );
+  });
+
+  it('a dispatch-to-settlement time exists exactly when the attempt was dispatched', () => {
+    for (const record of [caller.succeededOutcome(), caller.rejectedOutcome(), caller.timedOutOutcome()]) {
+      const label = `${record.outcome} without a settlement time`;
+      assertMissing(
+        withMember(json(record), 'dispatch_to_settlement_ns', undefined),
+        label,
+        'dispatch_to_settlement_ns',
+      );
+    }
+    const dispatched = failedWith('TRANSPORT_ERROR', 'DISPATCHED');
+    assertMissing(
+      withMember(dispatched, 'dispatch_to_settlement_ns', undefined),
+      'FAILED DISPATCHED without a settlement time',
+      'dispatch_to_settlement_ns',
+    );
+    for (const [code, state] of [
+      ['CALL_BUILD_FAILED', 'NOT_DISPATCHED'],
+      ['DISPATCH_TRANSITION_AMBIGUOUS', 'UNKNOWN'],
+    ] as const) {
+      const timed = withMember(failedWith(code, state), 'dispatch_to_settlement_ns', '1');
+      assertForbidden(timed, `${state} with a settlement time`, '/dispatch_to_settlement_ns');
     }
   });
 

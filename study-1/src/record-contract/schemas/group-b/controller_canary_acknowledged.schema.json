@@ -16,6 +16,15 @@
     "record_type": {
       "const": "controller_canary_acknowledged"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["treatment_controller"]
     },
@@ -26,5 +35,5 @@
     }
   },
   "required": ["schema_version", "record_type", "source", "canary_event_id"],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

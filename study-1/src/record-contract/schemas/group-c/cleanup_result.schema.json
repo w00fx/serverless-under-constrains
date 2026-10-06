@@ -14,7 +14,7 @@
           "maximum": 12
         },
         "status": {
-          "enum": ["STARTED", "SUCCEEDED", "FAILED", "SKIPPED"]
+          "enum": ["started", "succeeded", "failed", "skipped"]
         },
         "started_at": {
           "$ref": "_defs.schema.json#/$defs/utc_millis"

@@ -8,12 +8,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
-import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
+import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { GroupBRecordType } from '../../../../src/record-contract/records/group-b/record-map.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { assertRejected, violationsOf } from './support/group-b-validation.ts';
-import { pointerOf, withValueAt } from './support/json-paths.ts';
-import type { JsonPath } from './support/json-paths.ts';
+import { pathsMatching, pointerOf, withValueAt } from './support/json-paths.ts';
 import { toJson } from './support/record-builders.ts';
 import { resolvePointer, schemaOf } from './support/schema-reading.ts';
 
@@ -116,20 +115,21 @@ function site(rule: string, values: readonly string[], recordType: GroupBRecordT
   };
 }
 
-/** Every concrete path in `json` that a `/a/*\/b` pattern names. */
-function pathsMatching(json: JsonValue, pattern: string): readonly JsonPath[] {
-  const expand = (node: JsonValue, segments: readonly string[], path: JsonPath): readonly JsonPath[] => {
-    const [head, ...rest] = segments;
-    if (head === undefined) {
-      return [path];
-    }
-    if (head === '*') {
-      return isJsonArray(node) ? node.flatMap((child, index) => expand(child, rest, [...path, index])) : [];
-    }
-    const child = isJsonObject(node) ? node[head] : undefined;
-    return child === undefined ? [] : expand(child, rest, [...path, head]);
-  };
-  return expand(json, pattern.split('/').slice(1), []);
+// A FAILED carrier takes a failure code that admits `state` (design §5.3 C2/C3, §9.9), and only a
+// dispatched attempt keeps its dispatch-to-settlement time, so the dispatch implication is the
+// only rule each variant can break.
+const FAILURE_CODE_FOR_STATE: Readonly<Record<string, string>> = {
+  NOT_DISPATCHED: 'CALL_BUILD_FAILED',
+  DISPATCHED: 'TRANSPORT_ERROR',
+  UNKNOWN: 'DISPATCH_TRANSITION_AMBIGUOUS',
+};
+
+function withDispatchState(carrier: JsonObject, state: string): JsonObject {
+  const { dispatch_to_settlement_ns: settlement, ...rest } = carrier;
+  const timed = state === 'DISPATCHED' && settlement !== undefined ? { dispatch_to_settlement_ns: settlement } : {};
+  const failure = carrier['failure'];
+  const coded = isJsonObject(failure) ? { failure: { ...failure, code: FAILURE_CODE_FOR_STATE[state] ?? state } } : {};
+  return { ...rest, ...timed, ...coded, dispatch_state: state };
 }
 
 /** The value in the other case (BR-RUA-033 fixes the case of each list, so a flip is foreign). */
@@ -205,7 +205,7 @@ describe('AC-RUA-046 group-B enums hold the spec value lists', () => {
       const carrier = outcomes.find((json) => json['outcome'] === outcome);
       assert.ok(carrier !== undefined, `an example records ${outcome}`);
       for (const state of SPEC_DISPATCH_STATES) {
-        const record: JsonObject = { ...carrier, dispatch_state: state };
+        const record = withDispatchState(carrier, state);
         const accepted: boolean = violationsOf(record).length === 0;
         const expected = outcome === 'FAILED' || state === 'DISPATCHED';
         assert.equal(accepted, expected, `${outcome} with ${state}`);

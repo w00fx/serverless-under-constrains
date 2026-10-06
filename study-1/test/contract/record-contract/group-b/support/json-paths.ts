@@ -1,5 +1,6 @@
-// Path utilities over parsed JSON for single-field mutations: list every leaf, and copy a
-// document with one value replaced, removed or added.
+// Path utilities over parsed JSON for single-field mutations: list every leaf, walk a path or a
+// `*` pattern, and copy a document with one value replaced, removed or added. Every group-B test
+// walks JSON through these, so path semantics live in one place.
 
 import { isJsonArray, isJsonObject } from '../../../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../../../src/record-contract/primitives.ts';
@@ -98,6 +99,81 @@ export function textOf(value: JsonValue): string {
 }
 
 /**
+ * The value one segment below `node`: an array element for a number (or a digit string, as a
+ * JSON Pointer spells it), an own object member for a string; undefined when nothing is there.
+ * Only own members are read, so `constructor` or `toString` never resolve to inherited values.
+ *
+ * @example
+ * childAt([10, 20], 1); // 20
+ * childAt({ a: 1 }, 'toString'); // undefined
+ */
+export function childAt(node: JsonValue | undefined, segment: string | number): JsonValue | undefined {
+  if (isJsonArray(node)) {
+    const index = typeof segment === 'number' ? segment : Number(segment);
+    return Number.isInteger(index) ? node[index] : undefined;
+  }
+  if (isJsonObject(node) && typeof segment === 'string' && Object.hasOwn(node, segment)) {
+    return node[segment];
+  }
+  return undefined;
+}
+
+/**
+ * The value at `path`, or undefined when the path leads nowhere.
+ *
+ * @example
+ * valueAt({ a: [{ b: 1 }] }, ['a', 0, 'b']); // 1
+ */
+export function valueAt(root: JsonValue, path: readonly (string | number)[]): JsonValue | undefined {
+  return path.reduce<JsonValue | undefined>((node, segment) => childAt(node, segment), root);
+}
+
+/**
+ * The object at `path`; throws when the path addresses anything else.
+ *
+ * @example
+ * objectAt({ a: [{ b: 1 }] }, ['a', 0]); // { b: 1 }
+ */
+export function objectAt(root: JsonValue, path: JsonPath): JsonObject {
+  const node = valueAt(root, path);
+  if (!isJsonObject(node)) {
+    throw new Error(`path ${pointerOf(path)} addresses ${JSON.stringify(node)}; expected an object`);
+  }
+  return node;
+}
+
+/**
+ * A concrete path as its pattern, every array index written `*` (the `nested_optional` form).
+ *
+ * @example
+ * patternOf(['executions', 0, 'ended_at']); // '/executions/*\/ended_at'
+ */
+export function patternOf(path: JsonPath): string {
+  return path.map((segment) => (typeof segment === 'number' ? '/*' : `/${segment}`)).join('');
+}
+
+/**
+ * Every concrete path in `root` that a pattern names (the inverse of `patternOf`).
+ *
+ * @example
+ * pathsMatching({ a: [{ b: 1 }, { b: 2 }] }, '/a/*\/b'); // [['a', 0, 'b'], ['a', 1, 'b']]
+ */
+export function pathsMatching(root: JsonValue, pattern: string): readonly JsonPath[] {
+  const expand = (node: JsonValue, segments: readonly string[], path: JsonPath): readonly JsonPath[] => {
+    const [head, ...rest] = segments;
+    if (head === undefined) {
+      return [path];
+    }
+    if (head === '*') {
+      return isJsonArray(node) ? node.flatMap((child, index) => expand(child, rest, [...path, index])) : [];
+    }
+    const child = childAt(node, head);
+    return child === undefined || isJsonArray(node) ? [] : expand(child, rest, [...path, head]);
+  };
+  return expand(root, pattern.split('/').slice(1), []);
+}
+
+/**
  * Renders a path as a JSON Pointer for assertion labels and violation matching.
  *
  * @example
@@ -119,3 +195,13 @@ function replaceMember(root: JsonObject, key: string, next: JsonValue | undefine
   const kept = Object.entries(root).filter(([name]) => name !== key);
   return Object.fromEntries(next === undefined ? kept : [...kept, [key, next]]);
 }
+
+/**
+ * Every own property name of `Object.prototype` (`__proto__`, `constructor`, `toString`, ...).
+ * A validator that tracks members in a plain object sees these as present on every object, so
+ * each closed object must be proven to reject them as unknown members (Owner amendment A-07).
+ *
+ * @example
+ * INHERITED_MEMBER_NAMES.includes('hasOwnProperty'); // true
+ */
+export const INHERITED_MEMBER_NAMES: readonly string[] = Object.getOwnPropertyNames(Object.prototype).toSorted();

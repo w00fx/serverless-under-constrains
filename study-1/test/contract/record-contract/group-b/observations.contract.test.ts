@@ -2,13 +2,20 @@
 // read is recorded, never omitted), counters are nonnegative safe integers, and the ledger
 // snapshot records how it was read so the oracle can judge it (BR-RUA-031, BR-RUA-032).
 
+import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { JsonObject } from '../../../../src/record-contract/primitives.ts';
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import * as observation from './examples/observation-examples.ts';
-import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { withMember, withValueAt } from './support/json-paths.ts';
+import {
+  assertAccepted,
+  assertForbidden,
+  assertMissing,
+  assertRejected,
+  violationsOf,
+} from './support/group-b-validation.ts';
+import { objectAt, withMember, withValueAt } from './support/json-paths.ts';
 import { RUN_ID, toJson } from './support/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
@@ -136,6 +143,94 @@ describe('AC-RUA-046 treatment_state_snapshot', () => {
     assertRejected(withValueAt(present, ['treatment', 'state'], 'DONE'), 'state', '/treatment/state enum');
     assertRejected(withValueAt(present, ['treatment', 'version'], 0), 'version', '/treatment/version minimum');
     assertRejected(withValueAt(present, ['treatment'], { version: 1 }), 'no state', '/treatment required');
+  });
+});
+
+// BR-RUA-025: "The transition to `COMMITTED_WAITING` atomically ... records its attempt, provider
+// request, provider call, transaction, and commit identities"; each later transition adds its own.
+const COMMIT_IDENTITIES = [
+  'targeted_attempt_id',
+  'provider_request_id',
+  'provider_call_id',
+  'provider_commit_id',
+  'provider_transaction_id',
+  'commit_event_id',
+];
+const SIGNAL_IDENTITIES = ['signal_event_id', 'signal_caller_event_id'];
+const IDENTITIES_BY_STATE: readonly (readonly [string, readonly string[]])[] = [
+  ['ARMED', []],
+  ['COMMITTED_WAITING', COMMIT_IDENTITIES],
+  ['TIMEOUT_SIGNALLED', [...COMMIT_IDENTITIES, ...SIGNAL_IDENTITIES]],
+  ['TIMEOUT_OBSERVED', [...COMMIT_IDENTITIES, ...SIGNAL_IDENTITIES, 'observed_event_id']],
+  ['RESPONSE_RELEASED', [...COMMIT_IDENTITIES, ...SIGNAL_IDENTITIES, 'observed_event_id', 'release_event_id']],
+];
+
+/** The canonical present snapshot with its item replaced by `state` carrying `members`. */
+function treatmentIn(state: string, members: readonly string[], extra: JsonObject = {}): JsonObject {
+  const present = json(observation.treatmentItemPresent());
+  const full = objectAt(present, ['treatment']);
+  const kept = Object.fromEntries(members.map((member) => [member, full[member] ?? null]));
+  return withMember(present, 'treatment', { state, version: 3, ...kept, ...extra });
+}
+
+describe('AC-RUA-046 treatment_state_snapshot item identities follow its state (BR-RUA-025)', () => {
+  it('each chain state carries exactly the identities its transitions recorded', () => {
+    for (const [state, members] of IDENTITIES_BY_STATE) {
+      assertAccepted(treatmentIn(state, members), state);
+      for (const member of members) {
+        const without = members.filter((kept) => kept !== member);
+        assertRejected(treatmentIn(state, without), `${state} without ${member}`, '/treatment');
+      }
+    }
+  });
+
+  it('a state never carries the identity of a later transition', () => {
+    const later = [...SIGNAL_IDENTITIES, 'observed_event_id', 'release_event_id'];
+    for (const [index, [state, members]] of IDENTITIES_BY_STATE.entries()) {
+      const next = IDENTITIES_BY_STATE[index + 1]?.[1] ?? [];
+      const added = next.filter((member) => !members.includes(member) && later.includes(member));
+      for (const member of added) {
+        const carried = treatmentIn(state, [...members, ...added]);
+        assertRejected(carried, `${state} with ${member}`, `/treatment/${member} false schema`);
+      }
+    }
+    assertForbidden(treatmentIn('ARMED', COMMIT_IDENTITIES), 'ARMED with a commit', '/treatment/provider_commit_id');
+  });
+
+  it('no post-commit state omits its commit identities', () => {
+    for (const [state] of IDENTITIES_BY_STATE.slice(1)) {
+      const bare = treatmentIn(state, []);
+      for (const member of COMMIT_IDENTITIES) {
+        const missing = violationsOf(bare).filter((violation) => violation.includes(`"missingProperty":"${member}"`));
+        assert.ok(
+          missing.some((violation) => violation.startsWith('/treatment required ')),
+          `${state} requires ${member}`,
+        );
+      }
+    }
+  });
+
+  it('a safety-release cause appears only on SAFETY_RELEASED', () => {
+    const cause = { safety_release_cause: 'SAFETY_DEADLINE' };
+    for (const [state, members] of IDENTITIES_BY_STATE) {
+      assertForbidden(treatmentIn(state, members, cause), `${state} with a cause`, '/treatment/safety_release_cause');
+    }
+    assertAccepted(treatmentIn('SAFETY_RELEASED', COMMIT_IDENTITIES, cause), 'released after commit');
+    assertAccepted(treatmentIn('SAFETY_RELEASED', [], { safety_release_cause: 'CLEANUP_REQUEST' }), 'from ARMED');
+    assertAccepted(treatmentIn('SAFETY_RELEASED', COMMIT_IDENTITIES), 'released by cleanup, no cause');
+  });
+
+  it('a safety release keeps whole commit and signal records and never a response release', () => {
+    const signalled = [...COMMIT_IDENTITIES, ...SIGNAL_IDENTITIES, 'observed_event_id'];
+    assertAccepted(treatmentIn('SAFETY_RELEASED', signalled), 'released after observation');
+    const released = treatmentIn('SAFETY_RELEASED', [...signalled, 'release_event_id']);
+    assertForbidden(released, 'released twice', '/treatment/release_event_id');
+    const partial = treatmentIn('SAFETY_RELEASED', ['provider_commit_id']);
+    assertRejected(partial, 'partial commit', '/treatment dependentRequired');
+    const signalOnly = treatmentIn('SAFETY_RELEASED', SIGNAL_IDENTITIES);
+    assertRejected(signalOnly, 'signal without commit', '/treatment dependentRequired');
+    const observedOnly = treatmentIn('SAFETY_RELEASED', [...COMMIT_IDENTITIES, 'observed_event_id']);
+    assertRejected(observedOnly, 'observation without signal', '/treatment dependentRequired');
   });
 });
 

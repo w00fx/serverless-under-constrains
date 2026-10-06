@@ -103,6 +103,9 @@
     "record_type": {
       "const": "durable_execution_metadata"
     },
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
     "execution_manifest_sha256": {
       "$ref": "_defs.schema.json#/$defs/sha256"
     },
@@ -149,5 +152,5 @@
     "list_complete",
     "executions"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

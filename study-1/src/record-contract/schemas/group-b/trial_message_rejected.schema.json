@@ -16,6 +16,17 @@
     "record_type": {
       "const": "trial_message_rejected"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["conventional_caller", "durable_caller"]
     },
@@ -53,5 +64,5 @@
     }
   },
   "required": ["schema_version", "record_type", "source", "message_id", "message_body_sha256", "reason", "detail"],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

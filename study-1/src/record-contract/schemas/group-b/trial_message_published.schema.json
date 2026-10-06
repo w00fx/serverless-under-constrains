@@ -16,6 +16,15 @@
     "record_type": {
       "const": "trial_message_published"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["runner"]
     },
@@ -66,5 +75,5 @@
     "message_group_id",
     "message_deduplication_id"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

@@ -43,7 +43,7 @@ export function phaseTransitionRecorded(): PhaseTransitionRecorded {
     ...executionEnvelope('phase_transition_recorded', 'run', 30, 1),
     source: 'runner',
     phase: 'TRIALS',
-    status: 'STARTED',
+    status: 'started',
     reasons: [],
   };
 }
@@ -319,7 +319,7 @@ export function cleanupResourceAction(): CleanupActionRecorded {
     ...executionEnvelope('cleanup_action_recorded', 'run', 41, 1),
     source: 'cleanup',
     step: 5,
-    step_status: 'SUCCEEDED',
+    step_status: 'succeeded',
     cleanup_mode: 'NORMAL',
     cleanup_induced: false,
     action: 'DELETE_STACK',
@@ -341,7 +341,7 @@ export function cleanupStepAction(): CleanupActionRecorded {
     ...executionEnvelope('cleanup_action_recorded', 'run', 41, 1),
     source: 'cleanup',
     step: 1,
-    step_status: 'STARTED',
+    step_status: 'started',
     cleanup_mode: 'EMERGENCY',
     cleanup_induced: true,
     action: 'STOP_PUBLICATION',

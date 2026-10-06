@@ -16,6 +16,17 @@
     "record_type": {
       "const": "provider_commit_confirmed"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["refund_provider"]
     },
@@ -41,5 +52,5 @@
     "provider_call_id",
     "committed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

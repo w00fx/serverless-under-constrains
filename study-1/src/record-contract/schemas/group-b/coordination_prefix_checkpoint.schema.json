@@ -52,5 +52,5 @@
     "last_source_sequence",
     "checkpointed_at"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }

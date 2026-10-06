@@ -5,7 +5,13 @@ import type { Uuid4, UtcMillis } from '../../primitives.ts';
 import type { ExecutionCorrelation, ExecutionScoped, TrialScoped } from './shared-shapes.ts';
 import type { SafetyReleaseCause, TreatmentState } from './vocabulary.ts';
 
-/** The treatment item: state, version, commit triple and signal identities as far as they exist. */
+/**
+ * The treatment item: state, version and exactly the identities its state has recorded. The
+ * schema ties them to the state: ARMED has none; COMMITTED_WAITING and later states carry the six
+ * commit identities together (BR-RUA-025), TIMEOUT_SIGNALLED adds both signal ids,
+ * TIMEOUT_OBSERVED the observation and RESPONSE_RELEASED the release; SAFETY_RELEASED keeps what
+ * was recorded before it and alone may carry `safety_release_cause`.
+ */
 export interface TreatmentItem {
   readonly state: TreatmentState;
   readonly version: number;

@@ -239,6 +239,7 @@ export function rejectedOutcome(): RejectedOutcome {
     dispatch_state: 'DISPATCHED',
     provider_call_id: COMMIT_TRIPLE.provider_call_id,
     rejection_reason: 'PAYMENT_NOT_FOUND',
+    dispatch_to_settlement_ns: ns(640_000_000n),
   };
 }
 
@@ -256,11 +257,13 @@ export function timedOutOutcome(): TimedOutOutcome {
     outcome: 'TIMED_OUT',
     dispatch_state: 'DISPATCHED',
     provider_call_id: COMMIT_TRIPLE.provider_call_id,
+    dispatch_to_settlement_ns: ns(3_000_412_000n),
   };
 }
 
 /**
- * An attempt that failed with an unknown dispatch state.
+ * An attempt whose provider function failed after dispatch: FUNCTION_ERROR is a transport-side
+ * code, so the attempt is DISPATCHED and has a dispatch-to-settlement time (design §9.9).
  *
  * @example
  * toJson(failedOutcome());
@@ -271,9 +274,28 @@ export function failedOutcome(): FailedOutcome {
     source: 'conventional_caller',
     ...ATTEMPT_CORRELATION,
     outcome: 'FAILED',
-    dispatch_state: 'UNKNOWN',
-    failure: { code: 'TRANSPORT_ERROR', subject: 'invoke', detail: 'socket reset; expected a response' },
+    dispatch_state: 'DISPATCHED',
+    failure: { code: 'FUNCTION_ERROR', subject: 'invoke', detail: 'Unhandled; expected a response' },
     function_error: 'Unhandled',
+    dispatch_to_settlement_ns: ns(95_000_000n),
+  };
+}
+
+/**
+ * An attempt whose call could not be built: the conditional `PRE_DISPATCH -> NOT_DISPATCHED`
+ * transition applied, so it is NOT_DISPATCHED and has no dispatch origin (design §5.3 C2).
+ *
+ * @example
+ * toJson(failedBeforeDispatchOutcome());
+ */
+export function failedBeforeDispatchOutcome(): FailedOutcome {
+  return {
+    ...trialEnvelope('attempt_outcome_recorded', 8, 7),
+    source: 'conventional_caller',
+    ...ATTEMPT_CORRELATION,
+    outcome: 'FAILED',
+    dispatch_state: 'NOT_DISPATCHED',
+    failure: { code: 'CALL_BUILD_FAILED', subject: 'provider_refund_call', detail: 'amount_minor 0; expected >= 1' },
   };
 }
 
@@ -364,12 +386,11 @@ export const CALLER_EXAMPLES: readonly RecordExample[] = [
   example('dispatch_started', dispatchStarted()),
   example('caller_timeout_recorded', callerTimeoutRecorded()),
   example('transport_settled_after_timeout', transportSettledAfterTimeout()),
-  example('attempt_outcome_recorded SUCCEEDED', succeededOutcome(), {
-    optional: ['dispatch_to_settlement_ns', 'executed_version'],
-  }),
+  example('attempt_outcome_recorded SUCCEEDED', succeededOutcome(), { optional: ['executed_version'] }),
   example('attempt_outcome_recorded REJECTED', rejectedOutcome()),
   example('attempt_outcome_recorded TIMED_OUT', timedOutOutcome(), { optional: ['provider_call_id'] }),
   example('attempt_outcome_recorded FAILED', failedOutcome(), { optional: ['function_error'] }),
+  example('attempt_outcome_recorded FAILED before dispatch', failedBeforeDispatchOutcome()),
   example('request_state_recorded FINISHED', finishedRequestState()),
   example('request_state_recorded RUNNING', runningRequestState()),
   example('request_state_recorded MESSAGE_REJECTED', messageRejectedRequestState(), {

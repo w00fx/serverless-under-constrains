@@ -8,6 +8,7 @@ import type { AttemptFailureCode, CallerEventSource, DispatchState, ProviderReje
 
 interface OutcomeBase extends EventEnvelope<'attempt_outcome_recorded'>, AttemptCorrelation {
   readonly source: CallerEventSource;
+  /** Present exactly when `dispatch_state` is DISPATCHED (step C6); the schema enforces it. */
   readonly dispatch_to_settlement_ns?: DecimalString;
   readonly executed_version?: string;
   /** Raw `X-Amz-Function-Error` value when the response carried one. */
@@ -38,7 +39,12 @@ export interface TimedOutOutcome extends OutcomeBase {
   readonly provider_transaction_id?: Uuid4;
 }
 
-/** Anything else; the dispatch state decides whether the outcome is ambiguous (BR-RUA-004). */
+/**
+ * Anything else; the dispatch state decides whether the outcome is ambiguous (BR-RUA-004). The
+ * schema ties it to `failure.code`: CALL_BUILD_FAILED and DISPATCH_TRANSITION_REJECTED are
+ * NOT_DISPATCHED or UNKNOWN, the two other dispatch-transition codes UNKNOWN, transport-side codes
+ * DISPATCHED (design §5.3 C2/C3, §9.9).
+ */
 export interface FailedOutcome extends OutcomeBase {
   readonly outcome: 'FAILED';
   readonly dispatch_state: DispatchState;

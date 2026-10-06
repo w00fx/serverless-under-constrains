@@ -119,10 +119,10 @@ describe('AC-RUA-046 serialization rules over group C', () => {
       assertRejected(withMember(json, 'record_type', textOf(json['record_type'] ?? null).toUpperCase()), example.label);
     }
     const upperSnake = (value: JsonValue): boolean => typeof value === 'string' && UPPER_SNAKE_VALUE.test(value);
-    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 161);
+    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 156);
     const lowercase = (value: JsonValue, leaf: JsonLeaf): boolean =>
       typeof value === 'string' && LOWERCASE_VOCABULARY.has(value) && !isProse(leaf.path);
-    assert.equal(rejectEveryGovernedLeaf(lowercase, [(value): JsonValue => textOf(value).toUpperCase()]), 527);
+    assert.equal(rejectEveryGovernedLeaf(lowercase, [(value): JsonValue => textOf(value).toUpperCase()]), 531);
   });
 
   it('millisecond UTC', () => {

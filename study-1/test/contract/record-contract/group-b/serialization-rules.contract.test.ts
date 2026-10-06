@@ -6,14 +6,23 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { isDecimalString } from '../../../../src/record-contract/decimal.ts';
-import { isJsonArray, isJsonObject } from '../../../../src/record-contract/json-value.ts';
 import { isSha256Hex } from '../../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
+import * as vocabulary from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import { isUtcMillis } from '../../../../src/record-contract/timestamps.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { assertAccepted, assertRejected } from './support/group-b-validation.ts';
-import { leavesOf, objectPathsOf, pointerOf, textOf, withMember, withValueAt } from './support/json-paths.ts';
+import {
+  leavesOf,
+  objectAt,
+  objectPathsOf,
+  patternOf,
+  pointerOf,
+  textOf,
+  withMember,
+  withValueAt,
+} from './support/json-paths.ts';
 import type { JsonLeaf, JsonPath } from './support/json-paths.ts';
 import type { RecordExample } from './support/record-example.ts';
 import { toJson } from './support/record-builders.ts';
@@ -61,8 +70,17 @@ function isBoolean(value: JsonValue): boolean {
 
 const UPPER_SNAKE_VALUE = /^[A-Z][A-Z0-9_]*[A-Z]$/;
 
+// Every lowercase value of a group-B closed vocabulary (design §6.1: verdict, validity,
+// eligibility and every operational status are lowercase), so a status catalogued in the wrong
+// case is caught where it is written, not only an UPPER_SNAKE value lowercased.
+const LOWERCASE_VOCABULARY: ReadonlySet<string> = new Set(
+  Object.values(vocabulary)
+    .flatMap((exported): readonly unknown[] => (Array.isArray(exported) ? exported : [exported]))
+    .filter((value): value is string => typeof value === 'string' && /^[a-z][a-z_]*$/.test(value)),
+);
+
 // Members of nested objects across all examples (each checked for omission).
-const NESTED_MEMBER_COUNT = 122;
+const NESTED_MEMBER_COUNT = 171;
 
 /** Omitting a member is valid exactly when the example declares it optional. */
 function assertOmission(example: RecordExample, json: JsonObject, key: string): void {
@@ -74,34 +92,11 @@ function assertOmission(example: RecordExample, json: JsonObject, key: string): 
   assertRejected(withMember(json, key, undefined), label);
 }
 
-/** A member path as its pattern: every array index becomes `*`. */
-function patternOf(path: JsonPath): string {
-  return path.map((segment) => (typeof segment === 'number' ? '/*' : `/${segment}`)).join('');
-}
-
 /** The members of every nested object (the root excluded), each with its full path. */
 function nestedMemberPathsOf(json: JsonObject): readonly JsonPath[] {
   return objectPathsOf(json)
     .filter((path) => path.length > 0)
     .flatMap((path) => Object.keys(objectAt(json, path)).map((key) => [...path, key]));
-}
-
-function objectAt(json: JsonValue, path: JsonPath): JsonObject {
-  const node = path.reduce<JsonValue | undefined>(
-    (parent, segment) => (isJsonArray(parent) || isJsonObject(parent) ? childOf(parent, segment) : undefined),
-    json,
-  );
-  if (!isJsonObject(node)) {
-    throw new Error(`path ${pointerOf(path)} addresses ${JSON.stringify(node)}; expected an object`);
-  }
-  return node;
-}
-
-function childOf(parent: JsonValue, segment: string | number): JsonValue | undefined {
-  if (isJsonArray(parent) && typeof segment === 'number') {
-    return parent[segment];
-  }
-  return isJsonObject(parent) && typeof segment === 'string' ? parent[segment] : undefined;
 }
 
 /**
@@ -132,7 +127,7 @@ function snakeToCamel(name: string): string {
 
 describe('AC-RUA-046 serialization rules over group B', () => {
   it('every example is valid after kernel serialization', () => {
-    assert.equal(EXAMPLES.length, 69);
+    assert.equal(EXAMPLES.length, 75);
     for (const { example, json } of EXAMPLES) {
       assertAccepted(json, example.label);
     }
@@ -150,7 +145,9 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       assertRejected(withMember(json, 'record_type', textOf(json['record_type'] ?? null).toUpperCase()), example.label);
     }
     const upperSnake = (value: JsonValue): boolean => typeof value === 'string' && UPPER_SNAKE_VALUE.test(value);
-    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 74);
+    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 80);
+    const lowercase = (value: JsonValue): boolean => typeof value === 'string' && LOWERCASE_VOCABULARY.has(value);
+    assert.equal(rejectEveryGovernedLeaf(lowercase, [(value): JsonValue => textOf(value).toUpperCase()]), 47);
   });
 
   it('millisecond UTC', () => {
@@ -161,7 +158,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value): JsonValue => textOf(value).replace(/Z$/, 'z'),
       (value): JsonValue => textOf(value).replace(/^\d{4}-\d{2}-\d{2}/, '2026-02-30'),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 93);
+    assert.equal(rejectEveryGovernedLeaf(isUtcMillis, mutations), 100);
   });
 
   it('lowercase UUIDv4', () => {
@@ -171,7 +168,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value): JsonValue => `${textOf(value).slice(0, 14)}1${textOf(value).slice(15)}`,
       (value): JsonValue => `{${textOf(value)}}`,
     ];
-    assert.equal(rejectEveryGovernedLeaf(isUuid4, mutations), 344);
+    assert.equal(rejectEveryGovernedLeaf(isUuid4, mutations), 388);
   });
 
   it('lowercase SHA-256 digests', () => {
@@ -179,7 +176,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value: JsonValue): JsonValue => textOf(value).toUpperCase(),
       (value: JsonValue): JsonValue => textOf(value).slice(1),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isSha256Hex, mutations), 129);
+    assert.equal(rejectEveryGovernedLeaf(isSha256Hex, mutations), 141);
   });
 
   it('safe-integer amounts', () => {
@@ -189,7 +186,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (): JsonValue => -1,
       (): JsonValue => Number.MAX_SAFE_INTEGER + 1,
     ];
-    assert.equal(rejectEveryGovernedLeaf(isNumber, mutations), 172);
+    assert.equal(rejectEveryGovernedLeaf(isNumber, mutations), 188);
   });
 
   it('decimal aggregates', () => {
@@ -202,7 +199,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (): JsonValue => '1e3',
       (value): JsonValue => Number(value),
     ];
-    assert.equal(rejectEveryGovernedLeaf(elapsedNs, mutations), 6);
+    assert.equal(rejectEveryGovernedLeaf(elapsedNs, mutations), 9);
   });
 
   it('booleans are JSON booleans', () => {
@@ -210,7 +207,7 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       (value: JsonValue): JsonValue => textOf(value),
       (value: JsonValue): JsonValue => (value === true ? 1 : 0),
     ];
-    assert.equal(rejectEveryGovernedLeaf(isBoolean, mutations), 20);
+    assert.equal(rejectEveryGovernedLeaf(isBoolean, mutations), 30);
   });
 
   it('omitted versus null', () => {

@@ -23,6 +23,15 @@
     "record_type": {
       "const": "cleanup_action_recorded"
     },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
     "source": {
       "enum": ["cleanup"]
     },
@@ -34,7 +43,7 @@
       "maximum": 12
     },
     "step_status": {
-      "enum": ["STARTED", "SUCCEEDED", "FAILED", "SKIPPED"]
+      "enum": ["started", "succeeded", "failed", "skipped"]
     },
     "cleanup_mode": {
       "enum": ["NORMAL", "EMERGENCY"]
@@ -77,5 +86,5 @@
     "action",
     "reasons"
   ],
-  "unevaluatedProperties": false
+  "additionalProperties": false
 }
