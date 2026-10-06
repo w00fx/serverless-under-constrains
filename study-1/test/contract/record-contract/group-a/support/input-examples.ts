@@ -14,6 +14,12 @@ import type {
 import type { TrialMessage } from '../../../../../src/record-contract/records/group-a/trial_message.ts';
 import { ACCOUNT_ID, COORDINATION_STACK_ID, COORDINATION_TABLE_ARN, DIGESTS, FIXTURE, IDS } from './sample-values.ts';
 
+/**
+ * The operator's credential-free environment input for one allowlisted account (BR-RUA-041).
+ *
+ * @example
+ * environmentInput().account_allowlist; // ['012345678901']
+ */
 export function environmentInput(): EnvironmentInput {
   return {
     schema_version: 1,
@@ -25,7 +31,12 @@ export function environmentInput(): EnvironmentInput {
   };
 }
 
-/** CTR-RUA-005 verbatim. */
+/**
+ * CTR-RUA-005 verbatim.
+ *
+ * @example
+ * payment().captured_amount_minor; // 10000
+ */
 export function payment(): Payment {
   return {
     schema_version: 1,
@@ -36,7 +47,12 @@ export function payment(): Payment {
   };
 }
 
-/** CTR-RUA-006 verbatim. */
+/**
+ * CTR-RUA-006 verbatim.
+ *
+ * @example
+ * approvedDecision().decision; // 'APPROVED'
+ */
 export function approvedDecision(): ApprovedDecision {
   return {
     schema_version: 1,
@@ -49,6 +65,12 @@ export function approvedDecision(): ApprovedDecision {
   };
 }
 
+/**
+ * The run's message for its conventional `COMMIT_THEN_TIMEOUT` trial (BR-RUA-036).
+ *
+ * @example
+ * trialMessage().trial_id; // IDS.trial3
+ */
 export function trialMessage(): TrialMessage {
   return {
     schema_version: 1,
@@ -61,7 +83,12 @@ export function trialMessage(): TrialMessage {
   };
 }
 
-/** A conventional caller's call inside the run's conventional COMMIT_THEN_TIMEOUT trial. */
+/**
+ * A conventional caller's call inside the run's conventional COMMIT_THEN_TIMEOUT trial.
+ *
+ * @example
+ * trialProviderRefundCall().caller_id; // 'conventional'
+ */
 export function trialProviderRefundCall(): ProviderRefundCall {
   return {
     schema_version: 1,
@@ -80,7 +107,12 @@ export function trialProviderRefundCall(): ProviderRefundCall {
   };
 }
 
-/** The probe caller's single call: no trial (D-06). */
+/**
+ * The probe caller's single call: no trial (D-06).
+ *
+ * @example
+ * probeProviderRefundCall().transport_probe_id; // IDS.transportProbe
+ */
 export function probeProviderRefundCall(): ProviderRefundCall {
   return {
     schema_version: 1,
@@ -97,6 +129,12 @@ export function probeProviderRefundCall(): ProviderRefundCall {
   };
 }
 
+/**
+ * The provider's success: it echoes the caller identities and names the transaction (BR-RUA-018).
+ *
+ * @example
+ * succeededResponse().provider_transaction_id; // IDS.providerTransaction
+ */
 export function succeededResponse(): ProviderRefundSucceeded {
   return {
     schema_version: 1,
@@ -109,7 +147,12 @@ export function succeededResponse(): ProviderRefundSucceeded {
   };
 }
 
-/** A currency-mismatch rejection that echoes the structurally valid caller identities. */
+/**
+ * A currency-mismatch rejection that echoes the structurally valid caller identities.
+ *
+ * @example
+ * rejectedResponse().rejection_reason; // 'CURRENCY_MISMATCH'
+ */
 export function rejectedResponse(): ProviderRefundRejected {
   return {
     schema_version: 1,
@@ -122,6 +165,12 @@ export function rejectedResponse(): ProviderRefundRejected {
   };
 }
 
+/**
+ * The runner's single request to the probe caller (BR-RUA-027).
+ *
+ * @example
+ * probeWorkloadRequest().amount_minor; // 10000
+ */
 export function probeWorkloadRequest(): ProbeWorkloadRequest {
   return {
     schema_version: 1,

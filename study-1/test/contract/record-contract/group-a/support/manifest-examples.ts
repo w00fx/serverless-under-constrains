@@ -122,7 +122,12 @@ function sharedManifestFields(): Omit<ExecutionManifest, 'execution_kind' | 'tri
   };
 }
 
-/** The canonical four-trial run in the BR-RUA-019 order. */
+/**
+ * The canonical four-trial run in the BR-RUA-019 order.
+ *
+ * @example
+ * runExecutionManifest().trials.length; // 4
+ */
 export function runExecutionManifest(): ExecutionManifest {
   return {
     ...sharedManifestFields(),
@@ -141,7 +146,12 @@ export function runExecutionManifest(): ExecutionManifest {
   };
 }
 
-/** A Durable variant validation: control, then treatment (BR-RUA-038). */
+/**
+ * A Durable variant validation: control, then treatment (BR-RUA-038).
+ *
+ * @example
+ * validationExecutionManifest().variant_id; // 'durable'
+ */
 export function validationExecutionManifest(): ExecutionManifest {
   return {
     ...sharedManifestFields(),
@@ -160,7 +170,12 @@ export function validationExecutionManifest(): ExecutionManifest {
   };
 }
 
-/** A transport probe: no trials and no consumed qualification (OR-RUA-004 safety). */
+/**
+ * A transport probe: no trials and no consumed qualification (OR-RUA-004 safety).
+ *
+ * @example
+ * probeExecutionManifest().qualification; // null
+ */
 export function probeExecutionManifest(): ExecutionManifest {
   return {
     ...sharedManifestFields(),
@@ -179,7 +194,12 @@ export function probeExecutionManifest(): ExecutionManifest {
   };
 }
 
-/** The five BR-RUA-050 tags of the run's execution stack (expiry: admission plus OR-RUA-003 total). */
+/**
+ * The five BR-RUA-050 tags of the run's execution stack (expiry: admission plus OR-RUA-003 total).
+ *
+ * @example
+ * runOwnershipTags().map((tag) => tag.key); // ['suc:project', ..., 'suc:expires_at']
+ */
 export function runOwnershipTags(): readonly OwnershipTagEntry[] {
   return [
     { key: 'suc:project', value: 'serverless-under-constraints' },
@@ -190,6 +210,12 @@ export function runOwnershipTags(): readonly OwnershipTagEntry[] {
   ];
 }
 
+/**
+ * The run stack after a successful deploy: stack id, provider version and configuration snapshot.
+ *
+ * @example
+ * succeededResourceManifest().provider_version; // '1'
+ */
 export function succeededResourceManifest(): ResourceManifest {
   return {
     schema_version: 1,
@@ -225,7 +251,12 @@ export function succeededResourceManifest(): ResourceManifest {
   };
 }
 
-/** Provisioning failed before CloudFormation created the stack: nothing to name yet. */
+/**
+ * Provisioning failed before CloudFormation created the stack: nothing to name yet.
+ *
+ * @example
+ * failedResourceManifest().resources; // []
+ */
 export function failedResourceManifest(): ResourceManifest {
   return {
     schema_version: 1,
@@ -242,6 +273,12 @@ export function failedResourceManifest(): ResourceManifest {
   };
 }
 
+/**
+ * The run's third trial (conventional `COMMIT_THEN_TIMEOUT`), frozen before publication.
+ *
+ * @example
+ * trialManifest().sequence; // 3
+ */
 export function trialManifest(): TrialManifest {
   return {
     schema_version: 1,
@@ -259,6 +296,12 @@ export function trialManifest(): TrialManifest {
   };
 }
 
+/**
+ * The provider configuration of the run's conventional treatment trial (BR-RUA-025).
+ *
+ * @example
+ * trialProviderConfiguration().registered_caller_id; // 'conventional'
+ */
 export function trialProviderConfiguration(): ProviderTrialConfiguration {
   return {
     schema_version: 1,
@@ -276,6 +319,12 @@ export function trialProviderConfiguration(): ProviderTrialConfiguration {
   };
 }
 
+/**
+ * The probe's provider configuration: the probe caller and the treatment, no trial (D-06).
+ *
+ * @example
+ * probeProviderConfiguration().scenario; // 'COMMIT_THEN_TIMEOUT'
+ */
 export function probeProviderConfiguration(): ProviderTrialConfiguration {
   return {
     schema_version: 1,
@@ -291,6 +340,12 @@ export function probeProviderConfiguration(): ProviderTrialConfiguration {
   };
 }
 
+/**
+ * The conventional variant's registry item naming its active trial (BR-RUA-036, D-21).
+ *
+ * @example
+ * trialRegistration().registry_version; // 3
+ */
 export function trialRegistration(): TrialRegistration {
   return {
     schema_version: 1,

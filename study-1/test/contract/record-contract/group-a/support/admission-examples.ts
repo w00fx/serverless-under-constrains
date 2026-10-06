@@ -18,7 +18,12 @@ import {
   instant,
 } from './sample-values.ts';
 
-/** A financial-input rejection: the approved amount differs from the captured amount (D-31). */
+/**
+ * A financial-input rejection: the approved amount differs from the captured amount (D-31).
+ *
+ * @example
+ * admissionRejection().rejection_class; // 'FINANCIAL_INPUT'
+ */
 export function admissionRejection(): AdmissionRejection {
   return {
     schema_version: 1,
@@ -38,7 +43,12 @@ export function admissionRejection(): AdmissionRejection {
   };
 }
 
-/** A passed safety step: the estimated attributable cost is within the OR-RUA-003 ceiling. */
+/**
+ * A passed safety step: the estimated attributable cost is within the OR-RUA-003 ceiling.
+ *
+ * @example
+ * passedPreflightCheck().result; // 'passed'
+ */
 export function passedPreflightCheck(): PreflightCheckRecorded {
   return {
     schema_version: 1,
@@ -56,7 +66,12 @@ export function passedPreflightCheck(): PreflightCheckRecorded {
   };
 }
 
-/** The failed step behind `admissionRejection()`, with the evidence it judged. */
+/**
+ * The failed step behind `admissionRejection()`, with the evidence it judged.
+ *
+ * @example
+ * failedPreflightCheck().check_id; // 'A3'
+ */
 export function failedPreflightCheck(): PreflightCheckRecorded {
   return {
     schema_version: 1,
@@ -81,6 +96,12 @@ export function failedPreflightCheck(): PreflightCheckRecorded {
   };
 }
 
+/**
+ * A clean checkout of an attached branch (BR-RUA-042).
+ *
+ * @example
+ * sourceProvenance().branch; // 'feature/rua-study-1'
+ */
 export function sourceProvenance(): SourceProvenance {
   return {
     schema_version: 1,
@@ -98,6 +119,12 @@ export function sourceProvenance(): SourceProvenance {
   };
 }
 
+/**
+ * A frozen assembly of three regular files, sorted by path (BR-RUA-042).
+ *
+ * @example
+ * deploymentAssemblyInventory().files.length; // 3
+ */
 export function deploymentAssemblyInventory(): DeploymentAssemblyInventory {
   return {
     schema_version: 1,
@@ -113,6 +140,12 @@ export function deploymentAssemblyInventory(): DeploymentAssemblyInventory {
   };
 }
 
+/**
+ * A committed scope policy over the provider, controller and probe caller (BR-RUA-028).
+ *
+ * @example
+ * transportScopePolicy().configuration_projections[0].projection_id; // 'provider_function'
+ */
 export function transportScopePolicy(): TransportScopePolicy {
   return {
     schema_version: 1,
@@ -140,6 +173,12 @@ export function transportScopePolicy(): TransportScopePolicy {
   };
 }
 
+/**
+ * A frozen scope snapshot with the controller mapping and provider function projections (BR-RUA-028).
+ *
+ * @example
+ * transportScopeSnapshot().provider_warmup; // { invocations_per_trial: 1 }
+ */
 export function transportScopeSnapshot(): TransportScopeSnapshot {
   return {
     schema_version: 1,
