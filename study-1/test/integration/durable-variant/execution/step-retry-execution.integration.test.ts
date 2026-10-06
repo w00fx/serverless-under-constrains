@@ -14,7 +14,9 @@ import {
   durableExecutionHarness,
   pollDurable,
   publishDurable,
+  TEST_RETRY,
   setUpDurableRunner,
+  stepFailuresOf,
   stepsOf,
   tearDownDurableRunner,
 } from '../support/durable-execution-harness.ts';
@@ -37,6 +39,9 @@ describe('the Durable handler on a step retry', () => {
     assert.deepEqual(execution.getResult(), { terminal_reason: 'SUCCEEDED' });
     assert.equal(execution.getInvocations().length, 2);
     assert.deepEqual(stepsOf(execution), [[DURABLE_REFUND_STEP_NAME, 2]]);
+    // The SDK checkpointed the one retry with the handler's fixed delay (OR-RUA-002, injected 1 s).
+    assert.equal(TEST_RETRY.delay_seconds, 1);
+    assert.deepEqual(stepFailuresOf(execution), [[DURABLE_REFUND_STEP_NAME, 'StepAttemptFailed', 1]]);
 
     const starts = eventsOfType(harness, 'caller_invocation_started').map((event) =>
       'durable_execution_arn' in event
