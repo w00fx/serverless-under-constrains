@@ -64,6 +64,9 @@ import type { ReadinessPorts } from './readiness.ts';
 import { buildSafetyAssessment } from './safety-assessment.ts';
 import { planDeclaredTrials } from './trial-plans.ts';
 
+/** How often the runner re-reads an uncertain lease before handing over the next trial. */
+export const LEASE_RECOVERY_POLL_MS = 5_000;
+
 /** Everything the runner acts through. */
 export interface ExecutionRunnerDeps {
   readonly lease: ExecutionLease;
@@ -234,7 +237,7 @@ export class ExecutionRunner {
       return false;
     }
     for (const plan of plans.value) {
-      if (!this.#gate.mayStartTrial()) {
+      if (!(await this.#awaitTrialStart())) {
         break;
       }
       const report = await this.#deps.trials.execute(plan, this.#gate);
@@ -255,6 +258,18 @@ export class ExecutionRunner {
       unfrozen.flatMap((report) => report.reasons),
     );
     return true;
+  }
+
+  // BR-RUA-045: lease uncertainty blocks new publication without ending the execution, and a
+  // recovery before staleness may resume scheduling. Handing a trial over while the lease is
+  // uncertain would consume it (its setup runs, then T5 refuses to publish), so the runner waits
+  // until the heartbeat confirms the lease again or loses it at the 300 s stale boundary (the loss
+  // latches the gate); the active-time deadline bounds the wait as well. False when no trial may start.
+  async #awaitTrialStart(): Promise<boolean> {
+    while (this.#gate.mayStartTrial() && !this.#gate.publicationAllowed()) {
+      await this.#deps.services.sleeper.sleep(LEASE_RECOVERY_POLL_MS);
+    }
+    return this.#gate.mayStartTrial();
   }
 
   // P7.
