@@ -1,5 +1,7 @@
 // Paths of the kernel's fixture schema catalogue and well-formed sample records for it. The
-// fixture schemas exercise the shared `$defs`; they are not the catalogue schemas WP-01..03 own.
+// fixture schemas exercise the shared `$defs` mechanics in kernel unit and fuzz tests; they are
+// not the catalogue schemas WP-01..03 own, and contract cases run against the real catalogue.
+// The payment fixture keeps exactly the CTR-RUA-005 fields (WP-00 review round 1).
 
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +13,6 @@ export const FIXTURE_CATALOGUE_ROOT = fileURLToPath(new URL('./schema-fixtures/c
 export const SHARED_DEFS_PATH = join(DEFAULT_SCHEMA_ROOT, '_defs.schema.json');
 
 export const SAMPLE_UUIDS = {
-  payment: '3f1c2a9e-8b4d-4c1e-9f00-1a2b3c4d5e6f',
   event: '00000000-0000-4000-8000-000000000001',
   run: '00000000-0000-4000-8000-000000000002',
   instance: '00000000-0000-4000-8000-000000000003',
@@ -21,20 +22,28 @@ export const SAMPLE_UUIDS = {
   causeB: '00000000-0000-4000-8000-00000000000b',
 } as const;
 
-/** A `payment` record valid against the fixture schema. */
+/**
+ * A `payment` record valid against the fixture schema: the CTR-RUA-005 example.
+ *
+ * @example
+ * validator.validate({ ...samplePayment(), captured_amount_minor: 0 }); // rejected: minimum
+ */
 export function samplePayment(): JsonObject {
   return {
     schema_version: 1,
     record_type: 'payment',
-    payment_id: SAMPLE_UUIDS.payment,
+    payment_id: 'pay-poc-001',
     captured_amount_minor: 10000,
-    refunded_total_minor: '0',
-    captured_at: '2026-10-05T12:00:00.000Z',
     currency: 'BRL',
   };
 }
 
-/** A `dispatch_started` journal event valid against the fixture schema and the envelope. */
+/**
+ * A `dispatch_started` journal event valid against the fixture schema and the envelope.
+ *
+ * @example
+ * validator.validate({ ...sampleDispatchStarted(), causation_event_ids: [SAMPLE_UUIDS.causeA] });
+ */
 export function sampleDispatchStarted(): JsonObject {
   return {
     schema_version: 1,
@@ -50,7 +59,12 @@ export function sampleDispatchStarted(): JsonObject {
   };
 }
 
-/** An `oracle_result` record valid against the fixture schema. */
+/**
+ * An `oracle_result` fixture record (reduced shape) valid against the fixture schema.
+ *
+ * @example
+ * validator.validate({ ...sampleOracleResult(), evidence_refs: [] });
+ */
 export function sampleOracleResult(): JsonObject {
   return {
     schema_version: 1,
