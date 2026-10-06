@@ -9,6 +9,7 @@
 // reported as a finding but never decides this gate (addendum §2.2; review finding WP-12 R2).
 
 import type { EvidenceRef } from '../record-contract/evidence-refs.ts';
+import { boundedText } from '../record-contract/json-value.ts';
 import type { IngestionFindingCode } from '../record-contract/records/group-c/vocabulary.ts';
 import { artifactRef, assembleGate, reasonAt } from './gate-assessment.ts';
 import type { GateCause } from './gate-assessment.ts';
@@ -38,7 +39,8 @@ export function assessEvidenceIntegrity(evidence: IngestedEvidence): GateAssessm
   const causes = [
     ...evidence.findings.flatMap((finding) => findingCauses(finding, evidence)),
     ...evidence.identities.provider_collisions.map((collision) => {
-      const detail = `expected provider-generated ${collision.kind} ${collision.id} to be unique; created by ${String(collision.origin_event_ids.length)} events across partitions ${collision.partitions.join(', ')}`;
+      // Values quoted from evidence bytes are bounded (A-12; review finding WP-12 R3).
+      const detail = `expected provider-generated ${collision.kind} ${boundedText(collision.id)} to be unique; created by ${String(collision.origin_event_ids.length)} events across partitions ${boundedText(collision.partitions.join(', '))}`;
       const reason = reasonAt('INV-RUA-001', 'PROVIDER_IDENTITY_COLLISION', detail, collision.refs[0]);
       return { value: 'invalid', reason, refs: collision.refs } satisfies GateCause;
     }),

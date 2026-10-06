@@ -5,8 +5,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { assessEvidenceIntegrity } from '../../../src/evidence-ingestion/evidence-integrity-gate.ts';
 import { assessIdentityIntegrity } from '../../../src/evidence-ingestion/identity-integrity-gate.ts';
-import type { IngestionInput } from '../../../src/evidence-ingestion/ingestion-model.ts';
+import type {
+  IdentityCollision,
+  IdentityRegistry,
+  IngestionInput,
+} from '../../../src/evidence-ingestion/ingestion-model.ts';
+import type { EvidenceRef } from '../../../src/record-contract/evidence-refs.ts';
+import type { Sha256Hex } from '../../../src/record-contract/primitives.ts';
 import type { ScenarioOperation } from '../../support/golden-builder/operation-parsing.ts';
 import {
   artifactBytes,
@@ -17,6 +24,7 @@ import {
   trialInput,
   withArtifact,
 } from './support/evidence-fixtures.ts';
+import { uuid } from './support/indexed-events.ts';
 
 const CALLER = '$trial/journals/caller-journal.jsonl';
 
@@ -127,5 +135,39 @@ describe('assessIdentityIntegrity', () => {
       result.reasons.some((reason) => reason.code === 'ARTIFACT_MISSING'),
       false,
     );
+  });
+});
+
+describe('identity reasons are bounded (A-12, review WP-12 R3)', () => {
+  it('quotes a collision over many partitions, and a long identity, in bounded text for G3 and G8', () => {
+    const evidence = ingest(trialInput());
+    const ref: EvidenceRef = {
+      artifact_path: 'runner/runner-journal.jsonl',
+      artifact_sha256: 'c'.repeat(64) as Sha256Hex,
+    };
+    const collision = (kind: IdentityCollision['kind']): IdentityCollision => ({
+      kind,
+      id: 'x'.repeat(10_000),
+      origin_event_ids: [uuid(1), uuid(2)],
+      partitions: Array.from({ length: 1_000 }, (_, index) => uuid(index + 1)),
+      refs: [ref],
+    });
+    const identities: IdentityRegistry = {
+      caller_collisions: [collision('attempt_id')],
+      provider_collisions: [collision('provider_call_id')],
+      unregistered_attempts: [{ attempt_id: 'y'.repeat(10_000), ref }],
+    };
+    const g3 = assessIdentityIntegrity({ ...evidence, identities });
+    const g8 = assessEvidenceIntegrity({ ...evidence, identities });
+    assert.equal(g3.value, 'invalid');
+    assert.equal(g8.value, 'invalid');
+    const details = [...g3.reasons, ...g8.reasons].map((reason) => reason.detail);
+    assert.equal(details.length, 2);
+    for (const detail of details) {
+      assert.ok(detail.length < 600, `detail of ${String(detail.length)} characters`);
+      assert.match(detail, /…\[truncated\]/u);
+    }
+    const unregistered = assessIdentityIntegrity({ ...evidence, identities: { ...identities, caller_collisions: [] } });
+    assert.ok((unregistered.reasons[0]?.detail.length ?? 0) < 600);
   });
 });

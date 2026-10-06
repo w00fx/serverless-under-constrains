@@ -2,8 +2,10 @@
 // caller-generated reuse: an `attempt_id` or `provider_request_id` created twice, spanning two
 // attempts, or appearing in another trial. Unverified when identity evidence is missing: a subject
 // record references an attempt nobody registered, the caller journal is absent, unparseable or
-// gapped, or an earlier trial's evidence that bounds the execution scope cannot be read.
+// gapped, or an earlier trial's evidence that bounds the execution scope cannot be read. Values
+// quoted from evidence bytes are bounded (A-12; review finding WP-12 R3).
 
+import { boundedText } from '../record-contract/json-value.ts';
 import type { GateAssessment, IngestedEvidence, IngestedArtifact } from './ingestion-model.ts';
 import { artifactRef, assembleGate, reasonAt } from './gate-assessment.ts';
 import type { GateCause } from './gate-assessment.ts';
@@ -32,7 +34,7 @@ export function assessIdentityIntegrity(evidence: IngestedEvidence): GateAssessm
 
 function reuseCauses(evidence: IngestedEvidence): readonly GateCause[] {
   return evidence.identities.caller_collisions.map((collision) => {
-    const detail = `expected ${collision.kind} ${collision.id} to be unique in the execution scope; created by ${String(collision.origin_event_ids.length)} events across partitions ${collision.partitions.join(', ')}`;
+    const detail = `expected ${collision.kind} ${boundedText(collision.id)} to be unique in the execution scope; created by ${String(collision.origin_event_ids.length)} events across partitions ${boundedText(collision.partitions.join(', '))}`;
     return {
       value: 'invalid',
       reason: reasonAt(SUBJECT, 'CALLER_IDENTITY_REUSED', detail, collision.refs[0]),
@@ -43,7 +45,7 @@ function reuseCauses(evidence: IngestedEvidence): readonly GateCause[] {
 
 function unregisteredCauses(evidence: IngestedEvidence): readonly GateCause[] {
   return evidence.identities.unregistered_attempts.map((attempt) => {
-    const detail = `expected attempt ${attempt.attempt_id} to have an attempt_registered event; none was read`;
+    const detail = `expected attempt ${boundedText(attempt.attempt_id)} to have an attempt_registered event; none was read`;
     return {
       value: 'unverified',
       reason: reasonAt(SUBJECT, 'ATTEMPT_UNREGISTERED', detail, attempt.ref),

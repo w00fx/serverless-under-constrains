@@ -74,8 +74,19 @@ export function executionIdValue(identity: ExecutionIdentity): string {
  * namesOtherExecution({ run_id: 'b' }, { execution_kind: 'RUN', run_id: 'a' }); // true
  */
 export function namesOtherExecution(value: JsonValue, active: ExecutionIdentity): boolean {
+  return otherExecutionField(value, active) !== undefined;
+}
+
+/**
+ * The first execution id member that names an execution other than the active one, or
+ * `undefined`: what a traceability reason quotes as the offending identity.
+ *
+ * @example
+ * otherExecutionField({ run_id: 'b' }, { execution_kind: 'RUN', run_id: 'a' }); // 'run_id'
+ */
+export function otherExecutionField(value: JsonValue, active: ExecutionIdentity): ExecutionIdField | undefined {
   const activeField = executionIdField(active);
-  return EXECUTION_ID_FIELDS.some((field) => {
+  return EXECUTION_ID_FIELDS.find((field) => {
     const named = ownString(value, field);
     return named !== undefined && (field !== activeField || named !== executionIdValue(active));
   });

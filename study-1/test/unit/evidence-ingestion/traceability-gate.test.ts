@@ -68,6 +68,8 @@ describe('assessTraceability', () => {
     assert.equal(result.reasons[0]?.subject, 'BR-RUA-008');
     assert.notEqual(result.reasons[0].event_id, undefined);
     assert.equal(result.evidence_refs.length, 1);
+    // Review finding WP-12 R4: the reason names the offending member and value.
+    assert.match(result.reasons[0].detail, new RegExp(`caller-journal\\.jsonl names run_id ${uuid(80)}$`, 'u'));
   });
 
   it('is invalid when a trial-directory document names another trial', () => {
@@ -81,7 +83,10 @@ describe('assessTraceability', () => {
     assert.equal(result.reasons[0]?.event_id, undefined);
     assert.match(
       result.reasons[0]?.detail ?? '',
-      /^expected the active trial identity; a record of .* names another$/u,
+      new RegExp(
+        `^expected the active trial identity; a record of .*treatment-state-snapshot\\.json names trial_id ${uuid(81)}$`,
+        'u',
+      ),
     );
   });
 
@@ -228,6 +233,28 @@ describe('assessTraceability on re-evaluation', () => {
     assert.equal(value, 'invalid');
     assert.deepEqual(codes, ['EVIDENCE_REF_DIGEST_MISMATCH']);
     assert.equal(result.reasons[0]?.artifact_path, RUNNER);
+  });
+
+  it('quotes a referenced path from the record bounded (A-12, review WP-12 R3)', () => {
+    const long = `${'x'.repeat(1_000_000)}.json`;
+    for (const [digest, code] of [
+      ['a'.repeat(64), 'EVIDENCE_REF_UNRESOLVED'],
+      [runnerDigest, 'EVIDENCE_REF_DIGEST_MISMATCH'],
+    ] as const) {
+      const indexedLong = (edited: IngestionInput): IngestionInput => {
+        const base = reevaluated(edited);
+        const indexed = new Map(base.indexed_digests);
+        if (code === 'EVIDENCE_REF_DIGEST_MISMATCH') {
+          indexed.set(long, manifestDigest);
+        }
+        return { ...base, indexed_digests: indexed };
+      };
+      const { codes, result } = gate(indexedLong(withSafetyCheck([{ artifact_path: long, artifact_sha256: digest }])));
+      assert.deepEqual(codes, [code]);
+      const detail = result.reasons[0]?.detail ?? '';
+      assert.ok(detail.length < 500, `detail of ${String(detail.length)} characters`);
+      assert.match(detail, /x…\[truncated\]/u);
+    }
   });
 
   it('does not check references when the package is not re-evaluated', () => {
