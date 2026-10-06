@@ -1,0 +1,1 @@
+{"resources":[{"type":"AWS::Lambda::Function","name":"caller"}]}
