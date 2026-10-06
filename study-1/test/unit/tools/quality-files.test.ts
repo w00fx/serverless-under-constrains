@@ -101,8 +101,10 @@ describe('committed quality files', () => {
   it('never lower the kernel suite minimums below their last ratified values (D-33 ratchet)', () => {
     // Raised to the measured WP-00 counts in review rounds 1 and 2, so deleting a kernel
     // regression case (such as the A-02, deep-nesting or bounded-detail ones) fails the suite
-    // guard. Raising a value here is routine; lowering one needs a human decision.
-    const floor = { unit: 263, contract: 16, fuzz: 15, integration: 44 } as const;
+    // guard. Raising a value here is routine; lowering one needs a human decision. M0 chores
+    // (A-11, decision 23): the 11 CLI process tests moved from unit to integration, so the floor
+    // takes the measured counts after the move (unit 270 - 11 = 259, integration 44 + 11 = 55).
+    const floor = { unit: 259, contract: 16, fuzz: 15, integration: 55 } as const;
     const minimums = parseSuiteMinimums(
       'record-contract-kernel.json',
       readJson('quality/suite-minimums/record-contract-kernel.json'),
