@@ -10,7 +10,7 @@ import type { AttemptFailureCode, DispatchState } from '../../../../src/record-c
 import type { StudyRecord } from '../../../../src/record-contract/records/index.ts';
 import * as caller from './examples/caller-examples.ts';
 import { assertAccepted, assertForbidden, assertMissing, assertRejected } from './support/group-b-validation.ts';
-import { objectAt, textOf, withMember, withValueAt } from './support/json-paths.ts';
+import { objectAt, textOf, withMember, withValueAt, withoutMembers } from './support/json-paths.ts';
 import { ATTEMPT_CORRELATION, toJson, uuid } from './support/record-builders.ts';
 
 function json(record: StudyRecord): JsonObject {
@@ -127,7 +127,15 @@ describe('AC-RUA-046 caller_timeout_recorded', () => {
     assertAccepted(withMember(timeout, 'arbiter_winner', 'TRANSPORT'), 'transport won');
     assertAccepted(withMember(timeout, 'transport_settled_at_claim', true), 'settled at claim');
     assertRejected(withMember(timeout, 'arbiter_winner', 'NONE'), 'unknown winner', '/arbiter_winner enum');
-    assertAccepted(withMember(timeout, 'source', 'runner'), 'recorded by the runner');
+  });
+
+  it('the runner writes one only at execution level, in the canary partition (D-10)', () => {
+    const timeout = json(caller.callerTimeoutRecorded());
+    const executionLevel = withoutMembers(timeout, ['trial_id', 'trial_manifest_sha256']);
+    assertAccepted(withMember(executionLevel, 'source', 'runner'), 'runner canary');
+    const inTrial = withMember(timeout, 'source', 'runner');
+    assertForbidden(inTrial, 'runner inside a trial', '/trial_id');
+    assertForbidden(inTrial, 'runner inside a trial', '/trial_manifest_sha256');
   });
 });
 
