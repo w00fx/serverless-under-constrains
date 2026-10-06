@@ -19,9 +19,14 @@
 //   (https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html).
 // Fault injection: scripted definitive failures, ambiguous outcomes (applied or not, then a
 // lost response), read failures and the page size.
-// Known limitation: an ADD whose sum leaves the safe-integer range is stored as the rounded
-// double. DynamoDB would store the exact decimal and the adapter's next read would report
-// UndecodableItem. The study's counters (`version`, +1 per transition) cannot get there.
+// Documented divergence: an ADD whose sum leaves the safe-integer range is refused like an ADD
+// on a non-number (ValidationException alone, ValidationError in a transaction) and changes
+// nothing. DynamoDB would store the exact decimal, and the adapter's next read of it would report
+// UndecodableItem. Refusing keeps every stored item encodable, so a subscribed StreamFeed can
+// always build its stream record (WP-04 review round 2: storing the rounded double made the
+// listener throw out of write() after the commit). The study's counters (`version`, +1 per
+// transition) cannot get there.
+// write() and transact() run inside a promise executor, so they never throw synchronously.
 
 import { canonicalJson, structurallyEqual } from '../../../src/record-contract/canonical-json.ts';
 import type { JsonValue, Result, WallClock } from '../../../src/record-contract/primitives.ts';
@@ -122,6 +127,14 @@ export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
   }
 
   write(action: WriteAction): Promise<WriteOutcome> {
+    return settled(() => this.#write(action));
+  }
+
+  transact(actions: readonly WriteAction[], clientRequestToken: string): Promise<WriteOutcome> {
+    return settled(() => this.#transact(actions, clientRequestToken));
+  }
+
+  #write(action: WriteAction): WriteOutcome {
     const key = action.kind === 'put' ? action.item : action.key;
     this.#mutationLog?.record({
       port: MUTATION_LOG_PORT,
@@ -130,13 +143,13 @@ export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
       detail: { pk: key.pk, sk: key.sk },
     });
     if (validateWriteAction(action).length > 0) {
-      return Promise.resolve({ kind: 'definitive_failure', code: STORE_CODES.validation });
+      return { kind: 'definitive_failure', code: STORE_CODES.validation };
     }
     const fault = this.#takeWriteFault('write', [action.table]);
-    return Promise.resolve(this.#withFault(fault, () => this.#execute([action], 'ValidationException')));
+    return this.#withFault(fault, () => this.#execute([action], 'ValidationException'));
   }
 
-  transact(actions: readonly WriteAction[], clientRequestToken: string): Promise<WriteOutcome> {
+  #transact(actions: readonly WriteAction[], clientRequestToken: string): WriteOutcome {
     this.#mutationLog?.record({
       port: MUTATION_LOG_PORT,
       operation: 'TransactWriteItems',
@@ -144,13 +157,13 @@ export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
       detail: { client_request_token: clientRequestToken, action_count: actions.length },
     });
     if (validateTransaction(actions, clientRequestToken).length > 0) {
-      return Promise.resolve({ kind: 'definitive_failure', code: STORE_CODES.validation });
+      return { kind: 'definitive_failure', code: STORE_CODES.validation };
     }
     const fault = this.#takeWriteFault(
       'transact',
       actions.map((action) => action.table),
     );
-    return Promise.resolve(this.#withFault(fault, () => this.#executeIdempotent(actions, clientRequestToken)));
+    return this.#withFault(fault, () => this.#executeIdempotent(actions, clientRequestToken));
   }
 
   getConsistent(table: TableRole, key: ItemKey): Promise<Result<StoredItem | undefined, StoreReadFailure>> {
@@ -343,6 +356,14 @@ export class InMemoryItemStore implements DurableItemStore, ItemChangeSource {
     partitions.set(pk, items);
     return items;
   }
+}
+
+// The executor runs synchronously, so the write still happens before the caller's `await`; a
+// throw inside it becomes a rejection instead of escaping the call.
+function settled(run: () => WriteOutcome): Promise<WriteOutcome> {
+  return new Promise((resolve) => {
+    resolve(run());
+  });
 }
 
 function nextImage(action: WriteAction, previous: StoredItem | undefined): Result<StoredItem | undefined, string> {
