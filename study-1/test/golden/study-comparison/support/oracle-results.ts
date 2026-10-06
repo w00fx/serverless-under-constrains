@@ -3,15 +3,20 @@
 // oracle would freeze a VALID trial (design §8.3-§8.6): every gate verified, the mirror rules equal
 // their gates, BR-RUA-007 `not_applicable` per trial, and the monetary rules judged on the ledger the
 // result cites. One successful transaction gives `pass`; more give `fail` (BR-RUA-001, -002, -009).
+// `correct_completion` follows BR-RUA-030: a pass completes correctly only when the request's terminal
+// reason is SUCCEEDED, so a pass whose request was rejected is `pass` without correct completion.
 // Every conclusive item cites whole trial files, so each reference resolves inside the package.
+// `frozen-oracle-results.golden.test.ts` checks every result built here against the real oracle.
 
 import type { EvidenceRef } from '../../../../src/record-contract/evidence-refs.ts';
 import type { RuleOutcome, Sha256Hex, Uuid4, UtcMillis } from '../../../../src/record-contract/primitives.ts';
 import type { DeclaredTrial } from '../../../../src/record-contract/records/group-a/execution_manifest.ts';
+import type { ProcessingTerminalReason } from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import type {
   OracleResult,
   RuleResult,
   ValidityGate,
+  VerdictOutcome,
 } from '../../../../src/record-contract/records/group-c/oracle_result.ts';
 import type {
   ConditionResult,
@@ -33,6 +38,8 @@ export interface OracleResultSpec {
   readonly trial_manifest_sha256: Sha256Hex;
   /** The ledger's successful transactions: one gives `pass`, more give `fail`. */
   readonly provider_transaction_ids: readonly Uuid4[];
+  /** BR-RUA-022: how the trial's request ended; BR-RUA-030 reads it for `correct_completion`. */
+  readonly processing_terminal_reason: ProcessingTerminalReason;
   /** How a stored file is cited: a fixture digest link in a golden case, a fixed digest in a unit test. */
   readonly digest_of: (path: string) => Sha256Hex;
   readonly checked_at: UtcMillis;
@@ -68,7 +75,8 @@ const GATE_FILES: Readonly<Record<GateId, readonly CitedFile[]>> = {
  *
  * @example
  * validOracleResult({ run_id, trial, execution_manifest_sha256, trial_manifest_sha256,
- *   provider_transaction_ids: [transactionId], digest_of: linkSha256, checked_at }).preservation_verdict; // 'pass'
+ *   provider_transaction_ids: [transactionId], processing_terminal_reason: 'SUCCEEDED',
+ *   digest_of: linkSha256, checked_at }).preservation_verdict; // 'pass'
  */
 export function validOracleResult(spec: OracleResultSpec): OracleResult {
   const cite = (...files: readonly CitedFile[]): readonly EvidenceRef[] => citedFiles(spec, files);
@@ -101,10 +109,7 @@ export function validOracleResult(spec: OracleResultSpec): OracleResult {
     },
     checked_at: spec.checked_at,
   } as const;
-  const verdict =
-    count === 1
-      ? ({ preservation_verdict: 'pass', correct_completion: true, processing_terminal_reason: 'SUCCEEDED' } as const)
-      : ({ preservation_verdict: 'fail', correct_completion: false, processing_terminal_reason: 'SUCCEEDED' } as const);
+  const verdict = frozenVerdict(count, spec.processing_terminal_reason);
   if (control) {
     return {
       ...head,
@@ -127,6 +132,20 @@ export function validOracleResult(spec: OracleResultSpec): OracleResult {
     clock_assumption_refs: ['CA-1'],
     treatment_condition_results: conditions(cite('controllerJournal', 'providerJournal')),
   };
+}
+
+/**
+ * BR-RUA-030 on a valid trial: one successful transaction passes, more fail, and only a pass whose
+ * request SUCCEEDED completes correctly.
+ */
+function frozenVerdict(count: number, terminal: ProcessingTerminalReason): VerdictOutcome {
+  if (count !== 1) {
+    return { preservation_verdict: 'fail', correct_completion: false, processing_terminal_reason: terminal };
+  }
+  if (terminal === 'SUCCEEDED') {
+    return { preservation_verdict: 'pass', correct_completion: true, processing_terminal_reason: terminal };
+  }
+  return { preservation_verdict: 'pass', correct_completion: false, processing_terminal_reason: terminal };
 }
 
 function unitPath(spec: OracleResultSpec, file: CitedFile): string {

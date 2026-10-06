@@ -1,13 +1,22 @@
 // AC-RUA-012 (BR-RUA-006, BR-RUA-043; CTR-RUA-002): the initial hypothesis expects both treatment
 // variants to create two successful transactions. Here the Durable treatment's second attempt is
 // rejected, so its ledger holds one transaction and its oracle result passes, contradicting the
-// hypothesis. The run summary still reports all four trials, in declared order, each with its
+// hypothesis. Its request ended PROVIDER_REJECTED, so that pass is not a correct completion
+// (BR-RUA-030). The run summary still reports all four trials, in declared order, each with its
 // oracle result's verdict and completion copied unaltered: nothing is filtered, reordered or
 // annotated, and the summary names no winner, aggregate or statistic.
 
 import { defineGoldenCase } from '../../../support/golden-builder/golden-case.ts';
-import { BASE_TRANSACTIONS, CLEAN_CLOSURE, frozenRunOperations } from '../support/run-fixture.ts';
-import { HYPOTHESIS_CONTRADICTING_TRANSACTIONS } from '../support/contradicting-ledger.ts';
+import {
+  BASE_TERMINAL_REASONS,
+  BASE_TRANSACTIONS,
+  CLEAN_CLOSURE,
+  frozenRunOperations,
+} from '../support/run-fixture.ts';
+import {
+  HYPOTHESIS_CONTRADICTING_TERMINAL_REASON,
+  HYPOTHESIS_CONTRADICTING_TRANSACTIONS,
+} from '../support/contradicting-ledger.ts';
 
 export default defineGoldenCase({
   case_id: 'ac012-summary-includes-all-four',
@@ -26,6 +35,12 @@ export default defineGoldenCase({
       HYPOTHESIS_CONTRADICTING_TRANSACTIONS,
     ],
     CLEAN_CLOSURE,
+    [
+      BASE_TERMINAL_REASONS[0] ?? 'SUCCEEDED',
+      BASE_TERMINAL_REASONS[1] ?? 'SUCCEEDED',
+      BASE_TERMINAL_REASONS[2] ?? 'SUCCEEDED',
+      HYPOTHESIS_CONTRADICTING_TERMINAL_REASON,
+    ],
   ),
   expected: {
     trial_results: [
@@ -59,7 +74,7 @@ export default defineGoldenCase({
         scenario: 'COMMIT_THEN_TIMEOUT',
         execution_status: 'completed',
         preservation_verdict: 'pass',
-        correct_completion: true,
+        correct_completion: false,
       },
     ],
     summary_members: [

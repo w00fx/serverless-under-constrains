@@ -9,7 +9,10 @@
 import type { JsonValue, Sha256Hex, Uuid4, UtcMillis } from '../../../../src/record-contract/primitives.ts';
 import type { SourceProvenance } from '../../../../src/record-contract/records/group-a/source_provenance.ts';
 import type { LeaseEventRecorded } from '../../../../src/record-contract/records/group-b/lease_event_recorded.ts';
-import type { LeaseEvent } from '../../../../src/record-contract/records/group-b/vocabulary.ts';
+import type {
+  LeaseEvent,
+  ProcessingTerminalReason,
+} from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import type { CleanupResult } from '../../../../src/record-contract/records/group-c/cleanup_result.ts';
 import type { LateEvidenceAssessment } from '../../../../src/record-contract/records/group-c/late_evidence_assessment.ts';
 import type {
@@ -65,6 +68,17 @@ export const BASE_TRANSACTIONS: readonly (readonly Uuid4[])[] = [
   [uuid('3ada1bbc-7422-422d-a83b-c11c12ea7e1a'), uuid('d7c9907a-9f36-45e3-9cf2-bc6906f7eae5')],
 ];
 
+/**
+ * How each base trial's request ended (BR-RUA-022): every base plan completes processing, so each
+ * request SUCCEEDED. The trial oracle derives the same reasons from the base evidence.
+ */
+export const BASE_TERMINAL_REASONS: readonly ProcessingTerminalReason[] = [
+  'SUCCEEDED',
+  'SUCCEEDED',
+  'SUCCEEDED',
+  'SUCCEEDED',
+];
+
 /** The qualification and source values the base manifest froze (BR-RUA-028, BR-RUA-042). */
 export const BASE_QUALIFICATION = {
   qualification: {
@@ -101,9 +115,10 @@ export const CLEAN_CLOSURE: ClosureSpec = { cleanup_status: 'succeeded', leaks: 
 export function frozenRunOperations(
   transactions: readonly (readonly Uuid4[])[],
   closure: ClosureSpec,
+  terminal_reasons: readonly ProcessingTerminalReason[] = BASE_TERMINAL_REASONS,
 ): readonly ScenarioOperation[] {
   return [
-    ...oracleResultOperations(transactions),
+    ...oracleResultOperations(transactions, terminal_reasons),
     putJson(EXECUTION_PATHS.sourceProvenance, sourceProvenance()),
     // The manifest pins the provenance by digest (BR-RUA-042); linking keeps the pin exact.
     {
@@ -131,12 +146,16 @@ export function frozenRunOperations(
 }
 
 /**
- * The oracle result of each declared trial, judged on the given ledger transactions.
+ * The oracle result of each declared trial, judged on the given ledger transactions and request
+ * terminal reasons.
  *
  * @example
- * oracleResultOperations(BASE_TRANSACTIONS); // four put_file operations
+ * oracleResultOperations(BASE_TRANSACTIONS, BASE_TERMINAL_REASONS); // four put_file operations
  */
-export function oracleResultOperations(transactions: readonly (readonly Uuid4[])[]): readonly ScenarioOperation[] {
+export function oracleResultOperations(
+  transactions: readonly (readonly Uuid4[])[],
+  terminal_reasons: readonly ProcessingTerminalReason[],
+): readonly ScenarioOperation[] {
   return RUN_TRIALS.map((trial, index) => {
     const unit = { kind: 'trial', trial_id: trial.trial_id } as const;
     const result = validOracleResult({
@@ -145,6 +164,7 @@ export function oracleResultOperations(transactions: readonly (readonly Uuid4[])
       execution_manifest_sha256: MANIFEST_DIGEST,
       trial_manifest_sha256: linkSha256(PACKAGE_LAYOUT.unitFile(unit, 'trialManifest')),
       provider_transaction_ids: transactions[index] ?? [],
+      processing_terminal_reason: terminal_reasons[index] ?? 'SUCCEEDED',
       digest_of: linkSha256,
       checked_at: at('2026-10-05T12:56:00.000Z'),
     });

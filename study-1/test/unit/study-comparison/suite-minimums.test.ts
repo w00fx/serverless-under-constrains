@@ -34,8 +34,11 @@ const AC_CASE_FILES = [
     cases: ['cleanup-failure-without-compromise', 'leak-capable-of-correlated-effects'],
   },
 ] as const;
-/** The WP-16 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 126, golden: 7, fuzz: 13 } as const;
+/**
+ * The WP-16 counts after its single-pass review: two equality unit tests (design §8.14 declarable
+ * projections) and eight golden tests checking the frozen oracle results against the trial oracle.
+ */
+const RATIFIED_FLOOR = { unit: 128, golden: 15, fuzz: 13 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));

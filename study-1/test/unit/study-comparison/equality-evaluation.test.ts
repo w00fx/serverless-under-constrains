@@ -62,6 +62,36 @@ describe('evaluateEquality', () => {
     ]);
   });
 
+  it('declares a manifest-declared execution-strategy difference in caller_timing', () => {
+    const strategy = { parameter: 'execution_strategy_code', conventional: 'sqs', durable: 'durable', basis: 'D-08' };
+    const inputs = slotInputs({
+      caller_timing: (slot) => ({ common: { execution_strategy_code: DURABLE.has(slot) ? 'durable' : 'sqs' } }),
+    });
+    const equality = evaluateEquality(inputs, [strategy]);
+    assert.equal(equality.equality_result, 'pass');
+    assert.equal(equality.projections[6].result, 'pass');
+    assert.equal(equality.projections[6].differences[0]?.declared, true);
+  });
+
+  it('never lets a manifest declaration excuse a difference where design §8.14 lists none', () => {
+    // BR-RUA-007 excuses only differences "explicitly declared as part of the variants' execution
+    // strategies"; §8.14 lists them for message_source_protocol and caller_timing alone.
+    const knob = { parameter: 'knob', conventional: 1, durable: 2, basis: 'not an execution strategy' };
+    const undeclarable = PROJECTION_IDS.filter((id) => id !== 'message_source_protocol' && id !== 'caller_timing');
+    assert.equal(undeclarable.length, 6);
+    for (const id of undeclarable) {
+      const inputs = slotInputs({ [id]: (slot: number) => ({ common: { knob: DURABLE.has(slot) ? 2 : 1 } }) });
+      const equality = evaluateEquality(inputs, [knob]);
+      const projection = equality.projections[PROJECTION_IDS.indexOf(id)];
+      assert.equal(projection?.result, 'fail', `${id} result`);
+      assert.equal(projection.differences[0]?.declared, false, `${id} declared`);
+      assert.deepEqual(
+        equality.reasons.map(({ code, subject }) => ({ code, subject })),
+        [{ code: 'UNDECLARED_DIFFERENCE', subject: `${id}.knob` }],
+      );
+    }
+  });
+
   it('fails an undeclared difference with UNDECLARED_DIFFERENCE naming projection and field', () => {
     const inputs = slotInputs({
       treatment_parameters: (slot) => ({ common: { treatment_poll_interval_ms: slot === 3 ? 500 : 250 } }),
