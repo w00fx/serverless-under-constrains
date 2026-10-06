@@ -6,6 +6,7 @@
 // recorded in `failures` and in the entry's `unavailable` status, and the snapshot is still written,
 // because a partial snapshot is the evidence of what could be seen.
 
+import { pushEach } from '../durable-store/push-each.ts';
 import { boundedText } from '../record-contract/json-value.ts';
 import type {
   ExecutionIdentity,
@@ -18,7 +19,7 @@ import { TREATMENT_STATES } from '../record-contract/records/group-b/vocabulary.
 import type { CleanupMode } from '../record-contract/records/group-b/vocabulary.ts';
 import { executionIdentityFields } from '../record-contract/envelope.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
-import { appendEach, readFailure, readWholePartition, recordOfItem } from './collected-records.ts';
+import { readFailure, readWholePartition, recordOfItem } from './collected-records.ts';
 import type { CollectorStoreReader } from './collected-records.ts';
 import { listDurableExecutions } from './durable-metadata.ts';
 import type { DurableExecutionReader, DurableListingRequest } from './durable-metadata.ts';
@@ -79,7 +80,7 @@ export async function capturePreCleanupSnapshot(
   const durableExecutions: JsonObject[] = [];
   for (const request of plan.durable_listings) {
     const listing = await listDurableExecutions(ports.durable, request);
-    appendEach(failures, listing.failures);
+    pushEach(failures, listing.failures);
     for (const execution of listing.executions) {
       durableExecutions.push({ durable_execution_arn: execution.durable_execution_arn, status: execution.status });
     }

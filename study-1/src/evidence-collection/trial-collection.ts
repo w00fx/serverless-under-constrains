@@ -11,10 +11,10 @@
 // so the pagination failure itself is evidence (AC-RUA-007). Telemetry is diagnostic and always
 // written (AC-RUA-054).
 
+import { pushEach } from '../durable-store/push-each.ts';
 import type { StructuredReason, VariantId, WallClock } from '../record-contract/primitives.ts';
 import type { CaptureScope } from './capture-scope.ts';
 import { capturePartitionKey, isTrialScope } from './capture-scope.ts';
-import { appendEach } from './collected-records.ts';
 import { keepRead, keepRecord } from './collection-buffer.ts';
 import type { CollectedFile, CollectionBuffer } from './collection-buffer.ts';
 import type { CollectorStoreReader } from './collected-records.ts';
@@ -76,7 +76,7 @@ export async function collectTrialEvidence(
   const buffer: CollectionBuffer = { files: [], failures: [] };
   const { scope } = plan;
   const ledger = await captureLedgerSnapshot(ports.store, scope, ports.clock);
-  appendEach(buffer.failures, ledger.failures);
+  pushEach(buffer.failures, ledger.failures);
   keepRecord(buffer, 'ledgerSnapshot', ledger.record);
   const dlqCapture = await collectDlq(ports, plan, buffer);
   await collectJournals(ports.store, scope, buffer);
@@ -103,7 +103,7 @@ async function collectDlq(
     return undefined;
   }
   const capture = await captureDlq(ports.dlq, dlq, scope, ports.clock);
-  appendEach(buffer.failures, capture.failures);
+  pushEach(buffer.failures, capture.failures);
   if (capture.correlated_message_ids.length > 0) {
     keepRecord(buffer, 'dlqSnapshot', capture.record);
   }
@@ -150,6 +150,6 @@ async function collectDurable(
     return;
   }
   const metadata = await collectDurableExecutionMetadata(ports.durable, durable, scope, ports.clock);
-  appendEach(buffer.failures, metadata.failures);
+  pushEach(buffer.failures, metadata.failures);
   keepRecord(buffer, 'durableExecutions', metadata.record);
 }

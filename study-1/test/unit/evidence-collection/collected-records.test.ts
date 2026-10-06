@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
-  appendEach,
   encodeRecordFile,
   encodeRecordLines,
   readFailure,
@@ -116,17 +115,5 @@ describe('readFailure', () => {
     assert.equal(reason.subject, 'BR-RUA-037');
     assert.match(reason.detail, /^ledger read of r#t at page 2 failed with X+…\[truncated\]; expected a successful/);
     assert.doesNotMatch(readFailure('C', 's', 't', { code: 'Y' }).detail, /at page/);
-  });
-});
-
-describe('appendEach', () => {
-  it('appends more elements than a spread call accepts (A-05)', () => {
-    const target: number[] = [1];
-    appendEach(
-      target,
-      Array.from({ length: 300_000 }, (_, index) => index),
-    );
-    assert.equal(target.length, 300_001);
-    assert.equal(target.at(-1), 299_999);
   });
 });

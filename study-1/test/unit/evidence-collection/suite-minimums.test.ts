@@ -13,8 +13,8 @@ import { parseSuiteMinimums } from '../../../tools/lib/suite-accounting.ts';
 const MINIMUMS_PATH = fileURLToPath(
   new URL('../../../quality/suite-minimums/evidence-collection.json', import.meta.url),
 );
-/** The WP-25 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 122, integration: 56, fuzz: 9 } as const;
+/** The WP-25 counts after its single-pass review (first delivery: unit 122, integration 56, fuzz 9). */
+const RATIFIED_FLOOR = { unit: 125, integration: 58, fuzz: 9 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));

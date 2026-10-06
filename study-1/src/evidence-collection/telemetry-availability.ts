@@ -3,7 +3,10 @@
 // them, and this record says only whether each signal could be located for the unit, with the
 // locators found (log groups, metric names, trace ids) and the reasons a signal is unavailable.
 // A probe that fails or finds nothing makes that one signal unavailable; it never fails the
-// collection, because the absence of telemetry never blocks a verdict.
+// collection, because the absence of telemetry never blocks a verdict. That holds even for a probe
+// that rejects instead of returning its failure: no AWS binding of the port exists yet (its
+// CloudWatch and X-Ray lookups belong to the runner composition), so the collector settles each
+// lookup itself rather than trusting every future binding to honour the Result contract.
 
 import { boundedText } from '../record-contract/json-value.ts';
 import type { JsonObject, Result, StructuredReason, WallClock } from '../record-contract/primitives.ts';
@@ -12,6 +15,7 @@ import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { correlationFields } from './capture-scope.ts';
 import type { CaptureScope } from './capture-scope.ts';
 import type { CollectorReadFailure } from './collected-records.ts';
+import { settleSdkCall } from './sdk-values.ts';
 
 /** The three diagnostic signals, in record order. */
 export const TELEMETRY_SIGNALS = ['logs', 'metrics', 'traces'] as const;
@@ -42,7 +46,7 @@ export async function captureTelemetryAvailability(
 ): Promise<JsonObject> {
   const signals: Record<string, JsonObject> = {};
   for (const signal of TELEMETRY_SIGNALS) {
-    signals[signal] = signalJson(signalAvailability(signal, await probe.locate(signal, scope)));
+    signals[signal] = signalJson(signalAvailability(signal, await locateSettled(probe, signal, scope)));
   }
   return {
     schema_version: 1,
@@ -75,6 +79,16 @@ export function signalAvailability(
     return unavailable('TELEMETRY_NOT_FOUND', `${signal} lookup found no locator; expected at least one`);
   }
   return { availability: 'available', locators, reasons: [] };
+}
+
+// A rejected lookup becomes a failure named by the error, like a returned one (BR-RUA-037).
+async function locateSettled(
+  probe: TelemetryProbe,
+  signal: TelemetrySignal,
+  scope: CaptureScope,
+): Promise<Result<readonly string[], CollectorReadFailure>> {
+  const settled = await settleSdkCall(() => probe.locate(signal, scope));
+  return settled.ok ? settled.value : settled;
 }
 
 function unavailable(code: string, detail: string): SignalRecord {

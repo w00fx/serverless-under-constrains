@@ -119,8 +119,9 @@ export function quoted(value: unknown): string {
 }
 
 /**
- * Runs one SDK call and turns a thrown error into a failure value named by the error's `name`
- * (`ThrottlingException`, `QueueDoesNotExist`, …), so every port reports failure without throwing.
+ * Runs one SDK call (or a port lookup that may reject) and turns a thrown error into a failure
+ * value named by the error's `name` (`ThrottlingException`, `QueueDoesNotExist`, …), so every port
+ * reports failure without throwing.
  *
  * @example
  * const output = await settleSdkCall(() => client.send(new GetQueueAttributesCommand(input)));

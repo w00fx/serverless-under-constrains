@@ -2,6 +2,10 @@
 // real SQS binding produces through a real SQSClient — the counters of a queue, a missing queue as
 // QueueDoesNotExist, and a service error as its bare code. `scriptFailure` queues per URL, which
 // the real binding cannot be told to do; it emulates the service failing that one read.
+//
+// Sources (RK-17): [R-aws] §3 "Settlement polling, GetQueueAttributes" (the three approximate
+// counters `ApproximateNumberOfMessages`, `…NotVisible`, `…Delayed`, lagging at least a minute,
+// so they never establish settlement alone).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

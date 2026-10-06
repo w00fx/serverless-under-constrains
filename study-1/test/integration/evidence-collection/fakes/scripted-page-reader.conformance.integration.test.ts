@@ -3,6 +3,9 @@
 // or absent item, a last page without a cursor, an empty partition as one empty consistent page,
 // and a failed read as a bare code. Repeated cursors and hostile keys are what it adds: a broken
 // store the collector must not loop on or trust.
+//
+// Sources (RK-17): [R-aws] §1.3 (`ConsistentRead: true` Query pages; a read is complete only when
+// a page carries no `LastEvaluatedKey`), via the in-memory store's own DynamoDB conformance tests.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

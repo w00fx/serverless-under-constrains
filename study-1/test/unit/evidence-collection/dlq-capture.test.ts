@@ -173,7 +173,12 @@ describe('captureDlq', () => {
     const capture = await captureDlq(dlq, DLQ, TRIAL_SCOPE, collectionClock());
     assert.deepEqual(capture.captured_message_ids, ['good']);
     assert.equal(capture.receive_complete, false);
-    assert.deepEqual([...new Set(capture.failures.map((failure) => failure.code))], ['DLQ_MESSAGE_MALFORMED']);
+    // The malformed message comes back on both rounds; it is reported once (WP-25 review).
+    assert.equal(dlq.receiveCount(), 2);
+    assert.deepEqual(
+      capture.failures.map((failure) => failure.code),
+      ['DLQ_MESSAGE_MALFORMED'],
+    );
     assert.match(capture.failures[0]?.detail ?? '', /^dlq suc1-dlq\.fifo returned message "bad": MD5OfBody is "nope"/);
   });
 

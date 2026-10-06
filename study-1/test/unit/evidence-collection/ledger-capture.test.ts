@@ -77,6 +77,21 @@ describe('captureLedgerSnapshot', () => {
     assertValidRecord(ledger.record);
   });
 
+  it('keeps every item of a page wider than one spread call accepts (A-05)', async () => {
+    // Moved from the removed local appendEach test: the property is the collector's, so it is
+    // proved here, at the boundary where a huge page arrives.
+    const reader = new ScriptedPageReader();
+    const items = Array.from({ length: 300_000 }, (_, index) => ({ pk: TRIAL_PK, sk: `tx#${String(index)}` }));
+    reader.scriptPage('ledger', TRIAL_PK, { items, consistent_read: true });
+    const ledger = await captureLedgerSnapshot(reader, TRIAL_SCOPE, collectionClock());
+    assert.equal(ledger.complete, true);
+    assert.equal(ledger.transaction_count, 300_000);
+    const transactions = ledger.record['transactions'] as readonly JsonObject[];
+    assert.equal(transactions.length, 300_000);
+    assert.deepEqual(transactions.at(-1), {});
+    assert.deepEqual(pagesOf(ledger.record), [{ page_number: 1, item_count: 300_000 }]);
+  });
+
   it('records a failed page as an incomplete read that keeps the pages before it (AC-RUA-007)', async () => {
     const reader = new ScriptedPageReader();
     reader.scriptPage('ledger', TRIAL_PK, {

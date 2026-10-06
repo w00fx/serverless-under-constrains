@@ -5,6 +5,9 @@
 // report a value JSON cannot hold instead of throwing.
 
 import type { DurableItemStore, StoredItem, TableRole } from '../durable-store/item-store-port.ts';
+// A spread push of a huge page exceeds the engine's argument limit and throws RangeError (A-05);
+// durable-store's stack-safe append is the one implementation (WP-25 review: no local copy).
+import { pushEach } from '../durable-store/push-each.ts';
 import { canonicalJsonIfRepresentable } from '../record-contract/canonical-json.ts';
 import { boundedText } from '../record-contract/json-value.ts';
 import { err, ok } from '../record-contract/primitives.ts';
@@ -62,7 +65,7 @@ export async function readWholePartition(
     if (!page.ok) {
       return err(readFailure('PARTITION_READ_FAILED', table, partitionKey, page.error, pageCount));
     }
-    appendEach(items, page.value.items);
+    pushEach(items, page.value.items);
     cursor = page.value.next_cursor;
     if (cursor === undefined) {
       return ok({ items, page_count: pageCount });
@@ -71,19 +74,6 @@ export async function readWholePartition(
       return err(repeatedCursor(table, partitionKey, pageCount));
     }
     seen.add(cursor);
-  }
-}
-
-/**
- * Appends every element of `source` to `target`, one push each: a spread push of a huge page
- * exceeds the engine's argument limit and throws RangeError (A-05).
- *
- * @example
- * appendEach(items, page.value.items);
- */
-export function appendEach<T>(target: T[], source: readonly T[]): void {
-  for (const element of source) {
-    target.push(element);
   }
 }
 
