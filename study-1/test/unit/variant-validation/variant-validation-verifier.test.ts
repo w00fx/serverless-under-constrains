@@ -168,6 +168,25 @@ describe('verifyVariantValidation', () => {
     assert.deepEqual(codes(verification), ['DECLARED_STATUS_CONTRADICTED']);
   });
 
+  // Regression of the FC_RUNS=10000 campaign (seed -1827406168, path "8338:8:6:7", counterexample
+  // [35,15,1]): a bit flip in the package index's own `created_at` re-seals the package. The index
+  // is the trust root, so the verifier cannot tell it from an original; what it must do is pin the
+  // verification to the altered index's digest, never to the original one (BR-RUA-035).
+  it('pins a re-sealed package index to its own digest, never the original one', () => {
+    const indexPosition = SOUND.files.findIndex((file) => file.path === EXECUTION_PATHS.packageIndex);
+    const resealed = SOUND.files[indexPosition]?.bytes.slice() ?? new Uint8Array();
+    resealed[15] = (resealed[15] ?? 0) ^ 1;
+    assert.equal(new TextDecoder().decode(resealed.slice(0, 20)), '{"created_at":"3026-');
+    const verification = verified(replaceFile(SOUND.files, EXECUTION_PATHS.packageIndex, resealed));
+    assert.equal(verification.effective_implementation_validation_status, 'verified');
+    assert.notEqual(verification.original_package_index_sha256, SOUND.index_sha256);
+    assert.equal(verification.original_package_index_sha256, FIXTURE_DEPS.digest(resealed));
+    assert.ok(
+      verification.evidence_refs.every((ref) => ref.package_index_sha256 === FIXTURE_DEPS.digest(resealed)),
+      'every reference pins the re-sealed index',
+    );
+  });
+
   it('treats an absent, run-scoped or foreign safety assessment as unverified safety', () => {
     const absent = reindexed(SOUND, withoutFile(SOUND.files, EXECUTION_PATHS.safetyAssessment)).files;
     const runScoped = withSafetyEdit(({ variant_validation_id: _id, ...assessment }) => ({

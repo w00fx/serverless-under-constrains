@@ -39,7 +39,7 @@ const AC_CASE_FILES = [
   },
 ] as const;
 /** The WP-17 counts at first delivery. */
-const RATIFIED_FLOOR = { unit: 121, golden: 11, fuzz: 6 } as const;
+const RATIFIED_FLOOR = { unit: 122, golden: 11, fuzz: 6 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));

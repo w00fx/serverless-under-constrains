@@ -1,7 +1,12 @@
 // The CTR-RUA-004 verifier is total over hostile package bytes (Owner amendment A-05; AC-RUA-046
 // feed) and never concludes on altered evidence (BR-RUA-044, AC-RUA-037): replacing or bit-flipping
 // any stored file of a verified validation package never throws, and whenever it changes the bytes,
-// the result is an error or a valid verification whose effective status is not `verified`.
+// the result is an error or a valid verification that does not conclude `verified` about the
+// original package. The package index is the trust root: an altered index that still seals every
+// file (a bit flip in its own `created_at`) is a different package, so a `verified` result is only
+// acceptable when it pins that altered index's digest, never the original one (BR-RUA-035). The
+// FC_RUNS=10000 campaign found that case (seed -1827406168, path "8338:8:6:7", counterexample
+// [35,15,1]); its regression is the unit test "pins a re-sealed package index to its own digest".
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -20,7 +25,8 @@ import { GOLDEN_VALIDATION_ID, goldenAt } from '../../golden/variant-validation/
 const SOUND = validationPackage();
 const encoder = new TextEncoder();
 
-function assertNeverVerified(files: readonly PackageFile[]): void {
+function assertNoVerdictOnOriginal(files: readonly PackageFile[]): void {
+  const storedIndex = files.find((file) => file.path === EXECUTION_PATHS.packageIndex)?.bytes ?? new Uint8Array();
   const result = verifyVariantValidation(
     {
       variant_validation_id: GOLDEN_VALIDATION_ID,
@@ -35,7 +41,10 @@ function assertNeverVerified(files: readonly PackageFile[]): void {
   if (!result.ok) {
     return;
   }
-  assert.notEqual(result.value.effective_implementation_validation_status, 'verified');
+  if (result.value.effective_implementation_validation_status === 'verified') {
+    assert.notEqual(result.value.original_package_index_sha256, SOUND.index_sha256, 'verified the original package');
+    assert.equal(result.value.original_package_index_sha256, FIXTURE_DEPS.digest(storedIndex));
+  }
   const checked = FIXTURE_DEPS.validator.validateAs(
     'variant_validation_verification',
     JSON.parse(JSON.stringify(result.value)) as JsonValue,
@@ -70,32 +79,32 @@ describe('verifyVariantValidation over hostile bytes (property)', () => {
     assert.ok(result.ok && result.value.effective_implementation_validation_status === 'verified');
   });
 
-  it('flipping bits of any stored byte never yields verified', () => {
+  it('flipping bits of any stored byte never verifies the original package', () => {
     fc.assert(
       fc.property(FILE_INDEX, fc.nat(), fc.integer({ min: 1, max: 255 }), (index, offset, mask) => {
         const original = SOUND.files[index]?.bytes ?? new Uint8Array();
         const bytes = original.slice();
         bytes[offset % bytes.length] = (bytes[offset % bytes.length] ?? 0) ^ mask;
-        assertNeverVerified(replaced(index, bytes));
+        assertNoVerdictOnOriginal(replaced(index, bytes));
       }),
       fuzzParameters(),
     );
   });
 
-  it('replacing any stored file with arbitrary bytes never throws and never yields verified', () => {
+  it('replacing any stored file with arbitrary bytes never throws and never verifies the original package', () => {
     fc.assert(
       fc.property(FILE_INDEX, fc.uint8Array({ maxLength: 512 }), (index, bytes) => {
         fc.pre(!sameBytes(bytes, SOUND.files[index]?.bytes ?? new Uint8Array()));
-        assertNeverVerified(replaced(index, bytes));
+        assertNoVerdictOnOriginal(replaced(index, bytes));
       }),
       fuzzParameters(),
     );
   });
 
-  it('replacing the summary with any JSON document never throws and never yields verified', () => {
+  it('replacing the summary with any JSON document never throws and never verifies the original package', () => {
     fc.assert(
       fc.property(fc.jsonValue({ maxDepth: 6 }), (value) => {
-        assertNeverVerified(replaced(SUMMARY_INDEX, encoder.encode(JSON.stringify(value))));
+        assertNoVerdictOnOriginal(replaced(SUMMARY_INDEX, encoder.encode(JSON.stringify(value))));
       }),
       fuzzParameters(),
     );
