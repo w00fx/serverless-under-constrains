@@ -6,6 +6,10 @@
 // ignorer must not stand in for the human decision quality/mutation-equivalences.json records
 // (WP-00 review round 1). A file with zero valid mutants is unmeasured unless it has no runtime
 // code at all (type-only modules have nothing to mutate); Timeouts are listed for review.
+// Stryker's JSON report lists only files that have mutants, so a type-only target is judged the
+// same whether the report omits it or lists it with no mutants (WP-00 review round 2). The
+// type_only verdict itself awaits the Owner's ratification (design §15.3 counts zero valid sites
+// as unmeasured; a module with no runtime code has no sites at all).
 
 import { isTypeOnlyModule } from './source-imports.ts';
 
@@ -48,6 +52,12 @@ export interface Equivalence {
 }
 
 export type FileVerdictKind = 'passed' | 'failed' | 'type_only' | 'unmeasured' | 'missing';
+
+/** A mutation-target file the gate expects to judge, with its source text. */
+export interface ExpectedTarget {
+  readonly path: string;
+  readonly source: string;
+}
 
 export interface FileVerdict {
   readonly path: string;
@@ -121,16 +131,18 @@ export function parseEquivalences(document: unknown): readonly Equivalence[] {
 }
 
 /**
- * Applies the gate. `expectedFiles` lists target files that must appear in the report.
+ * Applies the gate. `expectedTargets` lists the target files the gate must judge: one absent
+ * from the report is `missing` when it has runtime code and `type_only` when it has none.
  *
  * @example
- * const result = evaluateMutationGate(files, equivalences, ['src/record-contract/parsing.ts']);
+ * const parsing = { path: 'src/record-contract/parsing.ts', source: readFileSync(path, 'utf8') };
+ * const result = evaluateMutationGate(files, equivalences, [parsing]);
  * process.exitCode = result.passed ? 0 : 1;
  */
 export function evaluateMutationGate(
   files: readonly ReportedFile[],
   equivalences: readonly Equivalence[],
-  expectedFiles: readonly string[],
+  expectedTargets: readonly ExpectedTarget[],
 ): GateResult {
   const verdicts = files.map((file) =>
     judgeFile(
@@ -139,7 +151,7 @@ export function evaluateMutationGate(
     ),
   );
   const reported = new Set(files.map((file) => file.path));
-  const missing = expectedFiles.filter((path) => !reported.has(path)).map((path) => missingFile(path));
+  const missing = expectedTargets.filter((target) => !reported.has(target.path)).map(unreportedFile);
   const pendingProblems = equivalences
     .filter((entry) => (entry.approved_by ?? '') === '' || (entry.approved_at ?? '') === '')
     .map(
@@ -208,15 +220,15 @@ function isApprovedEquivalent(mutant: ReportedMutant, equivalences: readonly Equ
   );
 }
 
-function missingFile(path: string): FileVerdict {
+function unreportedFile(target: ExpectedTarget): FileVerdict {
+  const base = { path: target.path, counts: countStatuses([]), valid: 0, accepted_equivalent: 0, timeouts: [] };
+  if (isTypeOnlyModule(target.source)) {
+    return { ...base, verdict: 'type_only', problems: [] };
+  }
   return {
-    path,
+    ...base,
     verdict: 'missing',
-    counts: countStatuses([]),
-    valid: 0,
-    accepted_equivalent: 0,
-    problems: ['expected target file is absent from the report; it was not mutated'],
-    timeouts: [],
+    problems: ['expected target file with runtime code is absent from the report; it was not mutated'],
   };
 }
 

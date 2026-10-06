@@ -3,7 +3,9 @@
 // Every mutation target of quality/mutation-targets.json (its include globs minus its exclude
 // globs, recomputed from the tree) must be in the report, as must every file matching an
 // --expect glob. Stryker's JSON report lists only files that have mutants, so without this a
-// target that was never mutated would pass unseen (WP-00 review round 1).
+// target that was never mutated would pass unseen (WP-00 review round 1). A target with no
+// runtime code has no mutants and is never in the report; it is listed as type_only, the
+// verdict it gets when the report does list it (WP-00 review round 2).
 
 import { globSync, readFileSync } from 'node:fs';
 import process from 'node:process';
@@ -25,7 +27,11 @@ const equivalences = parseEquivalences(JSON.parse(readFileSync('quality/mutation
 const policy = parseMutationTargetPolicy(JSON.parse(readFileSync('quality/mutation-targets.json', 'utf8')));
 const targets = globSync([...policy.include], { exclude: [...policy.exclude] });
 const expected = [...new Set([...targets, ...expectGlobs.flatMap((pattern) => globSync(pattern))])].sort();
-const result = evaluateMutationGate(files, equivalences, expected);
+const result = evaluateMutationGate(
+  files,
+  equivalences,
+  expected.map((path) => ({ path, source: readFileSync(path, 'utf8') })),
+);
 
 for (const file of result.files) {
   const c = file.counts;
@@ -44,6 +50,10 @@ for (const file of result.files) {
 for (const problem of result.problems) {
   process.stdout.write(`gate: ${problem}\n`);
 }
+const typeOnly = result.files.filter((file) => file.verdict === 'type_only');
+process.stdout.write(
+  `type-only targets (no runtime code, no mutants; verdict awaiting ratification): ${String(typeOnly.length)}\n`,
+);
 process.stdout.write(
   `mutation gate: ${result.passed ? 'PASSED' : 'FAILED'} over ${String(result.files.length)} file(s)\n`,
 );

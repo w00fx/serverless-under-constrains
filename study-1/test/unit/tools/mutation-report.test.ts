@@ -9,7 +9,13 @@ import {
   parseEquivalences,
   parseMutationReport,
 } from '../../../tools/lib/mutation-report.ts';
-import type { Equivalence, MutantStatus, ReportedFile, ReportedMutant } from '../../../tools/lib/mutation-report.ts';
+import type {
+  Equivalence,
+  ExpectedTarget,
+  MutantStatus,
+  ReportedFile,
+  ReportedMutant,
+} from '../../../tools/lib/mutation-report.ts';
 
 const RUNTIME_SOURCE = 'export const a = 1;';
 
@@ -19,6 +25,11 @@ function mutant(status: MutantStatus, line = 1, replacement = '0'): ReportedMuta
 
 function reported(path: string, statuses: readonly MutantStatus[], source = RUNTIME_SOURCE): ReportedFile {
   return { path, source, mutants: statuses.map((status, index) => mutant(status, index + 1)) };
+}
+
+/** Expected targets that have runtime code, so one the report lacks is missing. */
+function runtimeTargets(...paths: readonly string[]): readonly ExpectedTarget[] {
+  return paths.map((path) => ({ path, source: RUNTIME_SOURCE }));
 }
 
 const approved: Equivalence = {
@@ -136,7 +147,7 @@ describe('evaluateMutationGate', () => {
     const result = evaluateMutationGate(
       [reported('src/a.ts', ['Killed', 'Killed', 'Timeout', 'CompileError'])],
       [],
-      ['src/a.ts'],
+      runtimeTargets('src/a.ts'),
     );
     assert.equal(result.passed, true);
     assert.deepEqual(result.problems, []);
@@ -159,12 +170,12 @@ describe('evaluateMutationGate', () => {
   it('fails an Ignored mutant unless an approved equivalence covers it (review round 1)', () => {
     // A `// Stryker disable` comment must not replace the human decision the equivalence file records.
     const ignored = reported('src/a.ts', ['Killed', 'Ignored']);
-    const unresolved = evaluateMutationGate([ignored], [], ['src/a.ts']);
+    const unresolved = evaluateMutationGate([ignored], [], runtimeTargets('src/a.ts'));
     assert.equal(unresolved.passed, false);
     assert.equal(unresolved.files[0]?.verdict, 'failed');
     assert.deepEqual(unresolved.files[0].problems, ['Ignored NumericLiteral at 2:17 -> "0"']);
     assert.equal(unresolved.files[0].valid, 1);
-    const covered = evaluateMutationGate([ignored], [approved], ['src/a.ts']);
+    const covered = evaluateMutationGate([ignored], [approved], runtimeTargets('src/a.ts'));
     assert.equal(covered.passed, true);
     assert.equal(covered.files[0]?.verdict, 'passed');
     assert.equal(covered.files[0].accepted_equivalent, 1);
@@ -208,7 +219,7 @@ describe('evaluateMutationGate', () => {
 
   it('accepts a survivor only under an approved equivalence that matches it exactly', () => {
     const survivors = reported('src/a.ts', ['Killed', 'Survived']);
-    const accepted = evaluateMutationGate([survivors], [approved], ['src/a.ts']);
+    const accepted = evaluateMutationGate([survivors], [approved], runtimeTargets('src/a.ts'));
     assert.equal(accepted.passed, true);
     assert.equal(accepted.files[0]?.accepted_equivalent, 1);
     const mismatches: readonly Partial<Equivalence>[] = [
@@ -270,7 +281,7 @@ describe('evaluateMutationGate', () => {
     const typeOnly = evaluateMutationGate(
       [reported('src/t.ts', [], 'export interface T { readonly a: 1 }')],
       [],
-      ['src/t.ts'],
+      runtimeTargets('src/t.ts'),
     );
     assert.equal(typeOnly.passed, true);
     assert.equal(typeOnly.files[0]?.verdict, 'type_only');
@@ -278,7 +289,7 @@ describe('evaluateMutationGate', () => {
   });
 
   it('fails an expected target that the report lacks, and an empty report', () => {
-    const result = evaluateMutationGate([reported('src/a.ts', ['Killed'])], [], ['src/a.ts', 'src/b.ts']);
+    const result = evaluateMutationGate([reported('src/a.ts', ['Killed'])], [], runtimeTargets('src/a.ts', 'src/b.ts'));
     assert.equal(result.passed, false);
     assert.deepEqual(result.files[1], {
       path: 'src/b.ts',
@@ -295,7 +306,7 @@ describe('evaluateMutationGate', () => {
       },
       valid: 0,
       accepted_equivalent: 0,
-      problems: ['expected target file is absent from the report; it was not mutated'],
+      problems: ['expected target file with runtime code is absent from the report; it was not mutated'],
       timeouts: [],
     });
     assert.deepEqual(evaluateMutationGate([], [], []), {
@@ -303,5 +314,35 @@ describe('evaluateMutationGate', () => {
       files: [],
       problems: ['the report holds no target file; zero files is not verification'],
     });
+  });
+
+  // WP-00 review round 2: Stryker never lists a file without mutants, so an absent type-only
+  // target was judged missing while a listed one was type_only, and the gate could not pass.
+  it('judges an absent type-only target exactly as a listed one: type_only, not missing', () => {
+    const typeOnlySource =
+      "import type { A } from './a.ts';\nexport interface T { readonly a: A }\nexport type U = T;\n";
+    const absent = evaluateMutationGate(
+      [reported('src/a.ts', ['Killed'])],
+      [],
+      [...runtimeTargets('src/a.ts'), { path: 'src/t.ts', source: typeOnlySource }],
+    );
+    const listed = evaluateMutationGate(
+      [reported('src/a.ts', ['Killed']), reported('src/t.ts', [], typeOnlySource)],
+      [],
+      [],
+    );
+    assert.equal(absent.passed, true);
+    assert.deepEqual(absent.files[1], listed.files[1]);
+    assert.equal(absent.files[1]?.verdict, 'type_only');
+    // A value export or a side-effect import is runtime code, so its absence is still missing.
+    for (const source of [
+      'export const a = 1;\n',
+      "import './a.ts';\nexport type T = 1;\n",
+      "import { type A } from './a.ts';\n",
+    ]) {
+      const result = evaluateMutationGate([reported('src/a.ts', ['Killed'])], [], [{ path: 'src/r.ts', source }]);
+      assert.equal(result.passed, false, source);
+      assert.equal(result.files[1]?.verdict, 'missing', source);
+    }
   });
 });

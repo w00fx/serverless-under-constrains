@@ -134,7 +134,7 @@ describe('mutation-gate', () => {
       'killed.json': report('Killed'),
       'survived.json': report('Survived'),
       'src/a.ts': '',
-      'src/b.ts': '',
+      'src/b.ts': 'export const b = 2;\n',
     });
     const killed = runTool(root, 'mutation-gate.ts', ['killed.json', '--expect', 'src/a.ts']);
     assert.equal(killed.status, 0, killed.stdout);
@@ -157,14 +157,18 @@ describe('mutation-gate', () => {
       'killed.json': report('Killed'),
       'ignored.json': report('Ignored'),
       'src/a.ts': '',
-      'src/c/d.ts': '',
+      'src/c/d.ts': 'export const d = 1;\n',
+      'src/c/types.ts': 'export interface T { readonly t: 1 }\n',
       'src/aws/adapter.ts': '',
     });
     const missing = runTool(root, 'mutation-gate.ts', ['killed.json']);
     assert.equal(missing.status, 1);
     assert.match(missing.stdout, /missing {4}src\/c\/d\.ts/);
+    // A target with no runtime code never appears in a Stryker report (review round 2).
+    assert.match(missing.stdout, /type_only {2}src\/c\/types\.ts/);
+    assert.match(missing.stdout, /type-only targets \(no runtime code, no mutants; verdict awaiting ratification\): 1/);
     assert.doesNotMatch(missing.stdout, /src\/aws\/adapter\.ts/);
-    assert.match(missing.stdout, /mutation gate: FAILED over 2 file\(s\)/);
+    assert.match(missing.stdout, /mutation gate: FAILED over 3 file\(s\)/);
     const ignored = runTool(root, 'mutation-gate.ts', ['ignored.json']);
     assert.equal(ignored.status, 1);
     assert.match(ignored.stdout, /Ignored NumericLiteral at 1:18 -> "0"/);
