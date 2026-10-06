@@ -107,8 +107,15 @@ export function quoted(value: unknown): string {
   if (value instanceof Date) {
     return `a Date of ${String(value.getTime())} ms`;
   }
-  // boundedJsonText walks any value iteratively and stops at its limit (A-05 policy 1).
-  return boundedJsonText(value as JsonValue);
+  // boundedJsonText walks any value iteratively and stops at its limit (A-05 policy 1). Its leaf
+  // text is JSON.stringify, which throws on a BigInt anywhere in the value; SDK outputs are not
+  // parsed JSON, so one can carry a BigInt (fuzz seed 2099329007, counterexample
+  // {"MessageId":{"":0n}}). Such a value has no JSON text to quote.
+  try {
+    return boundedJsonText(value as JsonValue);
+  } catch {
+    return 'a value with no JSON text';
+  }
 }
 
 /**

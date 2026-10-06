@@ -4,6 +4,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { mapDlqMessage } from '../../../src/evidence-collection/dlq-capture.ts';
+
 import {
   digitCount,
   instantOfDate,
@@ -91,6 +93,14 @@ describe('quoted', () => {
     assert.equal(quoted(JSON.parse('1e400')), 'Infinity');
     assert.ok(quoted('y'.repeat(10_000)).length < 300);
     assert.ok(quoted(parsedTower('array', DEEP_NESTING)).length < 300);
+  });
+
+  // Regression of fuzz seed 2099329007 (sdk-response-mapping.fuzz.test.ts): a BigInt nested in an
+  // SDK member made the bounded JSON rendering throw out of a mapper.
+  it('renders a value holding a BigInt as having no JSON text', () => {
+    assert.equal(quoted(0n), 'a value with no JSON text');
+    assert.equal(quoted({ '': 0n }), 'a value with no JSON text');
+    assert.deepEqual(mapDlqMessage({ MessageId: { '': 0n } }).ok, false);
   });
 });
 
