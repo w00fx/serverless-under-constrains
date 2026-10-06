@@ -7,12 +7,11 @@ import { describe, it } from 'node:test';
 
 import { ingestEvidence } from '../../../src/evidence-ingestion/ingest-evidence.ts';
 import type { IngestedEvidence } from '../../../src/evidence-ingestion/ingestion-model.ts';
-import { validateResultReferences } from '../../../src/record-contract/evidence-refs.ts';
-import type { JsonValue, Uuid4 } from '../../../src/record-contract/primitives.ts';
+import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { evaluateTrial } from '../../../src/trial-oracle/evaluate-trial.ts';
 import { builtEvidence, ORACLE_VALIDATOR, trialIngestionInput } from './support/built-trials.ts';
 import type { TrialBuild } from './support/built-trials.ts';
-import { evaluatedTrial, UNIT_CHECKED_AT } from './support/evaluated-trials.ts';
+import { evaluatedTrial, evaluationContractProblems, UNIT_CHECKED_AT } from './support/evaluated-trials.ts';
 import { notDispatched } from './support/trial-edits.ts';
 import {
   ACTIVE_CONTROL,
@@ -36,18 +35,7 @@ const BASES = [
 ] as const;
 
 function contractProblems(build: TrialBuild): readonly string[] {
-  const { result, projection } = evaluatedTrial(build);
-  const resultCheck = ORACLE_VALIDATOR.validateAs('oracle_result', result as unknown as JsonValue);
-  const projectionCheck = ORACLE_VALIDATOR.validateAs('attempt_projection', projection as unknown as JsonValue);
-  return [
-    ...(resultCheck.valid ? [] : [JSON.stringify(resultCheck.violations)]),
-    ...(projectionCheck.valid ? [] : [JSON.stringify(projectionCheck.violations)]),
-    ...result.rule_results.flatMap((rule) =>
-      rule.result === 'not_applicable'
-        ? []
-        : validateResultReferences(rule.result, rule.evidence_refs, rule.indeterminate_reasons),
-    ),
-  ];
+  return evaluationContractProblems(evaluatedTrial(build));
 }
 
 describe('evaluateTrial', () => {
