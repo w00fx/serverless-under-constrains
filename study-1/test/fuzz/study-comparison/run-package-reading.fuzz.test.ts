@@ -11,7 +11,6 @@ import { before, describe, it } from 'node:test';
 import fc from 'fast-check';
 
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
-import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import type { UtcMillis } from '../../../src/record-contract/primitives.ts';
 import { EXECUTION_PATHS } from '../../../src/evidence-package/package-layout.ts';
 import { readJournalRecords, readRecordFile } from '../../../src/study-comparison/record-files.ts';
@@ -22,10 +21,10 @@ import type { FixtureBytes } from '../../support/golden-builder/digest-links.ts'
 import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 import { fuzzParameters } from '../../support/kernel/fuzz-parameters.ts';
 import { specDeploymentProjection } from '../../golden/study-comparison/support/golden-run.ts';
+import { assertSchemaValid } from '../../golden/study-comparison/support/golden-views.ts';
 import { READ_DEPS, cleanRunFiles, trialFile, withBytes } from '../../unit/study-comparison/support/clean-run.ts';
 
 const encoder = new TextEncoder();
-const validator = createRecordValidator();
 const RECORD_TYPES: readonly StudyComparisonRecordType[] = [
   'execution_manifest',
   'resource_manifest',
@@ -91,10 +90,8 @@ function assertTotal(packageFiles: FixtureBytes): void {
     sha256Hex,
   );
   if (finalized.ok) {
-    assert.ok(
-      validator.validateAs('comparison_assessment', finalized.value.comparison_assessment.record as never).valid,
-    );
-    assert.ok(validator.validateAs('run_summary', finalized.value.run_summary.record as never).valid);
+    assertSchemaValid('comparison_assessment', finalized.value.comparison_assessment.record);
+    assertSchemaValid('run_summary', finalized.value.run_summary.record);
   }
 }
 

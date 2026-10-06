@@ -5,9 +5,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { deriveRunTerminalReason, finalLeaseStatus } from '../../../src/study-comparison/run-terminal-reason.ts';
 import type { RunTerminalInput } from '../../../src/study-comparison/run-terminal-reason.ts';
+import { assertSchemaValid } from '../../golden/study-comparison/support/golden-views.ts';
 import { interruptionEvent, leaseEvent, phaseEvent } from './support/runner-events.ts';
 
 const CLEAN: RunTerminalInput = {
@@ -19,13 +19,12 @@ const CLEAN: RunTerminalInput = {
 
 describe('deriveRunTerminalReason', () => {
   it('builds schema-valid events', () => {
-    const validator = createRecordValidator();
     for (const event of [
       phaseEvent('SUMMARY', 'failed', 3),
       interruptionEvent('INTERRUPTED', 4),
       leaseEvent('LOST_STALE', 5),
     ]) {
-      assert.equal(validator.validateAs(event.record_type, event as never).valid, true);
+      assertSchemaValid(event.record_type, event);
     }
   });
 

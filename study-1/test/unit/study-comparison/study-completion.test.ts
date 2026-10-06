@@ -49,10 +49,14 @@ function failing(completion: ReturnType<typeof assessStudyCompletion>): readonly
   return completion.checks.filter((check) => !check.holds).map((check) => check.check_id);
 }
 
-function summaryWith(patch: Record<string, unknown>): StudyCompletionInput['run_summary'] {
+// The clean summary with some members replaced; the patch is untyped, so the result is checked
+// against the run_summary schema before a test uses it.
+function summaryWith(patch: Readonly<Record<string, unknown>>): StudyCompletionInput['run_summary'] {
   const summary = clean.run_summary;
   assert.ok(summary !== undefined);
-  return { ...summary, record: { ...summary.record, ...patch } as typeof summary.record };
+  const record = { ...summary.record, ...patch } as typeof summary.record;
+  assertSchemaValid('run_summary', record);
+  return { ...summary, record };
 }
 
 describe('assessStudyCompletion', () => {

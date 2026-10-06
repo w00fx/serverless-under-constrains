@@ -5,13 +5,14 @@
 import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 
-import type { Sha256Hex } from '../../../src/record-contract/primitives.ts';
+import type { Sha256Hex, Uuid4 } from '../../../src/record-contract/primitives.ts';
 import type { ExecutionManifest } from '../../../src/record-contract/records/group-a/execution_manifest.ts';
 import type { SourceProvenance } from '../../../src/record-contract/records/group-a/source_provenance.ts';
 import { EXECUTION_PATHS } from '../../../src/evidence-package/package-layout.ts';
 import { readRecordFile } from '../../../src/study-comparison/record-files.ts';
 import type { FrozenRecord } from '../../../src/study-comparison/record-files.ts';
 import { qualificationReasons, sourceReasons } from '../../../src/study-comparison/study-provenance.ts';
+import type { SelectedRunQualification } from '../../../src/study-comparison/study-provenance.ts';
 import { BASE_QUALIFICATION } from '../../golden/study-comparison/support/run-fixture.ts';
 import { READ_DEPS, cleanRunRecords, probeManifestBytes } from './support/clean-run.ts';
 
@@ -78,21 +79,15 @@ describe('qualificationReasons', () => {
   });
 
   it('names every field that differs from the selection', () => {
-    const selected = {
+    const selected: SelectedRunQualification = {
       qualification: {
-        transport_probe_id: '00000000-0000-4000-8000-000000000009',
+        transport_probe_id: '00000000-0000-4000-8000-000000000009' as Uuid4,
         original_package_index_sha256: OTHER,
         amendment_head_sha256: OTHER,
       },
       transport_scope_snapshot_sha256: OTHER,
-    } as const;
-    const reasons = qualificationReasons(manifest, {
-      ...selected,
-      qualification: {
-        ...selected.qualification,
-        transport_probe_id: selected.qualification.transport_probe_id as never,
-      },
-    });
+    };
+    const reasons = qualificationReasons(manifest, selected);
     assert.deepEqual(subjects(reasons), [
       'QUALIFICATION_MISMATCH:transport_probe_id',
       'QUALIFICATION_MISMATCH:original_package_index_sha256',
