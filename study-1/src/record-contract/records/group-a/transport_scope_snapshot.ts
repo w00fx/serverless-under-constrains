@@ -57,6 +57,11 @@ export interface TransportScopeSnapshot {
   readonly entry_points: readonly [string, ...string[]];
   readonly source_files: readonly [ScopedSourceFile, ...ScopedSourceFile[]];
   readonly dependency_closure: readonly [ResolvedDependency, ...ResolvedDependency[]];
+  /**
+   * SHA-256 of the canonical JSON of the closure's lockfile entries, keyed by install path, each
+   * with its version and, when recorded, resolved and integrity; not of the package-lock.json
+   * bytes (the schema description states the exact input).
+   */
   readonly lockfile_sha256: Sha256Hex;
   readonly configuration_projections: readonly [
     NormalizedConfigurationProjection,
