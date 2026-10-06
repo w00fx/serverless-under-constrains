@@ -3,9 +3,16 @@
 // verdict projections. A trial-scoped late record joins only its trial's evidence; a record of an
 // execution-level file joins every trial's evidence, because every trial's evidence holds that
 // file. Only records that name the trial, or no trial at all, count as late evidence of the trial:
-// with none of them the trial has no late evidence and is not re-evaluated.
+// with none of them the trial has no late evidence and is not re-evaluated. A change counts against
+// the late records only when the frozen evidence alone still re-evaluates to the frozen result's
+// projection; otherwise the difference has another cause (other evidence than was frozen, another
+// ingestion context or oracle revision), and the reassessment is refused rather than reported as a
+// contradiction (BR-RUA-043 "Late evidence never modifies frozen results"; D-16).
 
 import { ingestEvidence } from '../../evidence-ingestion/ingest-evidence.ts';
+import { aggregatedDetail } from '../../evidence-ingestion/ingestion-findings.ts';
+import type { IngestionInput } from '../../evidence-ingestion/ingestion-model.ts';
+import { boundedJsonText } from '../../record-contract/json-value.ts';
 import { err, ok } from '../../record-contract/primitives.ts';
 import type { Result, StructuredReason, UtcMillis } from '../../record-contract/primitives.ts';
 import type { RecordValidator } from '../../record-contract/schema-registry.ts';
@@ -15,6 +22,7 @@ import type {
 } from '../../record-contract/records/group-c/late_evidence_assessment.ts';
 import { evaluateTrial } from '../evaluate-trial.ts';
 import { verdictProjection } from '../verdict-projection.ts';
+import type { VerdictProjection } from '../verdict-projection.ts';
 import { augmentFrozenEvidence } from './frozen-augmentation.ts';
 import type { FrozenTrial } from './frozen-results.ts';
 import { LATE_EVIDENCE_SUBJECT } from './late-evidence-reasons.ts';
@@ -52,19 +60,50 @@ export function reevaluateTrial(
     return ok({ trial, counted, changes: [], problems: [] });
   }
   const augmented = augmentFrozenEvidence(trial.frozen, joining, validator);
-  const evaluation = evaluateTrial({ evidence: ingestEvidence(augmented.input, validator), checked_at: assessedAt });
-  if (!evaluation.ok) {
-    return err(
-      evaluation.error.map((reason) => refusal(trial, 'REEVALUATION_REFUSED', `${reason.code}: ${reason.detail}`)),
-    );
+  const projections = reevaluatedProjections(trial, [trial.frozen, augmented.input], assessedAt, validator);
+  if (!projections.ok) {
+    return projections;
   }
-  const reassessed = evaluation.value.result;
-  if (reassessed.trial_id !== trialId) {
-    const detail = `the frozen evidence names trial ${reassessed.trial_id}; expected trial ${trialId} of the frozen result`;
-    return err([refusal(trial, 'REEVALUATION_TRIAL_MISMATCH', detail)]);
+  // One projection per input, in input order.
+  const [baseline, reassessed] = projections.value as readonly [VerdictProjection, VerdictProjection];
+  const frozen = verdictProjection(trial.result);
+  const unexplained = projectionChanges(frozen, baseline);
+  const [first] = unexplained;
+  if (first !== undefined) {
+    const difference = `${first.field} ${boundedJsonText(first.reassessed)} where the frozen result holds ${boundedJsonText(first.frozen)}`;
+    const detail = `the frozen evidence alone re-evaluates to ${aggregatedDetail(difference, unexplained.length)}; expected it to reproduce the frozen result's verdict projection`;
+    return err([refusal(trial, 'FROZEN_RESULT_NOT_REPRODUCED', detail)]);
   }
-  const changes = projectionChanges(verdictProjection(trial.result), verdictProjection(reassessed));
-  return ok({ trial, counted, changes, problems: augmented.problems });
+  return ok({ trial, counted, changes: projectionChanges(frozen, reassessed), problems: augmented.problems });
+}
+
+// The verdict projection of each input re-evaluated at the assessment instant, in order, or the
+// refusal of the first input the oracle refuses or finds of another trial than the frozen result's.
+// The frozen and the augmented input hold the same manifests (augmentation joins only journals,
+// observations and re-captured snapshots), so they name one execution and trial: the oracle refuses
+// both or neither, and one refusal check covers both.
+function reevaluatedProjections(
+  trial: FrozenTrial,
+  inputs: readonly IngestionInput[],
+  assessedAt: UtcMillis,
+  validator: RecordValidator,
+): Result<readonly VerdictProjection[], readonly StructuredReason[]> {
+  const projections: VerdictProjection[] = [];
+  for (const input of inputs) {
+    const evaluation = evaluateTrial({ evidence: ingestEvidence(input, validator), checked_at: assessedAt });
+    if (!evaluation.ok) {
+      return err(
+        evaluation.error.map((reason) => refusal(trial, 'REEVALUATION_REFUSED', `${reason.code}: ${reason.detail}`)),
+      );
+    }
+    const { result } = evaluation.value;
+    if (result.trial_id !== trial.result.trial_id) {
+      const detail = `the frozen evidence names trial ${result.trial_id}; expected trial ${trial.result.trial_id} of the frozen result`;
+      return err([refusal(trial, 'REEVALUATION_TRIAL_MISMATCH', detail)]);
+    }
+    projections.push(verdictProjection(result));
+  }
+  return ok(projections);
 }
 
 /**

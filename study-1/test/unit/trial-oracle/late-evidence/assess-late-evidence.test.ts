@@ -171,6 +171,24 @@ describe('assessLateEvidence', () => {
     );
   });
 
+  it('refuses rather than reports a contradiction when frozen evidence does not reproduce its result', () => {
+    const payment = `trials/${control.result.trial_id}/inputs/payment.json`;
+    const evidence = {
+      ...control.evidence,
+      frozen: {
+        ...control.frozen,
+        artifacts: control.frozen.artifacts.filter((artifact) => artifact.path !== payment),
+      },
+    };
+    const unchangedLedger = lateRecord(control, {
+      sequence: 1,
+      late_source: 'LEDGER',
+      late_record: lateLedger(control, 0),
+    });
+    const input = { ...lateInput([control], lateStream([unchangedLedger])), trials: [evidence] };
+    assert.deepEqual(refusalCodes(input), ['FROZEN_RESULT_NOT_REPRODUCED']);
+  });
+
   it('counts a record of a trial without a frozen result and says so', () => {
     const orphan = lateRecord(control, {
       sequence: 1,
