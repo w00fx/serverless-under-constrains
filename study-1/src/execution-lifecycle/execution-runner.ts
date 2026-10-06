@@ -1,38 +1,35 @@
-// The execution runner (design §10.2 P1-P9, §5.3 `ExecutionRunner`; BR-RUA-019, BR-RUA-028,
-// BR-RUA-038, BR-RUA-043 to BR-RUA-049; AC-RUA-008, AC-RUA-049):
+// The execution runner (design §10.2 P1-P9, §5.3 `ExecutionRunner`; BR-RUA-019, BR-RUA-027,
+// BR-RUA-028, BR-RUA-038, BR-RUA-043 to BR-RUA-049; AC-RUA-002, AC-RUA-008, AC-RUA-021,
+// AC-RUA-027, AC-RUA-049). One admitted execution of any kind runs through the same phases:
 //   P1 lease.acquire, the execution's first mutation; a refusal finalizes without provisioning
 //   P2 deploy, leaving the resource manifest; a failed deploy goes to emergency cleanup
 //   P3 the A-09 configuration item, every mapping enabled and the controller canary acknowledged
-//   P4 every declared trial in declared order, each behind the publication gate
+//   P4 the workload of the kind: every declared trial in declared order (trial-workload.ts), or the
+//      probe's single workload (probe-workload.ts), each behind the publication gate
+//   P5 for the probe: the transport probe result and the coordination prefix checkpoint
 //   P6 late monitoring of at least 120 s with consumers enabled
 //   P7 cleanup steps 1-12, normal or emergency
 //   P8 lease finalization: release after a clean closure, otherwise recovery
 //   P9 safety assessment, summary, journals made read-only, package-index.json last
 // The heartbeat runs beside P2-P8. Lease loss, SIGINT and the active-time deadline latch the gate:
-// no trial starts after it, the active trial freezes indeterminate, monitoring is skipped and
-// cleanup runs in emergency mode, past the total target if it must (a duration breach). The probe's
-// workload phases (P4 Invoke, P5) are not bound here, so a probe is refused before any mutation
-// (evidence/WP-27/decisions.md).
+// no unit starts after it, the active unit freezes indeterminate, monitoring is skipped and
+// cleanup runs in emergency mode, past the total target if it must (a duration breach).
 
 import { CleanupOrchestrator } from '../cleanup/cleanup-orchestrator.ts';
 import type { CleanupRunOutcome } from '../cleanup/cleanup-orchestrator.ts';
+import type { LeaseClosure } from '../coordination-lease/lease-finalization.ts';
+import { LEASE_REASON_CODES } from '../coordination-lease/lease-item.ts';
 import { createJsonlJournalPort } from '../event-journal/jsonl-journal-port.ts';
 import { JournalWriter } from '../event-journal/journal-writer.ts';
 import { EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
-import type { Sha256Hex, StructuredReason, UtcMillis } from '../record-contract/primitives.ts';
+import type { ExecutionKind, Sha256Hex, StructuredReason, UtcMillis } from '../record-contract/primitives.ts';
 import { serializeRecordFile } from '../record-contract/canonical-json.ts';
 import type { CleanupMode } from '../record-contract/records/group-b/vocabulary.ts';
-import type { TrialExecutionIdentity } from '../record-contract/records/group-c/shared-shapes.ts';
 import type { LeaseStatus } from '../record-contract/records/group-c/vocabulary.ts';
 import { formatUtcMillis } from '../record-contract/timestamps.ts';
 import { writeExecutionConfiguration } from '../trial-execution/execution-configuration.ts';
 import { RUNNER_DEFINITIVE_RETRIES } from '../trial-execution/runner-trial-journal.ts';
-import type {
-  TrialExecution,
-  TrialExecutionReport,
-  TrialFrozen,
-  TrialInterruption,
-} from '../trial-execution/trial-execution-ports.ts';
+import type { TrialInterruption } from '../trial-execution/trial-execution-ports.ts';
 import { ExecutionCleanupEvidence } from './cleanup-evidence.ts';
 import { planCleanup } from './cleanup-plan.ts';
 import { writeExecutionEvidence } from './execution-evidence.ts';
@@ -43,7 +40,7 @@ import type { AbortAnswer } from './execution-gate.ts';
 import { ExecutionPhaseJournal } from './execution-journal.ts';
 import { ExecutionPackage } from './execution-package.ts';
 import type {
-  AdmittedTrialExecution,
+  AdmittedExecution,
   CleanupBindings,
   EvidenceRoot,
   ExecutionEvidenceReaders,
@@ -54,18 +51,20 @@ import type {
   ExecutionSafetyFactory,
   ExecutionServices,
   ExecutionTargets,
+  ProbeRunner,
   ProvisioningOutcome,
   TrialRunner,
 } from './execution-ports.ts';
+import type { ExecutionWorkload, WorkloadContext, WorkloadOutcome } from './execution-workload.ts';
 import { LateEvidenceFreeze } from './late-evidence-freeze.ts';
 import { LateEvidenceMonitor } from './late-monitoring.ts';
+import { ProbeWorkload } from './probe-workload.ts';
 import { confirmReadiness } from './readiness.ts';
 import type { ReadinessPorts } from './readiness.ts';
 import { buildSafetyAssessment } from './safety-assessment.ts';
-import { planDeclaredTrials } from './trial-plans.ts';
+import { interruptionReason, TrialWorkload } from './trial-workload.ts';
 
-/** How often the runner re-reads an uncertain lease before handing over the next trial. */
-export const LEASE_RECOVERY_POLL_MS = 5_000;
+export { LEASE_RECOVERY_POLL_MS } from './trial-workload.ts';
 
 /** Everything the runner acts through. */
 export interface ExecutionRunnerDeps {
@@ -73,6 +72,7 @@ export interface ExecutionRunnerDeps {
   readonly provisioner: ExecutionProvisioner;
   readonly readiness: Pick<ReadinessPorts, 'consumers'>;
   readonly trials: TrialRunner;
+  readonly probe: ProbeRunner;
   readonly safety: ExecutionSafetyFactory;
   readonly cleanup: CleanupBindings;
   readonly readers: ExecutionEvidenceReaders;
@@ -87,26 +87,32 @@ interface Closure {
   readonly lease_status?: LeaseStatus;
 }
 
+/** The lease is held: the deadline clock runs from the first mutation. */
+interface HeldExecution {
+  readonly safety: ExecutionSafety;
+  readonly started_at: UtcMillis;
+}
+
 /**
- * Runs one admitted run or variant validation through P1-P9.
+ * Runs one admitted run, variant validation or transport probe through P1-P9.
  *
  * @example
- * const runner = new ExecutionRunner(admitted, deps); // admitted = asTrialExecution(read)
+ * const runner = new ExecutionRunner(admitted, deps);
  * process.once('SIGINT', () => runner.abort('SIGINT'));
- * const outcome = await runner.run();
+ * const outcome = await runner.runProbe(); // or runValidation(), runCanonical()
  */
 export class ExecutionRunner {
-  readonly #admitted: AdmittedTrialExecution;
+  readonly #admitted: AdmittedExecution;
   readonly #deps: ExecutionRunnerDeps;
   readonly #gate: ExecutionGate;
   readonly #journal: ExecutionPhaseJournal;
   readonly #pkg: ExecutionPackage;
   readonly #monitor: LateEvidenceMonitor;
-  readonly #reports: TrialExecutionReport[] = [];
   readonly #reasons: StructuredReason[] = [];
+  #workload: WorkloadOutcome = { completed: false, trials: [], reasons: [] };
   #interruptionJournaled = false;
 
-  constructor(admitted: AdmittedTrialExecution, deps: ExecutionRunnerDeps) {
+  constructor(admitted: AdmittedExecution, deps: ExecutionRunnerDeps) {
     this.#admitted = admitted;
     this.#deps = deps;
     this.#gate = new ExecutionGate(deps.lease);
@@ -121,34 +127,84 @@ export class ExecutionRunner {
   }
 
   /**
-   * Runs the execution to its finalized package; never throws on a port failure.
+   * `probe execute`: runs an admitted transport probe; any other kind is refused before any mutation.
+   *
+   * @example
+   * (await runner.runProbe()).probe?.kind; // 'frozen'
+   */
+  runProbe(): Promise<ExecutionOutcome> {
+    return this.#runAs('TRANSPORT_PROBE');
+  }
+
+  /**
+   * `validation execute`: runs an admitted variant validation; any other kind is refused.
+   *
+   * @example
+   * (await runner.runValidation()).trials.length; // 2
+   */
+  runValidation(): Promise<ExecutionOutcome> {
+    return this.#runAs('VARIANT_VALIDATION');
+  }
+
+  /**
+   * `run execute`: runs an admitted canonical run; any other kind is refused.
+   *
+   * @example
+   * (await runner.runCanonical()).trials.length; // 4
+   */
+  runCanonical(): Promise<ExecutionOutcome> {
+    return this.#runAs('RUN');
+  }
+
+  /**
+   * Runs the execution, whatever its kind, to its finalized package; never throws on a port failure.
    *
    * @example
    * (await runner.run()).package_finalized; // true once package-index.json was written last
    */
   async run(): Promise<ExecutionOutcome> {
     const held = await this.#acquireLease();
-    if (held === undefined) {
-      return this.#finalize(undefined, {});
+    if (!('safety' in held)) {
+      return this.#finalize(undefined, held);
     }
     const { safety } = held;
     const provisioned = await this.#provision();
     const { targets } = provisioned;
-    const mode =
-      targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned.resource_manifest_sha256, targets);
+    const mode = targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned, targets);
     safety.markActiveEnded();
     const cleanup = await this.#cleanUp(mode, provisioned, held);
-    const leaseStatus = await this.#finalizeLease(cleanup);
+    const leaseStatus = await this.#finalizeLease(closureOf(cleanup));
     return this.#finalize(safety, { ...(cleanup === undefined ? {} : { cleanup }), lease_status: leaseStatus });
   }
 
-  // P1. An abort that came before the first mutation stops the execution without one.
-  async #acquireLease(): Promise<HeldExecution | undefined> {
+  // The command names the kind it runs; a mismatched package is refused before anything happens.
+  async #runAs(kind: ExecutionKind): Promise<ExecutionOutcome> {
+    const admittedKind = this.#admitted.identity.execution_kind;
+    if (admittedKind === kind) {
+      return this.run();
+    }
+    return {
+      package_finalized: false,
+      trials: [],
+      reasons: [
+        {
+          code: 'EXECUTION_KIND_MISMATCH',
+          subject: 'BR-RUA-040',
+          detail: `${this.#admitted.package_directory} admits a ${admittedKind}; expected a ${kind} for this command`,
+        },
+      ],
+    };
+  }
+
+  // P1. An abort that came before the first mutation stops the execution without one. An
+  // unresolved acquisition (an ambiguous write whose resolving read failed) may hold the lease, so
+  // it is finalized: a landed put must not stay HELD without a heartbeat (WP-22 residual 1).
+  async #acquireLease(): Promise<HeldExecution | Closure> {
     await this.#journal.phase('LEASE_ACQUISITION', 'started');
     const aborted = await this.#noteInterruption();
     if (aborted !== undefined) {
       await this.#journal.phase('LEASE_ACQUISITION', 'skipped', [interruptionReason(aborted)]);
-      return undefined;
+      return {};
     }
     const { services } = this.#deps;
     const startedNs = services.monotonic.nowNs();
@@ -156,7 +212,8 @@ export class ExecutionRunner {
     const acquisition = await this.#deps.lease.acquire();
     if (!acquisition.acquired) {
       await this.#journal.phase('LEASE_ACQUISITION', 'failed', [acquisition.reason]);
-      return undefined;
+      const unresolved = acquisition.reason.code === LEASE_REASON_CODES.writeAmbiguous;
+      return unresolved ? { lease_status: await this.#finalizeLease('clean') } : {};
     }
     await this.#journal.phase('LEASE_ACQUISITION', 'succeeded');
     const safety = this.#deps.safety(startedNs, this.#admitted);
@@ -176,18 +233,25 @@ export class ExecutionRunner {
     return outcome;
   }
 
-  // P3, P4 and P6; the cleanup mode they leave. Monitoring is active time: the active-time
-  // deadline interrupts it like a trial, so the ACTIVE_TIME check measures it too (`run` ends
-  // active time just before cleanup).
-  async #execute(resourceManifestSha256: Sha256Hex, targets: ExecutionTargets): Promise<CleanupMode> {
-    if (!(await this.#ready(targets)) || !(await this.#runTrials(resourceManifestSha256, targets))) {
+  // P3, P4 (and P5) and P6; the cleanup mode they leave. Monitoring is active time: the
+  // active-time deadline interrupts it like a unit, so the ACTIVE_TIME check measures it too
+  // (`run` ends active time just before cleanup).
+  async #execute(provisioned: ProvisioningOutcome, targets: ExecutionTargets): Promise<CleanupMode> {
+    const ready = await this.#ready(targets);
+    if (ready) {
+      this.#workload = await this.#workloadOf().run(
+        this.#workloadContext(provisioned.resource_manifest_sha256, targets),
+      );
+    }
+    this.#reasons.push(...this.#workload.reasons);
+    if (!this.#workload.completed) {
       await this.#journal.phase('LATE_MONITORING', 'skipped', [this.#stopReason()]);
       return 'EMERGENCY';
     }
     await this.#journal.phase('LATE_MONITORING', 'started');
     const monitoring = await this.#monitor.observe(this.#gate);
-    // Journaled before the outcome is judged: a shortened window means an interruption no trial
-    // recorded, and without its `trial_interrupted` the summary would read the run as COMPLETED.
+    // Journaled before the outcome is judged: a shortened window means an interruption no unit
+    // recorded, and without its `trial_interrupted` the summary would read it as COMPLETED.
     const interruption = await this.#noteInterruption();
     if (monitoring.outcome !== 'complete' || interruption !== undefined) {
       await this.#journal.phase('LATE_MONITORING', 'failed', [this.#stopReason()]);
@@ -197,7 +261,7 @@ export class ExecutionRunner {
     return 'NORMAL';
   }
 
-  // P3; false when the execution must not run trials.
+  // P3; false when the execution must not run its workload.
   async #ready(targets: ExecutionTargets): Promise<boolean> {
     if ((await this.#noteInterruption()) !== undefined) {
       return false;
@@ -223,53 +287,27 @@ export class ExecutionRunner {
     return failures.length === 0;
   }
 
-  // P4; false when the trials were interrupted or could not be planned.
-  async #runTrials(resourceManifestSha256: Sha256Hex, targets: ExecutionTargets): Promise<boolean> {
-    await this.#journal.phase('TRIALS', 'started');
-    const plans = planDeclaredTrials({
+  #workloadOf(): ExecutionWorkload {
+    const { identity } = this.#admitted;
+    if (identity.execution_kind === 'TRANSPORT_PROBE') {
+      return new ProbeWorkload(identity, this.#deps.probe, this.#deps.evidence.files);
+    }
+    return new TrialWorkload({ ...this.#admitted, identity }, this.#deps.trials);
+  }
+
+  #workloadContext(resourceManifestSha256: Sha256Hex, targets: ExecutionTargets): WorkloadContext {
+    return {
       admitted: this.#admitted,
       resource_manifest_sha256: resourceManifestSha256,
       targets,
-    });
-    if (!plans.ok) {
-      this.#reasons.push(plans.error);
-      await this.#journal.phase('TRIALS', 'failed', [plans.error]);
-      return false;
-    }
-    for (const plan of plans.value) {
-      if (!(await this.#awaitTrialStart())) {
-        break;
-      }
-      const report = await this.#deps.trials.execute(plan, this.#gate);
-      this.#reports.push(report);
-      this.#interruptionJournaled ||= report.kind === 'frozen' && report.interruption !== undefined;
-    }
-    const interruption = await this.#noteInterruption();
-    if (interruption !== undefined) {
-      await this.#journal.phase('TRIALS', 'failed', [interruptionReason(interruption)]);
-      return false;
-    }
-    const unfrozen = this.#reports.filter(
-      (report): report is Exclude<TrialExecutionReport, TrialFrozen> => report.kind !== 'frozen',
-    );
-    await this.#journal.phase(
-      'TRIALS',
-      unfrozen.length === 0 ? 'succeeded' : 'failed',
-      unfrozen.flatMap((report) => report.reasons),
-    );
-    return true;
-  }
-
-  // BR-RUA-045: lease uncertainty blocks new publication without ending the execution, and a
-  // recovery before staleness may resume scheduling. Handing a trial over while the lease is
-  // uncertain would consume it (its setup runs, then T5 refuses to publish), so the runner waits
-  // until the heartbeat confirms the lease again or loses it at the 300 s stale boundary (the loss
-  // latches the gate); the active-time deadline bounds the wait as well. False when no trial may start.
-  async #awaitTrialStart(): Promise<boolean> {
-    while (this.#gate.mayStartTrial() && !this.#gate.publicationAllowed()) {
-      await this.#deps.services.sleeper.sleep(LEASE_RECOVERY_POLL_MS);
-    }
-    return this.#gate.mayStartTrial();
+      gate: this.#gate,
+      journal: this.#journal,
+      services: this.#deps.services,
+      noteInterruption: () => this.#noteInterruption(),
+      unitRecordedInterruption: (): void => {
+        this.#interruptionJournaled = true;
+      },
+    };
   }
 
   // P7.
@@ -294,9 +332,10 @@ export class ExecutionRunner {
     }
     const late = new LateEvidenceFreeze({
       admitted: this.#admitted,
-      execution: lateEvidenceIdentity(this.#admitted.identity),
       pkg: this.#pkg,
       monitor: this.#monitor,
+      capture: { store: readers.store, dlq: readers.dlq, durable: readers.durable },
+      targets: provisioned.targets,
       services,
     });
     const orchestrator = new CleanupOrchestrator({
@@ -339,15 +378,10 @@ export class ExecutionRunner {
   }
 
   // P8: release after a clean closure, otherwise mark recovery required.
-  async #finalizeLease(cleanup: CleanupRunOutcome | undefined): Promise<LeaseStatus> {
+  async #finalizeLease(closure: LeaseClosure): Promise<LeaseStatus> {
     this.#deps.lease.stopHeartbeats();
     await this.#journal.phase('LEASE_FINALIZATION', 'started');
-    // Clean only when the closure is also frozen in the package: a release must be provable.
-    const clean =
-      cleanup?.cleanup_result.cleanup_status === 'succeeded' &&
-      cleanup.leak_audit_result.leak_audit_status === 'clean' &&
-      cleanup.freeze.status === 'succeeded';
-    const status = await this.#deps.lease.finalize(clean ? 'clean' : 'unclean');
+    const status = await this.#deps.lease.finalize(closure);
     await this.#journal.phase('LEASE_FINALIZATION', status === 'unverified' ? 'failed' : 'succeeded');
     return status;
   }
@@ -378,10 +412,12 @@ export class ExecutionRunner {
       services.log({ level: 'warn', event: 'execution_reason', detail: `${reason.code}: ${reason.detail}` });
     }
     const interruption = this.#gate.latched();
+    const { probe } = this.#workload;
     return {
       package_finalized: index.ok,
       ...(interruption === undefined ? {} : { interruption }),
-      trials: [...this.#reports],
+      trials: [...this.#workload.trials],
+      ...(probe === undefined ? {} : { probe }),
       ...(closure.cleanup === undefined
         ? {}
         : {
@@ -393,7 +429,7 @@ export class ExecutionRunner {
     };
   }
 
-  // Records, once, an interruption no trial recorded; the interruption, when there is one.
+  // Records, once, an interruption no unit recorded; the interruption, when there is one.
   async #noteInterruption(): Promise<TrialInterruption | undefined> {
     const interruption = this.#gate.interruption();
     if (interruption !== undefined && !this.#interruptionJournaled) {
@@ -421,18 +457,13 @@ export class ExecutionRunner {
   }
 }
 
-/** The lease is held: the deadline clock runs from the first mutation. */
-interface HeldExecution {
-  readonly safety: ExecutionSafety;
-  readonly started_at: UtcMillis;
-}
-
-function interruptionReason(interruption: TrialInterruption): StructuredReason {
-  return {
-    code: 'EXECUTION_INTERRUPTED',
-    subject: 'BR-RUA-046',
-    detail: `${interruption.cause}: ${interruption.detail}; expected no interruption before closure`,
-  };
+// Clean only when the closure is also frozen in the package: a release must be provable.
+function closureOf(cleanup: CleanupRunOutcome | undefined): LeaseClosure {
+  const clean =
+    cleanup?.cleanup_result.cleanup_status === 'succeeded' &&
+    cleanup.leak_audit_result.leak_audit_status === 'clean' &&
+    cleanup.freeze.status === 'succeeded';
+  return clean ? 'clean' : 'unclean';
 }
 
 /** Where the runner's cleanup evidence lands inside the package. */
@@ -441,9 +472,3 @@ const CLEANUP_PACKAGE_PATHS = {
   cleanup_result: EXECUTION_PATHS.cleanupResult,
   leak_audit_result: EXECUTION_PATHS.leakAuditResult,
 } as const;
-
-function lateEvidenceIdentity(execution: TrialExecution): TrialExecutionIdentity {
-  return execution.execution_kind === 'RUN'
-    ? { run_id: execution.run_id }
-    : { variant_validation_id: execution.variant_validation_id };
-}

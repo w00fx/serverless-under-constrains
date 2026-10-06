@@ -1,5 +1,5 @@
 // Cleanup steps 1 and 2 over a package whose trials really froze (design §10.4; BR-RUA-043,
-// BR-RUA-049): step 1 writes the empty late stream once, step 2 freezes one assessment over every
+// BR-RUA-049): step 1 re-reads the settled offline cloud and writes the empty late stream once, step 2 freezes one assessment over every
 // trial that froze an oracle result, and an unreadable package, an oracle result without a readable
 // trial manifest, an oracle result the assessment rejects and a file already written each fail the
 // step with a reason instead of a partial assessment.
@@ -18,7 +18,7 @@ import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-schedule
 import { OfflinePackageStorage } from '../../support/offline-cloud/offline-package-storage.ts';
 import { ScriptedExecutionLease } from './fakes/scripted-execution-lease.ts';
 import { ScriptedExecutionSafety } from './fakes/scripted-execution-safety.ts';
-import { lifecycleServices, lifecycleValidator } from './support/execution-fixtures.ts';
+import { lifecycleServices, lifecycleValidator, targetsOf } from './support/execution-fixtures.ts';
 import { RunnerWorld } from './support/runner-world.ts';
 
 // Areas written after the last trial froze; the package below stops at that point.
@@ -31,7 +31,8 @@ const { identity } = admitted;
 const directory = admitted.package_directory;
 const [firstTrial] = admitted.manifest.trials;
 assert.ok(identity.execution_kind === 'RUN' && firstTrial !== undefined, 'the run fixture declares trials');
-const RUN = { run_id: identity.run_id };
+const { store, dlqReceiver: dlq, durable } = finished.cloud;
+const TARGETS = targetsOf(finished.cloud.execution);
 const firstUnit = { kind: 'trial', trial_id: firstTrial.trial_id } as const;
 const FROZEN = new Map(
   [...finished.cloud.packageFiles()].filter(([path]) => !AFTER_TRIALS.some((prefix) => path.startsWith(prefix))),
@@ -57,7 +58,17 @@ async function lateWorld(edit: (files: Map<string, Uint8Array>) => void = () => 
   gate.arm(new ScriptedExecutionSafety());
   await monitor.observe(gate);
   const pkg = new ExecutionPackage(storage, admitted.identity, directory);
-  return { storage, steps: new LateEvidenceFreeze({ admitted, execution: RUN, pkg, monitor, services }) };
+  return {
+    storage,
+    steps: new LateEvidenceFreeze({
+      admitted,
+      pkg,
+      monitor,
+      capture: { store, dlq, durable },
+      targets: TARGETS,
+      services,
+    }),
+  };
 }
 
 function codes(reasons: readonly { readonly code: string }[]): readonly string[] {

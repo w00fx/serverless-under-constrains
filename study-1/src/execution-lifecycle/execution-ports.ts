@@ -1,7 +1,7 @@
 // The ports the execution runner acts through (design §10.2 P1-P9, §5.3 `ExecutionRunner`). The
 // runner owns the phase order, the publication gate and the interruption sources; every cloud
-// effect goes through a port the composition root binds (the AWS bindings of provisioning and
-// readiness are not part of this feature, evidence/WP-27/decisions.md). Type-only: no runtime code
+// effect goes through a port the composition root binds (provisioning: execution-provisioner.ts;
+// the probe workload: probe-runner.ts; evidence/CMP-05/decisions.md). Type-only: no runtime code
 // (A-10).
 
 import type { CleanupPorts } from '../cleanup/cleanup-orchestrator.ts';
@@ -9,8 +9,10 @@ import type { LeaseLoss } from '../coordination-lease/lease-session.ts';
 import type { LeaseClosure } from '../coordination-lease/lease-finalization.ts';
 import type { DurableItemStore } from '../durable-store/item-store-port.ts';
 import type { AppendOnlyFile } from '../event-journal/append-only-file.ts';
+import type { DlqReceiver } from '../evidence-collection/dlq-capture.ts';
 import type { DurableExecutionReader } from '../evidence-collection/durable-metadata.ts';
 import type { QueueCounterReader, QueueTarget } from '../evidence-collection/queue-observation.ts';
+import type { TelemetryFunctionRole } from '../evidence-collection/telemetry-targets.ts';
 import type { PackageFileSystem } from '../evidence-package/package-file-system.ts';
 import type {
   ExecutionIdentity,
@@ -28,7 +30,10 @@ import type { SafetyCheck } from '../record-contract/records/group-c/safety_asse
 import type { LeaseStatus } from '../record-contract/records/group-c/vocabulary.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
 import type {
+  CoordinationCheckpointWriter,
   DurableCallerTarget,
+  ProbeExecutionReport,
+  ProbeWorkloadPlan,
   PublicationGate,
   TrialExecution,
   TrialExecutionReport,
@@ -54,6 +59,12 @@ export interface VariantQueues {
   readonly dlq: QueueTarget;
 }
 
+/** Stack outputs `ProbeCallerFunctionName` and `ProbeCallerVersion` (an immutable version number). */
+export interface ProbeCallerOutputs {
+  readonly function_name: string;
+  readonly version: string;
+}
+
 /** What the deployed stack names, as trials, readiness and cleanup address it. */
 export interface ExecutionTargets {
   /** The provider's published version (BR-RUA-053). */
@@ -66,6 +77,12 @@ export interface ExecutionTargets {
   readonly event_source_mapping_ids: readonly string[];
   /** Functions whose running Durable executions cleanup stops (step 5, RK-10). */
   readonly durable_function_names: readonly string[];
+  /** The provider's function name, which the warm-up Invoke names with `provider_version`. */
+  readonly provider_function_name?: string;
+  /** The probe caller's published version, when the stack is a transport probe's. */
+  readonly probe_caller?: ProbeCallerOutputs;
+  /** The deployed (CloudFormation-generated) function name of each telemetry role (design §9.4). */
+  readonly function_names: Readonly<Partial<Record<TelemetryFunctionRole, string>>>;
 }
 
 /**
@@ -88,6 +105,18 @@ export interface ExecutionProvisioner {
 /** Runs one declared trial (P4, `TrialExecutor` in production). */
 export interface TrialRunner {
   execute(plan: TrialPlan, gate: PublicationGate): Promise<TrialExecutionReport>;
+}
+
+/**
+ * Runs the transport probe's workload (P4) and its freeze (P5), `ProbeWorkloadExecutor` in
+ * production; the runner hands in the P5 coordination checkpoint it owns (BR-RUA-044).
+ */
+export interface ProbeRunner {
+  execute(
+    plan: ProbeWorkloadPlan,
+    gate: PublicationGate,
+    checkpoint: CoordinationCheckpointWriter,
+  ): Promise<ProbeExecutionReport>;
 }
 
 /** The coordination lease as the runner uses it (P1, the heartbeat beside P2-P8, P8). */
@@ -114,11 +143,15 @@ export type ExecutionSafetyFactory = (startedNs: bigint, admitted: AdmittedExecu
 /** The cleanup ports the composition root binds; the runner adds evidence, journal and safety. */
 export type CleanupBindings = Omit<CleanupPorts, 'evidence' | 'journal' | 'safety' | 'clock'>;
 
-/** The reads of the execution-level and pre-cleanup evidence (design §7 `readiness/`, `cleanup/`). */
+/**
+ * The reads of the execution-level, pre-cleanup and late evidence (design §7 `readiness/`,
+ * `cleanup/`, `late-evidence/`): the DLQ receiver re-reads each queued trial's DLQ at the cutoff.
+ */
 export interface ExecutionEvidenceReaders {
   readonly store: DurableItemStore;
   readonly queues: QueueCounterReader;
   readonly durable: DurableExecutionReader;
+  readonly dlq: DlqReceiver;
 }
 
 /** The evidence root: write-once package files and the JSONL journals beside them. */
@@ -152,6 +185,8 @@ export interface ExecutionOutcome {
   readonly package_finalized: boolean;
   readonly interruption?: TrialInterruption;
   readonly trials: readonly TrialExecutionReport[];
+  /** The probe's report, for a transport probe that reached P4. */
+  readonly probe?: ProbeExecutionReport;
   readonly cleanup_status?: string;
   readonly leak_audit_status?: string;
   readonly lease_status?: LeaseStatus;
