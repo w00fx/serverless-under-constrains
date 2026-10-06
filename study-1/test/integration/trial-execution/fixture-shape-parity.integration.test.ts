@@ -19,8 +19,9 @@ import { buildBaseScenario } from '../../support/golden-builder/scenario-builder
 import { OfflineCloud } from '../../support/offline-cloud/offline-cloud.ts';
 import type { OfflineExecutionName } from '../../support/offline-cloud/offline-execution.ts';
 import { textField } from './support/frozen-trial-files.ts';
+import { fieldShape, packageRecords, sourceStructure } from './support/package-shape.ts';
+import type { PackageFiles as Files } from './support/package-shape.ts';
 
-const decoder = new TextDecoder();
 const DERIVED_FILES = ['derived/attempt-projection.json', 'derived/oracle-result.json', 'evidence-index.json'];
 const ADMISSION_CORE_FILES = [
   EXECUTION_PATHS.deploymentAssemblyInventory,
@@ -43,59 +44,8 @@ const CASES: readonly ParityCase[] = [
   { base: 'validation-conventional-treatment', execution: 'validation-conventional', sequences: [1, 2] },
 ];
 
-type Files = ReadonlyMap<string, Uint8Array>;
-
-function records(bytes: Uint8Array): readonly JsonObject[] {
-  return decoder
-    .decode(bytes)
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as JsonObject);
-}
-
-// Record type -> sorted union of field names, per file of a directory.
-function fieldShape(files: Files, directory: string): Readonly<Record<string, Readonly<Record<string, string>>>> {
-  const shape: Record<string, Record<string, string>> = {};
-  for (const [path, bytes] of files) {
-    if (!path.startsWith(`${directory}/`) || DERIVED_FILES.some((derived) => path.endsWith(derived))) {
-      continue;
-    }
-    const byType = new Map<string, Set<string>>();
-    for (const record of records(bytes)) {
-      const type = textField(record, 'record_type');
-      byType.set(type, new Set([...(byType.get(type) ?? []), ...Object.keys(record)]));
-    }
-    shape[path.slice(directory.length + 1)] = Object.fromEntries(
-      [...byType]
-        .toSorted(([a], [b]) => (a < b ? -1 : 1))
-        .map(([type, fields]) => [type, [...fields].sort().join(',')]),
-    );
-  }
-  return shape;
-}
-
-// Per journal file of a directory: source -> number of source instances.
-function sourceStructure(files: Files, directory: string): Readonly<Record<string, string>> {
-  const structure: Record<string, string> = {};
-  for (const [path, bytes] of files) {
-    if (!path.startsWith(`${directory}/journals/`)) {
-      continue;
-    }
-    const instances = new Map<string, Set<string>>();
-    for (const event of records(bytes)) {
-      const source = textField(event, 'source');
-      instances.set(source, new Set([...(instances.get(source) ?? []), textField(event, 'source_instance_id')]));
-    }
-    structure[path] = [...instances]
-      .map(([source, ids]) => `${source}:${String(ids.size)}`)
-      .sort()
-      .join(',');
-  }
-  return structure;
-}
-
 function runnerEventsOf(files: Files, trialId: string): readonly JsonObject[] {
-  return records(files.get(EXECUTION_PATHS.runnerJournal) ?? new Uint8Array()).filter(
+  return packageRecords(files.get(EXECUTION_PATHS.runnerJournal) ?? new Uint8Array()).filter(
     (event) => event['trial_id'] === trialId,
   );
 }
@@ -132,7 +82,10 @@ describe('offline trial execution matches the golden base fixture shapes', () =>
         [...files.keys()].filter((path) => path.startsWith(`${directory}/`)).sort();
       const derived = DERIVED_FILES.map((file) => `${directory}/${file}`);
       assert.deepEqual(subjectFiles(offline.files), [...subjectFiles(golden.files), ...derived].sort());
-      assert.deepEqual(fieldShape(offline.files, directory), fieldShape(golden.files, directory));
+      assert.deepEqual(
+        fieldShape(offline.files, directory, DERIVED_FILES),
+        fieldShape(golden.files, directory, DERIVED_FILES),
+      );
       assert.deepEqual(sourceStructure(offline.files, directory), sourceStructure(golden.files, directory));
 
       const executionFiles = (files: Files): readonly string[] =>
