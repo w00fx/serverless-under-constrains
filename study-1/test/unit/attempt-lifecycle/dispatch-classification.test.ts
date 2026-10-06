@@ -11,20 +11,55 @@ import { foldEffectKnowledge } from '../../../src/attempt-lifecycle/effect-knowl
 import { classifyOutcome } from '../../../src/attempt-lifecycle/outcome-classification.ts';
 import type { DispatchState } from '../../../src/record-contract/records/group-b/vocabulary.ts';
 
-const EVIDENCE_VALUES: readonly (boolean | 'unknown')[] = [true, false, 'unknown'];
+type Evidence = boolean | 'unknown';
+const T = true;
+const F = false;
+const U = 'unknown';
+const D = 'DISPATCHED';
+const N = 'NOT_DISPATCHED';
+const X = 'UNKNOWN';
 
-// The rule restated from BR-RUA-021, independently of the implementation's branch order:
-// a recorded dispatch_started crosses the boundary; otherwise the recorded conditional
-// NOT_DISPATCHED transition (of an attempt not proven unregistered) is the only proof of
-// non-dispatch; everything else cannot be located.
-function specDispatch(e: DispatchEvidence): DispatchState {
-  const crossed = e.dispatch_started_recorded === true;
-  const provenPreDispatch = e.not_dispatched_transition_recorded === true && e.pre_dispatch_registered !== false;
-  if (crossed) {
-    return 'DISPATCHED';
-  }
-  return provenPreDispatch ? 'NOT_DISPATCHED' : 'UNKNOWN';
-}
+// The 27 evidence combinations, written out from the BR-RUA-021 text rather than derived from
+// the implementation. Columns: pre-dispatch registration, recorded NOT_DISPATCHED transition,
+// recorded dispatch_started, expected state.
+// - "Immediately before invoking transport, the caller records dispatch_started and sets
+//   DISPATCHED. A crash after that boundary remains conservatively dispatched": every row with
+//   dispatch_started recorded (T) is DISPATCHED.
+// - "NOT_DISPATCHED requires a conditional durable transition proving the attempt failed
+//   before provider-client dispatch began": NOT_DISPATCHED needs the transition recorded (T).
+//   The transition is conditional on the durable pre-dispatch state ("Every physical attempt
+//   begins in a durable pre-dispatch state"), so evidence that the registration is absent (F)
+//   makes the transition unprovable; an unknown registration (U) does not contradict it.
+// - "Absence of a dispatch event ... does not prove NOT_DISPATCHED": every other row is UNKNOWN.
+const EXPECTED: readonly (readonly [Evidence, Evidence, Evidence, DispatchState])[] = [
+  [T, T, T, D],
+  [T, T, F, N],
+  [T, T, U, N],
+  [T, F, T, D],
+  [T, F, F, X],
+  [T, F, U, X],
+  [T, U, T, D],
+  [T, U, F, X],
+  [T, U, U, X],
+  [F, T, T, D],
+  [F, T, F, X],
+  [F, T, U, X],
+  [F, F, T, D],
+  [F, F, F, X],
+  [F, F, U, X],
+  [F, U, T, D],
+  [F, U, F, X],
+  [F, U, U, X],
+  [U, T, T, D],
+  [U, T, F, N],
+  [U, T, U, N],
+  [U, F, T, D],
+  [U, F, F, X],
+  [U, F, U, X],
+  [U, U, T, D],
+  [U, U, F, X],
+  [U, U, U, X],
+];
 
 describe('AC-RUA-028 dispatch boundary crossed or not locatable', () => {
   it('crash-after-dispatch-started: a recorded dispatch_started stays DISPATCHED', () => {
@@ -103,25 +138,27 @@ describe('AC-RUA-028 dispatch boundary crossed or not locatable', () => {
     );
   });
 
-  it('all 27 evidence combinations follow the BR-RUA-021 rule and never yield NOT_DISPATCHED from absence', () => {
-    const combinations: readonly DispatchEvidence[] = EVIDENCE_VALUES.flatMap((registered) =>
-      EVIDENCE_VALUES.flatMap((notDispatched) =>
-        EVIDENCE_VALUES.map((started) => ({
-          pre_dispatch_registered: registered,
-          not_dispatched_transition_recorded: notDispatched,
-          dispatch_started_recorded: started,
-        })),
-      ),
-    );
-    assert.equal(combinations.length, 27);
-    let notDispatchedCount = 0;
-    for (const evidence of combinations) {
-      const state = classifyDispatch(evidence);
-      assert.equal(state, specDispatch(evidence), JSON.stringify(evidence));
-      notDispatchedCount += state === 'NOT_DISPATCHED' ? 1 : 0;
-      assert.ok(state !== 'NOT_DISPATCHED' || evidence.not_dispatched_transition_recorded === true);
+  it('all 27 evidence combinations match the table written from BR-RUA-021', () => {
+    assert.equal(new Set(EXPECTED.map(([r, n, d]) => `${String(r)}/${String(n)}/${String(d)}`)).size, 27);
+    for (const [registered, notDispatched, started, expected] of EXPECTED) {
+      const evidence: DispatchEvidence = {
+        pre_dispatch_registered: registered,
+        not_dispatched_transition_recorded: notDispatched,
+        dispatch_started_recorded: started,
+      };
+      assert.equal(classifyDispatch(evidence), expected, JSON.stringify(evidence));
     }
-    // registered in {true, unknown} x started in {false, unknown}
-    assert.equal(notDispatchedCount, 4);
+  });
+
+  it('spec invariants: NOT_DISPATCHED only with the recorded transition; dispatch_started always DISPATCHED', () => {
+    for (const [registered, notDispatched, started] of EXPECTED) {
+      const state = classifyDispatch({
+        pre_dispatch_registered: registered,
+        not_dispatched_transition_recorded: notDispatched,
+        dispatch_started_recorded: started,
+      });
+      assert.ok(state !== 'NOT_DISPATCHED' || notDispatched === true);
+      assert.ok(started !== true || state === 'DISPATCHED');
+    }
   });
 });

@@ -7,7 +7,7 @@
 // be redelivered by the source queue; the transport probe performs exactly one attempt and
 // has no retry layer (BR-RUA-027).
 
-/** The facts of one failed delivery (conventional), one exhausted inner execution (Durable) or the probe's one attempt. */
+/** The facts of one failed delivery (conventional), one Durable execution's inner retry layer, or the probe's one attempt. */
 export type RetryLayerFacts =
   | {
       readonly variant: 'conventional';
@@ -18,7 +18,7 @@ export type RetryLayerFacts =
     }
   | {
       readonly variant: 'durable';
-      /** The SQS `ApproximateReceiveCount` of the delivery that started the exhausted execution. */
+      /** The SQS `ApproximateReceiveCount` of the delivery that started the execution. */
       readonly receive_count: number;
       readonly max_receive_count: number;
       readonly inner_execution_exhausted: boolean;
@@ -34,39 +34,55 @@ const RETRIES_EXHAUSTED: TerminalityDecision = { processing_state: 'FINISHED', t
 
 /**
  * Decides whether a failed retry layer ends request processing. It is `RETRIES_EXHAUSTED`
- * only when no upstream layer can redeliver: the receive count has reached the source's
- * `maxReceiveCount` (the redrive policy then moves the message to the DLQ), or the caller is
- * the probe, which never retries.
+ * only when no upstream layer can redeliver: the deciding receive is the source's last
+ * (`receive_count == max_receive_count`, after which the redrive policy moves the message to
+ * the DLQ; design §8.7 accepts a recorded `RETRIES_EXHAUSTED` only then), or the caller is the
+ * probe, which never retries. A Durable execution whose inner layer is not exhausted can still
+ * retry its step, so processing keeps running (BR-RUA-024).
  *
- * The facts must describe a failure: a success or a provider rejection finishes processing
- * through `SUCCEEDED` or `PROVIDER_REJECTED`, never through this decision, so a fact set
- * without a failure (or with counts that are not positive safe integers) throws a RangeError.
+ * Throws a RangeError for facts that fit no decision: a conventional or probe attempt without
+ * a failure (a success or a provider rejection finishes through `SUCCEEDED` or
+ * `PROVIDER_REJECTED`, never through this decision), counts that are not positive safe
+ * integers, or a receive count above the maximum (SQS never delivers past the redrive
+ * threshold; a throttle that consumes a receive, RK-08, makes the first real invocation see
+ * `receive_count == max_receive_count`, not more).
  *
  * @example
  * decideTerminality({ variant: 'conventional', receive_count: 1, max_receive_count: 2,
  *   attempt_ambiguous_or_failed: true }); // { processing_state: 'RUNNING', upstream_can_redeliver: true }
  */
 export function decideTerminality(facts: RetryLayerFacts): TerminalityDecision {
-  if (!describesFailure(facts)) {
-    throw new RangeError(
-      `retry-layer facts ${JSON.stringify(facts)} describe no failure; expected attempt_ambiguous_or_failed or inner_execution_exhausted to be true`,
-    );
-  }
   if (facts.variant === 'probe') {
+    assertFailure(facts, facts.attempt_ambiguous_or_failed);
     return RETRIES_EXHAUSTED;
   }
   assertReceiveCounts(facts.receive_count, facts.max_receive_count);
+  if (facts.variant === 'durable' && !facts.inner_execution_exhausted) {
+    return STILL_RUNNING;
+  }
+  if (facts.variant === 'conventional') {
+    assertFailure(facts, facts.attempt_ambiguous_or_failed);
+  }
   return facts.receive_count < facts.max_receive_count ? STILL_RUNNING : RETRIES_EXHAUSTED;
 }
 
-function describesFailure(facts: RetryLayerFacts): boolean {
-  return facts.variant === 'durable' ? facts.inner_execution_exhausted : facts.attempt_ambiguous_or_failed;
+function assertFailure(facts: RetryLayerFacts, failed: boolean): void {
+  if (!failed) {
+    throw new RangeError(
+      `retry-layer facts ${JSON.stringify(facts)} describe no failure; expected attempt_ambiguous_or_failed to be true`,
+    );
+  }
 }
 
 function assertReceiveCounts(receiveCount: number, maxReceiveCount: number): void {
   if (!isPositiveSafeInteger(receiveCount) || !isPositiveSafeInteger(maxReceiveCount)) {
     throw new RangeError(
       `receive_count ${String(receiveCount)} and max_receive_count ${String(maxReceiveCount)}; expected positive safe integers`,
+    );
+  }
+  if (receiveCount > maxReceiveCount) {
+    throw new RangeError(
+      `receive_count ${String(receiveCount)} above max_receive_count ${String(maxReceiveCount)}; expected receive_count <= max_receive_count, because the redrive policy moves the message to the DLQ after the last receive`,
     );
   }
 }

@@ -19,11 +19,15 @@ export const OUTCOME_DISPATCH_CONTRADICTION = 'OUTCOME_DISPATCH_CONTRADICTION';
 
 /**
  * Classifies one attempt outcome together with its dispatch state. A `SUCCEEDED`, `REJECTED`
- * or `TIMED_OUT` outcome that is not `DISPATCHED` contradicts BR-RUA-021 and is returned as
- * an error instead of being guessed into a class.
+ * or `TIMED_OUT` outcome implies `DISPATCHED` (BR-RUA-021), so it keeps its class when the
+ * dispatch evidence cannot tell (`UNKNOWN`, for example a gapped journal; BR-RUA-004 maps
+ * `TIMED_OUT -> UNKNOWN` whatever the dispatch evidence). Only a proven `NOT_DISPATCHED`
+ * contradicts such an outcome, and it is returned as an error instead of being guessed into a
+ * class.
  *
  * @example
  * classifyOutcome('FAILED', 'UNKNOWN'); // { ok: true, value: 'AMBIGUOUS' }
+ * classifyOutcome('TIMED_OUT', 'UNKNOWN'); // { ok: true, value: 'AMBIGUOUS' }
  * classifyOutcome('SUCCEEDED', 'NOT_DISPATCHED').ok; // false
  */
 export function classifyOutcome(
@@ -33,13 +37,13 @@ export function classifyOutcome(
   if (outcome === 'FAILED') {
     return { ok: true, value: dispatch === 'NOT_DISPATCHED' ? 'PRE_DISPATCH_FAILURE' : 'AMBIGUOUS' };
   }
-  if (dispatch !== 'DISPATCHED') {
+  if (dispatch === 'NOT_DISPATCHED') {
     return {
       ok: false,
       error: {
         code: OUTCOME_DISPATCH_CONTRADICTION,
         subject: 'BR-RUA-021',
-        detail: `outcome ${outcome} with dispatch state ${dispatch}; expected dispatch state DISPATCHED, because SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED`,
+        detail: `outcome ${outcome} with dispatch state NOT_DISPATCHED; expected DISPATCHED or UNKNOWN, because SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED`,
       },
     };
   }
