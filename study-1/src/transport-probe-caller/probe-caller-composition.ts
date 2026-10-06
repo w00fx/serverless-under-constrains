@@ -66,6 +66,7 @@ export function composeProbeCaller(runtime: ProbeCallerRuntime): ProbeCaller {
         wall: runtime.wall,
         timer: new DeadlineTimer({ monotonic: runtime.monotonic, scheduler: runtime.scheduler }),
         ids: runtime.ids,
+        maxDefinitiveRetries: PROBE_CALLER_JOURNAL_DEFINITIVE_RETRIES,
       }),
   });
 }

@@ -35,6 +35,8 @@ export interface RecordedTransition {
   readonly operation: AttemptOperation;
   readonly attempt_id: Uuid4;
   readonly event_type: JournalEvent['record_type'];
+  /** The reserved journal put the call carried; an identical retry carries the same one. */
+  readonly put: PreparedJournalPut;
   /** The outcome returned, or `thrown` when the port threw. */
   readonly outcome: WriteOutcome | { readonly kind: 'thrown' };
 }
@@ -112,7 +114,7 @@ export class RecordingAttemptStatePort implements AttemptStatePort {
   ): Promise<WriteOutcome> {
     const fault = this.#faults.get(operation)?.shift();
     const record = (outcome: RecordedTransition['outcome']): void => {
-      this.#calls.push({ operation, attempt_id: attemptId, event_type: event.event.record_type, outcome });
+      this.#calls.push({ operation, attempt_id: attemptId, event_type: event.event.record_type, put: event, outcome });
     };
     if (fault?.kind === 'throw') {
       record({ kind: 'thrown' });
