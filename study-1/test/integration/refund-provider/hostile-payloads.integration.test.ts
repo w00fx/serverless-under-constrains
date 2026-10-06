@@ -4,7 +4,10 @@
 // limited only by the payload size. WP-07 review round 1 found that such calls threw a raw
 // TypeError or RangeError from the request digest and the guards' details, so they were neither
 // received nor rejected. Each is now received, judged and rejected with a fresh provider_call_id,
-// with no transaction and the treatment left armed.
+// with no transaction and the treatment left armed. Owner amendment A-05 fixes the regression set
+// of this boundary: nesting of at least 100,000 levels, non-finite numbers, and members named like
+// Object.prototype members, which JSON.parse makes own properties and which must never be read
+// through the prototype chain.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -36,7 +39,7 @@ import {
 } from '../../unit/refund-provider/support/provider-fixtures.ts';
 import { expectProviderFault } from './support/fault-assertions.ts';
 
-const DEEP = 50_000;
+const DEEP = 100_000;
 const DEEP_ARRAY_TEXT = `${'['.repeat(DEEP)}${']'.repeat(DEEP)}`;
 const DEEP_OBJECT_TEXT = `${'{"a":'.repeat(DEEP)}1${'}'.repeat(DEEP)}`;
 /** The marker the kernel's `boundedJsonText` appends to a cut text. */
@@ -211,6 +214,28 @@ describe('RefundProvider over runtime-parsed hostile payloads', () => {
     assert.equal(detail, 'caller_id absent; expected the registered caller "probe"');
   });
 
+  it('rejects own members named like Object.prototype members as SCHEMA_INVALID', async () => {
+    for (const member of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+      const harness = armedTrial();
+      const payload = parsedWith(validCall(), member, '{"caller_id":"conventional"}');
+      assert.ok(Object.hasOwn(payload, member));
+      const detail = await expectRecordedRejection(harness, TRIAL_PK, payload, 'SCHEMA_INVALID');
+      assert.ok(detail.startsWith(`property ${JSON.stringify(member)} is not part of provider_refund_call`), detail);
+    }
+  });
+
+  it('never reads the caller through an own __proto__ member (authorization comes first)', async () => {
+    const withoutCaller = Object.fromEntries(Object.entries(validCall()).filter(([key]) => key !== 'caller_id'));
+    const harness = armedTrial();
+    const detail = await expectRecordedRejection(
+      harness,
+      TRIAL_PK,
+      parsedWith(withoutCaller, '__proto__', '{"caller_id":"conventional"}'),
+      'AUTHORIZATION_FAILED',
+    );
+    assert.equal(detail, 'caller_id absent; expected the registered caller "conventional"');
+  });
+
   it('refuses a warm-up with a non-finite or deeply nested member as WARMUP_REQUEST_INVALID', async () => {
     const warmup: JsonObject = {
       schema_version: 1,
@@ -235,6 +260,28 @@ describe('RefundProvider over runtime-parsed hostile payloads', () => {
       'before_commit',
     );
     assert.match(deep.message, /warmup_id is array \[{200}…\[truncated\]; expected a lowercase/u);
+    assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
+  });
+
+  it('refuses a warm-up with own members named like Object.prototype members', async () => {
+    const warmup: JsonObject = {
+      schema_version: 1,
+      record_type: 'provider_warmup_request',
+      run_id: RUN_ID,
+      execution_manifest_sha256: MANIFEST_SHA,
+      warmup_id: WARMUP_ID,
+    };
+    const harness = providerHarness();
+    // `hasOwnProperty` is the minimized input of the warm-up differential (seed 1709518504): the
+    // guard refuses it although the group-B schema still accepts it on this branch (A-07).
+    for (const member of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+      const fault = await expectProviderFault(
+        harness.provider.handle(parsedWith(warmup, member, '{"warmup_id":1}')),
+        'WARMUP_REQUEST_INVALID',
+        'before_commit',
+      );
+      assert.match(fault.message, new RegExp(`property "${member}" is not part of provider_warmup_request`, 'u'));
+    }
     assert.deepEqual(harness.store.itemsIn('experiment_journal'), []);
   });
 });
