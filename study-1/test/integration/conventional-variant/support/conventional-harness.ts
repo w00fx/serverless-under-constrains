@@ -2,14 +2,16 @@
 // the caller journal and trial registry, the ScriptedProviderInvoker, and the FIFO source with
 // its DLQ driven by the fake event source mapping, all on one virtual clock. Tests publish the
 // trial message as the runner does (`MessageGroupId = MessageDeduplicationId = trial_id`) and
-// poll the mapping, advancing virtual time past the 60 s visibility timeout between receives.
+// poll the mapping, advancing virtual time past the 60 s visibility timeout between receives. The
+// mapping invokes the production Lambda entry, so every delivery that does not complete also
+// leaves its log line in the recording sink.
 
 import assert from 'node:assert/strict';
 
 import { composeConventionalConsumer } from '../../../../src/conventional-variant/conventional-composition.ts';
 import type { ConventionalRefundConsumer } from '../../../../src/conventional-variant/conventional-consumer.ts';
 import type { VariantDeployment } from '../../../../src/conventional-variant/conventional-environment.ts';
-import { consumeSqsEvent } from '../../../../src/conventional-variant/sqs-event-consumption.ts';
+import { createConventionalLambdaEntry } from '../../../../src/conventional-variant/conventional-lambda-entry.ts';
 import type { DurableItemStore } from '../../../../src/durable-store/item-store-port.ts';
 import type { JournalEvent } from '../../../../src/event-journal/journal-event.ts';
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
@@ -32,6 +34,7 @@ import {
   messageBody,
   runRegistration,
 } from '../../../unit/trial-message/support/trial-message-fixtures.ts';
+import { RecordingConventionalLogSink } from './recording-conventional-log-sink.ts';
 
 /** OR-RUA-002: the conventional source's visibility timeout. */
 export const VISIBILITY_TIMEOUT_MS = 60_000;
@@ -45,6 +48,8 @@ export interface ConventionalHarness {
   readonly source: InMemoryFifoQueue;
   readonly dlq: InMemoryFifoQueue;
   readonly driver: FakeSqsEsmDriver;
+  /** The log lines the Lambda entry wrote, one per delivery that did not complete. */
+  readonly log: RecordingConventionalLogSink;
 }
 
 export interface HarnessOptions {
@@ -84,12 +89,13 @@ export function conventionalHarness(options: HarnessOptions = {}): ConventionalH
     visibilityTimeoutMs: VISIBILITY_TIMEOUT_MS,
     redrive: { maxReceiveCount: 2, deadLetterQueue: dlq },
   });
+  const log = new RecordingConventionalLogSink();
   const driver = new FakeSqsEsmDriver({
     queue: source,
-    invoke: (event, context): Promise<void> => consumeSqsEvent(consumer, event, context.awsRequestId),
+    invoke: createConventionalLambdaEntry({ consumer: () => consumer, log }),
     event_source_arn: SOURCE_ARN,
   });
-  return { time, store, invoker, consumer, source, dlq, driver };
+  return { time, store, invoker, consumer, source, dlq, driver, log };
 }
 
 /** Publishes a body as the runner does; returns the SQS message id. */

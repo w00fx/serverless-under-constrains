@@ -2,7 +2,8 @@
 // `live` alias, BatchSize 1, 10 s timeout). Clients are created lazily on the first invocation,
 // and nothing compiles a schema at load time (RK-01). A completed delivery returns, so the event
 // source mapping deletes the message; a propagated failure or a fault is logged as one JSON line
-// and thrown, so the message returns after the visibility timeout (BR-RUA-020).
+// and thrown, so the message returns after the visibility timeout (BR-RUA-020). The logging and
+// rethrow live in conventional-lambda-entry.ts, where tests reach them; this shell only wires.
 
 import { createStoreDynamoDbClient } from '../durable-store/aws/dynamodb-client.ts';
 import { createDynamoDbItemStore } from '../durable-store/aws/dynamodb-item-store.ts';
@@ -11,13 +12,11 @@ import {
   createProviderLambdaClient,
 } from '../provider-client/aws/provider-lambda-client.ts';
 import { createProviderInvoker } from '../provider-client/aws/provider-lambda-invoker.ts';
-import type { JsonValue } from '../record-contract/primitives.ts';
 import { composeConventionalConsumer } from './conventional-composition.ts';
 import type { ConventionalRefundConsumer } from './conventional-consumer.ts';
 import { parseConventionalEnvironment } from './conventional-environment.ts';
-import { ConventionalCallerFault, DeliveryFailurePropagated } from './conventional-fault.ts';
+import { createConventionalLambdaEntry } from './conventional-lambda-entry.ts';
 import { conventionalSystemRuntime } from './node/system-runtime.ts';
-import { consumeSqsEvent } from './sqs-event-consumption.ts';
 
 let consumer: ConventionalRefundConsumer | undefined;
 
@@ -55,15 +54,7 @@ function consumerInstance(): ConventionalRefundConsumer {
  * @example
  * await handler(sqsEvent, { awsRequestId: 'req-1' }); // resolves when the delivery completed
  */
-export async function handler(event: JsonValue, context: { readonly awsRequestId: string }): Promise<void> {
-  try {
-    await consumeSqsEvent(consumerInstance(), event, context.awsRequestId);
-  } catch (error) {
-    const line =
-      error instanceof ConventionalCallerFault || error instanceof DeliveryFailurePropagated
-        ? error.toLog()
-        : { level: 'error', event: 'conventional_caller_error', detail: String(error) };
-    process.stderr.write(`${JSON.stringify(line)}\n`);
-    throw error;
-  }
-}
+export const handler = createConventionalLambdaEntry({
+  consumer: consumerInstance,
+  log: { write: (line) => process.stderr.write(`${JSON.stringify(line)}\n`) },
+});

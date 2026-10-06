@@ -1,8 +1,8 @@
 // One Lambda SQS event through the consumer, as the event source mapping sees it: the promise
 // resolves when the delivery completed (the mapping deletes the message) and rejects when it did
-// not (the message returns after the visibility timeout, BR-RUA-020). The handler adds only the
-// lazy wiring and the log line, so offline tests drive this exact path through the FIFO
-// emulator.
+// not (the message returns after the visibility timeout, BR-RUA-020). The Lambda entry
+// (conventional-lambda-entry.ts) adds the log line and the handler shell only the lazy wiring, so
+// offline tests drive this exact path through the FIFO emulator.
 
 import type { JsonValue } from '../record-contract/primitives.ts';
 import type { ConventionalRefundConsumer } from './conventional-consumer.ts';
