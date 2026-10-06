@@ -26,7 +26,7 @@ import { freezeTrialEvidence } from './trial-freeze.ts';
 import { freezeTrialInputs } from './trial-inputs.ts';
 import type { FrozenTrialInputs, TrialFileTarget } from './trial-inputs.ts';
 import { publishTrialMessage } from './trial-publication.ts';
-import { armTreatment, gateClosed, verifyPartitionsAbsent, writeControlItems } from './trial-setup.ts';
+import { armTreatment, describeReasons, gateClosed, verifyPartitionsAbsent, writeControlItems } from './trial-setup.ts';
 import type { UnitSetupContext } from './trial-setup.ts';
 import type {
   PublicationGate,
@@ -249,7 +249,7 @@ export class TrialExecutor {
         level: 'error',
         event: 'trial_freeze_failed',
         trial_id: trialId,
-        detail: describe(frozen.error),
+        detail: describeReasons(frozen.error),
       });
       return { kind: 'freeze_failed', trial_id: trialId, reasons: frozen.error };
     }
@@ -272,11 +272,7 @@ export class TrialExecutor {
 
   #notStarted(plan: TrialPlan, reasons: readonly StructuredReason[]): TrialExecutionReport {
     const trialId = plan.trial.trial_id;
-    this.#deps.log({ level: 'warn', event: 'trial_not_started', trial_id: trialId, detail: describe(reasons) });
+    this.#deps.log({ level: 'warn', event: 'trial_not_started', trial_id: trialId, detail: describeReasons(reasons) });
     return { kind: 'not_started', trial_id: trialId, reasons };
   }
-}
-
-function describe(reasons: readonly StructuredReason[]): string {
-  return reasons.map((reason) => `${reason.code}: ${reason.detail}`).join('; ');
 }

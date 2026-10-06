@@ -164,6 +164,16 @@ export function gateClosed(gate: PublicationGate): StructuredReason | undefined 
   };
 }
 
+/**
+ * Structured reasons as one diagnostic log detail: `CODE: detail` joined by `; `.
+ *
+ * @example
+ * describeReasons([{ code: 'PUBLICATION_GATE_CLOSED', subject, detail: 'closed' }]); // 'PUBLICATION_GATE_CLOSED: closed'
+ */
+export function describeReasons(reasons: readonly StructuredReason[]): string {
+  return reasons.map((reason) => `${reason.code}: ${reason.detail}`).join('; ');
+}
+
 const ABSENT: Condition = { kind: 'item_absent' };
 
 // D-21: the registry item is written conditionally on the version the runner read, so two
