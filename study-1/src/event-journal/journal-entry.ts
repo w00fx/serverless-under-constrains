@@ -22,6 +22,9 @@ export interface JournalEntry {
  * toJournalEntry(journalItemKey(scope, source, instance, 1), event).item.pk; // the partition key
  */
 export function toJournalEntry(key: ItemKey, event: JournalEvent): JournalEntry {
+  // An event is a JSON object, but its record interfaces carry no index signature, so it does
+  // not widen to StoredItem on its own. The item is exactly the event plus its key, checked for
+  // every event record type in test/integration/event-journal/journal-builder-catalogue.
   const item = { ...event, pk: key.pk, sk: key.sk } as unknown as StoredItem;
   return { key, event, item };
 }

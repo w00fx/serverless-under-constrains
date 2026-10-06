@@ -75,5 +75,8 @@ export function buildJournalEvent<T extends EventRecordType>(
     source_sequence: input.source_sequence,
     ...(causation === undefined ? {} : { causation_event_ids: causation }),
   };
+  // The one cast of the builder: TypeScript cannot relate a spread of the generic body
+  // `EventBody<T>` back to the union member it came from. Its soundness is checked at runtime
+  // for every event record type (test/integration/event-journal/journal-builder-catalogue).
   return event as unknown as JournalEvent;
 }
