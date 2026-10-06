@@ -43,7 +43,7 @@
       "maximum": 12
     },
     "step_status": {
-      "enum": ["STARTED", "SUCCEEDED", "FAILED", "SKIPPED"]
+      "enum": ["started", "succeeded", "failed", "skipped"]
     },
     "cleanup_mode": {
       "enum": ["NORMAL", "EMERGENCY"]

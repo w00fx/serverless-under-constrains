@@ -150,8 +150,11 @@ export const EXECUTION_PHASES = [
 ] as const;
 export type ExecutionPhase = (typeof EXECUTION_PHASES)[number];
 
-/** Progress of a runner phase or a cleanup step. */
-export const STEP_STATUSES = ['STARTED', 'SUCCEEDED', 'FAILED', 'SKIPPED'] as const;
+/**
+ * Progress of a runner phase or a cleanup step: an operational status, so lowercase (design §6.1
+ * "every operational status is lowercase"), spelled like BR-RUA-051 `cleanup_status`.
+ */
+export const STEP_STATUSES = ['started', 'succeeded', 'failed', 'skipped'] as const;
 export type StepStatus = (typeof STEP_STATUSES)[number];
 
 /** Provisioning journal events (design §6.2 row 46, §9.8 D1-D4). */

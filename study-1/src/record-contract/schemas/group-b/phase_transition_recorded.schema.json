@@ -44,7 +44,7 @@
       ]
     },
     "status": {
-      "enum": ["STARTED", "SUCCEEDED", "FAILED", "SKIPPED"]
+      "enum": ["started", "succeeded", "failed", "skipped"]
     },
     "reasons": {
       "$ref": "_defs.schema.json#/$defs/structured_reasons"

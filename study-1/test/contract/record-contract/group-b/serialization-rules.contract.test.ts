@@ -9,6 +9,7 @@ import { isDecimalString } from '../../../../src/record-contract/decimal.ts';
 import { isSha256Hex } from '../../../../src/record-contract/digests.ts';
 import { isUuid4 } from '../../../../src/record-contract/identifiers.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
+import * as vocabulary from '../../../../src/record-contract/records/group-b/vocabulary.ts';
 import { isUtcMillis } from '../../../../src/record-contract/timestamps.ts';
 import { GROUP_B_EXAMPLES } from './examples/group-b-examples.ts';
 import { assertAccepted, assertRejected } from './support/group-b-validation.ts';
@@ -68,6 +69,15 @@ function isBoolean(value: JsonValue): boolean {
 }
 
 const UPPER_SNAKE_VALUE = /^[A-Z][A-Z0-9_]*[A-Z]$/;
+
+// Every lowercase value of a group-B closed vocabulary (design §6.1: verdict, validity,
+// eligibility and every operational status are lowercase), so a status catalogued in the wrong
+// case is caught where it is written, not only an UPPER_SNAKE value lowercased.
+const LOWERCASE_VOCABULARY: ReadonlySet<string> = new Set(
+  Object.values(vocabulary)
+    .flatMap((exported): readonly unknown[] => (Array.isArray(exported) ? exported : [exported]))
+    .filter((value): value is string => typeof value === 'string' && /^[a-z][a-z_]*$/.test(value)),
+);
 
 // Members of nested objects across all examples (each checked for omission).
 const NESTED_MEMBER_COUNT = 122;
@@ -135,7 +145,9 @@ describe('AC-RUA-046 serialization rules over group B', () => {
       assertRejected(withMember(json, 'record_type', textOf(json['record_type'] ?? null).toUpperCase()), example.label);
     }
     const upperSnake = (value: JsonValue): boolean => typeof value === 'string' && UPPER_SNAKE_VALUE.test(value);
-    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 74);
+    assert.equal(rejectEveryGovernedLeaf(upperSnake, [(value): JsonValue => textOf(value).toLowerCase()]), 71);
+    const lowercase = (value: JsonValue): boolean => typeof value === 'string' && LOWERCASE_VOCABULARY.has(value);
+    assert.equal(rejectEveryGovernedLeaf(lowercase, [(value): JsonValue => textOf(value).toUpperCase()]), 46);
   });
 
   it('millisecond UTC', () => {

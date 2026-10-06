@@ -127,8 +127,8 @@ export function succeededCleanup(): CleanupResult {
     cleanup_mode: 'NORMAL',
     cleanup_status: 'succeeded',
     steps: [
-      { step: 1, status: 'SUCCEEDED', started_at: at(5000), completed_at: at(5001), reasons: [] },
-      { step: 2, status: 'SKIPPED', reasons: [reason('NO_LATE_EVIDENCE_WINDOW', 'late evidence')] },
+      { step: 1, status: 'succeeded', started_at: at(5000), completed_at: at(5001), reasons: [] },
+      { step: 2, status: 'skipped', reasons: [reason('NO_LATE_EVIDENCE_WINDOW', 'late evidence')] },
     ],
     resources: [
       {
@@ -206,7 +206,7 @@ export function runningCleanup(): CleanupResult {
     execution_manifest_sha256: EXECUTION_MANIFEST_SHA256,
     cleanup_mode: 'NORMAL',
     cleanup_status: 'running',
-    steps: [{ step: 1, status: 'STARTED', started_at: at(5200), reasons: [] }],
+    steps: [{ step: 1, status: 'started', started_at: at(5200), reasons: [] }],
     resources: [],
     stopped_durable_execution_arns: [],
     deleted_dlq_message_ids: [],
