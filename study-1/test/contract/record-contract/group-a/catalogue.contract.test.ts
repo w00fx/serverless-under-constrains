@@ -46,7 +46,7 @@ const GROUP_A = RECORD_TYPE_GROUPS['group-a'];
 const RUNTIME_EXPORTS: Partial<Readonly<Record<(typeof GROUP_A)[number], readonly string[]>>> = {
   admission_rejection: ['ADMISSION_CHECK_IDS', 'ADMISSION_REJECTION_CLASSES'],
   execution_manifest: ['CA_1_SCOPE', 'CA_1_STATEMENT', 'RUN_TRIAL_ORDER', 'VALIDATION_SCENARIO_ORDER'],
-  preflight_check_recorded: ['PREFLIGHT_CHECK_RESULTS'],
+  preflight_check_recorded: ['PREFLIGHT_CHECK_RESULTS', 'PREFLIGHT_VALUE_MAX_DEPTH'],
   provider_refund_call: ['PROVIDER_CALLER_IDS'],
   provider_refund_response: ['PROVIDER_REFUND_OUTCOMES', 'PROVIDER_REJECTION_REASONS'],
   resource_manifest: ['OWNERSHIP_TAG_KEYS', 'PROVISIONING_STATUSES'],
