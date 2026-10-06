@@ -89,6 +89,13 @@ export const SAMPLE_LOCK_ENTRIES: Readonly<Record<string, LockEntryFixture>> = {
   'node_modules/dev-only': lockEntry('dev-only', '0.1.0', { dev: true }),
 };
 
+/** The installed versions of the closure of `SAMPLE_BUNDLES` and `SAMPLE_POLICY`, as locked. */
+export const SAMPLE_INSTALLED_VERSIONS: Readonly<Record<string, string>> = {
+  'node_modules/transport-dep': '1.0.0',
+  'node_modules/transport-dep/node_modules/@inner/helper': '2.0.0',
+  'node_modules/@scope/declared-dep': '4.1.0',
+};
+
 export const SAMPLE_LOCK_BYTES = new TextEncoder().encode(lockfileJson(SAMPLE_LOCK_ENTRIES));
 
 export function sampleLock(
@@ -226,6 +233,15 @@ export function cdkTemplate(variant: TemplateVariant = {}): JsonObject {
   } as JsonObject;
 }
 
+/** Installed versions equal to the locked version of every lockfile entry that has one. */
+export function installedAsLocked(lock: ScopeSnapshotInput['lock']): ReadonlyMap<string, string> {
+  return new Map(
+    [...lock.packages].flatMap(([installPath, locked]) =>
+      locked.version === undefined ? [] : [[installPath, locked.version] as const],
+    ),
+  );
+}
+
 /** The complete input of `computeScopeSnapshot` for the miniature project. */
 export function sampleSnapshotInput(overrides: Partial<ScopeSnapshotInput> = {}): ScopeSnapshotInput {
   return {
@@ -234,6 +250,7 @@ export function sampleSnapshotInput(overrides: Partial<ScopeSnapshotInput> = {})
     committed_files: rootFilesOf(SAMPLE_COMMITTED_FILES),
     source_digests: digestsOf(SAMPLE_COMMITTED_FILES),
     lock: sampleLock(),
+    installed_versions: new Map(Object.entries(SAMPLE_INSTALLED_VERSIONS)),
     template: cdkTemplate(),
     runtime: SAMPLE_RUNTIME,
     timing: SAMPLE_TIMING,

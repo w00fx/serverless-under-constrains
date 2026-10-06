@@ -32,7 +32,9 @@ import {
   SHARED_PRIMITIVES,
   cdkTemplate,
   digestsOf,
+  installedAsLocked,
   loadedPolicy,
+  sampleLock,
   sampleSnapshotInput,
 } from './support/scope-fixtures.ts';
 
@@ -168,7 +170,9 @@ describe('computeScopeSnapshot', () => {
     const base = snapshotOf(sampleSnapshotInput());
     const changed = snapshotOf(sampleSnapshotInput({ template: cdkTemplate({ providerReservedConcurrency: 1 }) }));
     assert.notEqual(scopeSnapshotSha256(changed), scopeSnapshotSha256(base));
+    // Construct-path order: ExperimentCore/Controller/... before ExperimentCore/Provider/...
     assert.deepEqual(changed.configuration_projections[0].resources, [
+      UNRESERVED_FUNCTION,
       {
         property_values: [
           { property_path: 'Properties.MemorySize', canonical_json: '512' },
@@ -176,7 +180,6 @@ describe('computeScopeSnapshot', () => {
           { property_path: 'Properties.Timeout', canonical_json: '30' },
         ],
       },
-      UNRESERVED_FUNCTION,
     ]);
   });
 
@@ -271,8 +274,10 @@ describe('computeScopeSnapshot refusals', () => {
       },
       SAMPLE_BUNDLES[1],
     ].filter((bundle) => bundle !== undefined);
+    // Everything locked is installed as locked, so only the lock and dev checks speak.
+    const installed_versions = installedAsLocked(sampleLock());
     assert.deepEqual(
-      reasonsOf(sampleSnapshotInput({ bundles })).map((reason) => reason.code),
+      reasonsOf(sampleSnapshotInput({ bundles, installed_versions })).map((reason) => reason.code),
       ['BUNDLED_PACKAGE_NOT_PRODUCTION', 'DEPENDENCY_NOT_LOCKED'],
     );
   });
@@ -282,7 +287,7 @@ describe('computeScopeSnapshot refusals', () => {
       {
         code: 'TEMPLATE_INVALID',
         subject: 'BR-RUA-028',
-        detail: 'template Resources is []; expected an object of resources',
+        detail: 'template Resources is array []; expected an object of resources',
       },
     ]);
   });

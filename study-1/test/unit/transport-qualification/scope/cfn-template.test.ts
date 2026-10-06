@@ -66,7 +66,7 @@ describe('listTemplateResources', () => {
       error: {
         code: 'TEMPLATE_INVALID',
         subject: 'BR-RUA-028',
-        detail: 'template Resources.Q is {}; expected an object with a string Type',
+        detail: 'template Resources.Q is object {}; expected an object with a string Type',
       },
     });
     assert.deepEqual(listTemplateResources(Object.create({ Resources: {} }) as never), {
@@ -97,7 +97,7 @@ describe('listTemplateResources', () => {
       error: {
         code: 'TEMPLATE_INVALID',
         subject: 'BR-RUA-028',
-        detail: 'template Resources is null; expected an object of resources',
+        detail: 'template Resources is null null; expected an object of resources',
       },
     });
   });
@@ -108,7 +108,7 @@ describe('listTemplateResources', () => {
       error: {
         code: 'TEMPLATE_INVALID',
         subject: 'BR-RUA-028',
-        detail: 'template Resources.A is "text"; expected an object with a string Type',
+        detail: 'template Resources.A is string "text"; expected an object with a string Type',
       },
     });
     assert.deepEqual(listTemplateResources({ Resources: { B: { Type: 3 } } }), {
@@ -116,7 +116,7 @@ describe('listTemplateResources', () => {
       error: {
         code: 'TEMPLATE_INVALID',
         subject: 'BR-RUA-028',
-        detail: 'template Resources.B is {"Type":3}; expected an object with a string Type',
+        detail: 'template Resources.B is object {"Type":3}; expected an object with a string Type',
       },
     });
   });

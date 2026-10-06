@@ -80,7 +80,27 @@ describe('committed transport-scope policy', () => {
       projections.map(() => 'experiment_core'),
     );
     const versions = projections.find((projection) => projection.resource_type === 'AWS::Lambda::Version');
-    assert.deepEqual(versions?.property_paths, ['Properties.ProvisionedConcurrencyConfig']);
+    assert.deepEqual(versions?.property_paths, ['Properties.FunctionName', 'Properties.ProvisionedConcurrencyConfig']);
+  });
+
+  it('projects a property naming each resource, so entries identify themselves (WP-11 review round 1)', () => {
+    const parsed = committedPolicy();
+    assert.ok(parsed.ok);
+    assert.deepEqual(
+      parsed.value.policy.configuration_projections.map((projection) => [
+        projection.projection_id,
+        projection.property_paths.filter((path) =>
+          ['Properties.FunctionName', 'Properties.Role', 'Properties.Roles', 'Properties.TableName'].includes(path),
+        ),
+      ]),
+      [
+        ['experiment_core__functions', ['Properties.Role']],
+        ['experiment_core__versions', ['Properties.FunctionName']],
+        ['experiment_core__stream_mappings', ['Properties.FunctionName']],
+        ['experiment_core__tables', ['Properties.TableName']],
+        ['experiment_core__policies', ['Properties.Roles']],
+      ],
+    );
   });
 
   it('declares exactly the bundling runtime properties the esbuild resolver binds', () => {

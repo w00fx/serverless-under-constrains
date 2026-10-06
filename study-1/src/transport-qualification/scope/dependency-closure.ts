@@ -2,6 +2,12 @@
 // package the bundler pulled into a transport entry point, plus every dependency the policy
 // declares relevant, each resolved to its exact locked version.
 //
+// The probe qualifies only the code it actually exercised (BR-RUA-028), and the bundler reads
+// packages from `node_modules`, not from the lockfile. Every closure package must therefore be
+// installed at its locked version: a stale install (lockfile 1.1.0, `node_modules` still 1.0.0)
+// would otherwise bind 1.1.0 to a probe that ran 1.0.0, and a later run on 1.1.0 would pass as
+// no drift (WP-11 review round 1, verify/spec-r1-stale-install.log).
+//
 // The lockfile digest binds only the closure's own lockfile entries (version, tarball URL and
 // integrity). A dependency change elsewhere in the lockfile, such as a reporting-only package,
 // therefore never drifts the scope, while a re-published tarball under the same version does.
@@ -21,6 +27,8 @@ export interface DependencyClosureInput {
   /** Package names the policy declares relevant; each resolves at `node_modules/<name>`. */
   readonly declared_dependencies: readonly string[];
   readonly lock: PackageLock;
+  /** The installed `package.json` version of each closure install path; an absent path is not installed. */
+  readonly installed_versions: ReadonlyMap<string, string>;
 }
 
 export interface DependencyClosure {
@@ -35,24 +43,39 @@ type LockedVersionedPackage = LockedPackage & { readonly version: string };
 const encoder = new TextEncoder();
 
 /**
- * Resolves the closure against the lockfile, reporting every unlocked or development-only
- * bundled package.
+ * The install paths of the closure: every bundled package and every declared dependency, sorted
+ * and unique.
  *
  * @example
- * resolveDependencyClosure({ bundled_packages: ['node_modules/@smithy/types'], declared_dependencies: ['esbuild'], lock });
+ * closureInstallPaths(['node_modules/@smithy/types'], ['esbuild']); // ['node_modules/@smithy/types', 'node_modules/esbuild']
+ */
+export function closureInstallPaths(bundled: readonly string[], declared: readonly string[]): readonly string[] {
+  return sortedCodeUnits(new Set([...bundled, ...declared.map((name) => `node_modules/${name}`)]));
+}
+
+/**
+ * Resolves the closure against the lockfile, reporting every unlocked, development-only or
+ * not-as-locked installed package.
+ *
+ * @example
+ * resolveDependencyClosure({ bundled_packages: ['node_modules/@smithy/types'], declared_dependencies: ['esbuild'], lock,
+ *   installed_versions: new Map([['node_modules/@smithy/types', '4.3.1'], ['node_modules/esbuild', '0.28.2']]) });
  */
 export function resolveDependencyClosure(
   input: DependencyClosureInput,
 ): Result<DependencyClosure, readonly StructuredReason[]> {
   const reasons: StructuredReason[] = [];
   const resolved: LockedVersionedPackage[] = [];
-  const declaredPaths = input.declared_dependencies.map((name) => `node_modules/${name}`);
   const bundled = new Set(input.bundled_packages);
-  for (const installPath of sortedCodeUnits(new Set([...input.bundled_packages, ...declaredPaths]))) {
+  for (const installPath of closureInstallPaths(input.bundled_packages, input.declared_dependencies)) {
     const locked = lockedVersion(input.lock, installPath);
     if (!locked.ok) {
       reasons.push(locked.error);
       continue;
+    }
+    const installed = input.installed_versions.get(installPath);
+    if (installed !== locked.value.version) {
+      reasons.push(installMismatch(installPath, installed, locked.value.version));
     }
     if (bundled.has(installPath) && locked.value.dev) {
       reasons.push(
@@ -86,6 +109,15 @@ function lockedVersion(lock: PackageLock, installPath: string): Result<LockedVer
     };
   }
   return { ok: true, value: { ...locked, version: locked.version } };
+}
+
+function installMismatch(installPath: string, installed: string | undefined, locked: string): StructuredReason {
+  const found = installed === undefined ? 'not installed' : `installed at ${installed}`;
+  return scopeViolation(
+    'DEPENDENCY_INSTALL_MISMATCH',
+    `${installPath} is ${found} but ${PACKAGE_LOCK_PATH} locks ${locked}; expected the locked version installed ` +
+      '(npm ci at the admitted revision)',
+  );
 }
 
 function uniqueDependencies(packages: readonly LockedVersionedPackage[]): readonly ResolvedDependency[] {

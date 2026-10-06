@@ -14,8 +14,10 @@ import { GitCommittedSourceReader } from '../../../../src/transport-qualificatio
 import { recomputeScopeSnapshot } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
 import { TRANSPORT_SCOPE_POLICY_PATH } from '../../../../src/transport-qualification/scope/scope-policy.ts';
 import { FixedBundleInputResolver } from '../../../unit/transport-qualification/scope/support/fixed-bundle-input-resolver.ts';
+import { MemoryInstalledPackageReader } from '../../../unit/transport-qualification/scope/support/memory-installed-package-reader.ts';
 import {
   SAMPLE_BUNDLES,
+  SAMPLE_INSTALLED_VERSIONS,
   SAMPLE_RUNTIME,
   SAMPLE_TIMING,
   cdkTemplate,
@@ -152,6 +154,7 @@ describe('GitCommittedSourceReader', () => {
       {
         sources: new GitCommittedSourceReader({ projectRoot: project.projectRoot, revision: 'no-such-revision' }),
         bundles: new FixedBundleInputResolver(SAMPLE_BUNDLES),
+        installed: new MemoryInstalledPackageReader(SAMPLE_INSTALLED_VERSIONS),
         validator: createRecordValidator(),
       },
     );

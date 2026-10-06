@@ -1,7 +1,7 @@
 // The committed transport-scope policy over the real transport (BR-RUA-028, AC-RUA-051 feed):
 // WP-08's real ExperimentCore, with the ProbeCaller in the probe stack, is synthesized for a
 // TRANSPORT_PROBE stack and a RUN stack, and the scope is recomputed with the committed policy
-// over this repository's committed closure through the production git and esbuild adapters.
+// over the real transport closure through the production git, esbuild and node_modules adapters.
 //
 // Selection depends on the CDK `aws:cdk:path` resource metadata, which `cdk synth` (design §9.8
 // S1) emits by default and a programmatic `new App()` emits only with the context key
@@ -9,12 +9,18 @@
 // probe and run scopes agree (no drift); without it the scope is refused with its own reason
 // instead of a misleading PROJECTION_SELECTS_NOTHING.
 //
+// Repeatability (WP-11 review round 1): the outcome must not depend on the VCS state of this
+// checkout. The study's `src/`, `infra/`, `package.json` and `package-lock.json` are therefore
+// copied as they are on disk into a temporary repository and committed there; the git reader
+// reads that commit while esbuild and the installed-package reader read the same files in place
+// (they resolve `node_modules`, which a copy could not reproduce at the lockfile's paths). Both
+// trees hold the same bytes, which is the coherence admission gets from a clean HEAD (A5).
+//
 // Real CDK synthesis and local esbuild bundling; Docker is forbidden (CDK_DOCKER points at the
-// sentinel) and nothing touches AWS. The committed closure is read at HEAD, so a scoped file
-// that exists only in the working tree is (correctly) reported as not committed.
+// sentinel) and nothing touches AWS.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -29,18 +35,32 @@ import { stackName } from '../../../../infra/ownership/resource-naming.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import type { TransportScopeSnapshot } from '../../../../src/record-contract/records/group-a/transport_scope_snapshot.ts';
 import { createRecordValidator } from '../../../../src/record-contract/schema-registry.ts';
+import type { BundleInputs } from '../../../../src/transport-qualification/scope/bundle-inputs.ts';
 import { CDK_PATH_METADATA_CONTEXT_KEY } from '../../../../src/transport-qualification/scope/cfn-template.ts';
 import { EsbuildBundleInputResolver } from '../../../../src/transport-qualification/scope/node/esbuild-bundle-input-resolver.ts';
 import { GitCommittedSourceReader } from '../../../../src/transport-qualification/scope/node/git-committed-source-reader.ts';
+import { NodeModulesPackageReader } from '../../../../src/transport-qualification/scope/node/node-modules-package-reader.ts';
 import { compareScopeSnapshots } from '../../../../src/transport-qualification/scope/scope-drift.ts';
 import { recomputeScopeSnapshot } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
-import type { ScopeEnvironment } from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
+import type {
+  ScopeEnvironment,
+  ScopeRecomputationPorts,
+} from '../../../../src/transport-qualification/scope/scope-recomputation.ts';
 import { SAMPLE_TIMING } from '../../../unit/transport-qualification/scope/support/scope-fixtures.ts';
+import { TemporaryScopeProject } from './support/temporary-scope-project.ts';
 
 const STUDY_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const DOCKER_SENTINEL = join(STUDY_ROOT, 'tools/docker-forbidden.sh');
 const PROBE_EXECUTION_ID = '11111111-2222-4333-8444-555555555555';
 const RUN_EXECUTION_ID = '3f1c2a9e-8b4d-4c1e-9f00-1a2b3c4d5e6f';
+const COPIED_PATHS = ['src', 'infra', 'package.json', 'package-lock.json'] as const;
+
+/** Each deployed function's construct path below the stack, with the entry point it bundles. */
+const FUNCTION_ENTRY_POINTS = [
+  ['ExperimentCore/Provider/Function/Resource', 'src/refund-provider/refund-provider.handler.ts'],
+  ['ExperimentCore/Controller/Function/Resource', 'src/treatment-controller/treatment-controller.handler.ts'],
+  ['ProbeCaller/Caller/Function/Resource', 'src/transport-probe-caller/transport-probe-caller.handler.ts'],
+] as const;
 
 interface SynthesisOptions {
   readonly kind: 'TRANSPORT_PROBE' | 'RUN';
@@ -48,8 +68,14 @@ interface SynthesisOptions {
   readonly pathMetadata: boolean;
 }
 
-/** Synthesizes one execution stack the way the probe or the run deploys it and returns its template. */
-function synthesize(options: SynthesisOptions): JsonObject {
+interface Synthesized {
+  readonly template: JsonObject;
+  /** The deployed bundle text of each function, keyed by its construct path below the stack. */
+  readonly bundles: ReadonlyMap<string, string>;
+}
+
+/** Synthesizes one execution stack the way the probe or the run deploys it. */
+function synthesize(options: SynthesisOptions): Synthesized {
   const context = parseExecutionSynthContext({
     execution_kind: options.kind,
     execution_id: options.executionId,
@@ -71,49 +97,94 @@ function synthesize(options: SynthesisOptions): JsonObject {
     if (options.kind === 'TRANSPORT_PROBE') {
       new ProbeCaller(stack, 'ProbeCaller', { context, core });
     }
-    return app.synth().getStackByName(stack.stackName).template as JsonObject;
+    const template = app.synth().getStackByName(stack.stackName).template as JsonObject;
+    return { template, bundles: deployedBundles(template, outdir) };
   } finally {
     rmSync(outdir, { recursive: true, force: true });
   }
 }
 
-const validator = createRecordValidator();
-const ports = {
-  sources: new GitCommittedSourceReader({ projectRoot: STUDY_ROOT }),
-  bundles: new EsbuildBundleInputResolver({ projectRoot: STUDY_ROOT }),
-  validator,
-};
+// Reads `index.mjs` of every function asset before the outdir goes. A programmatic App emits no
+// asset-path metadata; the staged asset directory is `asset.<hash>`, the hash the S3 key names.
+function deployedBundles(template: JsonObject, outdir: string): ReadonlyMap<string, string> {
+  const bundles = new Map<string, string>();
+  for (const resource of Object.values(template['Resources'] as Record<string, Record<string, JsonValue>>)) {
+    const code = (resource['Properties'] as Record<string, JsonValue> | undefined)?.['Code'] as
+      Record<string, JsonValue> | undefined;
+    const s3Key = code?.['S3Key'];
+    const constructPath = (resource['Metadata'] as Record<string, JsonValue> | undefined)?.['aws:cdk:path'];
+    if (
+      resource['Type'] === 'AWS::Lambda::Function' &&
+      typeof s3Key === 'string' &&
+      typeof constructPath === 'string'
+    ) {
+      const assetDirectory = `asset.${s3Key.replace(/\.zip$/, '')}`;
+      bundles.set(
+        constructPath.split('/').slice(1).join('/'),
+        readFileSync(join(outdir, assetDirectory, 'index.mjs'), 'utf8'),
+      );
+    }
+  }
+  return bundles;
+}
+
+// esbuild opens each bundled module of a non-minified bundle with a `// <path>` line, the path
+// relative to its working directory (CDK local bundling runs it in the project root).
+function bundledModules(bundle: string): readonly string[] {
+  return [...bundle.matchAll(/^\/\/ ((?:src|infra|node_modules)\/\S+)$/gm)].map((match) => match[1] ?? '');
+}
+
+function inClosure(path: string, closure: BundleInputs): boolean {
+  return (
+    closure.local_sources.includes(path) || closure.packages.some((installPath) => path.startsWith(`${installPath}/`))
+  );
+}
 
 function environment(template: JsonObject): ScopeEnvironment {
   return { template, runtime: {}, timing: SAMPLE_TIMING, provider_warmup: { invocations_per_trial: 1 } };
 }
 
-async function snapshotOf(template: JsonObject): Promise<TransportScopeSnapshot> {
-  const result = await recomputeScopeSnapshot(environment(template), ports);
-  assert.ok(result.ok, `expected a snapshot, got ${JSON.stringify(result)}`);
-  return result.value;
-}
-
 describe('committed transport-scope policy over the real ExperimentCore', () => {
-  let probeTemplate: JsonObject;
-  let runTemplate: JsonObject;
+  let committed: TemporaryScopeProject;
+  let ports: ScopeRecomputationPorts;
+  let probeStack: Synthesized;
+  let runStack: Synthesized;
   let probe: TransportScopeSnapshot;
   let run: TransportScopeSnapshot;
 
+  async function snapshotOf(template: JsonObject): Promise<TransportScopeSnapshot> {
+    const result = await recomputeScopeSnapshot(environment(template), ports);
+    assert.ok(result.ok, `expected a snapshot, got ${JSON.stringify(result)}`);
+    return result.value;
+  }
+
   before(async () => {
     process.env['CDK_DOCKER'] = DOCKER_SENTINEL;
-    probeTemplate = synthesize({ kind: 'TRANSPORT_PROBE', executionId: PROBE_EXECUTION_ID, pathMetadata: true });
-    runTemplate = synthesize({ kind: 'RUN', executionId: RUN_EXECUTION_ID, pathMetadata: true });
-    probe = await snapshotOf(probeTemplate);
-    run = await snapshotOf(runTemplate);
+    committed = TemporaryScopeProject.create({});
+    committed.copyFrom(STUDY_ROOT, COPIED_PATHS);
+    committed.commit('the study transport as it is on disk');
+    ports = {
+      sources: new GitCommittedSourceReader({ projectRoot: committed.projectRoot }),
+      bundles: new EsbuildBundleInputResolver({ projectRoot: STUDY_ROOT }),
+      installed: new NodeModulesPackageReader({ projectRoot: STUDY_ROOT }),
+      validator: createRecordValidator(),
+    };
+    probeStack = synthesize({ kind: 'TRANSPORT_PROBE', executionId: PROBE_EXECUTION_ID, pathMetadata: true });
+    runStack = synthesize({ kind: 'RUN', executionId: RUN_EXECUTION_ID, pathMetadata: true });
+    probe = await snapshotOf(probeStack.template);
+    run = await snapshotOf(runStack.template);
   });
 
   after(() => {
     delete process.env['CDK_DOCKER'];
+    committed.dispose();
   });
 
   it('computes a probe-stack snapshot the transport_scope_snapshot schema accepts', () => {
-    const validation = validator.validateAs('transport_scope_snapshot', JSON.parse(JSON.stringify(probe)) as JsonValue);
+    const validation = ports.validator.validateAs(
+      'transport_scope_snapshot',
+      JSON.parse(JSON.stringify(probe)) as JsonValue,
+    );
     assert.deepEqual(validation.valid ? [] : validation.violations, []);
   });
 
@@ -132,12 +203,39 @@ describe('committed transport-scope policy over the real ExperimentCore', () => 
     );
   });
 
-  it('binds the three transport entry points and the bundler options of the real closure', () => {
-    assert.deepEqual(probe.entry_points, [
-      'src/refund-provider/refund-provider.handler.ts',
-      'src/transport-probe-caller/transport-probe-caller.handler.ts',
-      'src/treatment-controller/treatment-controller.handler.ts',
+  it('keeps resource identity: entries in construct-path order, references by construct path', () => {
+    const valuesOf = (projectionId: string, path: string): readonly (string | undefined)[] =>
+      (
+        probe.configuration_projections.find((projection) => projection.projection_id === projectionId)?.resources ?? []
+      ).map((resource) => resource.property_values.find((property) => property.property_path === path)?.canonical_json);
+    const roleOf = (construct: string): string =>
+      `{"Fn::GetAtt":["<ExperimentCore/${construct}/Role/Resource>","Arn"]}`;
+    assert.deepEqual(valuesOf('experiment_core__functions', 'Properties.Role'), [
+      roleOf('Controller'),
+      roleOf('Provider'),
     ]);
+    assert.deepEqual(valuesOf('experiment_core__policies', 'Properties.Roles'), [
+      '[{"Ref":"<ExperimentCore/Controller/Role/Resource>"}]',
+      '[{"Ref":"<ExperimentCore/Provider/Role/Resource>"}]',
+    ]);
+    assert.deepEqual(valuesOf('experiment_core__stream_mappings', 'Properties.FunctionName'), [
+      '{"Ref":"<ExperimentCore/Controller/Function/Resource>"}',
+    ]);
+    assert.deepEqual(valuesOf('experiment_core__versions', 'Properties.FunctionName'), [
+      '{"Ref":"<ExperimentCore/Provider/Function/Resource>"}',
+    ]);
+    // Construct-path order: CallerJournalTable, ControlTable, ExperimentJournalTable, LedgerTable, TrialRegistryTable.
+    assert.deepEqual(valuesOf('experiment_core__tables', 'Properties.TableName'), [
+      '"suc1-<p>-caller-journal"',
+      '"suc1-<p>-control"',
+      '"suc1-<p>-experiment-journal"',
+      '"suc1-<p>-ledger"',
+      '"suc1-<p>-trial-registry"',
+    ]);
+  });
+
+  it('binds the three transport entry points and the bundler options of the real closure', () => {
+    assert.deepEqual(probe.entry_points, FUNCTION_ENTRY_POINTS.map(([, entryPoint]) => entryPoint).sort());
     assert.deepEqual(probe.runtime_properties, {
       bundle_aws_sdk: true,
       bundle_format: 'esm',
@@ -153,14 +251,29 @@ describe('committed transport-scope policy over the real ExperimentCore', () => 
     }
   });
 
+  it('resolves a closure that holds every module CDK bundles into each deployed function', async () => {
+    const closures = await ports.bundles.resolve(FUNCTION_ENTRY_POINTS.map(([, entryPoint]) => entryPoint));
+    for (const [index, [constructPath, entryPoint]] of FUNCTION_ENTRY_POINTS.entries()) {
+      const closure = closures[index];
+      assert.ok(closure !== undefined, `no closure resolved for ${entryPoint}`);
+      const modules = bundledModules(probeStack.bundles.get(constructPath) ?? '');
+      assert.ok(modules.includes(entryPoint), `${constructPath} bundle does not open ${entryPoint}`);
+      assert.deepEqual(
+        modules.filter((path) => !inClosure(path, closure)),
+        [],
+        `${constructPath}: modules CDK deploys outside the scope closure of ${entryPoint}`,
+      );
+    }
+  });
+
   it('gives a probe stack and a run stack the same scope (no drift)', () => {
-    assert.notDeepEqual(probeTemplate, runTemplate);
+    assert.notDeepEqual(probeStack.template, runStack.template);
     assert.deepEqual(compareScopeSnapshots(probe, run).status, 'no_drift');
   });
 
   it('refuses a template synthesized without construct-path metadata with its own reason', async () => {
     const bare = synthesize({ kind: 'RUN', executionId: RUN_EXECUTION_ID, pathMetadata: false });
-    const result = await recomputeScopeSnapshot(environment(bare), ports);
+    const result = await recomputeScopeSnapshot(environment(bare.template), ports);
     assert.ok(!result.ok);
     assert.deepEqual(
       result.error.map((reason) => reason.code),

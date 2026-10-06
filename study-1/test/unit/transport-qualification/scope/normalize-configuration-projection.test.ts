@@ -36,20 +36,16 @@ const FUNCTIONS = {
   property_paths: ['Properties.Timeout', 'Properties.Role', 'Properties.ReservedConcurrentExecutions'],
 } as const;
 
+// The provider's role as its references name it: by stack-relative construct path, not logical id.
+const PROVIDER_ROLE = '{"Fn::GetAtt":["<ExperimentCore/Provider/Role/Resource>","Arn"]}';
+
 describe('normalizeConfigurationProjection', () => {
   it('selects only the selector construct, normalizes references and omits the value of absent paths', () => {
     const projected = normalizeConfigurationProjection(cdkTemplate({ providerTimeout: 29 }), FUNCTIONS);
     assert.deepEqual(projected, {
       ok: true,
       value: [
-        // canonical order: the provider's first value "29" sorts before the controller's "30"
-        {
-          property_values: [
-            { property_path: 'Properties.Timeout', canonical_json: '29' },
-            { property_path: 'Properties.Role', canonical_json: '{"Fn::GetAtt":["<AWS::IAM::Role>","Arn"]}' },
-            { property_path: 'Properties.ReservedConcurrentExecutions' },
-          ],
-        },
+        // construct-path order: ExperimentCore/Controller/... sorts before ExperimentCore/Provider/...
         {
           property_values: [
             { property_path: 'Properties.Timeout', canonical_json: '30' },
@@ -57,13 +53,20 @@ describe('normalizeConfigurationProjection', () => {
             { property_path: 'Properties.ReservedConcurrentExecutions' },
           ],
         },
+        {
+          property_values: [
+            { property_path: 'Properties.Timeout', canonical_json: '29' },
+            { property_path: 'Properties.Role', canonical_json: PROVIDER_ROLE },
+            { property_path: 'Properties.ReservedConcurrentExecutions' },
+          ],
+        },
       ],
     });
     assert.ok(projected.ok);
-    const [provider, controller] = projected.value;
+    const [controller, provider] = projected.value;
     // An unset property keeps only its path: no `canonical_json` key, never a null (BR-RUA-033).
-    assert.equal(Object.hasOwn(provider.property_values[2] ?? {}, 'canonical_json'), false);
-    assert.equal(Object.hasOwn(controller?.property_values[1] ?? {}, 'canonical_json'), false);
+    assert.equal(Object.hasOwn(provider?.property_values[2] ?? {}, 'canonical_json'), false);
+    assert.equal(Object.hasOwn(controller.property_values[1] ?? {}, 'canonical_json'), false);
   });
 
   it('projects a later-set property with its value, so setting it is a change', () => {
@@ -75,15 +78,15 @@ describe('normalizeConfigurationProjection', () => {
         {
           property_values: [
             { property_path: 'Properties.Timeout', canonical_json: '30' },
-            { property_path: 'Properties.Role', canonical_json: '{"Fn::GetAtt":["<AWS::IAM::Role>","Arn"]}' },
-            { property_path: 'Properties.ReservedConcurrentExecutions', canonical_json: '0' },
+            { property_path: 'Properties.Role' },
+            { property_path: 'Properties.ReservedConcurrentExecutions' },
           ],
         },
         {
           property_values: [
             { property_path: 'Properties.Timeout', canonical_json: '30' },
-            { property_path: 'Properties.Role' },
-            { property_path: 'Properties.ReservedConcurrentExecutions' },
+            { property_path: 'Properties.Role', canonical_json: PROVIDER_ROLE },
+            { property_path: 'Properties.ReservedConcurrentExecutions', canonical_json: '0' },
           ],
         },
       ],
@@ -91,7 +94,7 @@ describe('normalizeConfigurationProjection', () => {
     assert.notDeepEqual(set, unset);
   });
 
-  it('sorts the selected resources by canonical form, independent of template order', () => {
+  it('sorts the selected resources by construct path, independent of template order', () => {
     const template = cdkTemplate();
     const resources = template['Resources'] as JsonObject;
     const reversed = { ...template, Resources: Object.fromEntries(Object.entries(resources).reverse()) };
@@ -114,18 +117,17 @@ describe('normalizeConfigurationProjection', () => {
     assert.deepEqual(probe, {
       ok: true,
       value: [
-        // canonical order: a set first property ("canonical_json") sorts before an unset one
+        { property_values: [{ property_path: 'Properties.Environment' }, { property_path: 'Properties.Role' }] },
         {
           property_values: [
             {
               property_path: 'Properties.Environment',
               canonical_json:
-                '{"Variables":{"SUC_EXECUTION_ID":"<uuid>","SUC_TABLE_LEDGER":{"Ref":"<AWS::DynamoDB::Table>"}}}',
+                '{"Variables":{"SUC_EXECUTION_ID":"<uuid>","SUC_TABLE_LEDGER":{"Ref":"<ExperimentCore/Ledger/Resource>"}}}',
             },
-            { property_path: 'Properties.Role', canonical_json: '{"Fn::GetAtt":["<AWS::IAM::Role>","Arn"]}' },
+            { property_path: 'Properties.Role', canonical_json: PROVIDER_ROLE },
           ],
         },
-        { property_values: [{ property_path: 'Properties.Environment' }, { property_path: 'Properties.Role' }] },
       ],
     });
   });
@@ -203,7 +205,7 @@ describe('normalizeConfigurationProjection', () => {
       value: [
         {
           property_values: [
-            { property_path: 'Properties.constructor', canonical_json: '{"Ref":"<AWS::Lambda::Function>"}' },
+            { property_path: 'Properties.constructor', canonical_json: '{"Ref":"<ExperimentCore/Fn/Resource>"}' },
             { property_path: 'Properties.toString', canonical_json: '7' },
             { property_path: 'Properties.valueOf' },
           ],
@@ -251,10 +253,17 @@ describe('normalizeConfigurationProjection', () => {
     );
     const propertyPath = fc.array(segment, { minLength: 1, maxLength: 3 }).map((segments) => segments.join('.'));
     const keyName = fc.constantFrom(...PROTOTYPE_MEMBER_NAMES, 'Timeout', 'Role', 'Fn', 'Ref', 'Fn::GetAtt', 'Tags');
+    // JSON values plus the non-finite numbers JSON.parse yields for 1e400 (A-05).
+    const nonFinite = fc.constantFrom<JsonValue>(Infinity, -Infinity, Number.NaN);
+    const propertyValue = fc.oneof(
+      fc.jsonValue({ maxDepth: 2 }) as fc.Arbitrary<JsonValue>,
+      nonFinite,
+      fc.array(fc.oneof(nonFinite, fc.integer()), { maxLength: 2 }),
+    );
     const resource = fc.record(
       {
         Type: fc.constantFrom('AWS::Lambda::Function', 'AWS::IAM::Role', 'AWS::SQS::Queue'),
-        Properties: fc.dictionary(keyName, fc.jsonValue({ maxDepth: 2 }) as fc.Arbitrary<JsonValue>, { maxKeys: 4 }),
+        Properties: fc.dictionary(keyName, propertyValue, { maxKeys: 4 }),
         Metadata: fc.oneof(
           fc.record({
             'aws:cdk:path': fc.constantFrom('S/ExperimentCore/Fn/Resource', 'S/Other/Fn/Resource', 'S'),
@@ -292,7 +301,9 @@ describe('normalizeConfigurationProjection', () => {
           assert.equal(typeof canonicalJson(projected.value.map(projectedResourceJson)), 'string');
         } else {
           assert.ok(
-            ['PROJECTION_SELECTS_NOTHING', 'TEMPLATE_WITHOUT_PATH_METADATA'].includes(projected.error.code),
+            ['PROJECTION_SELECTS_NOTHING', 'TEMPLATE_INVALID', 'TEMPLATE_WITHOUT_PATH_METADATA'].includes(
+              projected.error.code,
+            ),
             JSON.stringify(projected.error),
           );
         }

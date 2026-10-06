@@ -1,6 +1,6 @@
 // Normalization strips execution identity (names, tags, ARNs, ids, logical ids) and keeps
-// configuration (BR-RUA-028, BR-RUA-050 names and tags). Includes a property test over
-// generated values: normalization is total and idempotent.
+// configuration and resource identity (BR-RUA-028, BR-RUA-050 names and tags). Includes a
+// property test over generated values: normalization is total and idempotent.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -25,9 +25,10 @@ function hasObjectKey(value: JsonValue, key: string): boolean {
   return false;
 }
 
-const TYPES = new Map([
-  ['LedgerA1B2', 'AWS::DynamoDB::Table'],
-  ['QueueC3D4', 'AWS::SQS::Queue'],
+// Each logical id's stable identity: its stack-relative construct path (configuration-projection.ts).
+const IDENTITIES = new Map([
+  ['LedgerA1B2', 'ExperimentCore/Ledger/Resource'],
+  ['QueueC3D4', 'ExperimentCore/Queue/Resource'],
 ]);
 
 describe('normalizeCfnString', () => {
@@ -59,35 +60,37 @@ describe('normalizeCfnString', () => {
 });
 
 describe('normalizeCfnValue', () => {
-  it('names the referenced resource type instead of its logical id', () => {
-    assert.deepEqual(normalizeCfnValue({ Ref: 'LedgerA1B2' }, TYPES), { Ref: '<AWS::DynamoDB::Table>' });
-    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['QueueC3D4', 'Arn'] }, TYPES), {
-      'Fn::GetAtt': ['<AWS::SQS::Queue>', 'Arn'],
+  it('names the referenced resource by its identity instead of its logical id', () => {
+    assert.deepEqual(normalizeCfnValue({ Ref: 'LedgerA1B2' }, IDENTITIES), { Ref: '<ExperimentCore/Ledger/Resource>' });
+    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['QueueC3D4', 'Arn'] }, IDENTITIES), {
+      'Fn::GetAtt': ['<ExperimentCore/Queue/Resource>', 'Arn'],
     });
   });
 
   it('keeps pseudo parameters, template parameters and unknown references', () => {
-    assert.deepEqual(normalizeCfnValue({ Ref: 'AWS::Region' }, TYPES), { Ref: 'AWS::Region' });
-    assert.deepEqual(normalizeCfnValue({ Ref: 'BootstrapVersion' }, TYPES), { Ref: 'BootstrapVersion' });
-    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['Unknown', 'Arn'] }, TYPES), {
+    assert.deepEqual(normalizeCfnValue({ Ref: 'AWS::Region' }, IDENTITIES), { Ref: 'AWS::Region' });
+    assert.deepEqual(normalizeCfnValue({ Ref: 'BootstrapVersion' }, IDENTITIES), { Ref: 'BootstrapVersion' });
+    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['Unknown', 'Arn'] }, IDENTITIES), {
       'Fn::GetAtt': ['Unknown', 'Arn'],
     });
   });
 
   it('normalizes the remaining parts of an unusual GetAtt', () => {
-    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': 'QueueC3D4.Arn' }, TYPES), { 'Fn::GetAtt': 'QueueC3D4.Arn' });
-    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': [{ Ref: 'QueueC3D4' }, 'Arn'] }, TYPES), {
-      'Fn::GetAtt': [{ Ref: '<AWS::SQS::Queue>' }, 'Arn'],
+    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': 'QueueC3D4.Arn' }, IDENTITIES), {
+      'Fn::GetAtt': 'QueueC3D4.Arn',
     });
-    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['LedgerA1B2', 'StreamArn', 'arn:aws:x'] }, TYPES), {
-      'Fn::GetAtt': ['<AWS::DynamoDB::Table>', 'StreamArn', '<arn>'],
+    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': [{ Ref: 'QueueC3D4' }, 'Arn'] }, IDENTITIES), {
+      'Fn::GetAtt': [{ Ref: '<ExperimentCore/Queue/Resource>' }, 'Arn'],
+    });
+    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['LedgerA1B2', 'StreamArn', 'arn:aws:x'] }, IDENTITIES), {
+      'Fn::GetAtt': ['<ExperimentCore/Ledger/Resource>', 'StreamArn', '<arn>'],
     });
   });
 
   it('treats an object with a Ref beside other keys as plain data', () => {
-    assert.deepEqual(normalizeCfnValue({ Ref: 'LedgerA1B2', Extra: 1 }, TYPES), { Ref: 'LedgerA1B2', Extra: 1 });
-    assert.deepEqual(normalizeCfnValue({ Ref: 5 }, TYPES), { Ref: 5 });
-    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['LedgerA1B2', 'Arn'], Extra: 'suc1-3f1c2a9e-x' }, TYPES), {
+    assert.deepEqual(normalizeCfnValue({ Ref: 'LedgerA1B2', Extra: 1 }, IDENTITIES), { Ref: 'LedgerA1B2', Extra: 1 });
+    assert.deepEqual(normalizeCfnValue({ Ref: 5 }, IDENTITIES), { Ref: 5 });
+    assert.deepEqual(normalizeCfnValue({ 'Fn::GetAtt': ['LedgerA1B2', 'Arn'], Extra: 'suc1-3f1c2a9e-x' }, IDENTITIES), {
       'Fn::GetAtt': ['LedgerA1B2', 'Arn'],
       Extra: 'suc1-<p>-x',
     });
@@ -97,11 +100,11 @@ describe('normalizeCfnValue', () => {
     // fast-check seed 164051165, path "832:3:3:6:6": the stripped form {Ref} was re-normalized
     // as a reference on the second pass.
     const counterexample = { Properties: { Tags: 'arn:aws:x', Ref: 'LedgerA1B2' } };
-    const once = normalizeCfnValue(counterexample, TYPES);
-    assert.deepEqual(once, { Properties: { Ref: '<AWS::DynamoDB::Table>' } });
-    assert.deepEqual(normalizeCfnValue(once, TYPES), once);
-    assert.deepEqual(normalizeCfnValue({ TableName: 'x', 'Fn::GetAtt': ['QueueC3D4', 'Arn'] }, TYPES), {
-      'Fn::GetAtt': ['<AWS::SQS::Queue>', 'Arn'],
+    const once = normalizeCfnValue(counterexample, IDENTITIES);
+    assert.deepEqual(once, { Properties: { Ref: '<ExperimentCore/Ledger/Resource>' } });
+    assert.deepEqual(normalizeCfnValue(once, IDENTITIES), once);
+    assert.deepEqual(normalizeCfnValue({ TableName: 'x', 'Fn::GetAtt': ['QueueC3D4', 'Arn'] }, IDENTITIES), {
+      'Fn::GetAtt': ['<ExperimentCore/Queue/Resource>', 'Arn'],
     });
   });
 
@@ -112,7 +115,7 @@ describe('normalizeCfnValue', () => {
       Nested: [{ RoleName: 'r', QueueName: 'q', Kept: { LogGroupName: 'l', Timeout: 3 } }],
       KeySchema: [{ AttributeName: 'pk', KeyType: 'HASH' }],
     };
-    assert.deepEqual(normalizeCfnValue(value, TYPES), {
+    assert.deepEqual(normalizeCfnValue(value, IDENTITIES), {
       Nested: [{ Kept: { Timeout: 3 } }],
       KeySchema: [{ AttributeName: 'pk', KeyType: 'HASH' }],
     });
@@ -136,16 +139,16 @@ describe('normalizeCfnValue', () => {
 
   it('keeps a parsed __proto__ key as a key instead of replacing the prototype', () => {
     const parsed = JSON.parse('{"__proto__":{"Ref":"LedgerA1B2"},"Timeout":3}') as JsonValue;
-    const normalized = normalizeCfnValue(parsed, TYPES);
+    const normalized = normalizeCfnValue(parsed, IDENTITIES);
     assert.deepEqual(Object.keys(normalized as object), ['__proto__', 'Timeout']);
     assert.equal(Object.getPrototypeOf(normalized), Object.prototype);
-    assert.equal(JSON.stringify(normalized), '{"__proto__":{"Ref":"<AWS::DynamoDB::Table>"},"Timeout":3}');
+    assert.equal(JSON.stringify(normalized), '{"__proto__":{"Ref":"<ExperimentCore/Ledger/Resource>"},"Timeout":3}');
   });
 
   it('keeps numbers, booleans and null', () => {
-    assert.equal(normalizeCfnValue(30, TYPES), 30);
-    assert.equal(normalizeCfnValue(false, TYPES), false);
-    assert.equal(normalizeCfnValue(null, TYPES), null);
+    assert.equal(normalizeCfnValue(30, IDENTITIES), 30);
+    assert.equal(normalizeCfnValue(false, IDENTITIES), false);
+    assert.equal(normalizeCfnValue(null, IDENTITIES), null);
   });
 
   it('is total and idempotent over generated JSON (property)', () => {
@@ -153,6 +156,8 @@ describe('normalizeCfnValue', () => {
       value: fc.oneof(
         { depthSize: 'small' },
         fc.constantFrom<JsonValue>('arn:aws:x', 'suc1-3f1c2a9e-a', 'LedgerA1B2', 'AWS::Region', 'Tags', 1, true, null),
+        // Non-finite leaves (A-05): JSON.parse('1e400') yields Infinity; normalization keeps them.
+        fc.constantFrom<JsonValue>(Infinity, -Infinity, Number.NaN),
         fc.string(),
         fc.record({ Ref: fc.constantFrom('LedgerA1B2', 'QueueC3D4', 'AWS::AccountId', 'Other') }),
         fc.record({
@@ -170,8 +175,8 @@ describe('normalizeCfnValue', () => {
     })).value;
     fc.assert(
       fc.property(cfnLike, (value) => {
-        const once = normalizeCfnValue(value, TYPES);
-        assert.deepEqual(normalizeCfnValue(once, TYPES), once);
+        const once = normalizeCfnValue(value, IDENTITIES);
+        assert.deepEqual(normalizeCfnValue(once, IDENTITIES), once);
         assert.equal(hasObjectKey(once, 'Tags'), false);
         assert.equal(hasObjectKey(once, 'TableName'), false);
       }),
