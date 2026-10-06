@@ -32,6 +32,16 @@ export interface VirtualTimeOptions {
   readonly monotonicOriginNs?: bigint;
 }
 
+/**
+ * Wall clock, monotonic clock, timers and sleep on one virtual time base that moves only when
+ * a test advances it.
+ *
+ * @example
+ * const time = new VirtualTimeScheduler({ wallEpochMs: Date.parse('2026-10-05T12:00:00.000Z') });
+ * const fired: string[] = [];
+ * time.schedule(3000, () => fired.push('deadline'));
+ * await time.advanceBy(3000); // fired = ['deadline'], time.nowNs() = 3_000_000_000n
+ */
 export class VirtualTimeScheduler implements WallClock, MonotonicClock, TimerScheduler, Sleeper {
   readonly #wallEpochMs: number;
   readonly #monotonicOriginNs: bigint;
@@ -46,14 +56,17 @@ export class VirtualTimeScheduler implements WallClock, MonotonicClock, TimerSch
     this.#monotonicOriginNs = options.monotonicOriginNs ?? 0n;
   }
 
+  /** Wall-clock reading: the epoch plus elapsed virtual time plus any skew. */
   now(): Date {
     return new Date(this.#wallEpochMs + Number(this.#elapsedNs / NS_PER_MS) + this.#wallSkewMs);
   }
 
+  /** Monotonic reading in nanoseconds; never moved by `skewWall`. */
   nowNs(): bigint {
     return this.#monotonicOriginNs + this.#elapsedNs;
   }
 
+  /** Schedules `callback` after `delayMs` virtual milliseconds; the handle cancels it. */
   schedule(delayMs: number, callback: () => void): TimerHandle {
     if (!Number.isFinite(delayMs) || delayMs < 0) {
       throw new RangeError(`timer delay ${String(delayMs)} ms; expected a finite nonnegative number of milliseconds`);
@@ -67,6 +80,7 @@ export class VirtualTimeScheduler implements WallClock, MonotonicClock, TimerSch
     return { cancel: () => this.#timers.delete(order) };
   }
 
+  /** Resolves once virtual time has advanced by `ms`. */
   sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
       this.schedule(ms, resolve);
@@ -86,15 +100,20 @@ export class VirtualTimeScheduler implements WallClock, MonotonicClock, TimerSch
     this.#wallSkewMs += ms;
   }
 
+  /** Timers scheduled and neither fired nor cancelled. */
   pendingTimerCount(): number {
     return this.#timers.size;
   }
 
   /**
    * Advances virtual time by `ms`, firing due timers in due-time order (ties in scheduling
-   * order) and letting promise continuations settle after each firing.
+   * order) and letting promise continuations settle after each firing. Monotonic time never
+   * moves backwards, so a negative or non-finite `ms` is refused.
    */
   async advanceBy(ms: number): Promise<void> {
+    if (!Number.isFinite(ms) || ms < 0) {
+      throw new RangeError(`advance of ${String(ms)} ms; expected a finite nonnegative number of milliseconds`);
+    }
     const targetNs = this.#elapsedNs + BigInt(Math.round(ms * 1_000_000));
     await this.#runTimersUntil(targetNs);
     this.#elapsedNs = targetNs;

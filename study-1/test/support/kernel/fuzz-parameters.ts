@@ -8,6 +8,13 @@ export interface FuzzParameters {
 
 const DEFAULT_RUNS = 1000;
 
+/**
+ * The fast-check parameters for one property: `numRuns` from FC_RUNS (1,000 by default) and
+ * `seed` from FC_SEED when set, so a recorded campaign seed replays its failure.
+ *
+ * @example
+ * fc.assert(fc.property(fc.jsonValue(), check), fuzzParameters());
+ */
 export function fuzzParameters(env: Readonly<Record<string, string | undefined>> = process.env): FuzzParameters {
   const runs = parseInteger('FC_RUNS', env['FC_RUNS']) ?? DEFAULT_RUNS;
   const seed = parseInteger('FC_SEED', env['FC_SEED']);

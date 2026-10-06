@@ -151,6 +151,20 @@ describe('VirtualTimeScheduler fault injection and limits', () => {
     }
   });
 
+  it('refuses to advance by a negative or non-finite amount, so monotonic time never goes back', async () => {
+    const time = create();
+    await time.advanceBy(5);
+    for (const ms of [-1, -0.000001, Number.NaN, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]) {
+      await assert.rejects(time.advanceBy(ms), {
+        name: 'RangeError',
+        message: `advance of ${String(ms)} ms; expected a finite nonnegative number of milliseconds`,
+      });
+    }
+    assert.equal(time.nowNs(), 5_000_000n);
+    await time.advanceBy(0);
+    assert.equal(time.nowNs(), 5_000_000n);
+  });
+
   it('lets promise continuations run between firings', async () => {
     const time = create();
     const steps: string[] = [];
