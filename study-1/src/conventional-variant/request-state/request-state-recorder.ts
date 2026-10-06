@@ -13,6 +13,7 @@ import { nextEffectKnowledge } from '../../attempt-lifecycle/effect-knowledge.ts
 import { INITIAL_EFFECT_KNOWLEDGE } from '../../attempt-lifecycle/effect-knowledge.ts';
 import type { OutcomeClass } from '../../attempt-lifecycle/outcome-classification.ts';
 import type { DurableItemStore, ItemKey, StoredItem, WriteAction } from '../../durable-store/item-store-port.ts';
+import { pushEach } from '../../durable-store/push-each.ts';
 import { journalPutAction } from '../../event-journal/journal-entry.ts';
 import type { EventBody, JournalEvent } from '../../event-journal/journal-event.ts';
 import { journalPartitionKey } from '../../event-journal/journal-scope.ts';
@@ -222,7 +223,8 @@ export class RequestStateRecorder {
           ),
         );
       }
-      items.push(...page.value.items);
+      // One push per item: a spread passes every item as an argument (A-05, push-each.ts).
+      pushEach(items, page.value.items);
       cursor = page.value.next_cursor;
     } while (cursor !== undefined);
     return ok(items);

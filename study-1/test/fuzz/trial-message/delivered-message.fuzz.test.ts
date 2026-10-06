@@ -2,8 +2,9 @@
 // AC-RUA-019). The guard is hand-written, so it is checked differentially against the
 // catalogue's Ajv validator: on near-valid bodies (a valid message with up to three properties
 // removed or replaced by boundary values) it accepts exactly the bodies the `trial_message`
-// schema accepts that also match the active registration, and a schema-invalid body is never
-// classified as a mismatch. Every rejection must journal as a valid `trial_message_rejected`
+// schema accepts that also match the active registration, and it reports a mismatch exactly when
+// a well-formed identity value names another execution, digest or trial (design D-28), schema
+// faults elsewhere in the body notwithstanding. Every rejection must journal as a valid `trial_message_rejected`
 // event. The check is total over arbitrary strings, JSON nested far deeper than the call stack
 // and non-finite numbers (Owner amendment A-05).
 
@@ -116,6 +117,31 @@ function matchesRegistration(message: JsonObject, registration: TrialRegistratio
   );
 }
 
+const UUID4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const SHA256 = /^[0-9a-f]{64}$/u;
+
+function wellFormed(value: JsonValue | undefined, pattern: RegExp): value is string {
+  return typeof value === 'string' && pattern.test(value);
+}
+
+// Design D-28, stated independently of the guard: which mismatch reason a message earns by
+// naming, in a well-formed value, another execution, or another digest or trial id.
+function namedMismatch(message: JsonObject, registration: TrialRegistration): string | undefined {
+  const expected = executionRefOf(registration);
+  const foreignExecution = (['run_id', 'variant_validation_id'] as const).some((field) => {
+    const id = Object.hasOwn(message, field) ? message[field] : undefined;
+    return wellFormed(id, UUID4) && (field !== expected.field || id !== expected.id);
+  });
+  if (foreignExecution) {
+    return 'EXECUTION_IDENTITY_MISMATCH';
+  }
+  const digest = message['trial_manifest_sha256'];
+  const trialId = message['trial_id'];
+  const foreignDigest = wellFormed(digest, SHA256) && digest !== registration.trial_manifest_sha256;
+  const foreignTrial = wellFormed(trialId, UUID4) && trialId !== registration.trial_id;
+  return foreignDigest || foreignTrial ? 'TRIAL_MANIFEST_DIGEST_MISMATCH' : undefined;
+}
+
 function rejectionEvent(rejection: ConsumerRejection, body: string): JsonValue {
   const { kind: _kind, ...fields } = rejection;
   const event = buildJournalEvent(
@@ -135,28 +161,32 @@ function rejectionEvent(rejection: ConsumerRejection, body: string): JsonValue {
 }
 
 describe('delivered trial message properties', () => {
-  it('accepts exactly the schema-valid bodies that match the registration, and never calls a schema violation a mismatch', () => {
-    const seen = { accepted: 0, mismatched: 0, invalid: 0 };
+  it('accepts exactly the schema-valid bodies that match the registration, and reports exactly the D-28 mismatches', () => {
+    const seen = { accepted: 0, mismatched: 0, invalid: 0, invalid_mismatch: 0 };
     fc.assert(
       fc.property(nearValidObject, registrationArbitrary, (object, registration) => {
         const body = JSON.stringify(object);
         const reparsed = JSON.parse(body) as JsonObject;
         const schemaValid = validator.validateAs('trial_message', reparsed).valid;
         const expected = schemaValid && matchesRegistration(reparsed, registration);
+        const mismatch = namedMismatch(reparsed, registration);
         const validation = validateDeliveredMessage(body, registration);
         seen[expected ? 'accepted' : schemaValid ? 'mismatched' : 'invalid'] += 1;
+        seen.invalid_mismatch += !schemaValid && mismatch !== undefined ? 1 : 0;
         if (validation.kind === 'accepted') {
           assert.ok(expected, body);
           assert.deepEqual(validation.message, reparsed);
           return;
         }
         assert.ok(!expected, `${body} rejected as ${validation.reason}: ${validation.detail}`);
-        const mismatchReasons = ['EXECUTION_IDENTITY_MISMATCH', 'TRIAL_MANIFEST_DIGEST_MISMATCH'];
-        assert.equal(mismatchReasons.includes(validation.reason), schemaValid, `${body}: ${validation.reason}`);
+        const mismatchReasons: readonly string[] = ['EXECUTION_IDENTITY_MISMATCH', 'TRIAL_MANIFEST_DIGEST_MISMATCH'];
+        const reported = mismatchReasons.includes(validation.reason) ? validation.reason : undefined;
+        assert.equal(reported, mismatch, `${body}: ${validation.reason}`);
       }),
       fuzzParameters(),
     );
-    assert.ok(seen.accepted > 0 && seen.mismatched > 0 && seen.invalid > 0, JSON.stringify(seen));
+    const { accepted, mismatched, invalid, invalid_mismatch: invalidMismatch } = seen;
+    assert.ok(accepted > 0 && mismatched > 0 && invalid > 0 && invalidMismatch > 0, JSON.stringify(seen));
   });
 
   it('judges any body without throwing, and every rejection journals as a valid trial_message_rejected event', () => {

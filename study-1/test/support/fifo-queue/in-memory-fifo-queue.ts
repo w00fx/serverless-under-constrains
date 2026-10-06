@@ -9,8 +9,9 @@
 //   the DLQ": the move happens on the receive that would exceed it, and "the original message ID
 //   is retained";
 // - a send with a deduplication id seen within the 5-minute deduplication interval is accepted
-//   but not delivered again, and answers with the original message id (SQS FIFO developer guide,
-//   exactly-once processing; not in aws-semantics §3, so UNVERIFIED against this account);
+//   but not delivered again (design §0 verified fact RF V8 / CF V-5, which cites the SQS
+//   SendMessageBatchRequestEntry reference), and answers with the original message id (SQS FIFO
+//   developer guide, exactly-once processing; that answer is not in the verified facts);
 // - approximate counters lag the true state by `counterLagMs` ("may not achieve consistency until
 //   at least 1 minute after the producers stop sending messages", RK-14).
 

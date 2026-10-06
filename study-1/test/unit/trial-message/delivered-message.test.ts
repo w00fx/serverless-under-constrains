@@ -126,7 +126,7 @@ describe('validateDeliveredMessage', () => {
         runMessageObject({ record_type: 'trial_manifest' }),
         /record_type string "trial_manifest"; expected "trial_message"$/,
       ],
-      [runMessageObject({ variant_validation_id: VALIDATION_ID }), /expected exactly one lowercase UUIDv4$/],
+      [runMessageObject({ variant_validation_id: null }), /expected exactly one lowercase UUIDv4$/],
       [
         runMessageObject({ run_id: RUN_ID.toUpperCase() }),
         /run_id string "AAAAAAAA-.*expected exactly one lowercase UUIDv4$/,
@@ -177,6 +177,14 @@ describe('validateDeliveredMessage', () => {
       crossKind.detail,
       `message variant_validation_id ${RUN_ID}; expected run_id ${RUN_ID} of the active trial registration`,
     );
+    const both = rejectedWith(
+      validate(messageBody(runMessageObject({ variant_validation_id: VALIDATION_ID }))),
+      'EXECUTION_IDENTITY_MISMATCH',
+    );
+    assert.deepEqual(
+      { offending: both.offending_value, expected: both.expected_value },
+      { offending: VALIDATION_ID, expected: RUN_ID },
+    );
   });
 
   it('rejects another trial-manifest digest as TRIAL_MANIFEST_DIGEST_MISMATCH with both values', () => {
@@ -203,7 +211,58 @@ describe('validateDeliveredMessage', () => {
       { offending: rejected.offending_value, expected: rejected.expected_value },
       { offending: OTHER_TRIAL_ID, expected: TRIAL_ID },
     );
-    assert.match(rejected.detail, /expected trial_id .* which that frozen trial manifest names$/);
+    assert.equal(
+      rejected.detail,
+      `message trial_id ${OTHER_TRIAL_ID}; expected trial_id ${TRIAL_ID}, which the frozen trial manifest ${TRIAL_MANIFEST_SHA} of the active trial names`,
+    );
+  });
+
+  // Design D-28: a message that names another execution or digest makes G2 invalid, so the name
+  // is reported even when the message also breaks the schema or lacks a correlation field.
+  it('reports a well-formed foreign identity as the mismatch before any correlation or schema fault', () => {
+    const cases: readonly (readonly [JsonObject, string, string])[] = [
+      [runMessageObject({ run_id: OTHER_RUN_ID, amount_minor: 10000 }), 'EXECUTION_IDENTITY_MISMATCH', OTHER_RUN_ID],
+      [
+        withoutFields(runMessageObject({ run_id: OTHER_RUN_ID }), 'trial_id'),
+        'EXECUTION_IDENTITY_MISMATCH',
+        OTHER_RUN_ID,
+      ],
+      [
+        runMessageObject({ trial_manifest_sha256: OTHER_TRIAL_MANIFEST_SHA, payment_id: ' pay' }),
+        'TRIAL_MANIFEST_DIGEST_MISMATCH',
+        OTHER_TRIAL_MANIFEST_SHA,
+      ],
+      [
+        withoutFields(runMessageObject({ trial_manifest_sha256: OTHER_TRIAL_MANIFEST_SHA }), 'run_id'),
+        'TRIAL_MANIFEST_DIGEST_MISMATCH',
+        OTHER_TRIAL_MANIFEST_SHA,
+      ],
+      [
+        withoutFields(runMessageObject({ trial_id: OTHER_TRIAL_ID }), 'trial_manifest_sha256'),
+        'TRIAL_MANIFEST_DIGEST_MISMATCH',
+        OTHER_TRIAL_ID,
+      ],
+      [
+        runMessageObject({ trial_id: OTHER_TRIAL_ID, schema_version: 2 }),
+        'TRIAL_MANIFEST_DIGEST_MISMATCH',
+        OTHER_TRIAL_ID,
+      ],
+    ];
+    for (const [object, reason, offending] of cases) {
+      const rejected = rejectedWith(validate(messageBody(object)), reason);
+      assert.equal(rejected.offending_value, offending, JSON.stringify(object));
+    }
+  });
+
+  it('leaves a malformed identity value to the schema check, never calling it a mismatch', () => {
+    const cases: readonly JsonObject[] = [
+      runMessageObject({ run_id: OTHER_RUN_ID.toUpperCase() }),
+      runMessageObject({ trial_manifest_sha256: OTHER_TRIAL_MANIFEST_SHA.slice(1) }),
+      runMessageObject({ trial_id: `${OTHER_TRIAL_ID} ` }),
+    ];
+    for (const object of cases) {
+      rejectedWith(validate(messageBody(object)), 'SCHEMA_INVALID');
+    }
   });
 
   it('checks the execution identity before the digest and the digest before the trial id', () => {
