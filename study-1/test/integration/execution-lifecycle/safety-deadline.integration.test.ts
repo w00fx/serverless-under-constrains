@@ -65,10 +65,18 @@ function assertControlledInterruption(world: RunnerWorld, outcome: ExecutionOutc
   assert.equal(outcome.cleanup_status, 'succeeded');
   assert.equal(outcome.leak_audit_status, 'clean');
 
+  const late = world.record(EXECUTION_PATHS.lateEvidenceAssessment);
+  assert.equal(late['monitoring'], 'skipped');
+  assert.equal(late['late_evidence_status'], 'unverified', 'emergency cleanup leaves late evidence unverified');
+
   const safety = world.record(EXECUTION_PATHS.safetyAssessment);
   assert.equal(safety['safety_status'], 'breached');
   const breached = (safety['reasons'] as readonly JsonObject[]).map((reason) => reason['code']);
   assert.ok(breached.includes('TOTAL_TIME_BREACHED'));
+
+  const summary = world.record(EXECUTION_PATHS.runSummary);
+  assert.equal(summary['run_terminal_reason'], 'SAFETY_DEADLINE');
+  assert.equal(summary['execution_status'], 'incomplete');
   assert.equal(outcome.package_finalized, true);
   assert.ok(world.file(EXECUTION_PATHS.packageIndex) !== undefined);
 }
@@ -91,15 +99,19 @@ describe('AC-RUA-049 the safety deadline is reached', () => {
     assert.ok(interrupted?.kind === 'frozen');
     assert.equal(interrupted.trial_id, second);
     assert.deepEqual(interrupted.interruption?.cause, 'SAFETY_DEADLINE');
-    assert.notEqual(interrupted.settlement.status, 'established', 'the interrupted trial is indeterminate');
+    assert.equal(interrupted.settlement.status, 'not_established', 'the interrupted trial is indeterminate');
     const marked = world.journal(EXECUTION_PATHS.runnerJournal).filter(eventOf('trial_interrupted'));
     assert.deepEqual(
       marked.map((event) => [event['trial_id'], event['cause']]),
       [[second, 'SAFETY_DEADLINE']],
       'the trial journals its own interruption; the runner does not journal it again',
     );
+    // The oracle judges what was preserved: an interrupted trial is indeterminate, never a pass.
     const oracle = world.record(`trials/${second}/derived/oracle-result.json`);
-    assert.notEqual(oracle['verdict'], 'PASS');
+    assert.equal(oracle['preservation_verdict'], 'indeterminate');
+    assert.equal(oracle['trial_validity'], 'indeterminate');
+    assert.equal(oracle['correct_completion'], null);
+    assert.equal(oracle['processing_terminal_reason'], 'SAFETY_DEADLINE');
   });
 
   it('deadline-between-trials', async () => {
