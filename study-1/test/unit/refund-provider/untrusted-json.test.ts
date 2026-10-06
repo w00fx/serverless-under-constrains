@@ -46,8 +46,8 @@ describe('describeUntrusted', () => {
     assert.equal(describeUntrusted(Number.POSITIVE_INFINITY), 'number Infinity');
     assert.equal(describeUntrusted(Number.NEGATIVE_INFINITY), 'number -Infinity');
     assert.equal(describeUntrusted(Number.NaN), 'number NaN');
-    // Nested values are the kernel's JSON text, which spells a non-finite number as JSON does.
-    assert.equal(describeUntrusted([Number.POSITIVE_INFINITY, 1]), 'array [null,1]');
+    // Nested values are the kernel's bounded JSON text, which names a non-finite number too (A-05).
+    assert.equal(describeUntrusted([Number.POSITIVE_INFINITY, 1]), 'array [Infinity,1]');
   });
 
   it('echoes exactly the kernel bound and cuts what goes one code unit beyond it', () => {

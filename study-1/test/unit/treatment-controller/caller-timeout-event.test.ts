@@ -309,12 +309,12 @@ describe('readCallerTimeout record shape (design §9.11 "invalid event"; BR-RUA-
     for (const nonFinite of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
       assert.deepEqual(
         readCallerTimeout(callerTimeoutImage('probe', { source_sequence: nonFinite }), expected),
-        rejected('source_sequence number null; expected a safe integer >= 1'),
+        rejected(`source_sequence number ${String(nonFinite)}; expected a safe integer >= 1`),
       );
       assert.deepEqual(
         readCallerTimeout(callerTimeoutImage('probe', { schema_version: nonFinite }), expected),
         rejected(
-          'record_type string "caller_timeout_recorded" schema_version number null; expected caller_timeout_recorded version 1',
+          `record_type string "caller_timeout_recorded" schema_version number ${String(nonFinite)}; expected caller_timeout_recorded version 1`,
         ),
       );
     }

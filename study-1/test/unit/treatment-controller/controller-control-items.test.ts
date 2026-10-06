@@ -182,14 +182,14 @@ describe('control item readers over hostile values (A-05)', () => {
     for (const version of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
       assert.deepEqual(decodeControllerTreatment({ pk: TRIAL_PK, sk: 'treatment', state: 'ARMED', version }), {
         ok: false,
-        error: `${treatmentPrefix}: version number null; expected a safe integer >= 1`,
+        error: `${treatmentPrefix}: version number ${String(version)}; expected a safe integer >= 1`,
       });
     }
     assert.deepEqual(
       decodeControllerConfig(probeConfigItem({ registered_caller_id: Number.POSITIVE_INFINITY }), PROBE_PARTITION),
       {
         ok: false,
-        error: `${configPrefix}: registered_caller_id number null; expected one of conventional, durable, probe`,
+        error: `${configPrefix}: registered_caller_id number Infinity; expected one of conventional, durable, probe`,
       },
     );
   });

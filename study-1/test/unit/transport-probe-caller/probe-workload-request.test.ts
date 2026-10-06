@@ -100,10 +100,10 @@ describe('parseProbeWorkloadRequest', () => {
     assert.equal(parseProbeWorkloadRequest(parsed, PROBE).ok, false);
     // The kernel's describeJson writes a non-finite number as JSON.stringify does: `null`.
     const cases: readonly [JsonObject, string][] = [
-      [{ amount_minor: Number.POSITIVE_INFINITY }, 'amount_minor number null; expected a safe integer >= 1'],
-      [{ amount_minor: Number.NEGATIVE_INFINITY }, 'amount_minor number null; expected a safe integer >= 1'],
-      [{ amount_minor: Number.NaN }, 'amount_minor number null; expected a safe integer >= 1'],
-      [{ schema_version: Number.POSITIVE_INFINITY }, 'schema_version number null; expected 1'],
+      [{ amount_minor: Number.POSITIVE_INFINITY }, 'amount_minor number Infinity; expected a safe integer >= 1'],
+      [{ amount_minor: Number.NEGATIVE_INFINITY }, 'amount_minor number -Infinity; expected a safe integer >= 1'],
+      [{ amount_minor: Number.NaN }, 'amount_minor number NaN; expected a safe integer >= 1'],
+      [{ schema_version: Number.POSITIVE_INFINITY }, 'schema_version number Infinity; expected 1'],
     ];
     for (const [overrides, problem] of cases) {
       assert.deepEqual(parseProbeWorkloadRequest(workloadRequest(overrides), PROBE), refusal(problem), problem);
