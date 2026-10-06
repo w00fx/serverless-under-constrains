@@ -2,14 +2,22 @@
 // copy structurally equal to the first is an ingestion duplicate, collapsed with a diagnostic
 // count; a copy with other content is CONFLICTING_EVENT_CONTENT and makes evidence integrity
 // invalid. The first copy read stays indexed either way, so later steps always see one event per
-// id. Structural equality is the kernel's total `sameJsonValue`: member order and whitespace are
-// ignored, array order and JSON types are not.
+// id. Subject artifacts are read first, whatever order the input lists them in, so an event the
+// subject holds is always kept as the subject's copy and its findings name the subject's artifact
+// (review finding WP-12 R2). Structural equality is the kernel's total `sameJsonValue`: member
+// order and whitespace are ignored, array order and JSON types are not.
 
 import { sameJsonValue } from '../record-contract/json-value.ts';
 import { isEventRecordType, isRecordType } from '../record-contract/record-types.ts';
 import type { JournalEvent } from '../event-journal/journal-event.ts';
 import { ingestionFinding } from './ingestion-findings.ts';
-import type { IndexedEvent, IngestedArtifact, IngestedRecord, IngestionFinding } from './ingestion-model.ts';
+import type {
+  ArtifactOrigin,
+  IndexedEvent,
+  IngestedArtifact,
+  IngestedRecord,
+  IngestionFinding,
+} from './ingestion-model.ts';
 import { locateRecord } from './located-records.ts';
 import { ownString, partitionOf } from './record-correlation.ts';
 
@@ -20,6 +28,9 @@ export interface EventCollapse {
   readonly collapsed_duplicate_count: number;
   readonly findings: readonly IngestionFinding[];
 }
+
+/** Reading order of origins: the subject's copies first; the sort is stable within an origin. */
+const ORIGIN_RANK: Readonly<Record<ArtifactOrigin, number>> = { subject: 0, supplementary: 1, execution_scope: 2 };
 
 interface EventGroup {
   readonly kept: IndexedEvent;
@@ -39,7 +50,7 @@ interface EventGroup {
  */
 export function indexEvents(artifacts: readonly IngestedArtifact[]): EventCollapse {
   const groups = new Map<string, EventGroup>();
-  for (const artifact of artifacts) {
+  for (const artifact of artifacts.toSorted((a, b) => ORIGIN_RANK[a.origin] - ORIGIN_RANK[b.origin])) {
     for (const event of artifactEvents(artifact)) {
       addToGroup(groups, event);
     }

@@ -3,6 +3,10 @@
 // evidence, a conflicting event or source sequence, a core-file digest mismatch, or a
 // provider-generated identity collision. Unverified when a frozen package is re-evaluated without
 // its evidence index. Gaps, collapsed duplicates and absent artifacts are other gates' concern.
+// The gate judges the evaluated trial's or probe's evidence: its expected artifacts and, in a
+// re-evaluation, every file its evidence index covers. A conflict or digest mismatch found only in
+// a supplementary file (readiness journals, the A-09 provider partition, derived files) is still
+// reported as a finding but never decides this gate (addendum §2.2; review finding WP-12 R2).
 
 import type { EvidenceRef } from '../record-contract/evidence-refs.ts';
 import type { IngestionFindingCode } from '../record-contract/records/group-c/vocabulary.ts';
@@ -43,19 +47,29 @@ export function assessEvidenceIntegrity(evidence: IngestedEvidence): GateAssessm
   return assembleGate('evidence_integrity', causes, integral.map(artifactRef));
 }
 
-function isRequiredEvidence(artifact: IngestedArtifact | undefined): artifact is IngestedArtifact {
+function isRequiredEvidence(artifact: IngestedArtifact): boolean {
   return (
-    artifact?.origin === 'subject' && (artifact.requirement === 'required' || artifact.requirement === 'conditional')
+    artifact.origin === 'subject' && (artifact.requirement === 'required' || artifact.requirement === 'conditional')
   );
+}
+
+// The subject's own artifacts, plus any file the re-evaluated evidence index pins: those bytes are
+// the trial's frozen evidence even when the expected set does not name them (design §7 index scope).
+function isJudgedEvidence(artifact: IngestedArtifact, evidence: IngestedEvidence): boolean {
+  return artifact.origin === 'subject' || evidence.indexed_digests?.has(artifact.path) === true;
 }
 
 function findingCauses(finding: IngestionFinding, evidence: IngestedEvidence): readonly GateCause[] {
   const artifact = finding.artifact_path === undefined ? undefined : evidence.artifacts.get(finding.artifact_path);
+  // Every finding that can invalidate names an artifact that was read: conflicts and mismatches
+  // are found in read records, and unreadable evidence counts only when it is required.
+  if (artifact === undefined) {
+    return [];
+  }
   const invalidating =
-    INVALIDATING_CODES.has(finding.code) || (UNREADABLE_CODES.has(finding.code) && isRequiredEvidence(artifact));
-  // Every invalidating finding names an artifact that was read: conflicts and mismatches are found
-  // in read records, and unreadable evidence counts only when it is required.
-  if (!invalidating || artifact === undefined) {
+    (INVALIDATING_CODES.has(finding.code) && isJudgedEvidence(artifact, evidence)) ||
+    (UNREADABLE_CODES.has(finding.code) && isRequiredEvidence(artifact));
+  if (!invalidating) {
     return [];
   }
   const ref: EvidenceRef = {

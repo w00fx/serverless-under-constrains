@@ -5,8 +5,13 @@
 // `provider_request_id`, when it is paired with two attempts. Caller-generated collisions
 // (`attempt_id`, `provider_request_id`) feed identity integrity; provider-generated ones (call,
 // transaction and commit ids) feed evidence integrity. A subject record that references an
-// attempt nobody registered is missing identity evidence. Collisions found only among earlier
-// trials were judged with those trials and are not repeated here.
+// attempt nobody registered is missing identity evidence. Only collisions that involve one of the
+// subject's own records are judged here: collisions found only among earlier trials were judged
+// with those trials, and collisions found only among supplementary execution-level records (the
+// addendum §2 warm-up journal, the A-09 `<execution_id>#provider` partition) are readiness and
+// stray-call evidence, never an input to this trial's gates (addendum §2.2; review finding WP-12
+// R2). A supplementary record that reuses a subject identity still collides (INV-RUA-001: unique
+// within the complete execution scope).
 
 import type { EvidenceRef } from '../record-contract/evidence-refs.ts';
 import { sortEvidenceRefs } from '../record-contract/evidence-refs.ts';
@@ -33,6 +38,7 @@ interface IdentityOccurrence {
   readonly paired_attempt?: string;
   /** The ledger transaction that carries the identity, for a ledger occurrence. */
   readonly ledger_item?: string;
+  /** Read from the subject's own artifacts: only a collision with such an occurrence is judged. */
   readonly examined: boolean;
   readonly ref: EvidenceRef;
 }
@@ -113,7 +119,7 @@ function eventOccurrences(event: IndexedEvent): readonly IdentityOccurrence[] {
     artifact_sha256: event.artifact_sha256,
     event_id: event.record.event_id,
   };
-  const located = { partition: event.partition, examined: event.origin !== 'execution_scope', ref };
+  const located = { partition: event.partition, examined: event.origin === 'subject', ref };
   return [
     ...origin.flatMap((kind) => occurrence(kind, event.record, { ...located, origin_event_id: event.record.event_id })),
     ...appearance.flatMap((kind) => occurrence(kind, event.record, located)),
@@ -156,7 +162,7 @@ function ledgerOccurrences(snapshot: LocatedRecord<LedgerSnapshot>): readonly Id
   return snapshot.record.transactions.flatMap((transaction, index) => {
     const located = {
       partition,
-      examined: snapshot.origin !== 'execution_scope',
+      examined: snapshot.origin === 'subject',
       ledger_item: `${snapshot.artifact_path}#${String(index)}`,
       ref: {
         artifact_path: snapshot.artifact_path,
