@@ -78,7 +78,7 @@ describe('AC-RUA-046 serialization rules', () => {
   it('casing', () => {
     assertAccepted(payment(), 'snake_case record');
     assertRejected({ ...payment(), paymentId: 'pay-poc-001' }, ' additionalProperties', 'camelCase field');
-    assertRejected({ ...dispatchStarted(), attemptId: LOWER_V4 }, ' unevaluatedProperties', 'camelCase event field');
+    assertRejected({ ...dispatchStarted(), attemptId: LOWER_V4 }, ' additionalProperties', 'camelCase event field');
     assert.deepEqual(violationsOf({ ...payment(), record_type: 'Payment' }), ['/record_type record_type']);
     // Domain and lifecycle enum values stay uppercase.
     assertRejected({ ...payment(), currency: 'brl' }, '/currency const', 'lowercase currency');
