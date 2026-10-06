@@ -23,6 +23,7 @@ import {
   createRecordValidator,
   listSchemaFiles,
 } from '../../../src/record-contract/schema-registry.ts';
+import type { RecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { CANONICAL_EXAMPLES as GROUP_A_EXAMPLES } from './group-a/support/canonical-examples.ts';
 import { CANONICAL_EXAMPLES as GROUP_B_EXAMPLES } from './group-b/examples/group-b-examples.ts';
 import { toJson } from './group-b/support/record-builders.ts';
@@ -35,6 +36,27 @@ const SHARED_MODULES: Readonly<Record<string, readonly string[]>> = {
   'group-b': ['record-map.ts', 'shared-shapes.ts', 'vocabulary.ts'],
   'group-c': ['record-map.ts', 'shared-shapes.ts', 'vocabulary.ts'],
 };
+
+/**
+ * Asserts the validator rejects `relabelled` (an example of `source` renamed as `other`) because of
+ * its members, not only because of `record_type`.
+ */
+function assertMembersRejectedAs(
+  validator: RecordValidator,
+  other: RecordType,
+  relabelled: JsonObject,
+  source: RecordType,
+): void {
+  const outcome = validator.validate(relabelled);
+  if (outcome.valid) {
+    assert.fail(`${source} payload is valid as ${other}; expected a rejection`);
+  }
+  const paths = outcome.violations.map((violation) => violation.instance_path || '/');
+  assert.ok(
+    paths.some((path) => path !== '/record_type'),
+    `${source} payload as ${other}: expected a member violation, got ${paths.join(', ')}`,
+  );
+}
 
 // One canonical example per catalogued type, keyed by type; each group's tuple indexes its
 // own typed example table, so a missing example fails to compile.
@@ -113,13 +135,15 @@ describe('AC-RUA-046 catalogue completeness over all 90 record types', () => {
     }
   });
 
-  it('a canonical example is never valid as another type', () => {
+  it("a canonical example's payload is never valid under another type's schema", () => {
+    // The example is relabelled as the other type, so that type's schema judges every member;
+    // `validateAs(other, example)` would stop at the record_type pre-check before any schema runs.
     const validator = createRecordValidator();
     let checked = 0;
     for (const recordType of RECORD_TYPES) {
       const example = canonicalExampleOf(recordType);
       for (const other of RECORD_TYPES.filter((candidate) => candidate !== recordType)) {
-        assert.equal(validator.validateAs(other, example).valid, false, `${recordType} as ${other}`);
+        assertMembersRejectedAs(validator, other, { ...example, record_type: other }, recordType);
         checked += 1;
       }
     }
