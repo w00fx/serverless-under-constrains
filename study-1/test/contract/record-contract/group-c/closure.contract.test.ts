@@ -320,6 +320,23 @@ describe('AC-RUA-046 late_evidence_assessment rules (BR-RUA-043, D-16)', () => {
     );
   });
 
+  it('consistent and contradictory have at least one correlated record (D-16)', () => {
+    assertRejected(
+      edited(contradictory, { correlated_record_count: 0 }),
+      'contradictory without a record',
+      '/correlated_record_count minimum',
+    );
+    assertRejected(
+      edited(contradictory, { late_evidence_status: 'consistent', correlated_record_count: 0, reassessments: [] }),
+      'consistent without a record',
+      '/correlated_record_count minimum',
+    );
+    assertAccepted(
+      edited(contradictory, { late_evidence_status: 'consistent', correlated_record_count: 1, reassessments: [] }),
+      'consistent with one record',
+    );
+  });
+
   it('contradictory needs a reassessment that changed the verdict projection', () => {
     assertRejected(
       withValueAt(contradictory, ['reassessments', 0, 'status'], 'consistent'),

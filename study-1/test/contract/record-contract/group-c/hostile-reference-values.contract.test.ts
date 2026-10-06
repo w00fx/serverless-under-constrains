@@ -18,7 +18,7 @@ import { groupBValidator } from '../group-b/support/group-b-validation.ts';
 import { toJson } from '../group-b/support/record-builders.ts';
 import { runPackageIndex } from './examples/package-examples.ts';
 import { usableProbe } from './examples/probe-examples.ts';
-import { evidenceRef } from './support/group-c-builders.ts';
+import { EXECUTION_MANIFEST_PATH, evidenceRef } from './support/group-c-builders.ts';
 
 const HOSTILE_MEMBER = '{"toString":1,"valueOf":1}';
 
@@ -41,7 +41,7 @@ const CASES: readonly HostileCase[] = [
     label: 'package_index entries',
     record: toJson(runPackageIndex()),
     list: 'entries',
-    firstPath: 'cleanup/cleanup-result.json',
+    firstPath: EXECUTION_MANIFEST_PATH,
   },
   {
     label: 'probe_usability_assessment evidence_refs (_defs evidence_refs)',

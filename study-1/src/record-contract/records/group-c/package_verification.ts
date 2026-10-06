@@ -25,12 +25,17 @@ export type PackageEligibilityOutcome =
       readonly package_ineligibility_reasons: readonly [PackageIneligibilityReason, ...PackageIneligibilityReason[]];
     };
 
-/** No selected head means no selected chain. */
+/**
+ * No selected head means no selected chain. A selected head lists the chain from sequence 1 to
+ * it; the schema requires at least one link only when the package is eligible, because an
+ * ineligible verification may name a head that resolves to nothing (`UNKNOWN_HEAD`, design
+ * §8.16 step 6) or to a broken chain, and still records the head the operator selected.
+ */
 export type SelectedChain =
   | { readonly selected_amendment_head_sha256: null; readonly selected_chain: readonly [] }
   | {
       readonly selected_amendment_head_sha256: Sha256Hex;
-      /** From sequence 1 to the selected head. */
+      /** From sequence 1 to the selected head; empty or partial only when ineligible. */
       readonly selected_chain: readonly AmendmentLink[];
     };
 

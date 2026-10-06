@@ -14,7 +14,24 @@ import * as groupB from '../../../../../src/record-contract/records/group-b/voca
 import type { GroupCRecordType } from '../../../../../src/record-contract/records/group-c/record-map.ts';
 import * as groupC from '../../../../../src/record-contract/records/group-c/vocabulary.ts';
 
-export type VocabularySite = readonly [readonly (string | number | null)[], GroupCRecordType, string];
+export type VocabularySite = readonly [readonly (string | number | boolean | null)[], GroupCRecordType, string];
+
+/** BR-RUA-030 `correct_completion`: a TypeScript `boolean | null`, so it has no exported tuple. */
+const CORRECT_COMPLETION_VALUES = [true, false, null] as const;
+
+/** The design §8.3 gates other than G4a and G4b: always applicable (INV-RUA-001 for G3). */
+const ALWAYS_APPLICABLE_GATE_POSITIONS = [0, 1, 2, 5, 6, 7, 8] as const;
+
+function gateValueSites(): readonly VocabularySite[] {
+  return ALWAYS_APPLICABLE_GATE_POSITIONS.map(
+    (position) =>
+      [
+        groupC.APPLICABLE_GATE_VALUES,
+        'oracle_result',
+        `/properties/validity_gates/prefixItems/${String(position)}/allOf/1/properties/value/enum`,
+      ] as const,
+  );
+}
 
 function propertyEnum(name: string): string {
   return `/properties/${name}/enum`;
@@ -55,7 +72,8 @@ export const VOCABULARY_SITES: readonly VocabularySite[] = [
   [groupC.APPLICABLE_GATE_VALUES, 'run_summary', propertyEnum('evidence_integrity_status')],
   [groupC.APPLICABLE_GATE_VALUES, 'probe_usability_assessment', propertyEnum('treatment_fidelity')],
   [groupC.APPLICABLE_GATE_VALUES, 'probe_usability_assessment', propertyEnum('evidence_integrity')],
-  [GATE_VALUES, 'oracle_result', propertyEnum('identity_integrity')],
+  [groupC.APPLICABLE_GATE_VALUES, 'oracle_result', propertyEnum('identity_integrity')],
+  ...gateValueSites(),
   [GATE_VALUES, 'oracle_result', propertyEnum('control_integrity')],
   [GATE_VALUES, 'oracle_result', propertyEnum('treatment_fidelity')],
   [GATE_VALUES, 'oracle_result', definitionEnum('validity_gate', 'value')],
@@ -65,6 +83,12 @@ export const VOCABULARY_SITES: readonly VocabularySite[] = [
   [groupC.CONDITION_IDS, 'oracle_result', definitionEnum('condition_result', 'condition_id')],
   [groupC.CONDITION_IDS, 'transport_probe_result', definitionEnum('condition_result', 'condition_id')],
   [groupC.FIDELITY_BASES, 'oracle_result', propertyEnum('fidelity_basis')],
+  // D-05: the probe always has a fidelity basis, so it admits every basis but not_applicable.
+  [
+    groupC.FIDELITY_BASES.filter((basis) => basis !== 'not_applicable'),
+    'transport_probe_result',
+    propertyEnum('fidelity_basis'),
+  ],
   [groupC.CLOCK_ASSUMPTION_IDS, 'oracle_result', '/properties/clock_assumption_refs/items/enum'],
   [groupC.CLOCK_ASSUMPTION_IDS, 'transport_probe_result', '/properties/clock_assumption_refs/items/enum'],
   [groupC.ORDERING_BASES, 'transport_probe_result', propertyEnum('ordering_basis')],
@@ -76,6 +100,14 @@ export const VOCABULARY_SITES: readonly VocabularySite[] = [
   ],
   [[...groupB.PROCESSING_TERMINAL_REASONS, null], 'oracle_result', propertyEnum('processing_terminal_reason')],
   [VARIANT_IDS, 'oracle_result', propertyEnum('variant_id')],
+  [VARIANT_IDS, 'run_summary', definitionEnum('trial_result', 'variant_id')],
+  [VARIANT_IDS, 'validation_summary', definitionEnum('trial_result', 'variant_id')],
+  [SCENARIOS, 'run_summary', definitionEnum('trial_result', 'scenario')],
+  [SCENARIOS, 'validation_summary', definitionEnum('trial_result', 'scenario')],
+  [CORRECT_COMPLETION_VALUES, 'oracle_result', propertyEnum('correct_completion')],
+  [CORRECT_COMPLETION_VALUES, 'run_summary', definitionEnum('trial_result', 'correct_completion')],
+  [CORRECT_COMPLETION_VALUES, 'validation_summary', definitionEnum('trial_result', 'correct_completion')],
+  [groupC.PRESERVATION_VERDICTS, 'transport_probe_result', definitionEnum('condition_result', 'result')],
   [SCENARIOS, 'oracle_result', propertyEnum('scenario')],
   [groupC.OUTCOME_CLASSES, 'attempt_projection', definitionEnum('attempt', 'outcome_class')],
   [groupC.PROVIDER_CALL_DISPOSITIONS, 'attempt_projection', definitionEnum('provider_call', 'disposition')],

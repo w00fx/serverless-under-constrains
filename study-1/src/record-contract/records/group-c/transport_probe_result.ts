@@ -39,16 +39,25 @@ interface TransportProbeResultFields extends ExecutionScoped {
 }
 
 /**
- * BR-RUA-027 precedence: an invalid probe is indeterminate; a `pass` needs a valid probe,
- * verified evidence and six passing conditions.
+ * BR-RUA-027 precedence: an invalid probe is indeterminate; a `pass` needs a probe that is not
+ * invalid, verified evidence and six passing conditions. A `pass` with `indeterminate` validity
+ * is reachable (a gapped runner journal stops the invocation cross-check of design §8.11) and
+ * only BR-RUA-026 usability, not this record, requires `probe_validity = valid`.
  */
 export type ProbeVerdictOutcome =
   | {
       readonly transport_probe_verdict: 'pass';
-      readonly probe_validity: 'valid';
+      readonly probe_validity: Exclude<TrialValidity, 'invalid'>;
       readonly evidence_integrity: 'verified';
     }
-  | { readonly transport_probe_verdict: Exclude<PreservationVerdict, 'pass'>; readonly probe_validity: TrialValidity };
+  | {
+      readonly transport_probe_verdict: Extract<PreservationVerdict, 'fail'>;
+      readonly probe_validity: Exclude<TrialValidity, 'invalid'>;
+    }
+  | {
+      readonly transport_probe_verdict: Extract<PreservationVerdict, 'indeterminate'>;
+      readonly probe_validity: TrialValidity;
+    };
 
 /** Schema: `schemas/group-c/transport_probe_result.schema.json`. */
 export type TransportProbeResult = TransportProbeResultFields & ProbeVerdictOutcome;

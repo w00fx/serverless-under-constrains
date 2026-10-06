@@ -36,7 +36,7 @@ import {
   reason,
   uuid,
 } from '../../group-b/support/record-builders.ts';
-import { artifactRef, evidenceRef } from '../support/group-c-builders.ts';
+import { EXECUTION_MANIFEST_PATH, artifactRef, evidenceRef } from '../support/group-c-builders.ts';
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';
 
@@ -82,7 +82,12 @@ const CLOSURE_REFS = {
   late_evidence_assessment_ref: artifactRef('late-evidence/late-evidence-assessment.json'),
 } as const;
 
-/** A verified durable validation: control pass, conclusive treatment, clean closure (BR-RUA-038). */
+/**
+ * A verified durable validation: control pass, conclusive treatment, clean closure (BR-RUA-038).
+ *
+ * @example
+ * verifiedValidationSummary().implementation_validation_status; // 'verified'
+ */
 export function verifiedValidationSummary(): ValidationSummary {
   return {
     schema_version: 1,
@@ -109,14 +114,20 @@ export function verifiedValidationSummary(): ValidationSummary {
   };
 }
 
-/** A failed validation: a trustworthy control fail, with its reason. */
+/**
+ * A failed validation: a trustworthy control fail and a conclusive treatment verdict (design
+ * §8.15: an indeterminate treatment verdict would make it indeterminate), with its reason.
+ *
+ * @example
+ * failedValidationSummary().implementation_validation_status; // 'failed'
+ */
 export function failedValidationSummary(): ValidationSummary {
   return {
     ...verifiedValidationSummary(),
     variant_id: 'conventional',
     trial_results: [
       evaluated(slot(1, VALIDATION_TRIALS, 'conventional', 'CONTROL'), 'fail', false),
-      evaluated(slot(2, VALIDATION_TRIALS, 'conventional', 'COMMIT_THEN_TIMEOUT'), 'indeterminate', null),
+      evaluated(slot(2, VALIDATION_TRIALS, 'conventional', 'COMMIT_THEN_TIMEOUT'), 'fail', false),
     ],
     implementation_validation_status: 'failed',
     status_reasons: [reason('CONTROL_FAILED', 'control trial')],
@@ -125,7 +136,12 @@ export function failedValidationSummary(): ValidationSummary {
   };
 }
 
-/** An indeterminate validation whose treatment trial never started (D-29). */
+/**
+ * An indeterminate validation whose treatment trial never started (D-29).
+ *
+ * @example
+ * indeterminateValidationSummary().implementation_validation_status; // 'indeterminate'
+ */
 export function indeterminateValidationSummary(): ValidationSummary {
   return {
     ...verifiedValidationSummary(),
@@ -143,6 +159,12 @@ export function indeterminateValidationSummary(): ValidationSummary {
   };
 }
 
+/**
+ * A completed run with four evaluated trials in declared order and an eligible comparison.
+ *
+ * @example
+ * eligibleRunSummary().comparison_eligibility; // 'eligible'
+ */
 export function eligibleRunSummary(): RunSummary {
   return {
     schema_version: 1,
@@ -170,7 +192,12 @@ export function eligibleRunSummary(): RunSummary {
   };
 }
 
-/** An incomplete run: the last trial could not be frozen, so the comparison is ineligible. */
+/**
+ * An incomplete run: the last trial could not be frozen, so the comparison is ineligible.
+ *
+ * @example
+ * incompleteRunSummary().comparison_eligibility; // 'ineligible'
+ */
 export function incompleteRunSummary(): RunSummary {
   return {
     ...eligibleRunSummary(),
@@ -199,7 +226,7 @@ function projection(projectionId: EqualityProjectionId, result: PreservationVerd
     result,
     compared_fields: ['/caller_timing/timeout_ms'],
     differences: differs ? [{ field: '/caller_timing/timeout_ms', declared: result !== 'fail', values }] : [],
-    evidence_refs: [evidenceRef('execution-manifest.json')],
+    evidence_refs: [evidenceRef(EXECUTION_MANIFEST_PATH)],
   };
 }
 
@@ -232,7 +259,12 @@ function comparisonChecks(failing?: ComparisonCheckId): ComparisonAssessment['el
   return [check(c1), check(c2), check(c3), check(c4), check(c5), check(c6), check(c7), check(c8), check(c9)];
 }
 
-/** An eligible comparison whose one difference was declared (BR-RUA-031). */
+/**
+ * An eligible comparison whose one difference was declared (BR-RUA-031).
+ *
+ * @example
+ * eligibleComparison().comparison_eligibility; // 'eligible'
+ */
 export function eligibleComparison(): ComparisonAssessment {
   return {
     schema_version: 1,
@@ -249,7 +281,12 @@ export function eligibleComparison(): ComparisonAssessment {
   };
 }
 
-/** An undeclared caller-timing difference fails equality, so the comparison is ineligible. */
+/**
+ * An undeclared caller-timing difference fails equality, so the comparison is ineligible.
+ *
+ * @example
+ * ineligibleComparison().comparison_eligibility; // 'ineligible'
+ */
 export function ineligibleComparison(): ComparisonAssessment {
   return {
     ...eligibleComparison(),
@@ -263,6 +300,12 @@ export function ineligibleComparison(): ComparisonAssessment {
 
 const VALIDATION_SUMMARY_PATH = 'summary/validation-summary.json';
 
+/**
+ * A verified validation package with no recovery amendment (CTR-RUA-004).
+ *
+ * @example
+ * verifiedValidationVerification().effective_implementation_validation_status; // 'verified'
+ */
 export function verifiedValidationVerification(): VariantValidationVerification {
   return {
     schema_version: 1,
@@ -288,7 +331,12 @@ export function verifiedValidationVerification(): VariantValidationVerification 
   };
 }
 
-/** An ineligible validation package leaves the effective status indeterminate. */
+/**
+ * An ineligible validation package leaves the effective status indeterminate.
+ *
+ * @example
+ * indeterminateValidationVerification().effective_implementation_validation_status; // 'indeterminate'
+ */
 export function indeterminateValidationVerification(): VariantValidationVerification {
   return {
     ...verifiedValidationVerification(),
@@ -313,7 +361,12 @@ function completionChecks(failing?: StudyCompletionCheckId): StudyCompletionAsse
   return [check(k1), check(k2), check(k3), check(k4), check(k5), check(k6), check(k7)];
 }
 
-/** A complete study over the original run package (BR-RUA-054). */
+/**
+ * A complete study over the original run package (BR-RUA-054).
+ *
+ * @example
+ * completeStudy().study_completion; // 'complete'
+ */
 export function completeStudy(): StudyCompletionAssessment {
   return {
     schema_version: 1,
@@ -334,7 +387,12 @@ export function completeStudy(): StudyCompletionAssessment {
   };
 }
 
-/** A run whose lease needs recovery leaves the study incomplete (AC-RUA-038). */
+/**
+ * A run whose lease needs recovery leaves the study incomplete (AC-RUA-038).
+ *
+ * @example
+ * incompleteStudy().study_completion; // 'incomplete'
+ */
 export function incompleteStudy(): StudyCompletionAssessment {
   return {
     ...completeStudy(),

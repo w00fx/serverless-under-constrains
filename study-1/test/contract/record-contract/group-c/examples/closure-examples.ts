@@ -23,12 +23,24 @@ import {
   reason,
   uuid,
 } from '../../group-b/support/record-builders.ts';
-import { TRIAL_DIRECTORY, artifactRef, evidenceRef } from '../support/group-c-builders.ts';
+import {
+  EXECUTION_MANIFEST_PATH,
+  RUNNER_JOURNAL_PATH,
+  TRIAL_PATHS,
+  artifactRef,
+  evidenceRef,
+} from '../support/group-c-builders.ts';
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';
 
 const RUN_CORRELATION = { run_id: RUN_ID, execution_manifest_sha256: EXECUTION_MANIFEST_SHA256 } as const;
 
+/**
+ * Every safeguard within its declared limit (BR-RUA-046).
+ *
+ * @example
+ * withinLimitsSafety().safety_status; // 'within_limits'
+ */
 export function withinLimitsSafety(): SafetyAssessment {
   return {
     schema_version: 1,
@@ -41,7 +53,7 @@ export function withinLimitsSafety(): SafetyAssessment {
         declared_limit: '3600000 ms',
         observed: '1200000 ms',
         result: 'within_limits',
-        evidence_refs: [evidenceRef('runner-journal.jsonl')],
+        evidence_refs: [evidenceRef(RUNNER_JOURNAL_PATH)],
         checked_at: at(4000),
       },
       {
@@ -49,7 +61,7 @@ export function withinLimitsSafety(): SafetyAssessment {
         declared_limit: '5.00 USD',
         observed: '0.42 USD',
         result: 'within_limits',
-        evidence_refs: [evidenceRef('execution-manifest.json')],
+        evidence_refs: [evidenceRef(EXECUTION_MANIFEST_PATH)],
         checked_at: at(4001),
       },
     ],
@@ -58,7 +70,12 @@ export function withinLimitsSafety(): SafetyAssessment {
   };
 }
 
-/** A billed-cost check that could not be read leaves the status unverified. */
+/**
+ * A billed-cost check that could not be read leaves the status unverified.
+ *
+ * @example
+ * unverifiedSafety().safety_status; // 'unverified'
+ */
 export function unverifiedSafety(): SafetyAssessment {
   return {
     schema_version: 1,
@@ -80,7 +97,12 @@ export function unverifiedSafety(): SafetyAssessment {
   };
 }
 
-/** A breach outranks every other result (precedence breached > unverified > within_limits). */
+/**
+ * A breach outranks every other result (precedence breached > unverified > within_limits).
+ *
+ * @example
+ * breachedSafety().safety_status; // 'breached'
+ */
 export function breachedSafety(): SafetyAssessment {
   const [activeTime, estimatedCost] = withinLimitsSafety().checks;
   return {
@@ -91,6 +113,12 @@ export function breachedSafety(): SafetyAssessment {
   };
 }
 
+/**
+ * A complete cleanup that deleted every owned resource (BR-RUA-048).
+ *
+ * @example
+ * succeededCleanup().cleanup_status; // 'succeeded'
+ */
 export function succeededCleanup(): CleanupResult {
   return {
     schema_version: 1,
@@ -140,7 +168,12 @@ export function succeededCleanup(): CleanupResult {
   };
 }
 
-/** A deletion that failed makes cleanup partial. */
+/**
+ * A deletion that failed makes cleanup partial.
+ *
+ * @example
+ * partialCleanup().cleanup_status; // 'partial'
+ */
 export function partialCleanup(): CleanupResult {
   return {
     ...succeededCleanup(),
@@ -159,7 +192,12 @@ export function partialCleanup(): CleanupResult {
   };
 }
 
-/** A cleanup still running has no completion time. */
+/**
+ * A cleanup still running has no completion time.
+ *
+ * @example
+ * runningCleanup().cleanup_status; // 'running'
+ */
 export function runningCleanup(): CleanupResult {
   return {
     schema_version: 1,
@@ -185,6 +223,12 @@ function auditPass(offset: number, surfaces: readonly SurfaceObservation[]): Aud
   return { started_at: at(offset), completed_at: at(offset + 50), surfaces };
 }
 
+/**
+ * Two clean audit passes separated by the stable-absence interval (BR-RUA-051).
+ *
+ * @example
+ * cleanLeakAudit().leak_audit_status; // 'clean'
+ */
 export function cleanLeakAudit(): LeakAuditResult {
   return {
     schema_version: 1,
@@ -202,6 +246,12 @@ export function cleanLeakAudit(): LeakAuditResult {
   };
 }
 
+/**
+ * An audit that found a processing-capable leak (D-30).
+ *
+ * @example
+ * leakingAudit().leak_audit_status; // 'leaks_detected'
+ */
 export function leakingAudit(): LeakAuditResult {
   return {
     ...cleanLeakAudit(),
@@ -220,7 +270,12 @@ export function leakingAudit(): LeakAuditResult {
   };
 }
 
-/** A failed query makes the audit inconclusive whatever else it saw. */
+/**
+ * A failed query makes the audit inconclusive whatever else it saw.
+ *
+ * @example
+ * inconclusiveLeakAudit().leak_audit_status; // 'inconclusive'
+ */
 export function inconclusiveLeakAudit(): LeakAuditResult {
   return {
     ...cleanLeakAudit(),
@@ -240,7 +295,12 @@ export function inconclusiveLeakAudit(): LeakAuditResult {
   };
 }
 
-/** A late provider event correlated with the frozen trial (BR-RUA-043). */
+/**
+ * A late provider event correlated with the frozen trial (BR-RUA-043).
+ *
+ * @example
+ * correlatedLateRecord().correlated; // true
+ */
 export function correlatedLateRecord(): LateEvidenceRecord {
   return {
     schema_version: 1,
@@ -260,7 +320,12 @@ export function correlatedLateRecord(): LateEvidenceRecord {
   };
 }
 
-/** A DLQ message of the probe that matches no frozen evidence. */
+/**
+ * A DLQ message of the probe that matches no frozen evidence.
+ *
+ * @example
+ * uncorrelatedProbeLateRecord().correlated; // false
+ */
 export function uncorrelatedProbeLateRecord(): LateEvidenceRecord {
   return {
     schema_version: 1,
@@ -276,8 +341,14 @@ export function uncorrelatedProbeLateRecord(): LateEvidenceRecord {
   };
 }
 
-const FROZEN_ORACLE_RESULT = artifactRef(`${TRIAL_DIRECTORY}/derived/oracle-result.json`);
+const FROZEN_ORACLE_RESULT = artifactRef(TRIAL_PATHS.oracleResult);
 
+/**
+ * Complete monitoring with no correlated late record: `none` (D-16).
+ *
+ * @example
+ * quietLateEvidence().late_evidence_status; // 'none'
+ */
 export function quietLateEvidence(): LateEvidenceAssessment {
   return {
     schema_version: 1,
@@ -295,7 +366,12 @@ export function quietLateEvidence(): LateEvidenceAssessment {
   };
 }
 
-/** A late commit changes the frozen verdict projection: contradictory (D-16). */
+/**
+ * A late commit changes the frozen verdict projection: contradictory (D-16).
+ *
+ * @example
+ * contradictoryLateEvidence().late_evidence_status; // 'contradictory'
+ */
 export function contradictoryLateEvidence(): LateEvidenceAssessment {
   return {
     ...quietLateEvidence(),
@@ -319,7 +395,12 @@ export function contradictoryLateEvidence(): LateEvidenceAssessment {
   };
 }
 
-/** Monitoring was skipped, so late evidence is unverified and has no monitoring window. */
+/**
+ * Monitoring was skipped, so late evidence is unverified and has no monitoring window.
+ *
+ * @example
+ * skippedLateEvidence().monitoring; // 'skipped'
+ */
 export function skippedLateEvidence(): LateEvidenceAssessment {
   return {
     schema_version: 1,
@@ -336,7 +417,12 @@ export function skippedLateEvidence(): LateEvidenceAssessment {
   };
 }
 
-/** Recovery reran cleanup steps 3-11 and repaired the leak audit (BR-RUA-038). */
+/**
+ * Recovery reran cleanup steps 3-11 and repaired the leak audit (BR-RUA-038).
+ *
+ * @example
+ * operationalRecovery().record_type; // 'operational_recovery_record'
+ */
 export function operationalRecovery(): OperationalRecoveryRecord {
   return {
     schema_version: 1,

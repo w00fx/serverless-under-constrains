@@ -10,7 +10,12 @@ import type { GroupCExample } from '../support/record-example.ts';
 const COMMIT_SHA = '0123456789abcdef0123456789abcdef01234567';
 const TREE_SHA = '89abcdef0123456789abcdef0123456789abcdef';
 
-/** The golden suite passed at a clean commit and covers every verdict-changing pair (BR-RUA-055). */
+/**
+ * The golden suite passed at a clean commit and covers every verdict-changing pair (BR-RUA-055).
+ *
+ * @example
+ * passedRevisionCheck().result; // 'passed'
+ */
 export function passedRevisionCheck(): OracleRevisionCheck {
   return {
     schema_version: 1,
@@ -37,7 +42,12 @@ export function passedRevisionCheck(): OracleRevisionCheck {
   };
 }
 
-/** A skipped golden test and an uncovered pair fail the check. */
+/**
+ * A skipped golden test and an uncovered pair fail the check.
+ *
+ * @example
+ * failedRevisionCheck().result; // 'failed'
+ */
 export function failedRevisionCheck(): OracleRevisionCheck {
   return {
     ...passedRevisionCheck(),
@@ -49,7 +59,12 @@ export function failedRevisionCheck(): OracleRevisionCheck {
   };
 }
 
-/** `rua run` completed: exit 0, the package paths it wrote and its summary record (design §11). */
+/**
+ * `rua run` completed: exit 0, the package paths it wrote and its summary record (design §11).
+ *
+ * @example
+ * completedCliResult().exit_code; // 0
+ */
 export function completedCliResult(): CliResult {
   return {
     schema_version: 1,
@@ -65,7 +80,12 @@ export function completedCliResult(): CliResult {
   };
 }
 
-/** A usage error names no execution and wrote nothing. */
+/**
+ * A usage error names no execution and wrote nothing.
+ *
+ * @example
+ * usageErrorCliResult().outcome; // 'usage_error'
+ */
 export function usageErrorCliResult(): CliResult {
   return {
     schema_version: 1,

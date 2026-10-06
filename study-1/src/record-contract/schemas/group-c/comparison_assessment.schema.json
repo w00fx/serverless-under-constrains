@@ -143,6 +143,24 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": ["pass", "fail"]
+              }
+            },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
         }
       ],
       "unevaluatedProperties": false

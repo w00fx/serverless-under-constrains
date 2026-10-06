@@ -5,13 +5,25 @@ import type { ProbeUsabilityAssessment } from '../../../../../src/record-contrac
 import type { TransportProbeResult } from '../../../../../src/record-contract/records/group-c/transport_probe_result.ts';
 import type { TransportProbeSummary } from '../../../../../src/record-contract/records/group-c/transport_probe_summary.ts';
 import { EXECUTION_MANIFEST_SHA256, PROBE_ID, at, digest, reason } from '../../group-b/support/record-builders.ts';
-import { artifactRef, codedReason, evidenceRef, sixConditions } from '../support/group-c-builders.ts';
+import {
+  PROBE_DIRECTORY,
+  PROBE_PATHS,
+  artifactRef,
+  codedReason,
+  evidenceRef,
+  sixConditions,
+} from '../support/group-c-builders.ts';
 import { groupCExample } from '../support/record-example.ts';
 import type { GroupCExample } from '../support/record-example.ts';
 
 const PROBE_RESULT_PATH = 'probe/derived/transport-probe-result.json';
 
-/** A passing probe: valid, verified evidence and six passing conditions (CTR-RUA-003). */
+/**
+ * A passing probe: valid, verified evidence and six passing conditions (CTR-RUA-003).
+ *
+ * @example
+ * passingTransportProbeResult().transport_probe_verdict; // 'pass'
+ */
 export function passingTransportProbeResult(): TransportProbeResult {
   return {
     schema_version: 1,
@@ -26,14 +38,19 @@ export function passingTransportProbeResult(): TransportProbeResult {
     fidelity_basis: 'causal_plus_cross_source_clock_assumption',
     clock_assumption_refs: ['CA-1'],
     ordering_basis: 'cross_source_wall_clock',
-    condition_results: sixConditions('pass'),
-    evidence_refs: [evidenceRef('probe/provider-journal.jsonl')],
+    condition_results: sixConditions('pass', undefined, PROBE_DIRECTORY),
+    evidence_refs: [evidenceRef(PROBE_PATHS.providerJournal)],
     indeterminate_reasons: [],
     checked_at: at(2000),
   };
 }
 
-/** An invalid probe, which is indeterminate whatever its conditions say. */
+/**
+ * An invalid probe, which is indeterminate whatever its conditions say.
+ *
+ * @example
+ * invalidTransportProbeResult().transport_probe_verdict; // 'indeterminate'
+ */
 export function invalidTransportProbeResult(): TransportProbeResult {
   return {
     ...passingTransportProbeResult(),
@@ -44,12 +61,18 @@ export function invalidTransportProbeResult(): TransportProbeResult {
     treatment_fidelity: 'invalid',
     fidelity_basis: 'causal',
     clock_assumption_refs: [],
-    condition_results: sixConditions('fail', ['BR-RUA-011', 'indeterminate']),
+    condition_results: sixConditions('fail', ['BR-RUA-011', 'indeterminate'], PROBE_DIRECTORY),
     evidence_refs: [],
     indeterminate_reasons: [reason('PROBE_CARDINALITY_INVALID', 'probe workload')],
   };
 }
 
+/**
+ * A probe whose lifecycle COMPLETED with a clean closure; it carries the probe-result digest.
+ *
+ * @example
+ * transportProbeSummary().probe_result_sha256; // digest of the frozen probe result
+ */
 export function transportProbeSummary(): TransportProbeSummary {
   return {
     schema_version: 1,
@@ -68,7 +91,12 @@ export function transportProbeSummary(): TransportProbeSummary {
   };
 }
 
-/** A probe that satisfies every usability condition (BR-RUA-026, AC-RUA-056). */
+/**
+ * A probe that satisfies every usability condition (BR-RUA-026, AC-RUA-056).
+ *
+ * @example
+ * usableProbe().probe_usability; // 'usable'
+ */
 export function usableProbe(): ProbeUsabilityAssessment {
   return {
     schema_version: 1,
@@ -94,7 +122,12 @@ export function usableProbe(): ProbeUsabilityAssessment {
   };
 }
 
-/** A probe whose late evidence contradicts it and whose closure is not clean. */
+/**
+ * A probe whose late evidence contradicts it and whose closure is not clean.
+ *
+ * @example
+ * unusableProbe().reasons.length; // 2
+ */
 export function unusableProbe(): ProbeUsabilityAssessment {
   return {
     ...usableProbe(),

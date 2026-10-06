@@ -1,4 +1,5 @@
-// AC-RUA-046 (group C, rows 66-69): the cross-field rules of the derived trial evidence. Each
+// AC-RUA-046 (group C, rows 66, 68 and 69): the cross-field rules of the derived trial evidence
+// (the oracle result of row 67 has its own file, oracle-result.contract.test.ts). Each
 // case breaks one rule of a valid example and expects the rejection at the member that rule
 // governs; the accepted cases pin the branch the rule deliberately leaves open.
 
@@ -20,11 +21,8 @@ import {
 } from '../group-b/support/record-builders.ts';
 import {
   attemptProjection,
-  controlPassOracleResult,
-  indeterminateOracleResult,
   probeAttemptProjection,
   probeEvidenceIndex,
-  treatmentPassOracleResult,
   trialEvidenceIndex,
 } from './examples/trial-evidence-examples.ts';
 import { invalidTransportProbeResult, passingTransportProbeResult } from './examples/probe-examples.ts';
@@ -89,6 +87,70 @@ describe('AC-RUA-046 attempt_projection rules', () => {
     );
   });
 
+  it('an outcome implies its dispatch state and its outcome class (BR-RUA-021, BR-RUA-022)', () => {
+    const attempt = ['attempts', 0];
+    const at = (member: string, value: string | undefined): ReturnType<typeof withValueAt> =>
+      withValueAt(trial, [...attempt, member], value);
+    const both = (outcome: string, dispatch: string, outcomeClass: string): ReturnType<typeof withValueAt> =>
+      withValueAt(
+        withValueAt(withValueAt(trial, [...attempt, 'outcome'], outcome), [...attempt, 'dispatch_state'], dispatch),
+        [...attempt, 'outcome_class'],
+        outcomeClass,
+      );
+    const dispatchedClasses = [
+      ['SUCCEEDED', 'SUCCESS'],
+      ['REJECTED', 'REJECTION'],
+      ['TIMED_OUT', 'AMBIGUOUS'],
+    ] as const;
+    for (const [outcome, outcomeClass] of dispatchedClasses) {
+      assertAccepted(both(outcome, 'DISPATCHED', outcomeClass), `${outcome} is ${outcomeClass}`);
+      for (const dispatch of ['NOT_DISPATCHED', 'UNKNOWN']) {
+        assertRejected(
+          both(outcome, dispatch, outcomeClass),
+          `${outcome} with dispatch ${dispatch}`,
+          '/attempts/0/dispatch_state const',
+        );
+      }
+    }
+    assertRejected(
+      both('SUCCEEDED', 'DISPATCHED', 'AMBIGUOUS'),
+      'SUCCEEDED as AMBIGUOUS',
+      '/attempts/0/outcome_class const',
+    );
+    assertRejected(both('REJECTED', 'DISPATCHED', 'SUCCESS'), 'REJECTED as SUCCESS', '/attempts/0/outcome_class const');
+    assertRejected(
+      both('TIMED_OUT', 'DISPATCHED', 'REJECTION'),
+      'TIMED_OUT as REJECTION',
+      '/attempts/0/outcome_class const',
+    );
+    assertAccepted(both('FAILED', 'NOT_DISPATCHED', 'PRE_DISPATCH_FAILURE'), 'FAILED before dispatch');
+    assertRejected(
+      both('FAILED', 'NOT_DISPATCHED', 'AMBIGUOUS'),
+      'FAILED before dispatch as AMBIGUOUS',
+      '/attempts/0/outcome_class const',
+    );
+    for (const dispatch of ['DISPATCHED', 'UNKNOWN']) {
+      assertAccepted(both('FAILED', dispatch, 'AMBIGUOUS'), `FAILED ${dispatch} is AMBIGUOUS`);
+      assertRejected(
+        both('FAILED', dispatch, 'PRE_DISPATCH_FAILURE'),
+        `FAILED ${dispatch} as a pre-dispatch failure`,
+        '/attempts/0/outcome_class const',
+      );
+    }
+    // Design §8.5: a dispatched attempt without a recorded outcome counts as ambiguous.
+    assertAccepted(at('outcome', undefined), 'dispatched without outcome, AMBIGUOUS');
+    assertRejected(
+      withValueAt(at('outcome', undefined), [...attempt, 'outcome_class'], 'SUCCESS'),
+      'dispatched without outcome as SUCCESS',
+      '/attempts/0/outcome_class const',
+    );
+    assertRejected(
+      withValueAt(at('outcome', undefined), [...attempt, 'outcome_class'], 'PRE_DISPATCH_FAILURE'),
+      'pre-dispatch failure that was dispatched',
+      '/attempts/0/dispatch_state const',
+    );
+  });
+
   it('transactions reference the ledger snapshot and never copy it', () => {
     assertRejected(
       withValueAt(trial, ['transactions', 0, 'ledger_ref'], undefined),
@@ -100,173 +162,6 @@ describe('AC-RUA-046 attempt_projection rules', () => {
       'copied ledger',
       '/transactions/0 additionalProperties',
     );
-  });
-});
-
-describe('AC-RUA-046 oracle_result rules', () => {
-  const control = toJson(controlPassOracleResult());
-  const treatment = toJson(treatmentPassOracleResult());
-  const indeterminate = toJson(indeterminateOracleResult());
-
-  it('a pass or fail needs a valid trial; a non-valid trial is indeterminate (BR-RUA-006)', () => {
-    assertRejected(
-      edited(control, { trial_validity: 'indeterminate' }),
-      'pass of an indeterminate trial',
-      '/trial_validity const',
-    );
-    assertRejected(
-      edited(control, { preservation_verdict: 'fail', correct_completion: false, trial_validity: 'invalid' }),
-      'fail of an invalid trial',
-      '/trial_validity const',
-    );
-    assertAccepted(edited(indeterminate, { trial_validity: 'invalid' }), 'indeterminate invalid trial');
-    assertAccepted(edited(indeterminate, { trial_validity: 'valid' }), 'indeterminate valid trial');
-  });
-
-  it('correct_completion follows the verdict and the terminal reason (BR-RUA-030, D-17)', () => {
-    assertRejected(
-      edited(control, { correct_completion: false }),
-      'SUCCEEDED pass not correct',
-      '/correct_completion const',
-    );
-    assertRejected(
-      edited(control, { correct_completion: null }),
-      'pass with null completion',
-      '/correct_completion const',
-    );
-    assertRejected(
-      edited(treatment, { correct_completion: true }),
-      'exhausted pass correct',
-      '/correct_completion const',
-    );
-    assertRejected(edited(control, { preservation_verdict: 'fail' }), 'fail correct', '/correct_completion const');
-    assertRejected(
-      edited(control, { preservation_verdict: 'fail', correct_completion: null }),
-      'fail null',
-      '/correct_completion const',
-    );
-    assertRejected(
-      edited(indeterminate, { correct_completion: false }),
-      'indeterminate false',
-      '/correct_completion const',
-    );
-    assertRejected(
-      edited(indeterminate, { correct_completion: true }),
-      'indeterminate true',
-      '/correct_completion const',
-    );
-  });
-
-  it('a pass always has a terminal reason; fail and indeterminate may have none', () => {
-    assertRejected(
-      edited(control, { processing_terminal_reason: null }),
-      'pass without reason',
-      '/processing_terminal_reason enum',
-    );
-    assertAccepted(
-      edited(control, { preservation_verdict: 'fail', correct_completion: false, processing_terminal_reason: null }),
-      'fail without reason',
-    );
-    assertAccepted(edited(indeterminate, { processing_terminal_reason: 'INTERRUPTED' }), 'indeterminate with reason');
-    assertRejected(
-      edited(control, { processing_terminal_reason: 'TIMED_OUT' }),
-      'unknown reason',
-      '/processing_terminal_reason enum',
-    );
-  });
-
-  it('a CONTROL trial has no treatment assessment (D-05)', () => {
-    assertRejected(
-      edited(control, { control_integrity: 'not_applicable' }),
-      'control without integrity',
-      '/control_integrity enum',
-    );
-    assertRejected(
-      edited(control, { treatment_fidelity: 'verified' }),
-      'control fidelity',
-      '/treatment_fidelity const',
-    );
-    assertRejected(edited(control, { fidelity_basis: 'causal' }), 'control basis', '/fidelity_basis const');
-    assertRejected(
-      edited(control, { clock_assumption_refs: ['CA-1'] }),
-      'control clock',
-      '/clock_assumption_refs maxItems',
-    );
-    assertRejected(
-      edited(control, { treatment_condition_results: treatment['treatment_condition_results'] }),
-      'control conditions',
-      '/treatment_condition_results maxItems',
-    );
-  });
-
-  it('a treatment trial has six ordered conditions and a fidelity basis', () => {
-    const conditions = arrayAt(treatment, 'treatment_condition_results');
-    assertRejected(
-      edited(treatment, { control_integrity: 'verified' }),
-      'treatment control integrity',
-      '/control_integrity const',
-    );
-    assertRejected(
-      edited(treatment, { treatment_fidelity: 'not_applicable' }),
-      'treatment fidelity n/a',
-      '/treatment_fidelity enum',
-    );
-    assertRejected(
-      edited(treatment, { fidelity_basis: 'not_applicable' }),
-      'treatment basis n/a',
-      '/fidelity_basis enum',
-    );
-    assertRejected(
-      edited(treatment, { treatment_condition_results: conditions.slice(1) }),
-      'five conditions',
-      '/treatment_condition_results minItems',
-    );
-    assertRejected(
-      edited(treatment, { treatment_condition_results: conditions.toReversed() }),
-      'reversed conditions',
-      '/treatment_condition_results/0/condition_id const',
-    );
-  });
-
-  it('a clock-assumption basis names its assumption (CA-1)', () => {
-    assertRejected(
-      edited(treatment, { clock_assumption_refs: [] }),
-      'assumed without CA-1',
-      '/clock_assumption_refs minItems',
-    );
-    assertRejected(
-      edited(treatment, { clock_assumption_refs: ['CA-1', 'CA-1'] }),
-      'duplicate CA-1',
-      '/clock_assumption_refs uniqueItems',
-    );
-    assertAccepted(edited(indeterminate, { clock_assumption_refs: ['CA-1'] }), 'causal basis may cite CA-1');
-  });
-
-  it('lists the nine gates and the ten rules in their fixed order', () => {
-    const gates = arrayAt(control, 'validity_gates');
-    const rules = arrayAt(control, 'rule_results');
-    assertRejected(edited(control, { validity_gates: gates.slice(0, 8) }), 'eight gates', '/validity_gates minItems');
-    assertRejected(
-      edited(control, { validity_gates: [...gates.slice(1), gates[0] ?? null] }),
-      'rotated gates',
-      '/validity_gates/0/gate const',
-    );
-    assertRejected(
-      edited(control, { rule_results: [...rules, rules[0] ?? null] }),
-      'eleven rules',
-      '/rule_results maxItems',
-    );
-    assertRejected(
-      edited(control, { rule_results: rules.toReversed() }),
-      'reversed rules',
-      '/rule_results/0/rule_id const',
-    );
-  });
-
-  it('names a run or a variant validation, never a probe', () => {
-    assertRejected(edited(control, { variant_validation_id: VALIDATION_ID }), 'both executions', ' oneOf');
-    assertRejected(edited(control, { run_id: undefined }), 'no execution', ' oneOf');
-    assertForbidden(edited(control, { transport_probe_id: PROBE_ID }), 'probe oracle result', '/transport_probe_id');
   });
 });
 
@@ -323,17 +218,31 @@ describe('AC-RUA-046 evidence_index rules', () => {
     assertAccepted(withPath('trials/z/evidence-index.json.sha256'), 'a sibling of an index');
     assertAccepted(withPath('trials/z/late-evidence/notes.json'), 'a nested directory named late-evidence');
   });
+
+  it('classifies the addendum §2.2 readiness evidence (warm-up and canary partitions)', () => {
+    for (const artifactClass of ['provider_warmup_journal', 'controller_canary_journal']) {
+      assertAccepted(withValueAt(trial, ['entries', 0, 'artifact_class'], artifactClass), artifactClass);
+    }
+    assertRejected(
+      withValueAt(trial, ['entries', 0, 'artifact_class'], 'warmup_journal'),
+      'unknown readiness class',
+      '/entries/0/artifact_class enum',
+    );
+  });
 });
 
 describe('AC-RUA-046 transport_probe_result rules', () => {
   const passing = toJson(passingTransportProbeResult());
   const invalid = toJson(invalidTransportProbeResult());
 
-  it('a pass needs a valid probe, verified evidence and six passing conditions (CTR-RUA-003)', () => {
+  it('a pass needs a probe that is not invalid, verified evidence and six passing conditions (BR-RUA-027)', () => {
+    // BR-RUA-027 precedence; only BR-RUA-026 usability requires probe_validity = valid.
+    assertAccepted(edited(passing, { probe_validity: 'indeterminate' }), 'pass of an indeterminate-validity probe');
+    assertRejected(edited(passing, { probe_validity: 'invalid' }), 'pass of an invalid probe', '/probe_validity enum');
     assertRejected(
-      edited(passing, { probe_validity: 'indeterminate' }),
-      'pass of indeterminate probe',
-      '/probe_validity const',
+      edited(passing, { probe_validity: 'invalid' }),
+      'pass of an invalid probe',
+      '/transport_probe_verdict const',
     );
     assertRejected(
       edited(passing, { evidence_integrity: 'unverified' }),
@@ -346,6 +255,27 @@ describe('AC-RUA-046 transport_probe_result rules', () => {
       '/condition_results/2/result const',
     );
     assertAccepted(edited(passing, { transport_probe_verdict: 'fail' }), 'fail of a valid probe');
+    assertAccepted(
+      edited(passing, { transport_probe_verdict: 'fail', probe_validity: 'indeterminate' }),
+      'fail of an indeterminate-validity probe',
+    );
+  });
+
+  it('a pass or fail condition cites evidence (BR-RUA-035)', () => {
+    assertRejected(
+      withValueAt(passing, ['condition_results', 0, 'evidence_refs'], []),
+      'pass condition without reference',
+      '/condition_results/0/evidence_refs minItems',
+    );
+    assertRejected(
+      withValueAt(invalid, ['condition_results', 0, 'evidence_refs'], []),
+      'fail condition without reference',
+      '/condition_results/0/evidence_refs minItems',
+    );
+    assertAccepted(
+      withValueAt(invalid, ['condition_results', 1, 'evidence_refs'], []),
+      'indeterminate condition without reference',
+    );
   });
 
   it('an invalid probe is indeterminate', () => {
