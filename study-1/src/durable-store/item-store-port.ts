@@ -3,7 +3,7 @@
 // reads", as one narrow typed port. Production binds it to DynamoDB base tables
 // (`aws/dynamodb-item-store.ts`); offline tests bind it to the `InMemoryItemStore` fake.
 //
-// Every write returns a closed outcome union instead of throwing, because callers decide what
+// Every write resolves to a closed outcome union instead of throwing or rejecting, because callers decide what
 // a definitive versus an ambiguous result means for them (BR-RUA-033: a definitive failure is
 // retried with identical content; an ambiguous one stops the writing instance).
 
@@ -79,8 +79,12 @@ export type WriteAction = PutAction | UpdateAction | ConditionCheckAction;
 /**
  * - `applied`: every action took effect.
  * - `condition_failed`: nothing took effect; `failed_action_index` is the first action whose
- *   condition did not hold and `existing` is that item as it was (DynamoDB `ALL_OLD`), absent
- *   when the item did not exist.
+ *   condition did not hold and `existing` is that item as it was (DynamoDB `ALL_OLD`). It is
+ *   absent when the item did not exist, and also when the service returned an `ALL_OLD` item
+ *   this store cannot decode (one it did not write, such as an unsafe integer or nesting past
+ *   32 levels): the condition failure is certain either way, but an absent `existing` alone
+ *   never proves that no item exists. A caller that must know re-reads with `getConsistent`,
+ *   which reports such an item as `UndecodableItem` (WP-04 review round 2).
  * - `definitive_failure`: the service rejected the request; nothing took effect.
  * - `ambiguous`: network, server fault or timeout; the write may or may not have taken effect.
  */
