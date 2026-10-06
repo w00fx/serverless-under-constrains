@@ -19,18 +19,11 @@ import fc from 'fast-check';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import { DEFAULT_SCHEMA_ROOT, listSchemaFiles } from '../../../../src/record-contract/schema-registry.ts';
 import { fuzzParameters } from '../../../support/kernel/fuzz-parameters.ts';
-import { leavesOf, objectPathsOf, pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
-import type { JsonPath } from '../group-b/support/json-paths.ts';
+import { pointerOf, withValueAt } from '../group-b/support/json-paths.ts';
 import { allValidExamples } from './support/canonical-examples.ts';
-import { isKindFree, isOpenObject } from './support/json-scope.ts';
+import { governedLeafSites, governedObjectSites } from './support/mutation-sites.ts';
+import type { MutationSite } from './support/mutation-sites.ts';
 import { catalogueValidator, withoutField } from './support/validation-assertions.ts';
-
-interface MutationSite {
-  readonly label: string;
-  readonly record: JsonObject;
-  readonly path: JsonPath;
-  readonly value: JsonValue;
-}
 
 type JsonKind = 'null' | 'boolean' | 'number' | 'string' | 'array' | 'object';
 
@@ -60,17 +53,8 @@ function requiredOf(record: JsonObject, label: string): readonly string[] {
   return required;
 }
 
-const LEAF_SITES: readonly MutationSite[] = EXAMPLES.flatMap(({ name, record }) =>
-  leavesOf(record)
-    .filter((leaf) => !isKindFree(leaf.path))
-    .map((leaf) => ({ label: name, record, path: leaf.path, value: leaf.value })),
-);
-
-const OBJECT_SITES: readonly MutationSite[] = EXAMPLES.flatMap(({ name, record }) =>
-  objectPathsOf(record)
-    .filter((path) => !isOpenObject(path))
-    .map((path) => ({ label: name, record, path, value: null })),
-);
+const LEAF_SITES = governedLeafSites(EXAMPLES);
+const OBJECT_SITES = governedObjectSites(EXAMPLES);
 
 const REMOVAL_SITES: readonly MutationSite[] = EXAMPLES.flatMap(({ name, record }) =>
   requiredOf(record, name).map((member) => ({ label: name, record, path: [member], value: null })),
