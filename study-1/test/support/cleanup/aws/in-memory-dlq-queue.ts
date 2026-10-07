@@ -4,7 +4,10 @@
 //   receipt handle per receive;
 // - in a FIFO queue (URL ending `.fifo`) a group with a hidden message returns nothing more until
 //   that message is deleted or released, as SQS FIFO ordering does;
-// - a delete or release acts only through the receipt handle of the message's latest receive.
+// - a delete or release acts only through the receipt handle of the message's latest receive;
+//   a delete through an older handle it issued is accepted and deletes nothing, as SQS
+//   `DeleteMessage` documents ("If you use an old ReceiptHandle, the request will succeed, but
+//   the message might not be deleted"), while a handle it never issued is refused;
 // Time is not modelled: a hidden message stays hidden until it is deleted or released. Faults
 // are scripted per queue (a failed receive, a queue that no longer exists) and per message id
 // (a failed delete or release). Every call is recorded.
@@ -49,6 +52,7 @@ export class InMemoryDlqQueue implements DlqQueueAccess {
   readonly #failedDeletes = new Set<string>();
   readonly #failedReleases = new Set<string>();
   readonly #calls: RecordedDlqCall[] = [];
+  readonly #issuedReceipts = new Set<string>();
   #receipts = 0;
 
   /** Adds a message to the end of a queue (created on first use); `group` is its FIFO group. */
@@ -112,6 +116,7 @@ export class InMemoryDlqQueue implements DlqQueueAccess {
     const messages: ReceivedDlqMessage[] = batch.map((message) => {
       this.#receipts += 1;
       message.hidden_by = `receipt-${String(this.#receipts)}`;
+      this.#issuedReceipts.add(message.hidden_by);
       return { message_id: message.message_id, receipt_handle: message.hidden_by };
     });
     return Promise.resolve({ kind: 'messages', messages });
@@ -135,7 +140,9 @@ export class InMemoryDlqQueue implements DlqQueueAccess {
       ...(message === undefined ? {} : { message_id: message.message_id }),
     });
     if (message === undefined) {
-      return { kind: 'failed', reason: scriptedReason('RECEIPT_HANDLE_IS_INVALID', receiptHandle) };
+      return operation === 'delete' && this.#issuedReceipts.has(receiptHandle)
+        ? { kind: 'done' }
+        : { kind: 'failed', reason: scriptedReason('RECEIPT_HANDLE_IS_INVALID', receiptHandle) };
     }
     const failing = operation === 'delete' ? this.#failedDeletes : this.#failedReleases;
     if (failing.has(message.message_id)) {
