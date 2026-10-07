@@ -242,3 +242,96 @@ describe('judgeProbeInvocation', () => {
     }
   });
 });
+
+// Owner amendment A-05 policy 3: the probe caller's Invoke response is untrusted SDK output, so the
+// mapping and the judge carry boundary regressions for deep nesting (100,000 levels), non-finite
+// numbers and inherited member names. Each is judged, never thrown on, with a bounded detail.
+describe('the probe Invoke on hostile SDK output (A-05)', () => {
+  const DEPTH = 100_000;
+  const DETAIL_LIMIT = 400;
+  const encoder = new TextEncoder();
+
+  function onlyFailure(judged: ReturnType<typeof judgeProbeInvocation>): string {
+    assert.equal(judged.kind, 'started');
+    assert.equal(judged.failures.length, 1);
+    const detail = judged.failures[0]?.detail ?? '';
+    assert.ok(detail.length <= DETAIL_LIMIT, `detail of ${String(detail.length)} characters; expected <= 400`);
+    return detail;
+  }
+
+  function tower(depth: number): unknown {
+    let value: unknown = [];
+    for (let level = 0; level < depth; level += 1) {
+      value = [value];
+    }
+    return value;
+  }
+
+  it('reports a 100,000-level array or object tower as the payload, bounded', () => {
+    const arrays = judgeProbeInvocation(
+      response({ payload: encoder.encode(`${'['.repeat(DEPTH)}${']'.repeat(DEPTH)}`) }),
+      PLAN,
+    );
+    assert.deepEqual(codes(arrays), ['PROBE_WORKLOAD_REPORT_UNEXPECTED']);
+    assert.match(onlyFailure(arrays), /^the response payload is array \[\[\[/);
+    const objects = judgeProbeInvocation(
+      response({ payload: encoder.encode(`${'{"a":'.repeat(DEPTH)}1${'}'.repeat(DEPTH)}`) }),
+      PLAN,
+    );
+    assert.deepEqual(codes(objects), ['PROBE_WORKLOAD_REPORT_UNEXPECTED']);
+    assert.match(onlyFailure(objects), /^the report names transport_probe_id absent and lambda_request_id absent/);
+  });
+
+  it('reports a payload whose number overflows to Infinity as not one JSON document', () => {
+    const overflowing = `{"transport_probe_id":"${PROBE_ID}","lambda_request_id":"req-1","n":1e400}`;
+    const judged = judgeProbeInvocation(response({ payload: encoder.encode(overflowing) }), PLAN);
+    assert.deepEqual(codes(judged), ['PROBE_WORKLOAD_REPORT_UNEXPECTED']);
+    assert.match(onlyFailure(judged), /^the response payload is not one JSON document \(invalid_json\)/);
+  });
+
+  it('reads no report member through an own __proto__ and ignores inherited names', () => {
+    const report = `{"transport_probe_id":"${PROBE_ID}","lambda_request_id":"req-1"}`;
+    const smuggled = judgeProbeInvocation(response({ payload: encoder.encode(`{"__proto__":${report}}`) }), PLAN);
+    assert.match(onlyFailure(smuggled), /names transport_probe_id absent and lambda_request_id absent/);
+    for (const name of ['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty']) {
+      const extended = `${report.slice(0, -1)},${JSON.stringify(name)}:{"x":1}}`;
+      assert.deepEqual(judgeProbeInvocation(response({ payload: encoder.encode(extended) }), PLAN), {
+        kind: 'started',
+        invoked: { lambda_request_id: 'req-1', status_code: 200, executed_version: '1' },
+        invocation_returned: true,
+        failures: [],
+      });
+    }
+  });
+
+  it('records no Invoke whose status is not finite, naming the status', () => {
+    for (const [status, shown] of [
+      [Number.POSITIVE_INFINITY, 'Infinity'],
+      [Number.NEGATIVE_INFINITY, '-Infinity'],
+      [Number.NaN, 'NaN'],
+    ] as const) {
+      const mapped = lambdaInvokeResponseOf({ StatusCode: status, $metadata: { requestId: 'req-1' } });
+      assert.equal(mapped.status_code, status);
+      const judged = judgeProbeInvocation(mapped, PLAN);
+      assert.equal(judged.kind === 'started' ? judged.invoked : 'not started', undefined);
+      assert.equal(
+        onlyFailure(judged),
+        `the Invoke returned status ${shown} with a request id; expected one recorded Invoke of the probe caller's published version returning its report`,
+      );
+    }
+  });
+
+  it('reads a 100,000-level tower in a member as absent', () => {
+    const deep = tower(DEPTH);
+    assert.deepEqual(
+      lambdaInvokeResponseOf({
+        StatusCode: 200,
+        ExecutedVersion: deep,
+        FunctionError: deep,
+        Payload: deep,
+        $metadata: deep,
+      }),
+      { kind: 'response', status_code: 200, payload: new Uint8Array() },
+    );
+  });
+});
