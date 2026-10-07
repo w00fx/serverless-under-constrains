@@ -1,11 +1,11 @@
 ---
 schema_version: 1
 capability_id: CAP-RUA
-status: draft        # draft → ratified when a human merges the spec PR
+status: ratified     # draft → ratified when a human merges the spec PR
 owner: <domain-owner>
-approved_by: <human>
-approved_at: <date>
-provenance: Migrated from Study 1 Specification v1.0 to the typed-ID template. Items marked [PROPOSED] need ratification; items marked "Added in this revision" make existing text explicit.
+approved_by: Raphael Moura
+approved_at: 2026-10-07
+provenance: Migrated from Study 1 Specification v1.0 to the typed-ID template. This revision approves the six items that had the [PROPOSED] mark (BR-RUA-002, the BR-RUA-022 transition table, AC-RUA-041, AC-RUA-043, AC-RUA-055 and BR-RUA-055) as the code at 9ce4ad7 does them. Items marked "Added in this revision" make existing text explicit. This revision closes OQ-RUA-001 and OQ-RUA-002.
 ---
 
 # Capability: Study 1 — Evaluate refund-invariant preservation under ambiguous outcomes
@@ -140,8 +140,8 @@ count(successful_transactions where refund_request_id = R) = 1
 
 ### BR-RUA-002 — Payment Limit
 
-**[PROPOSED — needs ratification]** v1.0 said "while the trial payment exists",
-which the spec never defines. The proposed window is the trial's lifetime.
+*Approved in this revision. v1.0 said "while the trial payment exists", but v1.0
+did not give that period. This rule uses the full trial as the period.*
 
 For the whole trial, from admission until evidence freeze, the arbitrary-precision sum of successful transactions associated with it must not exceed its captured amount.
 
@@ -401,7 +401,7 @@ processing_terminal_reason = SUCCEEDED
 effect_knowledge_state = UNKNOWN
 ```
 
-**[PROPOSED — needs ratification]** The effect-knowledge aggregate is a state
+*Approved in this revision.* The effect-knowledge aggregate is a state
 model, and v1.0 defines only some of its transitions. The table below follows
 the existing rules — BR-RUA-004 makes any ambiguous outcome absorbing, and a
 rejection establishes no effect only when no earlier success or ambiguity
@@ -1283,10 +1283,10 @@ Verifies BR-RUA-002 and BR-RUA-009.
 
 ### AC-RUA-041 — An Untraceable Verdict-Critical Record
 
-**[PROPOSED — needs ratification]** v1.0 lists BR-RUA-008 as a validity gate but
-does not say which gate value an uncorrelatable record yields. Proposal: a
-missing correlation is `unverified`; a correlation naming another execution is
-`invalid`.
+*Approved in this revision. v1.0 lists BR-RUA-008 as a validity gate, but it
+does not give the gate value for a record without a correlation. If the record
+has no correlation, the gate value is `unverified`. If the correlation refers to
+a different execution, the gate value is `invalid`.*
 
 Verifies BR-RUA-008 and BR-RUA-029.
 
@@ -1312,8 +1312,8 @@ Verifies BR-RUA-016 and BR-RUA-018.
 
 ### AC-RUA-043 — Effect Knowledge Follows the Transition Table
 
-**[PROPOSED — needs ratification]** Depends on the transition table proposed
-in BR-RUA-022.
+*Approved in this revision. This criterion uses the transition table in
+BR-RUA-022.*
 
 Verifies BR-RUA-022.
 
@@ -1465,7 +1465,7 @@ Verifies BR-RUA-037.
 
 ### AC-RUA-055 — The Oracle Is Final Before Cloud Evidence
 
-**[PROPOSED — needs ratification]** Depends on BR-RUA-055.
+*Approved in this revision. This criterion uses BR-RUA-055.*
 
 Verifies BR-RUA-055.
 
@@ -2083,9 +2083,9 @@ but cannot make an originally unclean run complete the study.
 
 ### BR-RUA-055 — The oracle is final before cloud evidence
 
-**[PROPOSED — needs ratification]** v1.0 stated this inside the Milestone 1 plan.
-It is a rule of scientific integrity, not an ordering note: evidence judged by an
-oracle changed after seeing it is compromised.
+*Approved in this revision. v1.0 gave this rule in the Milestone 1 plan. It is a
+rule of scientific integrity, not a sequence note. If the oracle changes after it
+sees the evidence, that evidence is compromised.*
 
 Every verdict-changing rule must be implemented before cloud study evidence is
 collected.
@@ -2126,9 +2126,13 @@ Direct synchronous invocation remains provisional by design and is resolved empi
 
 ### OQ-RUA-001 — Retrieval date of each external source
 
+*Closed in this revision. The Retrieved column of External Sources gives the date of each read.*
+
 The sources below carry no retrieval date. The behavior relied upon can change, and Lambda Durable Functions is recent; record the date each source was read.
 
 ### OQ-RUA-002 — Source for the SQS event-source mapping
+
+*Closed in this revision. External Sources gives the sources for the SQS event-source mapping.*
 
 The message-source protocol (BR-RUA-020) relies on FIFO ordering, visibility timeout and redrive with `maxReceiveCount`, but no source for the SQS event-source mapping is cited.
 
@@ -2141,24 +2145,40 @@ command's inputs, its structured JSON output and its exit codes.
 
 ## External Sources
 
-These sources constrain the implementation protocol; they do not define the refund business invariants. *The second column was added in this revision, derived from how this spec uses each source.*
+These sources constrain the implementation protocol; they do not define the refund business invariants. *The second column was added in this revision, derived from how this spec uses each source.* *This revision adds the Retrieved column and the last six rows (OQ-RUA-001, OQ-RUA-002).*
 
-| Source | Behavior this study relies on |
-|---|---|
-| [AWS Lambda Invoke API](https://docs.aws.amazon.com/lambda/latest/api/API_Invoke.html) | Synchronous direct invocation and its transport-level and function-level error surfaces |
-| [Lambda examples using AWS SDK for JavaScript v3](https://docs.aws.amazon.com/lambda/latest/dg/example_lambda_Invoke_section.html) | Invoking through the SDK client, whose automatic retries can be disabled |
-| [Lambda with DynamoDB Streams](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html) | At-least-once consumption of inserted records, from the earliest available position |
-| [DynamoDB read consistency](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html) | Strongly consistent reads for the complete ledger snapshot |
-| [Lambda Durable Functions getting started](https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started.html) | The durable execution model of the Durable variant |
-| [Lambda Durable Functions retries](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-sdk-retries.html) | Step retries with at-least-once semantics |
-| [Durable execution idempotency and event-source mappings](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-idempotency.html) | An outer source redelivery may start a new durable execution |
-| [AWS CDK CLI](https://docs.aws.amazon.com/cdk/v2/guide/cli.html) | Synthesizing and deploying the frozen assembly |
-| [AWS account identifiers](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html) | The 12-digit account format of the allowlist |
-| [STS GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html) | Read-only resolution of the active caller account at admission |
-| [AWS Cost Explorer](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-what-is.html) | Usage data behind attributable-cost amendments |
-| [AWS CUR line-item details](https://docs.aws.amazon.com/cur/latest/userguide/Lineitem-columns.html) | Authoritative usage lines and their correlation fields |
-| [Lambda execution environment](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html) | Execution-environment behavior relevant to CA-1 |
-| [Amazon Time Sync Service for EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html) | Background for CA-1; not a guarantee for Lambda |
+| Source | Behavior this study relies on | Retrieved |
+|---|---|---|
+| [AWS Lambda Invoke API](https://docs.aws.amazon.com/lambda/latest/api/API_Invoke.html) | Synchronous direct invocation and its transport-level and function-level error surfaces | 2026-10-05, 2026-10-07 |
+| [Lambda examples using AWS SDK for JavaScript v3](https://docs.aws.amazon.com/lambda/latest/dg/example_lambda_Invoke_section.html) | Invoking through the SDK client, whose automatic retries can be disabled | 2026-10-07 |
+| [Lambda with DynamoDB Streams](https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html) | At-least-once consumption of inserted records, from the earliest available position | 2026-10-05, 2026-10-07 |
+| [DynamoDB read consistency](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html) | Strongly consistent reads for the complete ledger snapshot | 2026-10-05, 2026-10-07 |
+| [Lambda Durable Functions getting started](https://docs.aws.amazon.com/lambda/latest/dg/durable-getting-started.html) | The durable execution model of the Durable variant | 2026-10-05, 2026-10-07 |
+| [Lambda Durable Functions retries](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-sdk-retries.html) | Step retries with at-least-once semantics | 2026-10-05, 2026-10-07 |
+| [Durable execution idempotency and event-source mappings](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-idempotency.html) | An outer source redelivery may start a new durable execution | 2026-10-05, 2026-10-07 |
+| [AWS CDK CLI](https://docs.aws.amazon.com/cdk/v2/guide/cli.html) | Synthesizing and deploying the frozen assembly | 2026-10-07 |
+| [AWS account identifiers](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html) | The 12-digit account format of the allowlist | 2026-10-05, 2026-10-07 |
+| [STS GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html) | Read-only resolution of the active caller account at admission | 2026-10-05, 2026-10-07 |
+| [AWS Cost Explorer](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-what-is.html) | Usage data behind attributable-cost amendments | 2026-10-07 |
+| [AWS CUR line-item details](https://docs.aws.amazon.com/cur/latest/userguide/Lineitem-columns.html) | Authoritative usage lines and their correlation fields | 2026-10-07 |
+| [Lambda execution environment](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html) | Execution-environment behavior relevant to CA-1 | 2026-10-07 |
+| [Amazon Time Sync Service for EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html) | Background for CA-1; not a guarantee for Lambda | 2026-10-07 |
+| [AWS SDKs and Tools: retry behavior](https://docs.aws.amazon.com/sdkref/latest/guide/feature-retry-behavior.html) | A max-attempts value of 1 stops the automatic retries of an SDK client | 2026-10-07 |
+| [CUR 2.0 line-item columns](https://docs.aws.amazon.com/cur/latest/userguide/table-dictionary-cur2-line-item.html) | The CUR 2.0 names of the line-item columns that the billing import reads | 2026-10-07 |
+| [Lambda with Amazon SQS: scaling](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-scaling.html) | Lambda receives the messages of one FIFO message group in sequence. It does all retries of a message before it receives more messages of that group | 2026-10-07 |
+| [Lambda with Amazon SQS: configuration](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html) | If the function does not complete a batch, its messages return to the queue and become visible after the visibility timeout. The function timeout must not be more than the visibility timeout | 2026-10-07 |
+| [Amazon SQS FIFO message groups](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-understanding-logic.html) | Amazon SQS does not return more messages of a message group until the received messages are deleted or visible again | 2026-10-07 |
+| [Amazon SQS dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html) | The redrive policy moves a message to the dead-letter queue after `maxReceiveCount` receives | 2026-10-07 |
+
+Retrieval notes:
+
+- The Retrieved column gives the date of each read. 2026-10-05 is the date that the research of the implementation recorded.
+- 2026-10-07 is the date of a second read for OQ-RUA-001 and OQ-RUA-002. A row with only that date has no recorded earlier read.
+- The SDK example page shows the call, but it does not give the retry setting. The retry-behavior row gives that setting.
+- The retry-behavior page tells that its 2026 retry behavior starts only with an opt-in setting.
+- The Durable retries page gives step retries. The idempotency page gives the at-least-once semantics of a step.
+- The CUR line-item page uses the legacy column names. The CUR 2.0 row gives the column names that the billing import reads.
+- The dead-letter queue page also tells that a dead-letter queue can break the sequence of a FIFO queue. BR-RUA-020 has one active message group for each trial. This warning has no effect on Study 1, because each trial publishes exactly one message in its own message group.
 
 ## Former identifiers
 
