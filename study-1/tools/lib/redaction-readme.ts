@@ -3,6 +3,7 @@
 // authority. Every number in it is counted from the manifest and the verdict recheck by the
 // caller, never typed by hand.
 
+import { ARCHIVE_NAME } from './evidence-archive.ts';
 import type { RedactedPackage } from './evidence-redaction.ts';
 
 /** One redaction rule with the files it changed and its replacements across the copy. */
@@ -41,6 +42,10 @@ export function redactionReadme(facts: ReadmeFacts): string {
     `A derived view of the ${String(facts.packages.length)} Study 1 evidence packages and their ${String(facts.record_count)} verification records.`,
     `${facts.authority} The raw packages stay private because they hold environment identifiers.`,
     'This copy replaces those identifiers and changes nothing else.',
+    '',
+    `The package files and the verification records are in \`${ARCHIVE_NAME}\`. Extract it here with`,
+    `\`tar -xzf ${ARCHIVE_NAME}\`: it restores every path that this README and \`redaction-manifest.json\``,
+    'name. Git ignores the extracted folders.',
     '',
     '## Packages',
     '',
@@ -88,7 +93,8 @@ export function redactionReadme(facts: ReadmeFacts): string {
     '   digests on both sides.',
     '4. The owner of the raw packages re-verifies each one from its own bytes with',
     '   `npm run rua -- run verify <package>` (or `validation verify`, `probe verify`), and re-derives',
-    '   this copy byte for byte with `npm run redact -- --check` in `study-1/`.',
+    '   this copy byte for byte with `npm run redact -- --check` in `study-1/`. The check compares the',
+    '   archive after decompression, because gzip output can differ between zlib builds.',
   ];
   return `${lines.join('\n')}\n`;
 }

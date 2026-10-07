@@ -4,6 +4,10 @@ A derived view of the 6 Study 1 evidence packages and their 17 verification reco
 Each original package-index.json digest is the authority for its package's files, and each verification record's original SHA-256, which results.json cites, for that record; this copy is a derived view (spec limitation 10). The raw packages stay private because they hold environment identifiers.
 This copy replaces those identifiers and changes nothing else.
 
+The package files and the verification records are in `study-1-evidence.tar.gz`. Extract it here with
+`tar -xzf study-1-evidence.tar.gz`: it restores every path that this README and `redaction-manifest.json`
+name. Git ignores the extracted folders.
+
 ## Packages
 
 | Package | Original package-index.json SHA-256 (the authority) | Redacted package-index.json SHA-256 |
@@ -52,4 +56,5 @@ by path and SHA-256. 17 of the 17 records are byte-identical to the originals.
    digests on both sides.
 4. The owner of the raw packages re-verifies each one from its own bytes with
    `npm run rua -- run verify <package>` (or `validation verify`, `probe verify`), and re-derives
-   this copy byte for byte with `npm run redact -- --check` in `study-1/`.
+   this copy byte for byte with `npm run redact -- --check` in `study-1/`. The check compares the
+   archive after decompression, because gzip output can differ between zlib builds.

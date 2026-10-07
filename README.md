@@ -46,11 +46,14 @@ The study's AWS resources were removed after the run. The raw evidence packages 
 The evidence packages are the authority. Each package is identified by the SHA-256 of its `package-index.json`, and each file in it by the digest its index records. Everything else is derived from those bytes by a script:
 
 - [`results/study-1/results.json`](results/study-1/results.json) is the derived results file. Every value cites the artifact it was read from, by package-relative path and SHA-256, and every package by `package_index_sha256`.
-- [`public/study-1-evidence/`](public/study-1-evidence/) is the redacted copy of the packages and of the verification records that `results.json` cites. Only the sandbox account id and local filesystem paths are replaced. Its [README](public/study-1-evidence/README.md) lists the rules and what the copy can re-derive, and `redaction-manifest.json` records each file's original and redacted digest.
+- [`public/study-1-evidence/`](public/study-1-evidence/) is the redacted copy of the packages and of the verification records that `results.json` cites, in one archive, `study-1-evidence.tar.gz`. Only the sandbox account id and local filesystem paths are replaced. Its [README](public/study-1-evidence/README.md) lists the rules and what the copy can re-derive, and `redaction-manifest.json` records each file's original and redacted digest.
 
-With `jq` and `shasum`, from `public/study-1-evidence/`:
+With `tar`, `jq` and `shasum`, from `public/study-1-evidence/`:
 
 ```sh
+# Extract the packages and verification records in place; git ignores the extracted folders.
+tar -xzf study-1-evidence.tar.gz
+
 # Every file in the copy matches the manifest.
 jq -r '.files[] | "\(.redacted_sha256)  \(.path)"' redaction-manifest.json | shasum -a 256 -c --quiet -
 

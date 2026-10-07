@@ -1,17 +1,21 @@
 // tools/redact-evidence.ts as a process (close-out Phase 3): it writes the public redacted copy to
-// a new directory, with each package's verification records when its verifications/ folder exists,
-// refuses an existing directory, and with --check exits 0 only when the copy on disk equals a fresh
-// derivation, naming the files that differ. Fixture packages are written to a scratch evidence
-// root, so the real evidence is never read.
+// a new directory, its README, manifest and verdict recheck beside one archive of the package files
+// and of each package's verification records when its verifications/ folder exists. It refuses an
+// existing directory, and with --check exits 0 only when the copy on disk equals a fresh derivation,
+// naming the files that differ: the archive is compared after decompression, and its files
+// extracted in place are accepted. Fixture packages are written to a scratch evidence root, so the
+// real evidence is never read.
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
+import { ARCHIVE_NAME, PLAIN_FILES } from '../../../tools/lib/evidence-archive.ts';
 import { deriveRedactedCopy } from '../../../tools/lib/evidence-redaction.ts';
 import type { InMemoryEvidence } from '../../unit/tools/support/in-memory-evidence.ts';
 import {
@@ -78,14 +82,19 @@ function redact(root: string, ...args: readonly string[]): ProcessResult {
 const PACKAGES = [RUN, PROBE];
 
 describe('redact-evidence', () => {
-  it("writes every file of the derived copy, with the packages' verification records, to a new directory", () => {
+  it("writes the plain files and one archive of every other file, the packages' records included", () => {
     const root = scratchEvidence();
     const result = redact(root, '--evidence-root', 'evidence', '--out', 'copy', ...PACKAGES);
     assert.deepEqual(result, {
       status: 0,
-      stdout: 'redacted evidence: wrote 22 files to copy; 2 run verdicts re-derived from the redacted ledgers\n',
+      stdout:
+        `redacted evidence: wrote 19 files into ${ARCHIVE_NAME} and 3 beside it in copy; ` +
+        '2 run verdicts re-derived from the redacted ledgers\n',
       stderr: '',
     });
+    assert.deepEqual(readdirSync(join(root, 'copy')).sort(), [...PLAIN_FILES, ARCHIVE_NAME].sort());
+    const extracted = spawnSync('tar', ['-xzf', ARCHIVE_NAME], { cwd: join(root, 'copy'), encoding: 'utf8' });
+    assert.deepEqual([extracted.status, extracted.stderr], [0, '']);
     const expected = deriveRedactedCopy({ packages: PACKAGES, records: [RECORD], read: fixtureEvidence().read });
     assert.ok(expected.files.has(RECORD));
     for (const [path, bytes] of expected.files) {
@@ -109,7 +118,7 @@ describe('redact-evidence', () => {
       redact(root, '--evidence-root', 'evidence', '--out', 'copy', '--check', ...PACKAGES);
     assert.deepEqual(check(), {
       status: 1,
-      stdout: `redacted evidence: copy DIFFERS from (${RUN}/package-index.json, ${RUN}/admission/deployment-assembly/stack.metadata.json, ${RUN}/admission/oracle-attestation.json, ${RUN}/admission/deployment-assembly/asset.1/index.mjs, ${RUN}/trials/${PASSING.id}/trial-manifest.json) a fresh derivation\n`,
+      stdout: `redacted evidence: copy DIFFERS from (redaction-manifest.json, verdict-recheck.json, README.md, ${ARCHIVE_NAME}) a fresh derivation\n`,
       stderr: '',
     });
     redact(root, '--evidence-root', 'evidence', '--out', 'copy', ...PACKAGES);
@@ -127,11 +136,35 @@ describe('redact-evidence', () => {
       stderr: '',
     });
     writeFileSync(manifest, original);
-    writeFileSync(join(root, 'copy', RUN, 'extra.json'), '{}');
-    assert.equal(check().stdout, `redacted evidence: copy DIFFERS from (${RUN}/extra.json) a fresh derivation\n`);
-    rmSync(join(root, 'copy', RUN, 'extra.json'));
+    writeFileSync(join(root, 'copy', 'extra.json'), '{}');
+    assert.equal(check().stdout, 'redacted evidence: copy DIFFERS from (extra.json) a fresh derivation\n');
+    rmSync(join(root, 'copy', 'extra.json'));
     rmSync(join(root, 'copy', 'README.md'));
     assert.equal(check().stdout, 'redacted evidence: copy DIFFERS from (README.md) a fresh derivation\n');
+  });
+
+  it('compares the archive after decompression and accepts its files extracted in place', () => {
+    const root = scratchEvidence();
+    const check = (): ProcessResult =>
+      redact(root, '--evidence-root', 'evidence', '--out', 'copy', '--check', ...PACKAGES);
+    const archive = join(root, 'copy', ARCHIVE_NAME);
+    const differs = `redacted evidence: copy DIFFERS from (${ARCHIVE_NAME}) a fresh derivation\n`;
+    redact(root, '--evidence-root', 'evidence', '--out', 'copy', ...PACKAGES);
+    const tar = gunzipSync(readFileSync(archive));
+    writeFileSync(archive, gzipSync(tar, { level: 1 }));
+    assert.equal(check().status, 0, 'other gzip bytes of the same tar still match');
+    spawnSync('tar', ['-xzf', ARCHIVE_NAME], { cwd: join(root, 'copy') });
+    assert.deepEqual(check(), {
+      status: 0,
+      stdout: 'redacted evidence: copy matches a fresh derivation\n',
+      stderr: '',
+    });
+    writeFileSync(archive, gzipSync(tar.subarray(512)));
+    assert.equal(check().stdout, differs);
+    writeFileSync(archive, 'not gzip');
+    assert.equal(check().stdout, differs);
+    rmSync(archive);
+    assert.equal(check().stdout, differs);
   });
 
   it('exits 2 with the usage on a missing or unknown flag', () => {

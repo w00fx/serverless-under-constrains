@@ -8,6 +8,9 @@ set -euo pipefail
 REPO=w00fx/serverless-under-constrains
 PATHS=(study-1/src/trial-oracle study-1/src/evidence-ingestion study-1/src/attempt-lifecycle study-1/test/golden study-1/tools/golden study-1/specs)
 PROBE_MANIFEST=public/study-1-evidence/transport-probes/4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5/admission/execution-manifest.json
+# The public copy is one archive; extract the probe manifest in place when it is not extracted yet.
+[ -f "$PROBE_MANIFEST" ] || tar -xzf public/study-1-evidence/study-1-evidence.tar.gz -C public/study-1-evidence \
+  "${PROBE_MANIFEST#public/study-1-evidence/}"
 
 collected_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 activity=$(gh api --paginate "repos/$REPO/activity?per_page=100" | jq -s 'add | map({id, timestamp, activity_type, ref, before, after, actor: .actor.login})')

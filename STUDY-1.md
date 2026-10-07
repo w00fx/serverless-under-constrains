@@ -42,7 +42,8 @@ These checks need only this repository: no AWS access and no private file.
   package-relative path and SHA-256 of the artifact it was read from, and every package by the
   SHA-256 of its `package-index.json`.
 - [`public/study-1-evidence/`](public/study-1-evidence/) is the redacted copy of the packages and
-  of the verification records that `results.json` cites. The commands under
+  of the verification records that `results.json` cites, in one archive that a reader extracts in
+  place (`tar -xzf study-1-evidence.tar.gz`). The commands under
   [Re-verify Study 1 from bytes](README.md#re-verify-study-1-from-bytes) check each copied file
   against the redaction manifest, each package identity against `results.json`, that only the
   files the manifest names as redacted differ from their package index, and each cited

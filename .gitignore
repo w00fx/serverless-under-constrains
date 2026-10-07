@@ -2,8 +2,10 @@
 node_modules/
 probe-attempts/
 transport-probes/
-# The public redacted copy of the Study 1 packages keeps its probe packages.
-!/public/study-1-evidence/transport-probes/
+# The public redacted copy of the Study 1 packages is one archive; a reader extracts it in place.
+/public/study-1-evidence/runs/
+/public/study-1-evidence/variant-validations/
+/public/study-1-evidence/verifications/
 dist/
 coverage/
 *.tsbuildinfo
