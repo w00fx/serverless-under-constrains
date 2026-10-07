@@ -34,7 +34,8 @@
     "mutation": "stryker run && node tools/mutation-gate.ts reports/mutation/mutation.json",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:fuzz && npm run coverage && npm run mutation",
     "test:e2e": "node tools/run-suite.ts e2e \"test/e2e/**/*.e2e.test.ts\"",
-    "rua": "node src/operator-cli/main.ts"
+    "rua": "node src/operator-cli/main.ts",
+    "results": "node tools/derive-study-results.ts --evidence-root evidence --spec specs/rua/refund-under-ambiguous-outcome.md --run abf41ffd-3008-4b29-81ee-b65d8095188b --validation a8a5b2f1-61d2-4712-9c54-34114abfd54e --validation 60511328-ab4d-4234-81ab-0b042a20e658 --out ../results/study-1/results.json"
   },
   "dependencies": {
     "@aws-sdk/client-cloudformation": "3.1146.0",
