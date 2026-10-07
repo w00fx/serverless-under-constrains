@@ -10,7 +10,7 @@ import type { PackageFile } from '../evidence-package/package-file-system.ts';
 import { PACKAGE_LAYOUT } from '../evidence-package/package-layout.ts';
 import type { EvidenceUnit } from '../evidence-package/package-layout.ts';
 import { sha256Hex } from '../record-contract/digests.ts';
-import type { Sha256Hex, StructuredReason } from '../record-contract/primitives.ts';
+import type { Sha256Hex, StructuredReason, Uuid4 } from '../record-contract/primitives.ts';
 import type { DeclaredTrial } from '../record-contract/records/group-a/execution_manifest.ts';
 import type { OracleResult } from '../record-contract/records/group-c/oracle_result.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
@@ -39,12 +39,19 @@ export function readValidationTrialOutcomes(
   validator: RecordValidator,
 ): ValidationTrialReading {
   const [control, treatment] = manifest.trials;
-  const controlRead = trialOutcome(files, control, manifestSha256, validator);
-  const treatmentRead = trialOutcome(files, treatment, manifestSha256, validator);
+  const owner = { variant_validation_id: manifest.variant_validation_id, execution_manifest_sha256: manifestSha256 };
+  const controlRead = trialOutcome(files, control, owner, validator);
+  const treatmentRead = trialOutcome(files, treatment, owner, validator);
   const results = [controlRead, treatmentRead].flatMap((read) =>
     read.frozen === undefined ? [] : [[read.frozen.record.trial_id, read.frozen] as const],
   );
   return { outcomes: [controlRead.outcome, treatmentRead.outcome], oracle_results: new Map(results) };
+}
+
+/** The validation and manifest every trial record must belong to. */
+interface ValidationOwner {
+  readonly variant_validation_id: Uuid4;
+  readonly execution_manifest_sha256: Sha256Hex;
 }
 
 interface TrialRead {
@@ -55,7 +62,7 @@ interface TrialRead {
 function trialOutcome(
   files: readonly PackageFile[],
   declared: DeclaredTrial,
-  manifestSha256: Sha256Hex,
+  owner: ValidationOwner,
   validator: RecordValidator,
 ): TrialRead {
   const unit: EvidenceUnit = { kind: 'trial', trial_id: declared.trial_id };
@@ -63,7 +70,8 @@ function trialOutcome(
   const manifestPath = PACKAGE_LAYOUT.unitFile(unit, 'trialManifest');
   const trialManifest = files.find((file) => file.path === manifestPath);
   const read = readValidationRecord(files, resultPath, 'oracle_result', validator);
-  const result = read.ok && ownsResult(read.value.record, declared, manifestSha256) ? read.value : undefined;
+  const result =
+    read.ok && ownsResult(read.value.record, declared, owner.execution_manifest_sha256) ? read.value : undefined;
   if (result === undefined) {
     return { outcome: unevaluated(declared, trialManifest !== undefined), frozen: undefined };
   }
@@ -76,7 +84,7 @@ function trialOutcome(
       oracle_result: result.record,
       oracle_result_ref: ref,
       trial_manifest_sha256: trialManifest === undefined ? undefined : sha256Hex(trialManifest.bytes),
-      anchor_problems: anchorProblems(files, unit, ref.artifact_sha256, manifestSha256, validator),
+      anchor_problems: anchorProblems(files, unit, ref.artifact_sha256, owner, validator),
     },
     frozen: { record: result.record, ref },
   };
@@ -108,12 +116,13 @@ function unevaluated(declared: DeclaredTrial, started: boolean): ValidationTrial
   };
 }
 
-// The trial's own evidence index must list the stored result with its digest (BR-RUA-044).
+// The trial's own evidence index, of this validation and manifest, must list the stored result with
+// its digest (BR-RUA-044); the same identity the verifier's `indexProblems` requires.
 function anchorProblems(
   files: readonly PackageFile[],
   unit: Extract<EvidenceUnit, { readonly kind: 'trial' }>,
   resultSha256: Sha256Hex,
-  manifestSha256: Sha256Hex,
+  owner: ValidationOwner,
   validator: RecordValidator,
 ): readonly string[] {
   const path = PACKAGE_LAYOUT.unitFile(unit, 'evidenceIndex');
@@ -123,12 +132,15 @@ function anchorProblems(
     return [read.error];
   }
   const index = read.value.record;
-  if (
-    index.index_scope !== 'TRIAL' ||
-    index.trial_id !== unit.trial_id ||
-    index.execution_manifest_sha256 !== manifestSha256
-  ) {
-    return [`${path} is not the evidence index of trial ${unit.trial_id} under manifest ${manifestSha256}`];
+  const ownIndex =
+    index.index_scope === 'TRIAL' &&
+    index.trial_id === unit.trial_id &&
+    index.variant_validation_id === owner.variant_validation_id &&
+    index.execution_manifest_sha256 === owner.execution_manifest_sha256;
+  if (!ownIndex) {
+    return [
+      `${path} is not the evidence index of trial ${unit.trial_id} of validation ${owner.variant_validation_id} under manifest ${owner.execution_manifest_sha256}`,
+    ];
   }
   const entry = index.entries.find((candidate) => candidate.artifact_path === resultPath);
   if (entry?.sha256 === resultSha256) {

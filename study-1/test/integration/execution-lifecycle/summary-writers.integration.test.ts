@@ -338,6 +338,14 @@ describe('ValidationSummaryWriter', () => {
       files.set(controlIndex, files.get(treatmentIndex) ?? new Uint8Array()),
     );
     assert.match(foreign[0] ?? '', /is not the evidence index of trial/);
+    const otherValidation = await anchorReasons((files) => {
+      withRecord(files, controlIndex, (index) => ({
+        ...index,
+        variant_validation_id: '00000000-0000-4000-8000-0000000000aa',
+      }));
+    });
+    assert.equal(otherValidation.length, 1, 'an index of another validation anchors nothing');
+    assert.match(otherValidation[0] ?? '', /is not the evidence index of trial .* of validation /);
     const stale = await anchorReasons((files) => {
       withRecord(files, controlIndex, (index) => ({
         ...index,
