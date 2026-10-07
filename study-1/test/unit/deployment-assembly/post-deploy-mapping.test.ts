@@ -326,6 +326,24 @@ describe('listAllStackResources', () => {
     assert.match(endless.ok ? '' : endless.error.detail, new RegExp(`more than ${String(MAX_RESOURCE_PAGES)} pages`));
   });
 
+  // A-05 regression (CMP-02 single-pass review): the pages were joined with `push(...page)`, whose
+  // argument list overflows the call stack past about 120,000 entries, so a hostile or broken
+  // endpoint answering one huge page made provisioning throw RangeError instead of recording it.
+  it('joins a page of 150,000 summaries without a RangeError', async () => {
+    const account = deployedAccount(runTemplate(), RUN_STACK, STACK_ID, declaredTags());
+    const resources = Array.from({ length: 150_000 }, (_, index) => ({
+      ...SUMMARY,
+      LogicalResourceId: `R${String(index)}`,
+    }));
+    const listed = await listAllStackResources(
+      new FakePostDeployReader({ ...account, resources, page_size: 150_000 }),
+      STACK_ID,
+    );
+    assert.ok(listed.ok);
+    assert.equal(listed.value.length, 150_000);
+    assert.deepEqual([listed.value[0]?.logical_id, listed.value[149_999]?.logical_id], ['R0', 'R149999']);
+  });
+
   it('names the stack, the operation and the service error', () => {
     const reason = stackReadReason('DescribeStacks', RUN_STACK, { code: 'Throttling', detail: 'Rate exceeded' });
     assert.deepEqual(reason, {
