@@ -8,7 +8,7 @@ import type { CleanupHistory } from '../cleanup/cleanup-history.ts';
 import type { CleanupInput } from '../cleanup/cleanup-orchestrator.ts';
 import { ownershipContextFromManifest, STUDY_BASELINE_EXCLUSIONS } from '../cleanup/ownership-context.ts';
 import type { PreCleanupPlan } from '../evidence-collection/pre-cleanup-snapshot.ts';
-import { executionIdOf } from '../evidence-package/package-layout.ts';
+import { EXECUTION_PATHS, executionIdOf } from '../evidence-package/package-layout.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, StructuredReason, UtcMillis } from '../record-contract/primitives.ts';
 import type { ResourceManifest } from '../record-contract/records/group-a/resource_manifest.ts';
@@ -24,7 +24,8 @@ export interface CleanupPlan {
 /** What the plan is derived from. */
 export interface CleanupPlanSources {
   readonly admitted: AdmittedExecution;
-  readonly resource_manifest: ResourceManifest;
+  /** Absent when provisioning froze none: then no ownership can be proven. */
+  readonly resource_manifest: ResourceManifest | undefined;
   /** Present when the deploy succeeded. */
   readonly targets: ExecutionTargets | undefined;
   readonly history: CleanupHistory;
@@ -42,6 +43,14 @@ export interface CleanupPlanSources {
  */
 export function planCleanup(sources: CleanupPlanSources): Result<CleanupPlan, StructuredReason> {
   const { admitted, resource_manifest: manifest, targets } = sources;
+  if (manifest === undefined) {
+    return err({
+      code: 'RESOURCE_MANIFEST_ABSENT',
+      subject: 'BR-RUA-050',
+      artifact_path: EXECUTION_PATHS.resourceManifest,
+      detail: `${EXECUTION_PATHS.resourceManifest} was never frozen; expected the manifest that proves what the execution owns`,
+    });
+  }
   const ownership = ownershipContextFromManifest({
     manifest,
     execution: admitted.identity,

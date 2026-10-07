@@ -169,8 +169,10 @@ export class ExecutionRunner {
     }
     const { safety } = held;
     const provisioned = await this.#provision();
-    const { targets } = provisioned;
-    const mode = targets === undefined ? 'EMERGENCY' : await this.#execute(provisioned, targets);
+    const mode =
+      provisioned.targets === undefined
+        ? 'EMERGENCY'
+        : await this.#execute(provisioned.resource_manifest_sha256, provisioned.targets);
     safety.markActiveEnded();
     const cleanup = await this.#cleanUp(mode, provisioned, held);
     const leaseStatus = await this.#finalizeLease(closureOf(cleanup));
@@ -236,12 +238,10 @@ export class ExecutionRunner {
   // P3, P4 (and P5) and P6; the cleanup mode they leave. Monitoring is active time: the
   // active-time deadline interrupts it like a unit, so the ACTIVE_TIME check measures it too
   // (`run` ends active time just before cleanup).
-  async #execute(provisioned: ProvisioningOutcome, targets: ExecutionTargets): Promise<CleanupMode> {
+  async #execute(resourceManifestSha256: Sha256Hex, targets: ExecutionTargets): Promise<CleanupMode> {
     const ready = await this.#ready(targets);
     if (ready) {
-      this.#workload = await this.#workloadOf().run(
-        this.#workloadContext(provisioned.resource_manifest_sha256, targets),
-      );
+      this.#workload = await this.#workloadOf().run(this.#workloadContext(resourceManifestSha256, targets));
     }
     this.#reasons.push(...this.#workload.reasons);
     if (!this.#workload.completed) {

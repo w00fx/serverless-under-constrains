@@ -86,16 +86,30 @@ export interface ExecutionTargets {
 }
 
 /**
- * P2 (design §9.8 D1-D4): the deployment always leaves `provisioning/resource-manifest.json`
- * behind, `failed` or `partial` when the deploy did not complete, so cleanup knows what it owns.
+ * P2 (design §9.8 D1-D4): the deployment leaves `provisioning/resource-manifest.json` behind,
+ * `failed` or `partial` when the deploy did not complete, so cleanup knows what it owns.
  */
-export interface ProvisioningOutcome {
+export interface FrozenProvisioningOutcome {
   readonly resource_manifest: ResourceManifest;
   readonly resource_manifest_sha256: Sha256Hex;
   /** Present exactly when the deploy succeeded and the outputs name every target. */
   readonly targets?: ExecutionTargets;
   readonly reasons: readonly StructuredReason[];
 }
+
+/**
+ * P2 that froze no resource manifest: the declared stack tags were refused before any deploy, or
+ * the manifest built after it is not a valid record. Cleanup can then prove ownership of nothing.
+ */
+export interface UnfrozenProvisioningOutcome {
+  readonly resource_manifest?: never;
+  readonly resource_manifest_sha256?: never;
+  readonly targets?: never;
+  readonly reasons: readonly [StructuredReason, ...StructuredReason[]];
+}
+
+/** What P2 leaves behind. */
+export type ProvisioningOutcome = FrozenProvisioningOutcome | UnfrozenProvisioningOutcome;
 
 /** Deploys the frozen assembly and writes the resource manifest (P2). */
 export interface ExecutionProvisioner {
