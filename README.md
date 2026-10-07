@@ -14,7 +14,7 @@ Protocol rules, fixtures, acceptance criteria, and delivery gates live in the [S
 
 ## Repository status
 
-Study 1 is implemented under [`study-1/`](study-1/): the controlled provider, both caller variants, the CDK infrastructure, the evidence model and oracle, and the `rua` operator CLI that admits, executes, cleans up and verifies each execution. It has unit, contract, integration, golden and fuzz suites, run locally through `npm run check`. The coverage gate requires every line, branch, function and statement to be covered in every file except the AWS and Node bindings, the Lambda handlers, the CLI entry point and the infrastructure code. Mutation testing has run only on the results and redaction tools under `study-1/tools/lib/`; the gate over the whole target set has not run yet.
+Study 1 is implemented under [`study-1/`](study-1/): the controlled provider, both caller variants, the CDK infrastructure, the evidence model and oracle, and the `rua` operator CLI that admits, executes, cleans up and verifies each execution. It has unit, contract, integration, golden and fuzz suites, run locally through `npm run check`. The coverage gate requires every line, branch, function and statement to be covered in every file except the AWS and Node bindings, the Lambda handlers, the CLI entry point and the infrastructure code. Mutation testing has run only on the changed lines of the results and redaction tools under `study-1/tools/lib/`, and its reports are private: they stay under `study-1/reports/mutation/`, which git ignores. The gate over the whole target set has not run yet.
 
 The first sandbox study ran a transport probe, variant validations and one canonical run:
 
@@ -44,7 +44,7 @@ The study's AWS resources were removed after the run. The raw evidence packages 
 The evidence packages are the authority. Each package is identified by the SHA-256 of its `package-index.json`, and each file in it by the digest its index records. Everything else is derived from those bytes by a script:
 
 - [`results/study-1/results.json`](results/study-1/results.json) is the derived results file. Every value cites the artifact it was read from, by package-relative path and SHA-256, and every package by `package_index_sha256`.
-- [`public/study-1-evidence/`](public/study-1-evidence/) is the redacted copy of the packages. Only the sandbox account id and local filesystem paths are replaced. Its [README](public/study-1-evidence/README.md) lists the rules, and `redaction-manifest.json` records each file's original and redacted digest.
+- [`public/study-1-evidence/`](public/study-1-evidence/) is the redacted copy of the packages and of the verification records that `results.json` cites. Only the sandbox account id and local filesystem paths are replaced. Its [README](public/study-1-evidence/README.md) lists the rules and what the copy can re-derive, and `redaction-manifest.json` records each file's original and redacted digest.
 
 With `jq` and `shasum`, from `public/study-1-evidence/`:
 
@@ -62,9 +62,13 @@ diff <(for index in */*/package-index.json; do
          jq -r --arg d "${index%/package-index.json}" '.entries[] | "\(.sha256)  \($d)/\(.artifact_path)"' "$index"
        done | shasum -a 256 -c - 2>/dev/null | grep -v ': OK$' | sed 's/: FAILED$//' | sort) \
      <(jq -r '.files[] | select(.rules_applied != {}) | .path' redaction-manifest.json | sort)
+
+# Every verification record that results.json cites matches the digest it cites.
+jq -r '[.. | objects | select(has("path") and has("sha256"))] | unique[] | "\(.sha256)  \(.path)"' \
+  ../../results/study-1/results.json | shasum -a 256 -c -
 ```
 
-`verdict-recheck.json` in the copy re-derives the canonical run's verdicts from the redacted ledgers and compares each with the original oracle result. With the raw packages, `npm run rua -- run verify <package>` re-verifies a package from its own bytes, and `npm run results -- --check` re-derives `results.json` and the study block of this README, and `npm run redact -- --check` the copy, byte for byte (all from `study-1/`).
+`verdict-recheck.json` in the copy re-derives the canonical run's monetary rules and verdicts from the redacted ledgers and compares each with the original oracle result. The trial-validity gates cannot be re-run on the copy, because it redacts some trial journals; the copy's README states which values it re-derives and which it cites. With the raw packages, `npm run rua -- run verify <package>` re-verifies a package from its own bytes, and `npm run results -- --check` re-derives `results.json` and the study block of this README, and `npm run redact -- --check` the copy, byte for byte (all from `study-1/`).
 
 ## Start here
 
