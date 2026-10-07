@@ -12,12 +12,15 @@ import { describe, it } from 'node:test';
 
 import { EXECUTION_PATHS, PACKAGE_LAYOUT } from '../../../src/evidence-package/package-layout.ts';
 import { readPackageSnapshot } from '../../../src/evidence-package/package-snapshot.ts';
+import { serializeRecordFile } from '../../../src/record-contract/canonical-json.ts';
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
 import { formatUtcMillis } from '../../../src/record-contract/timestamps.ts';
+import { PROBE_SAFETY } from '../../../src/safety/safety-limits.ts';
 import { assessProbeUsability } from '../../../src/transport-qualification/verdict/probe-usability.ts';
 import { readProbeUsabilityInput } from '../../../src/transport-qualification/verdict/probe-usability-reader.ts';
 import { OfflineProvisioner } from './fakes/offline-provisioner.ts';
+import { InterruptingProbeCaller } from './fakes/interrupting-probe-caller.ts';
 import { ScriptedProbeRunner } from './fakes/scripted-probe-runner.ts';
 import { lifecycleValidator } from './support/execution-fixtures.ts';
 import { ProbeRunnerWorld } from './support/probe-runner-world.ts';
@@ -232,6 +235,54 @@ describe('runProbe stops early with a truthful summary', () => {
     await world.run();
     assert.deepEqual(probe.plans(), []);
     assert.equal(summaryOf(world)['probe_terminal_reason'], 'LEASE_LOST');
+  });
+});
+
+describe('runProbe around the probe start and an interrupted probe', () => {
+  it('hands nothing over once the active deadline passed while the lease was unconfirmed', async () => {
+    const probe = new ScriptedProbeRunner();
+    const world: ProbeRunnerWorld = await ProbeRunnerWorld.create({
+      limits: { ...PROBE_SAFETY, active_ms: 120_000 },
+      deps: (built) => ({
+        probe,
+        provisioner: new OfflineProvisioner({
+          bytes: serializeRecordFile(built.resourceManifest),
+          targets: built.targets,
+          log: built.account.log,
+          files: built.cloud.storage,
+          during: (): void => {
+            built.lease.suspend();
+          },
+        }),
+      }),
+    });
+    await world.run();
+    assert.deepEqual(probe.plans(), []);
+    const trials = world.journalEvents().find((event) => event['phase'] === 'TRIALS' && event['status'] === 'failed');
+    assert.ok(trials !== undefined, world.phases().join());
+    const codes = (trials['reasons'] as readonly JsonObject[]).map((reason) => reason['code']);
+    assert.ok(codes.includes('PROBE_NOT_HANDED_OVER'), JSON.stringify(codes));
+    assert.ok(world.phases().includes('PROBE_FREEZE:skipped'), world.phases().join());
+    assert.equal(Object.hasOwn(summaryOf(world), 'probe_result_sha256'), false);
+  });
+
+  it('freezes a probe aborted after its Invoke and journals the interruption once', async () => {
+    let caller: InterruptingProbeCaller | undefined;
+    const world: ProbeRunnerWorld = await ProbeRunnerWorld.create({
+      workload: (inner, built) => {
+        caller = new InterruptingProbeCaller(inner, () => {
+          built.runner.abort('SIGINT');
+        });
+        return caller;
+      },
+    });
+    const outcome = await world.run();
+    assert.equal(caller?.invocations(), 1);
+    assert.equal(outcome.probe?.kind, 'frozen');
+    assert.equal(outcome.interruption?.cause, 'OPERATOR_ABORT');
+    const interrupted = world.journalEvents().filter((event) => event['record_type'] === 'trial_interrupted');
+    assert.equal(interrupted.length, 1, 'the probe executor journaled it; the runner did not again');
+    assert.equal(summaryOf(world)['probe_terminal_reason'], 'OPERATOR_ABORT');
   });
 });
 

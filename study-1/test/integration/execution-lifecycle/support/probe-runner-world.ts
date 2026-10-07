@@ -26,6 +26,7 @@ import type { ResourceManifest } from '../../../../src/record-contract/records/g
 import { PROBE_SAFETY } from '../../../../src/safety/safety-limits.ts';
 import type { SafetyLimits } from '../../../../src/safety/safety-limits.ts';
 import { SafetySupervisor } from '../../../../src/safety/safety-supervisor.ts';
+import type { ProbeWorkloadInvoker } from '../../../../src/trial-execution/trial-execution-ports.ts';
 import { ScriptedDurableExecutionReader } from '../../../support/evidence-collection/scripted-durable-execution-reader.ts';
 import { SequentialUuidSource } from '../../../support/kernel/sequential-uuid-source.ts';
 import { OfflineDlqReceiver } from '../../../support/offline-cloud/offline-dlq-receiver.ts';
@@ -46,6 +47,8 @@ export interface ProbeWorldOptions {
   readonly limits?: SafetyLimits;
   /** Replaces any runner dependency, given the world built so far. */
   readonly deps?: (world: ProbeRunnerWorld) => Partial<ExecutionRunnerDeps>;
+  /** Wraps the probe caller's Invoke the real probe executor uses, given the world. */
+  readonly workload?: (caller: ProbeWorkloadInvoker, world: ProbeRunnerWorld) => ProbeWorkloadInvoker;
 }
 
 /**
@@ -60,6 +63,8 @@ export class ProbeRunnerWorld {
   readonly admitted: AdmittedExecution;
   readonly account: OfflineAccount;
   readonly targets: ExecutionTargets;
+  /** The resource manifest the deploy freezes: the golden one with the probe caller's outputs. */
+  readonly resourceManifest: ResourceManifest;
   readonly lease = new ScriptedExecutionLease();
   readonly logs: ExecutionLogLine[];
   readonly services: ExecutionServices;
@@ -75,6 +80,7 @@ export class ProbeRunnerWorld {
     }
     this.admitted = admitted.value;
     const resourceManifest = deployedProbeManifest(cloud);
+    this.resourceManifest = resourceManifest;
     const targets = executionTargetsOf(resourceManifest);
     if (!targets.ok) {
       throw new Error(`${targets.error.detail}; expected the probe stack's targets`);
@@ -99,7 +105,7 @@ export class ProbeRunnerWorld {
         store: cloud.store,
         telemetry: cloud.telemetry,
         warmup: cloud.warmup,
-        workload: cloud.caller,
+        workload: options.workload?.(cloud.caller, this) ?? cloud.caller,
         files: cloud.storage,
         runner_journal: cloud.storage,
         clock: cloud.time,
@@ -168,13 +174,18 @@ export class ProbeRunnerWorld {
     return JSON.parse(new TextDecoder().decode(bytes)) as JsonObject;
   }
 
-  /** The runner journal's phase transitions as `<phase>:<status>`, in order. */
-  phases(): readonly string[] {
+  /** The runner journal's events, in order. */
+  journalEvents(): readonly JsonObject[] {
     const text = new TextDecoder().decode(this.file(EXECUTION_PATHS.runnerJournal) ?? new Uint8Array());
     return text
       .split('\n')
       .filter((line) => line !== '')
-      .map((line) => JSON.parse(line) as JsonObject)
+      .map((line) => JSON.parse(line) as JsonObject);
+  }
+
+  /** The runner journal's phase transitions as `<phase>:<status>`, in order. */
+  phases(): readonly string[] {
+    return this.journalEvents()
       .filter((event) => event['record_type'] === 'phase_transition_recorded')
       .map((event) => `${JSON.stringify(event['phase'])}:${JSON.stringify(event['status'])}`.replaceAll('"', ''));
   }

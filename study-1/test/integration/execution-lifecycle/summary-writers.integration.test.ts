@@ -288,6 +288,28 @@ describe('ValidationSummaryWriter', () => {
     assert.equal(summary['evidence_integrity_status'], 'unverified');
   });
 
+  it('reads an absent leak audit as inconclusive', async () => {
+    const summary = await validationRecord(
+      await validationPackage((files) => {
+        files.delete(EXECUTION_PATHS.leakAuditResult);
+      }),
+    );
+    assert.equal(summary['leak_audit_status'], 'inconclusive');
+  });
+
+  it('evaluates a frozen result whose trial manifest is absent, naming the missing evidence', async () => {
+    const summary = await validationRecord(
+      await validationPackage((files) => {
+        files.delete(PACKAGE_LAYOUT.unitFile(CONTROL_UNIT, 'trialManifest'));
+      }),
+    );
+    const entries = summary['trial_results'] as readonly JsonObject[];
+    assert.equal(entries[0]?.['execution_status'], 'completed');
+    assert.ok(
+      JSON.stringify(summary).includes(`the trial manifest of trial ${CONTROL.trial_id} is absent or unreadable`),
+    );
+  });
+
   it("never reports another trial's oracle result as this trial's", async () => {
     const summary = await validationRecord(
       await validationPackage((files) => {

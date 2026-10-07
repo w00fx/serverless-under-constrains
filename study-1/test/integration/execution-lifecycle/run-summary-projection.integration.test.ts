@@ -94,3 +94,21 @@ describe('frozenDeploymentProjection', () => {
     );
   });
 });
+
+describe('RunSummaryWriter over a package it cannot read as a run', () => {
+  it('names the missing execution manifest and writes no summary', async () => {
+    const storage = new OfflinePackageStorage();
+    for (const [path, bytes] of world.cloud.packageFiles()) {
+      if (path !== EXECUTION_PATHS.executionManifest && path !== EXECUTION_PATHS.runSummary) {
+        await storage.writeOnce(`${world.admitted.package_directory}/${path}`, bytes);
+      }
+    }
+    const pkg = new ExecutionPackage(storage, world.admitted.identity, world.admitted.package_directory);
+    const reasons = await new RunSummaryWriter(lifecycleValidator()).write(pkg, world.admitted, FINALIZED_AT);
+    assert.deepEqual(
+      reasons.map((reason) => [reason.code, reason.artifact_path]),
+      [['ARTIFACT_MISSING', EXECUTION_PATHS.executionManifest]],
+    );
+    assert.equal(storage.filesUnder(world.admitted.package_directory).has(EXECUTION_PATHS.runSummary), false);
+  });
+});

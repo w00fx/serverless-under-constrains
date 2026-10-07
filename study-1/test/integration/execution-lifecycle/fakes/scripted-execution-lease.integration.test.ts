@@ -36,6 +36,15 @@ describe('ScriptedExecutionLease', () => {
     assert.equal(losses[0]?.cause, 'LEASE_LOST');
   });
 
+  it('pauses publication without a loss while ownership is unconfirmed', () => {
+    const lease = new ScriptedExecutionLease();
+    const losses: LeaseLoss[] = [];
+    lease.startHeartbeats((loss) => losses.push(loss));
+    lease.suspend();
+    assert.equal(lease.publicationAllowed(), false);
+    assert.deepEqual(losses, []);
+  });
+
   it('tells no listener once heartbeats stopped, or before they started', () => {
     const lease = new ScriptedExecutionLease();
     lease.lose();
