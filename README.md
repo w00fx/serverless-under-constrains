@@ -14,12 +14,11 @@ Protocol rules, fixtures, acceptance criteria, and delivery gates live in the [S
 
 ## Repository status
 
-The initial commit contains:
+Study 1 is implemented under [`study-1/`](study-1/): the controlled provider, both caller variants, the CDK infrastructure, the evidence model and oracle, and the `rua` operator CLI that admits, executes, cleans up and verifies each execution. It has unit, contract, integration, golden and fuzz suites, run locally through `npm run check`. The coverage gate requires 100% line, branch, function and statement coverage for every file except the AWS and Node bindings, the Lambda handlers, the CLI entry point and the infrastructure code. Mutation testing has not run yet.
 
-- the project charter and repository guidance;
-- the Study 1 specification and architecture decisions.
+The first sandbox study ran on 2026-10-07 in `us-east-1`. It covered one transport probe, a variant validation for each variant, and one run of four trials. The run verified as complete and comparison-eligible: every trial was valid, cleanup succeeded and the leak audit was clean. Both variants passed `CONTROL` with one refund. Under `COMMIT_THEN_TIMEOUT`, each variant created two provider transactions, refunding 20000 for an approved 10000, so both failed the preservation verdict. This is the result the specification predicts when the provider has no idempotency key.
 
-No application code, package manifest, lockfile, test suite, infrastructure definition, or deployed AWS resource exists yet. Delivery starts with Milestone 0 and follows the sequence in the specification.
+The study's AWS resources were removed after the run. Evidence packages stay local under `study-1/evidence/`, which git ignores. The specification is still a draft, and its `[PROPOSED]` items are not ratified.
 
 ## Start here
 
