@@ -1,7 +1,8 @@
 // BR-RUA-022 effect-knowledge state model and BR-RUA-004 absorbing `UNKNOWN`.
 //
-// The table is the spec's [PROPOSED] transition table, approved as working authority by the
-// addendum §1. Every cell is written here literally (5 states x 4 outcome classes); the set
+// The table is the spec's BR-RUA-022 transition table, ratified in 5d16bfe; before that it was
+// a [PROPOSED] item, approved as working authority by the addendum §1. Every cell is written
+// here literally (5 states x 4 outcome classes); the set
 // of permitted transitions is exactly the set of cells, so the 12 remaining (from, to) pairs
 // are refused: nothing leaves `UNKNOWN`, and knowledge never moves back toward fewer
 // confirmed effects.
