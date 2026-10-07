@@ -206,6 +206,9 @@ export function memberOf(record: JsonObject, name: string): JsonValue | undefine
  * [manifestRef, summaryRef].sort(byArtifactPath);
  */
 export function byArtifactPath(a: ArtifactRef, b: ArtifactRef): number {
+  if (a.artifact_path === b.artifact_path) {
+    return 0;
+  }
   return a.artifact_path < b.artifact_path ? -1 : 1;
 }
 

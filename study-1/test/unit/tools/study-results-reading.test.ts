@@ -154,7 +154,7 @@ describe('typed members', () => {
     assert.equal(memberOf({ constructor: 1 }, 'constructor'), 1);
   });
 
-  it('orders references by artifact path', () => {
+  it('orders references by artifact path, equal paths as equal', () => {
     const ref = (artifact_path: string): ArtifactRef => ({
       package_index_sha256: 'p',
       artifact_path,
@@ -166,5 +166,6 @@ describe('typed members', () => {
     );
     assert.equal(byArtifactPath(ref('a'), ref('b')), -1);
     assert.equal(byArtifactPath(ref('b'), ref('a')), 1);
+    assert.equal(byArtifactPath(ref('a'), ref('a')), 0);
   });
 });
