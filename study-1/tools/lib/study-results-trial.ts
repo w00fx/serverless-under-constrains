@@ -226,10 +226,13 @@ function durableEvidence(pkg: EvidencePackage, directory: string, variantId: str
   if (!booleanOf(record, 'list_complete', subject)) {
     throw new Error(`${subject}: list_complete is false; expected a complete Durable execution listing`);
   }
-  return {
-    executions: objectsOf(record, 'executions', subject).map((one) => durableExecution(one, subject)),
-    refs: [ref],
-  };
+  const executions = objectsOf(record, 'executions', subject).map((one) => durableExecution(one, subject));
+  // A durable trial listing no execution is the eda6019a symptom (executions listed under the
+  // alias, fixed in 9ce4ad7): the history is missing, never a trial without retries.
+  if (variantId === 'durable' && executions.length === 0) {
+    throw new Error(`${subject}: executions is empty; expected the Durable execution of a durable trial`);
+  }
+  return { executions, refs: [ref] };
 }
 
 function durableExecution(execution: JsonObject, subject: string): DurableExecutionResult {
@@ -266,7 +269,7 @@ function retryPath(
     .map((one) => integerOf(one, 'step_attempt', subject));
   const stepAttempt = stepAttempts.length === 0 ? null : Math.max(...stepAttempts);
   const historyAttempt = Math.max(0, ...executions.map((one) => one.highest_step_attempt));
-  if (executions.length > 0 && historyAttempt !== (stepAttempt ?? 0)) {
+  if (historyAttempt !== (stepAttempt ?? 0)) {
     throw new Error(
       `${subject}: the caller journal reaches step attempt ${String(stepAttempt)}; ` +
         `expected the Durable history's ${String(historyAttempt)}`,

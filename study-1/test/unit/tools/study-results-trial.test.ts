@@ -216,6 +216,25 @@ describe('deriveTrialResult', () => {
     );
   });
 
+  it('refuses a durable trial whose complete listing holds no execution, as eda6019a listed under the alias', () => {
+    const metadata = 'execution-metadata/durable-executions.json';
+    const listedNone = (files: FileMap): void => {
+      files.set(`trials/${TIMEOUT_DURABLE.id}/${metadata}`, { list_complete: true, executions: [] });
+    };
+    assert.throws(() => derive(TIMEOUT_DURABLE, listedNone), {
+      message: `${durableDirectory}/${metadata}: executions is empty; expected the Durable execution of a durable trial`,
+    });
+  });
+
+  it('accepts a conventional trial whose listing holds no Durable execution, and cites the listing', () => {
+    const metadata = `trials/${CONTROL_CONVENTIONAL.id}/execution-metadata/durable-executions.json`;
+    const result = derive(CONTROL_CONVENTIONAL, (files) => {
+      files.set(metadata, { list_complete: true, executions: [] });
+    });
+    assert.deepEqual(result.retry.durable_executions, []);
+    assert.ok(result.evidence_refs.some((ref) => ref.artifact_path === metadata));
+  });
+
   it('refuses a caller journal without an invocation, or one whose step attempt the history contradicts', () => {
     const journal = 'journals/caller-journal.jsonl';
     const noInvocation = (files: FileMap): void => {
