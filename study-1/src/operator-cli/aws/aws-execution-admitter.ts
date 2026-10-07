@@ -33,24 +33,21 @@ import { createStoreDynamoDbClient } from '../../durable-store/aws/dynamodb-clie
 import { createDynamoDbItemStore } from '../../durable-store/aws/dynamodb-item-store.ts';
 import { NodeAppendOnlyFile } from '../../event-journal/node/node-append-only-file.ts';
 import { NodePackageFileSystem } from '../../evidence-package/node/node-package-file-system.ts';
-import type { RecordValidator } from '../../record-contract/schema-registry.ts';
 import type { Uuid4, WallClock } from '../../record-contract/primitives.ts';
 import { EsbuildBundleInputResolver } from '../../transport-qualification/scope/node/esbuild-bundle-input-resolver.ts';
 import { GitCommittedSourceReader } from '../../transport-qualification/scope/node/git-committed-source-reader.ts';
 import { NodeModulesPackageReader } from '../../transport-qualification/scope/node/node-modules-package-reader.ts';
 import type { ExecutionAdmitter, InputFileReader } from '../admit-commands.ts';
 import { EnvironmentLeaseReader } from '../environment-lease-reader.ts';
+import { awsCdkTools } from './aws-cdk-tools.ts';
+import type { AwsCompositionSettings } from './aws-cdk-tools.ts';
 
-export interface AwsAdmitterSettings {
-  /** Absolute path of `study-1/`; its parent is the repository root. */
-  readonly studyRoot: string;
+/** The composition settings plus admission's own reads; `studyRoot`'s parent is the repository root. */
+export interface AwsAdmitterSettings extends AwsCompositionSettings {
   readonly tempRoot: string;
   readonly nodeVersion: string;
-  readonly nodeExecutable: string;
-  readonly env: Readonly<Record<string, string>>;
   readonly inputs: InputFileReader;
   readonly clock: WallClock;
-  readonly validator: RecordValidator;
 }
 
 /**
@@ -101,13 +98,8 @@ function admissionPorts(
     synthesizer: new CdkAssemblySynthesizer({
       runner,
       files,
-      tools: {
-        node_executable: settings.nodeExecutable,
-        cdk_cli_entry: join(studyRoot, 'node_modules', 'aws-cdk', 'bin', 'cdk'),
-        study_root: studyRoot,
-        docker_sentinel: join(studyRoot, 'tools', 'docker-forbidden.sh'),
-        environment: settings.env,
-      },
+      // The one place the pinned CDK CLI and Docker sentinel are located (WP-28 review F4).
+      tools: awsCdkTools(settings),
     }),
     scope: {
       sources: new GitCommittedSourceReader({ projectRoot: studyRoot }),

@@ -6,22 +6,23 @@
 //
 // The driver executes the admitted probe (`probe execute … --confirm-cloud-mutation <id>`), then
 // verifies its package (`probe verify`), and reads the frozen probe result:
-// - ac002-real-probe: the provider commits and the application timer wins; the six conditions are
-//   evaluated from frozen evidence, fidelity names CA-1 and
+// - ac002-real-probe: the provider commits and the application timer wins; the six conditions
+//   BR-RUA-010..015 are evaluated from frozen evidence, verified fidelity names CA-1 and
 //   `causal_plus_cross_source_clock_assumption`, ordering is `cross_source_wall_clock`, and no
 //   member claims a happened-before proof or an AWS clock guarantee;
-// - ac021-real-probe-pass: the verdict is `pass` with cardinality 1/1/1, verified evidence, valid
-//   fidelity and no safety release, and the probe is usable, so later executions may select it.
-// The golden halves prove the same derivations offline (probe-pass.golden.test.ts).
+// - ac021-real-probe-pass: the verdict is `pass` with every condition passing, valid probe
+//   validity, verified fidelity and evidence, cardinality 1/1/1 and no BR-RUA-014 safety release,
+//   and the probe is usable, so later executions may select it.
+// The result checks live in `support/probe-result-assertions.ts`, which the unit suite runs offline
+// over the golden passing probe; the golden halves prove the derivations (probe-pass.golden.test.ts).
 
 import assert from 'node:assert/strict';
 import process from 'node:process';
 import { before, describe, it } from 'node:test';
 
 import { PACKAGE_LAYOUT } from '../../src/evidence-package/package-layout.ts';
-import { isJsonArray, isJsonObject } from '../../src/record-contract/json-value.ts';
-import type { ExecutionIdentity, JsonObject, JsonValue } from '../../src/record-contract/primitives.ts';
-import { HAPPENED_BEFORE_PATTERN } from '../golden/transport-qualification/verdict/support/probe-golden.ts';
+import type { ExecutionIdentity, JsonObject } from '../../src/record-contract/primitives.ts';
+import { assertCommitBeforeTimerResult, assertQualificationPassResult } from './support/probe-result-assertions.ts';
 import {
   admittedPackage,
   assertCompleted,
@@ -53,33 +54,12 @@ describe('AC-RUA-002 and AC-RUA-021 real-cloud transport probe', () => {
 
   it('ac002-real-probe', () => {
     assertExecuted(execute, probe);
-    const conditions = probeResult['condition_results'];
-    assert.ok(isJsonArray(conditions) && conditions.length === 6, 'six condition results');
-    for (const condition of conditions) {
-      assert.ok(isJsonObject(condition));
-      assert.equal(condition['result'], 'pass', JSON.stringify(condition));
-      const refs = condition['evidence_refs'];
-      assert.ok(isJsonArray(refs) && refs.length > 0);
-    }
-    assert.equal(probeResult['fidelity_basis'], 'causal_plus_cross_source_clock_assumption');
-    assert.deepEqual(probeResult['clock_assumption_refs'], ['CA-1']);
-    assert.equal(probeResult['ordering_basis'], 'cross_source_wall_clock');
-    assert.deepEqual(
-      memberNames(probeResult).filter((name) => HAPPENED_BEFORE_PATTERN.test(name)),
-      [],
-    );
+    assertCommitBeforeTimerResult(probeResult);
   });
 
   it('ac021-real-probe-pass', () => {
     assertExecuted(execute, probe);
-    assert.equal(probeResult['transport_probe_verdict'], 'pass');
-    assert.deepEqual(probeResult['probe_cardinality'], {
-      caller_invocations: 1,
-      accepted_provider_calls: 1,
-      committed_transactions: 1,
-    });
-    assert.equal(probeResult['evidence_integrity'], 'verified');
-    assert.equal(probeResult['treatment_fidelity'], 'verified');
+    assertQualificationPassResult(probeResult);
     assertCompleted(verify);
     const usability = verify.result.result_record;
     assert.ok(usability !== undefined);
@@ -88,14 +68,3 @@ describe('AC-RUA-002 and AC-RUA-021 real-cloud transport probe', () => {
     assert.equal(usability['package_eligibility'], 'eligible');
   });
 });
-
-// Every member name of a JSON value, at any depth.
-function memberNames(value: JsonValue): readonly string[] {
-  if (isJsonArray(value)) {
-    return value.flatMap(memberNames);
-  }
-  if (!isJsonObject(value)) {
-    return [];
-  }
-  return [...Object.keys(value), ...Object.values(value).flatMap(memberNames)];
-}

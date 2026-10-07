@@ -24,6 +24,24 @@ function verifyCommand(): RecordingCliCommand {
   return new RecordingCliCommand(['run', 'verify'], ['package'], { head: 'optional' });
 }
 
+// Hostile thrown values (Owner amendment A-05): an Error whose `message` getter throws, and one
+// whose `message` is a Symbol, which a template literal cannot convert.
+function errorWithThrowingMessage(): Error {
+  const error = new Error('hidden');
+  Object.defineProperty(error, 'message', {
+    get(): string {
+      throw new Error('message getter');
+    },
+  });
+  return error;
+}
+
+function errorWithSymbolMessage(): RangeError {
+  const error = new RangeError('hidden');
+  Object.defineProperty(error, 'message', { value: Symbol('message') });
+  return error;
+}
+
 describe('exitCodeOf', () => {
   it('gives every outcome the design §11 code', () => {
     assert.deepEqual(
@@ -83,10 +101,21 @@ describe('internalReason', () => {
     assert.deepEqual(internalReason(new TypeError('boom')), {
       code: 'INTERNAL_FAILURE',
       subject: 'operator-cli',
-      detail: 'TypeError: boom; expected the command to report its outcome as a value',
+      detail: 'threw TypeError: boom; expected a result value',
     });
-    assert.equal(internalReason(42).detail, 'a thrown number; expected the command to report its outcome as a value');
+    assert.equal(internalReason(42).detail, 'threw a non-Error number; expected a result value');
     assert.ok(internalReason(new Error('x'.repeat(2_000))).detail.length < 600);
+  });
+
+  it('describes an error whose message cannot be read instead of throwing', () => {
+    assert.equal(
+      internalReason(errorWithThrowingMessage()).detail,
+      'threw an unreadable value; expected a result value',
+    );
+    assert.equal(
+      internalReason(errorWithSymbolMessage()).detail,
+      'threw RangeError: a non-string symbol; expected a result value',
+    );
   });
 });
 
@@ -149,6 +178,19 @@ describe('main', () => {
     assert.equal(run.exit_code, 10);
     assert.equal(run.result.outcome, 'internal_failure');
     assert.deepEqual(run.result.reasons, [internalReason(new RangeError('stack'))]);
+  });
+
+  // A-05 totality (WP-28 review F2): a thrown Error whose `message` getter throws, or whose
+  // `message` is a Symbol, still yields the one result line with exit 10, never a crash.
+  it('reports a thrown error with an unreadable message as internal_failure with exit 10', async () => {
+    for (const thrown of [errorWithThrowingMessage(), errorWithSymbolMessage()]) {
+      const command = verifyCommand();
+      command.throwOnRun(thrown);
+      const run = await runCli(['run', 'verify', 'pkg'], [command]);
+      assert.equal(run.exit_code, 10);
+      assert.equal(run.result.outcome, 'internal_failure');
+      assert.equal(run.result.reasons[0]?.code, 'INTERNAL_FAILURE');
+    }
   });
 
   it('replaces a result that breaks the cli_result schema by an internal failure', async () => {

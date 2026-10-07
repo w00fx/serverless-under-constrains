@@ -4,6 +4,7 @@
 // function of the outcome alone (`CLI_OUTCOMES` / `CLI_EXIT_CODES`), so no command can pair an
 // outcome with another code.
 
+import { reasonFromThrown } from '../cleanup/thrown-reason.ts';
 import { executionIdentityFields } from '../record-contract/envelope.ts';
 import type { StructuredReason, UtcMillis } from '../record-contract/primitives.ts';
 import type { CliResult } from '../record-contract/records/group-c/cli_result.ts';
@@ -58,16 +59,14 @@ export function failedOutcome(outcome: CliOutcome, reasons: readonly StructuredR
 }
 
 /**
- * The reason a command failed internally, from whatever it threw (exit code 10).
+ * The reason a command failed internally, from whatever it threw (exit code 10). Total over every
+ * thrown value (Owner amendment A-05): it runs inside `main`'s catch, so an Error whose `name` or
+ * `message` is a throwing getter or a Symbol must still yield the one result line (WP-28 review F2;
+ * the earlier template literal threw there and `main` printed nothing).
  *
  * @example
- * internalReason(new Error('disk full')); // { code: 'INTERNAL_FAILURE', … detail: 'Error: disk full; …' }
+ * internalReason(new Error('disk full')); // { code: 'INTERNAL_FAILURE', … detail: 'threw Error: disk full; …' }
  */
 export function internalReason(thrown: unknown): StructuredReason {
-  const text = thrown instanceof Error ? `${thrown.name}: ${thrown.message}` : `a thrown ${typeof thrown}`;
-  return {
-    code: 'INTERNAL_FAILURE',
-    subject: 'operator-cli',
-    detail: `${text.slice(0, 500)}; expected the command to report its outcome as a value`,
-  };
+  return reasonFromThrown(thrown, 'INTERNAL_FAILURE', 'operator-cli');
 }
