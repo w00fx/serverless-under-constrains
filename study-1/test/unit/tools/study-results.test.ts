@@ -19,7 +19,7 @@ const SPEC = `# CAP-RUA\n\n## Threats to Validity and Limitations\n\n1. One.\n9.
 const OTHER_ID = '00000000-0000-4000-8000-000000000003';
 const USAGE =
   'usage: node tools/derive-study-results.ts --evidence-root <dir> --spec <spec.md> --run <id> ' +
-  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> [--check]';
+  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> --readme <README.md> [--check]';
 const idsRefusal = (argv: readonly string[], detail: string): { readonly message: string } => ({
   message: `${USAGE}; got ${JSON.stringify(argv)}; ${detail}`,
 });
@@ -93,7 +93,18 @@ describe('limitationOf', () => {
 });
 
 describe('parseDeriveArguments', () => {
-  const base = ['--evidence-root', 'evidence', '--spec', 's.md', '--run', RUN_ID, '--out', 'r.json'];
+  const base = [
+    '--evidence-root',
+    'evidence',
+    '--spec',
+    's.md',
+    '--run',
+    RUN_ID,
+    '--out',
+    'r.json',
+    '--readme',
+    'R.md',
+  ];
 
   it('reads every flag, repeated validations, excluded validations and --check', () => {
     assert.deepEqual(
@@ -114,6 +125,7 @@ describe('parseDeriveArguments', () => {
         validations: [VALIDATION_ID, '00000000-0000-4000-8000-000000000004'],
         excludedValidations: [OTHER_ID],
         out: 'r.json',
+        readme: 'R.md',
         check: true,
       },
     );
@@ -138,6 +150,7 @@ describe('parseDeriveArguments', () => {
       assert.throws(() => parseDeriveArguments(argv), usage, JSON.stringify(argv));
     }
     assert.throws(() => parseDeriveArguments([...base, '--out', 'again.json']), /with 2 --out$/);
+    assert.throws(() => parseDeriveArguments(base.slice(0, -2)), /with 0 --readme$/);
     const twice = [...base, '--run', RUN_ID];
     assert.throws(
       () => parseDeriveArguments(twice),

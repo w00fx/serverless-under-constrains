@@ -93,6 +93,11 @@ export class InMemoryEvidence {
     this.put(`${directory}/package-index.json`, { entries });
   }
 
+  /** Every stored path, in the order stored, for a test that writes the root to disk. */
+  paths(): readonly string[] {
+    return [...this.contents.keys()];
+  }
+
   /** The SHA-256 of the stored package index of `directory`. */
   indexDigest(directory: string): string {
     return createHash('sha256')

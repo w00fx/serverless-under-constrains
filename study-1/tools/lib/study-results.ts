@@ -42,6 +42,7 @@ export interface DeriveArguments {
   readonly validations: readonly string[];
   readonly excludedValidations: readonly string[];
   readonly out: string;
+  readonly readme: string;
   readonly check: boolean;
 }
 
@@ -54,10 +55,11 @@ const VALUE_FLAGS: readonly string[] = [
   '--validation',
   '--excluded-validation',
   '--out',
+  '--readme',
 ];
 const USAGE =
   'node tools/derive-study-results.ts --evidence-root <dir> --spec <spec.md> --run <id> ' +
-  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> [--check]';
+  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> --readme <README.md> [--check]';
 
 export const FIELD_DEFINITIONS: Readonly<Record<string, string>> = {
   paths:
@@ -178,6 +180,7 @@ export function parseDeriveArguments(argv: readonly string[]): DeriveArguments {
     validations,
     excludedValidations,
     out: single('--out'),
+    readme: single('--readme'),
     check,
   };
 }
