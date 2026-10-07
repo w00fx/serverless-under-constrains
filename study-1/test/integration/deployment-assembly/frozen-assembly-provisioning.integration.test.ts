@@ -326,7 +326,7 @@ describe('FrozenAssemblyProvisioner over the synthesized run assembly', () => {
       manifest.ownership_tags,
       [...declaredTags()].sort((left, right) => left.key.localeCompare(right.key)),
     );
-    const configuration = manifest.configuration ?? [];
+    const configuration = manifest.configuration;
     const concurrency = configuration.filter((entry) => entry.attribute_path === 'ProvisionedConcurrencyConfig');
     assert.deepEqual(
       concurrency.map((entry) => [entry.logical_id, entry.canonical_json]),
