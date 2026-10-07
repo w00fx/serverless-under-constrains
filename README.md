@@ -39,7 +39,7 @@ Excluded by the reproduction criterion: `eda6019a` (`durable`): validation_termi
 
 The `COMMIT_THEN_TIMEOUT` failures are the result the specification predicts when the provider has no idempotency key.
 
-The study's AWS resources were removed after the run. The raw evidence packages stay private under `study-1/evidence/`, which git ignores, because they hold environment identifiers; [`public/study-1-evidence/`](public/study-1-evidence/) is their redacted copy. The specification is still a draft, and its `[PROPOSED]` items are not ratified.
+The study's AWS resources were removed after the run. The raw evidence packages stay private under `study-1/evidence/`, which git ignores, because they hold environment identifiers; [`public/study-1-evidence/`](public/study-1-evidence/) is their redacted copy. The specification is ratified. Study 1 is closed: [`STUDY-1.md`](STUDY-1.md) states what a reader can check from public bytes, what is attested, the executions not counted, the cost status and the known gaps.
 
 ## Re-verify Study 1 from bytes
 
@@ -70,13 +70,14 @@ jq -r '[.. | objects | select(has("path") and has("sha256"))] | unique[] | "\(.s
   ../../results/study-1/results.json | shasum -a 256 -c -
 ```
 
-`verdict-recheck.json` in the copy re-derives the canonical run's monetary rules and verdicts from the redacted ledgers and compares each with the original oracle result. The trial-validity gates cannot be re-run on the copy, because it redacts some trial journals; the copy's README states which values it re-derives and which it cites. With the raw packages, `npm run rua -- run verify <package>` re-verifies a package from its own bytes, and `npm run results -- --check` re-derives `results.json` and the study block of this README, and `npm run redact -- --check` the copy, byte for byte (all from `study-1/`).
+`verdict-recheck.json` in the copy re-derives the canonical run's monetary rules and verdicts from the redacted ledgers and compares each with the original oracle result. The trial-validity gates cannot be re-run on the copy, because it redacts some trial journals; the copy's README states which values it re-derives and which it cites. With the raw packages, `npm run rua -- run verify <package>` re-verifies a package from its own bytes, and `npm run results -- --check` re-derives `results.json` and the study blocks of this README and of `STUDY-1.md`, and `npm run redact -- --check` the copy, byte for byte (all from `study-1/`).
 
 ## Start here
 
 | Document | Purpose |
 | --- | --- |
 | [Project charter](PROJECT.md) | Lab purpose, vocabulary, safety posture, and Study 1 delivery sequence. |
+| [Study 1 close-out](STUDY-1.md) | Status, results, provenance limit, cost and known gaps of Study 1. |
 | [Study 1 specification](study-1/specs/rua/refund-under-ambiguous-outcome.md) | Refund domain, protocol, evidence model, oracle rules, and acceptance criteria. |
 | [Architecture decisions](study-1/architecture/decisions/) | Design constraints adopted for Study 1. |
 | [Study 1 guidance](study-1/CLAUDE.md) | Scope and sequencing rules for Study 1 work. |

@@ -36,7 +36,7 @@
     "test:e2e": "node tools/run-suite.ts e2e \"test/e2e/**/*.e2e.test.ts\"",
     "rua": "node src/operator-cli/main.ts",
     "redact": "node tools/redact-evidence.ts --evidence-root evidence --out ../public/study-1-evidence runs/abf41ffd-3008-4b29-81ee-b65d8095188b transport-probes/4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5 transport-probes/adfca539-508f-4a51-9a98-e1dcf8cec84a variant-validations/a8a5b2f1-61d2-4712-9c54-34114abfd54e variant-validations/60511328-ab4d-4234-81ab-0b042a20e658 variant-validations/eda6019a-0f5d-4565-a809-b129ec432036",
-    "results": "node tools/derive-study-results.ts --evidence-root evidence --spec specs/rua/refund-under-ambiguous-outcome.md --run abf41ffd-3008-4b29-81ee-b65d8095188b --validation a8a5b2f1-61d2-4712-9c54-34114abfd54e --validation 60511328-ab4d-4234-81ab-0b042a20e658 --excluded-validation eda6019a-0f5d-4565-a809-b129ec432036 --out ../results/study-1/results.json --readme ../README.md"
+    "results": "node tools/derive-study-results.ts --evidence-root evidence --spec specs/rua/refund-under-ambiguous-outcome.md --run abf41ffd-3008-4b29-81ee-b65d8095188b --validation a8a5b2f1-61d2-4712-9c54-34114abfd54e --validation 60511328-ab4d-4234-81ab-0b042a20e658 --excluded-validation eda6019a-0f5d-4565-a809-b129ec432036 --out ../results/study-1/results.json --readme ../README.md --readme ../STUDY-1.md"
   },
   "dependencies": {
     "@aws-sdk/client-cloudformation": "3.1146.0",
