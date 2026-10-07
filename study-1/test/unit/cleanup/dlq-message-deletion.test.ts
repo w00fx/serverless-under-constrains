@@ -5,8 +5,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { CapturedDlqMessageDeletion, MAX_DLQ_RECEIVES_PER_QUEUE } from '../../../src/cleanup/dlq-message-deletion.ts';
-import type { DlqQueueAccess, DlqReceive } from '../../../src/cleanup/dlq-message-deletion.ts';
+import {
+  CapturedDlqMessageDeletion,
+  DLQ_RECEIVE_BATCH,
+  MAX_DLQ_RECEIVES_PER_QUEUE,
+} from '../../../src/cleanup/dlq-message-deletion.ts';
 import { InMemoryDlqQueue } from '../../support/cleanup/aws/in-memory-dlq-queue.ts';
 
 const HOST = 'https://sqs.us-east-1.amazonaws.com/123456789012';
@@ -170,19 +173,29 @@ describe('CapturedDlqMessageDeletion', () => {
   });
 
   it('gives a sweep up after the receive budget when the queue never comes back empty', async () => {
-    let receives = 0;
-    const endless: DlqQueueAccess = {
-      receive: (): Promise<DlqReceive> => {
-        receives += 1;
-        const message = { message_id: `u-${String(receives)}`, receipt_handle: `r-${String(receives)}` };
-        return Promise.resolve({ kind: 'messages', messages: [message] });
-      },
-      deleteMessage: () => Promise.resolve({ kind: 'done' }),
-      releaseMessage: () => Promise.resolve({ kind: 'done' }),
-    };
-    const report = await new CapturedDlqMessageDeletion(endless, [STANDARD]).deleteCaptured(['m-1']);
-    assert.equal(receives, MAX_DLQ_RECEIVES_PER_QUEUE);
-    assert.match(report.failed[0]?.reason.detail ?? '', /DLQ_SWEEP_INCOMPLETE/);
+    // More uncaptured messages than the budget can hold (20 receives of 10): every receive
+    // returns a full batch, so no receive within the budget comes back empty.
+    const queues = new InMemoryDlqQueue();
+    const backlog = MAX_DLQ_RECEIVES_PER_QUEUE * DLQ_RECEIVE_BATCH + 50;
+    for (let index = 0; index < backlog; index += 1) {
+      queues.enqueue(STANDARD, `u-${String(index)}`);
+    }
+    const report = await new CapturedDlqMessageDeletion(queues, [STANDARD]).deleteCaptured(['m-1']);
+    const operations = queues.calls().map((call) => call.operation);
+    assert.equal(operations.filter((operation) => operation === 'receive').length, MAX_DLQ_RECEIVES_PER_QUEUE);
+    assert.equal(
+      operations.filter((operation) => operation === 'release').length,
+      MAX_DLQ_RECEIVES_PER_QUEUE * DLQ_RECEIVE_BATCH,
+    );
+    assert.equal(operations.includes('delete'), false, 'an uncaptured message is never deleted');
+    assert.deepEqual(report.deleted, []);
     assert.deepEqual(report.absent, []);
+    assert.deepEqual(
+      report.failed.map((failure) => failure.reason.code),
+      ['DLQ_MESSAGE_NOT_PROVEN_ABSENT'],
+    );
+    assert.match(report.failed[0]?.reason.detail ?? '', /DLQ_SWEEP_INCOMPLETE on https:/);
+    assert.equal(queues.messageIds(STANDARD).length, backlog);
+    assert.deepEqual(queues.hiddenIds(STANDARD), []);
   });
 });
