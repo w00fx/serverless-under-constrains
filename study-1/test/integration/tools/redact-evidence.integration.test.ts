@@ -1,7 +1,8 @@
 // tools/redact-evidence.ts as a process (close-out Phase 3): it writes the public redacted copy to
-// a new directory, refuses an existing one, and with --check exits 0 only when the copy on disk
-// equals a fresh derivation, naming the files that differ. Fixture packages are written to a
-// scratch evidence root, so the real evidence is never read.
+// a new directory, with each package's verification records when its verifications/ folder exists,
+// refuses an existing directory, and with --check exits 0 only when the copy on disk equals a fresh
+// derivation, naming the files that differ. Fixture packages are written to a scratch evidence
+// root, so the real evidence is never read.
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -12,6 +13,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { deriveRedactedCopy } from '../../../tools/lib/evidence-redaction.ts';
+import type { InMemoryEvidence } from '../../unit/tools/support/in-memory-evidence.ts';
 import {
   DOUBLE_REFUND,
   PASSING,
@@ -36,14 +38,24 @@ interface ProcessResult {
   readonly stderr: string;
 }
 
-// A scratch evidence root holding the fixture run and probe packages, byte for byte.
+// The run's one verification record; the probe has no verifications/ folder.
+const RECORD = `verifications/${RUN.slice('runs/'.length)}/2026-10-07T06:00:00.000Z-package-verification.json`;
+
+function fixtureEvidence(): InMemoryEvidence {
+  const evidence = redactionEvidence();
+  evidence.put(RECORD, { record_type: 'package_verification', package_eligibility: 'eligible' });
+  return evidence;
+}
+
+// A scratch evidence root holding the fixture run and probe packages and the run's record, byte for byte.
 function scratchEvidence(): string {
   const root = mkdtempSync(join(tmpdir(), 'rua-redact-'));
   scratchRoots.push(root);
-  const evidence = redactionEvidence();
+  const evidence = fixtureEvidence();
   const paths = [
     ...[...runPackageFiles([PASSING, DOUBLE_REFUND]).keys(), 'package-index.json'].map((path) => `${RUN}/${path}`),
     ...[...probePackageFiles().keys(), 'package-index.json'].map((path) => `${PROBE}/${path}`),
+    RECORD,
   ];
   for (const path of paths) {
     mkdirSync(dirname(join(root, 'evidence', path)), { recursive: true });
@@ -66,15 +78,16 @@ function redact(root: string, ...args: readonly string[]): ProcessResult {
 const PACKAGES = [RUN, PROBE];
 
 describe('redact-evidence', () => {
-  it('writes every file of the derived copy to a new directory', () => {
+  it("writes every file of the derived copy, with the packages' verification records, to a new directory", () => {
     const root = scratchEvidence();
     const result = redact(root, '--evidence-root', 'evidence', '--out', 'copy', ...PACKAGES);
     assert.deepEqual(result, {
       status: 0,
-      stdout: 'redacted evidence: wrote 21 files to copy; 2 run verdicts re-derived from the redacted ledgers\n',
+      stdout: 'redacted evidence: wrote 22 files to copy; 2 run verdicts re-derived from the redacted ledgers\n',
       stderr: '',
     });
-    const expected = deriveRedactedCopy({ packages: PACKAGES, read: redactionEvidence().read });
+    const expected = deriveRedactedCopy({ packages: PACKAGES, records: [RECORD], read: fixtureEvidence().read });
+    assert.ok(expected.files.has(RECORD));
     for (const [path, bytes] of expected.files) {
       assert.deepEqual(new Uint8Array(readFileSync(join(root, 'copy', path))), bytes, path);
     }

@@ -3,7 +3,10 @@
 // separately derived artifact. The copy rewrites only the owner's environment identifiers, the AWS
 // account id and local filesystem paths, and each original package-index.json digest stays the
 // authority: the manifest maps every file's original digest to its redacted one with the rules
-// applied. A copy that still holds an identifier, or whose JSON no longer parses, is refused.
+// applied. The verification records the verify commands wrote for the packages sit outside any
+// package; results.json cites them by path and digest, so they are copied the same way, each
+// identified by the digest of its original bytes. A copy that still holds an identifier, or whose
+// JSON no longer parses, is refused.
 
 import { sha256Hex } from '../../src/record-contract/digests.ts';
 import { decodeUtf8Strict, parseJsonDocument, parseJsonl } from '../../src/record-contract/parsing.ts';
@@ -73,9 +76,13 @@ export interface RedactedCopy {
   readonly files: ReadonlyMap<string, Uint8Array>;
 }
 
-/** The packages to copy, as directories under the evidence root, and how to read them. */
+/**
+ * The packages to copy, as directories under the evidence root, their verification records, as
+ * `verifications/<package id>/<name>.json` paths under the same root, and how to read both.
+ */
 export interface RedactionInput {
   readonly packages: readonly string[];
+  readonly records: readonly string[];
   readonly read: EvidenceFileReader;
 }
 
@@ -104,6 +111,9 @@ type Rule = readonly [RedactionRuleId, RegExp, string];
 const ARN_WITH_ACCOUNT = /arn:aws[\w-]*:[\w-]*:[\w-]*:\d{12}:/g;
 const PACKAGE_DIRECTORY =
   /^(?:runs|transport-probes|variant-validations)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const VERIFICATION_RECORD = /^verifications\/([^/]+)\/[^/]+\.json$/;
+// A probe's journals sit under probe/journals/; only a trial's journals feed the validity gates.
+const TRIAL_JOURNAL = /\/trials\/[^/]+\/journals\//;
 const LEFTOVER_PATH = /\/(?:Users|home|var\/folders)\//;
 // Order matters: the checkout rule keeps the study-1/ tail before the home rule takes the rest.
 const PATH_RULES: readonly Rule[] = [
@@ -113,29 +123,38 @@ const PATH_RULES: readonly Rule[] = [
 ];
 
 /**
- * The derived public copy of `packages`: every indexed file redacted and checked, the manifest,
- * the run verdicts re-derived from the redacted ledgers, and the README.
+ * The derived public copy of `packages` and their verification `records`: every file redacted and
+ * checked, the manifest, the run verdicts re-derived from the redacted ledgers, and the README.
  *
  * @example
- * deriveRedactedCopy({ packages: ['runs/<id>'], read }).files.get('redaction-manifest.json');
+ * deriveRedactedCopy({ packages: ['runs/<id>'], records: [], read }).files.get('redaction-manifest.json');
  */
 export function deriveRedactedCopy(input: RedactionInput): RedactedCopy {
   assertPackageDirectories(input.packages);
+  assertRecordPaths(input.records, input.packages);
   const sources = input.packages.map((directory) => sourcesOf(loadPackage(directory, input.read), input.read));
-  const accountId = accountIdOf(sources.flatMap((one) => [one.index, ...one.files]).map((source) => source.text));
+  const records = input.records.map((path) => {
+    const bytes = input.read(path);
+    return { path, sha256: sha256Hex(bytes), text: textOf(bytes, path) };
+  });
+  const originals = [...sources.flatMap((one) => [one.index, ...one.files]), ...records];
+  const accountId = accountIdOf(originals.map((source) => source.text));
   const redacted = sources.map((one) => ({
     pkg: one.pkg,
     index: redactSource(one.index, accountId),
     files: one.files.map((source) => redactSource(source, accountId)),
   }));
-  const copied = redacted.flatMap((one) => [one.index, ...one.files]);
+  const copied = [
+    ...redacted.flatMap((one) => [one.index, ...one.files]),
+    ...records.map((source) => redactSource(source, accountId)),
+  ];
   const files = new Map(copied.map((file) => [file.entry.path, file.bytes]));
   const manifest: RedactionManifest = {
     record_type: 'redaction_manifest',
     schema_version: 1,
     derived_by: 'study-1/tools/redact-evidence.ts',
     authority:
-      'Each original package-index.json digest is the authority; this copy is a derived view of the packages (spec limitation 10).',
+      "Each original package-index.json digest is the authority for its package's files, and each verification record's original SHA-256, which results.json cites, for that record; this copy is a derived view (spec limitation 10).",
     rules: REDACTION_RULES,
     packages: redacted.map((one) => ({
       directory: one.pkg.directory,
@@ -168,6 +187,25 @@ export function assertPackageDirectories(directories: readonly string[]): void {
     throw new Error(
       `got packages ${JSON.stringify(directories)}; expected at least one distinct ` +
         '{runs|transport-probes|variant-validations}/<lowercase UUID> directory',
+    );
+  }
+}
+
+/**
+ * Refuses verification records that are not `verifications/<id>/<name>.json` for the id of a
+ * copied package, or that repeat, so every record belongs to a package of the copy.
+ *
+ * @example
+ * assertRecordPaths(['verifications/<id>/x-package-verification.json'], ['runs/<id>']);
+ */
+export function assertRecordPaths(records: readonly string[], packages: readonly string[]): void {
+  const ids = packages.map((directory) => directory.slice(directory.indexOf('/') + 1));
+  const misplaced = records.filter((path) => !ids.some((id) => VERIFICATION_RECORD.exec(path)?.[1] === id));
+  const repeated = records.filter((path, index) => records.indexOf(path) !== index);
+  if (misplaced.length > 0 || repeated.length > 0) {
+    throw new Error(
+      `got verification records ${JSON.stringify(records)}; expected distinct ` +
+        'verifications/<package id>/<name>.json paths, each for a copied package',
     );
   }
 }
@@ -271,6 +309,9 @@ function assertParses(path: string, bytes: Uint8Array): void {
 }
 
 function readmeFacts(manifest: RedactionManifest, rechecks: readonly TrialRecheck[]): ReadmeFacts {
+  const unchanged = (file: RedactionEntry): boolean => file.original_sha256 === file.redacted_sha256;
+  const records = manifest.files.filter((file) => file.path.startsWith('verifications/'));
+  const journals = manifest.files.filter((file) => TRIAL_JOURNAL.test(file.path));
   return {
     authority: manifest.authority,
     packages: manifest.packages,
@@ -284,8 +325,13 @@ function readmeFacts(manifest: RedactionManifest, rechecks: readonly TrialRechec
       };
     }),
     file_count: manifest.files.length,
-    unchanged_count: manifest.files.filter((file) => file.original_sha256 === file.redacted_sha256).length,
+    unchanged_count: manifest.files.filter(unchanged).length,
+    record_count: records.length,
+    unchanged_record_count: records.filter(unchanged).length,
     recheck_count: rechecks.length,
+    unchanged_ledger_count: rechecks.filter((one) => one.original_ledger_sha256 === one.redacted_ledger_sha256).length,
+    journal_count: journals.length,
+    redacted_journal_count: journals.filter((file) => !unchanged(file)).length,
   };
 }
 

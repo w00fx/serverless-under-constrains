@@ -20,6 +20,8 @@ import { redactionReadme } from '../../../tools/lib/redaction-readme.ts';
 import { InMemoryEvidence } from './support/in-memory-evidence.ts';
 import {
   ACCOUNT,
+  AUTHORIZED,
+  CHECKOUT,
   DOUBLE_REFUND,
   PASSING,
   PROBE,
@@ -34,11 +36,13 @@ import {
 const textOf = (bytes: Uint8Array | undefined): string => new TextDecoder().decode(bytes);
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
 const ARN = `arn:aws:sqs:us-east-1:${ACCOUNT}:source`;
+const RUN_ID = RUN.slice('runs/'.length);
+const PROBE_ID = PROBE.slice('transport-probes/'.length);
 
 describe('deriveRedactedCopy', () => {
   it('copies every indexed file, rewriting only the account id and the local paths', () => {
     const evidence = redactionEvidence();
-    const copy = deriveRedactedCopy({ packages: [RUN, PROBE], read: evidence.read });
+    const copy = deriveRedactedCopy({ packages: [RUN, PROBE], records: [], read: evidence.read });
     const runPaths = [...runPackageFiles([PASSING, DOUBLE_REFUND]).keys()].map((path) => `${RUN}/${path}`);
     assert.deepEqual(
       [...copy.files.keys()],
@@ -86,7 +90,7 @@ describe('deriveRedactedCopy', () => {
   it("records each file's digests and rules, each package's index digests, the recheck and the README", () => {
     const evidence = new InMemoryEvidence();
     evidence.putPackage(PROBE, probePackageFiles());
-    const copy = deriveRedactedCopy({ packages: [PROBE], read: evidence.read });
+    const copy = deriveRedactedCopy({ packages: [PROBE], records: [], read: evidence.read });
     const original = textOf(evidence.read(`${PROBE}/provisioning/stack.json`));
     const redacted = original.replaceAll(ACCOUNT, ACCOUNT_PLACEHOLDER);
     const index = evidence.indexDigest(PROBE);
@@ -96,7 +100,7 @@ describe('deriveRedactedCopy', () => {
       schema_version: 1,
       derived_by: 'study-1/tools/redact-evidence.ts',
       authority:
-        'Each original package-index.json digest is the authority; this copy is a derived view of the packages (spec limitation 10).',
+        "Each original package-index.json digest is the authority for its package's files, and each verification record's original SHA-256, which results.json cites, for that record; this copy is a derived view (spec limitation 10).",
       rules: REDACTION_RULES,
       packages,
       files: [
@@ -125,23 +129,118 @@ describe('deriveRedactedCopy', () => {
         ],
         file_count: 2,
         unchanged_count: 1,
+        record_count: 0,
+        unchanged_record_count: 0,
         recheck_count: 0,
+        unchanged_ledger_count: 0,
+        journal_count: 0,
+        redacted_journal_count: 0,
       }),
     );
   });
 
   it('counts each rule over every file it changed', () => {
-    const copy = deriveRedactedCopy({ packages: [RUN, PROBE], read: redactionEvidence().read });
+    const copy = deriveRedactedCopy({ packages: [RUN, PROBE], records: [], read: redactionEvidence().read });
     assert.match(textOf(copy.files.get('README.md')), /`aws-account-id`: .* Files changed: 3; replacements: 6\./);
     assert.match(textOf(copy.files.get('README.md')), /`temp-path`: .* Files changed: 1; replacements: 1\./);
     assert.match(textOf(copy.files.get('README.md')), /\n13 of the 18 files are byte-identical to the originals\.\n/);
+    assert.match(textOf(copy.files.get('README.md')), /; 2 of those\n {2}2 ledger snapshots are byte-identical/);
+  });
+
+  it('copies each verification record the same way after the packages, identified by its original digest', () => {
+    const evidence = redactionEvidence();
+    const redactedRecord = `verifications/${RUN_ID}/2026-10-07T06:00:00.000Z-package-verification.json`;
+    const cleanRecord = `verifications/${PROBE_ID}/2026-10-07T06:00:01.000Z-probe-usability-assessment.json`;
+    evidence.put(redactedRecord, {
+      record_type: 'package_verification',
+      package: `${CHECKOUT}study-1/evidence/${RUN}`,
+    });
+    evidence.put(cleanRecord, { record_type: 'probe_usability_assessment', usability: 'usable' });
+    const copy = deriveRedactedCopy({
+      packages: [RUN, PROBE],
+      records: [redactedRecord, cleanRecord],
+      read: evidence.read,
+    });
+    assert.deepEqual([...copy.files.keys()].slice(-5), [
+      redactedRecord,
+      cleanRecord,
+      'redaction-manifest.json',
+      'verdict-recheck.json',
+      'README.md',
+    ]);
+    const redacted = JSON.stringify({
+      record_type: 'package_verification',
+      package: `<checkout>/study-1/evidence/${RUN}`,
+    });
+    assert.equal(textOf(copy.files.get(redactedRecord)), redacted);
+    assert.deepEqual(copy.files.get(cleanRecord), evidence.read(cleanRecord));
+    const clean = textOf(evidence.read(cleanRecord));
+    assert.deepEqual(copy.manifest.files.slice(-2), [
+      {
+        path: redactedRecord,
+        original_sha256: sha(textOf(evidence.read(redactedRecord))),
+        redacted_sha256: sha(redacted),
+        rules_applied: { 'checkout-path': 1 },
+      },
+      { path: cleanRecord, original_sha256: sha(clean), redacted_sha256: sha(clean), rules_applied: {} },
+    ]);
+    const readme = textOf(copy.files.get('README.md'));
+    assert.match(readme, /packages and their 2 verification records\./);
+    assert.match(readme, /\nby path and SHA-256\. 1 of the 2 records are byte-identical to the originals\.\n/);
+  });
+
+  it('reads the account from the verification records too', () => {
+    const evidence = redactionEvidence();
+    const record = `verifications/${RUN_ID}/2026-10-07T06:00:00.000Z-package-verification.json`;
+    evidence.put(record, { role: 'arn:aws:iam::210987654321:role/other' });
+    assert.throws(() => deriveRedactedCopy({ packages: [RUN, PROBE], records: [record], read: evidence.read }), {
+      message: `the ARNs name accounts ["${ACCOUNT}","210987654321"]; expected exactly one, the study's sandbox`,
+    });
+  });
+
+  it('refuses a verification record outside the folder of a copied package, or named twice, before reading it', () => {
+    const evidence = redactionEvidence();
+    for (const records of [
+      ['verifications/00000000-0000-4000-8000-0000000000ff/x.json'],
+      [`verifications/${RUN_ID}/x.txt`],
+      [`verifications/${RUN_ID}/sub/x.json`],
+      [`evidence/${RUN_ID}/x.json`],
+      [`verifications/runs/${RUN_ID}/x.json`],
+      [`old/verifications/${RUN_ID}/x.json`],
+      [`verifications/${RUN_ID}/x.json.txt`],
+      [`verifications/${RUN_ID}/x.json`, `verifications/${PROBE_ID}/y.json`, `verifications/${RUN_ID}/x.json`],
+    ]) {
+      assert.throws(() => deriveRedactedCopy({ packages: [RUN, PROBE], records, read: evidence.read }), {
+        message:
+          `got verification records ${JSON.stringify(records)}; expected distinct ` +
+          'verifications/<package id>/<name>.json paths, each for a copied package',
+      });
+    }
+  });
+
+  it('counts the ledgers byte-identical to the originals and the trial journals that redaction changed', () => {
+    // A ledger that names the account, an unchanged trial journal, and a probe journal that is no trial's.
+    const noted = { ...AUTHORIZED, provider_ref: ARN };
+    const files = runPackageFiles([PASSING, { ...DOUBLE_REFUND, transactions: [noted, AUTHORIZED] }]);
+    files.set(`trials/${PASSING.id}/journals/provider-journal.jsonl`, '{"event":"committed"}\n');
+    const evidence = new InMemoryEvidence();
+    evidence.putPackage(RUN, files);
+    evidence.putPackage(
+      PROBE,
+      new Map([...probePackageFiles(), ['probe/journals/caller-journal.jsonl', `{"arn":"${ARN}"}\n`]]),
+    );
+    const copy = deriveRedactedCopy({ packages: [RUN, PROBE], records: [], read: evidence.read });
+    const readme = textOf(copy.files.get('README.md'));
+    assert.match(readme, /for the canonical run's 2 trials\n/);
+    assert.match(readme, /; 1 of those\n {2}2 ledger snapshots are byte-identical to the originals\./);
+    assert.match(readme, /redaction changed 2 of the 3 journal files here/);
   });
 
   it('re-derives the verdicts of run packages only', () => {
     const evidence = redactionEvidence();
     // The oracle of this validation trial disagrees with its ledger: rechecking it would refuse.
     evidence.putPackage(VALIDATION, runPackageFiles([{ ...PASSING, verdict: 'fail' }]));
-    const copy = deriveRedactedCopy({ packages: [RUN, PROBE, VALIDATION], read: evidence.read });
+    const copy = deriveRedactedCopy({ packages: [RUN, PROBE, VALIDATION], records: [], read: evidence.read });
     assert.deepEqual(
       copy.rechecks.map((one) => [one.trial_id, one.preservation_verdict.redacted_ledger]),
       [
@@ -158,7 +257,7 @@ describe('deriveRedactedCopy', () => {
       PROBE,
       new Map([['notes.json', { arn: ARN, at: '/var/folders/ab/cd/X/y', n: `9${ACCOUNT}3` }]]),
     );
-    assert.throws(() => deriveRedactedCopy({ packages: [PROBE], read: evidence.read }), {
+    assert.throws(() => deriveRedactedCopy({ packages: [PROBE], records: [], read: evidence.read }), {
       message: `redacted ${PROBE}/notes.json still holds the account id ${ACCOUNT} and the local path prefix /var/folders/; expected no environment identifier`,
     });
   });
@@ -170,13 +269,13 @@ describe('deriveRedactedCopy', () => {
     ] as const) {
       const evidence = new InMemoryEvidence();
       evidence.putPackage(PROBE, new Map([[path, content]]));
-      assert.throws(() => deriveRedactedCopy({ packages: [PROBE], read: evidence.read }), {
+      assert.throws(() => deriveRedactedCopy({ packages: [PROBE], records: [], read: evidence.read }), {
         message: `redacted ${PROBE}/${path} does not parse; expected the JSON of the original file`,
       });
     }
     const evidence = new InMemoryEvidence();
     evidence.putPackage(PROBE, new Map([['index.mjs', `const arn = "${ARN}"; {`]]));
-    const copy = deriveRedactedCopy({ packages: [PROBE], read: evidence.read });
+    const copy = deriveRedactedCopy({ packages: [PROBE], records: [], read: evidence.read });
     assert.equal(
       textOf(copy.files.get(`${PROBE}/index.mjs`)),
       `const arn = "${ARN.replace(ACCOUNT, ACCOUNT_PLACEHOLDER)}"; {`,
@@ -192,7 +291,7 @@ describe('deriveRedactedCopy', () => {
         ['raw.bin', Uint8Array.of(0x61, 0xff)],
       ]),
     );
-    assert.throws(() => deriveRedactedCopy({ packages: [PROBE], read }), {
+    assert.throws(() => deriveRedactedCopy({ packages: [PROBE], records: [], read }), {
       message: `${PROBE}/raw.bin is not UTF-8 at byte 1; expected UTF-8 text`,
     });
   });
@@ -200,11 +299,11 @@ describe('deriveRedactedCopy', () => {
   it('refuses packages that name no account, and malformed package directories', () => {
     const evidence = new InMemoryEvidence();
     evidence.putPackage(PROBE, new Map([['empty.json', {}]]));
-    assert.throws(() => deriveRedactedCopy({ packages: [PROBE], read: evidence.read }), {
+    assert.throws(() => deriveRedactedCopy({ packages: [PROBE], records: [], read: evidence.read }), {
       message: "the ARNs name accounts []; expected exactly one, the study's sandbox",
     });
     assert.throws(
-      () => deriveRedactedCopy({ packages: ['../runs'], read: evidence.read }),
+      () => deriveRedactedCopy({ packages: ['../runs'], records: [], read: evidence.read }),
       /got packages \["\.\.\/runs"\]/,
     );
   });

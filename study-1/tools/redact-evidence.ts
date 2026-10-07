@@ -2,12 +2,13 @@
 // Phase 3, spec limitation 10).
 // Usage (or `npm run redact [-- --check]`):
 //   node tools/redact-evidence.ts --evidence-root <dir> --out <dir> [--check] <package-dir> ...
-// Reads only: every original file is checked against its package-index entry, and nothing under
-// the evidence root is written. Writing refuses an existing output directory; `--check` writes
-// nothing and exits 1 when the copy on disk differs from a fresh derivation.
+// Each package's verification records, under verifications/<package id>/ when that folder exists,
+// are copied with it. Reads only: every original file is checked against its package-index entry,
+// and nothing under the evidence root is written. Writing refuses an existing output directory;
+// `--check` writes nothing and exits 1 when the copy on disk differs from a fresh derivation.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
 
@@ -34,7 +35,15 @@ if (root === undefined || out === undefined) {
   process.exit(2);
 }
 
-const copy = deriveRedactedCopy({ packages: positionals, read: (path) => readFileSync(join(root, path)) });
+const records = positionals.flatMap((directory) => {
+  const folder = `verifications/${basename(directory)}`;
+  return existsSync(join(root, folder))
+    ? readdirSync(join(root, folder))
+        .sort()
+        .map((name) => `${folder}/${name}`)
+    : [];
+});
+const copy = deriveRedactedCopy({ packages: positionals, records, read: (path) => readFileSync(join(root, path)) });
 
 if (values.check === true) {
   const onDisk = existsSync(out)
