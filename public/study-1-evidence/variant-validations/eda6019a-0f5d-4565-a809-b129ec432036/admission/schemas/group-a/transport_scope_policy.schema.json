@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/transport_scope_policy.schema.json",
+  "title": "transport_scope_policy (BR-RUA-028)",
+  "description": "The committed qualification scope policy: the critical entry points, the conservative source roots, the configuration projections (each selects a CloudFormation resource type and the property paths whose normalized values belong to the scope), the runtime property names, and the relevant production dependencies. Paths are normalized POSIX paths relative to the Study 1 project root.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "transport_scope_policy" },
+    "entry_points": {
+      "type": "array",
+      "items": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "source_roots": {
+      "type": "array",
+      "items": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "configuration_projections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "projection_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "resource_type": { "type": "string", "pattern": "^[A-Za-z0-9]+::[A-Za-z0-9]+::[A-Za-z0-9]+$" },
+          "property_paths": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[A-Za-z0-9]+(\\.[A-Za-z0-9]+)*$" },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": ["projection_id", "resource_type", "property_paths"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "runtime_properties": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+      "uniqueItems": true
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$" },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "entry_points",
+    "source_roots",
+    "configuration_projections",
+    "runtime_properties",
+    "dependencies"
+  ],
+  "additionalProperties": false
+}

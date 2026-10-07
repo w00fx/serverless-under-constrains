@@ -1,0 +1,1119 @@
+{
+ "Description": "Study 1 run-owned TRANSPORT_PROBE execution 4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5 (CAP-RUA).",
+ "Resources": {
+  "ExperimentCoreLedgerTable84EA353E": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "suc1-4f4a29c7-ledger",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/LedgerTable/Resource"
+   }
+  },
+  "ExperimentCoreExperimentJournalTable448229F7": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "suc1-4f4a29c7-experiment-journal",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/ExperimentJournalTable/Resource"
+   }
+  },
+  "ExperimentCoreCallerJournalTableB85C1509": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "StreamSpecification": {
+     "StreamViewType": "NEW_IMAGE"
+    },
+    "TableName": "suc1-4f4a29c7-caller-journal",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/CallerJournalTable/Resource"
+   }
+  },
+  "ExperimentCoreControlTableC2B11426": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "suc1-4f4a29c7-control",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/ControlTable/Resource"
+   }
+  },
+  "ExperimentCoreTrialRegistryTableE2BC3EDC": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "pk",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "TableName": "suc1-4f4a29c7-trial-registry",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/TrialRegistryTable/Resource"
+   }
+  },
+  "ExperimentCoreProviderLogGroup90EED0A4": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/suc/study-1/4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5/refund-provider",
+    "RetentionInDays": 731,
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Provider/LogGroup/Resource"
+   }
+  },
+  "ExperimentCoreProviderRoleD183CA86": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RoleName": "suc1-4f4a29c7-refund-provider",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Provider/Role/Resource"
+   }
+  },
+  "ExperimentCoreProviderRoleDefaultPolicy74033122": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreProviderLogGroup90EED0A4",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "dynamodb:PutItem",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreLedgerTable84EA353E",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "dynamodb:PutItem",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreExperimentJournalTable448229F7",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:ConditionCheckItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreControlTableC2B11426",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExperimentCoreProviderRoleDefaultPolicy74033122",
+    "Roles": [
+     {
+      "Ref": "ExperimentCoreProviderRoleD183CA86"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Provider/Role/DefaultPolicy/Resource"
+   }
+  },
+  "ExperimentCoreProviderFunction56CA6335": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "x86_64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-111122223333-us-east-1",
+     "S3Key": "b36173153d6d06172effcbcc31fc010e03eb53848e6a79a3aa73b2c555ae2477.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "SUC_EXECUTION_ID": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5",
+      "SUC_EXECUTION_KIND": "TRANSPORT_PROBE",
+      "SUC_TABLE_CONTROL": "suc1-4f4a29c7-control",
+      "SUC_TABLE_EXPERIMENT_JOURNAL": "suc1-4f4a29c7-experiment-journal",
+      "SUC_TABLE_LEDGER": "suc1-4f4a29c7-ledger"
+     }
+    },
+    "Handler": "index.handler",
+    "LoggingConfig": {
+     "LogGroup": {
+      "Ref": "ExperimentCoreProviderLogGroup90EED0A4"
+     }
+    },
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "ExperimentCoreProviderRoleD183CA86",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs24.x",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ],
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExperimentCoreProviderRoleDefaultPolicy74033122",
+    "ExperimentCoreProviderRoleD183CA86"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Provider/Function/Resource",
+    "aws:asset:path": "asset.b36173153d6d06172effcbcc31fc010e03eb53848e6a79a3aa73b2c555ae2477",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExperimentCoreProviderFunctionCurrentVersion73855420e5f37a85b96edb694fb79e3c976a1584": {
+   "Type": "AWS::Lambda::Version",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ExperimentCoreProviderFunction56CA6335"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Provider/Function/CurrentVersion/Resource",
+    "aws:cdk:do-not-refactor": true
+   }
+  },
+  "ExperimentCoreControllerLogGroup09A0FFD2": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/suc/study-1/4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5/treatment-controller",
+    "RetentionInDays": 731,
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Controller/LogGroup/Resource"
+   }
+  },
+  "ExperimentCoreControllerRole375C23C5": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RoleName": "suc1-4f4a29c7-treatment-controller",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Controller/Role/Resource"
+   }
+  },
+  "ExperimentCoreControllerRoleDefaultPolicy5ED8645A": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreControllerLogGroup09A0FFD2",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "dynamodb:PutItem",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreExperimentJournalTable448229F7",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreControlTableC2B11426",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "dynamodb:ListStreams",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "dynamodb:DescribeStream",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreCallerJournalTableB85C1509",
+         "StreamArn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "sqs:SendMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreControllerFailure5B3BAECA",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ExperimentCoreControllerRoleDefaultPolicy5ED8645A",
+    "Roles": [
+     {
+      "Ref": "ExperimentCoreControllerRole375C23C5"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Controller/Role/DefaultPolicy/Resource"
+   }
+  },
+  "ExperimentCoreControllerFunction36B2FDBA": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "x86_64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-111122223333-us-east-1",
+     "S3Key": "8410ea2a4b0a127a75b4c7d88053a05bc57f5498efe0f8f6b61b945175407c2e.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "SUC_TABLE_EXPERIMENT_JOURNAL": "suc1-4f4a29c7-experiment-journal",
+      "SUC_TABLE_CONTROL": "suc1-4f4a29c7-control",
+      "SUC_EXECUTION_KIND": "TRANSPORT_PROBE",
+      "SUC_EXECUTION_ID": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     }
+    },
+    "Handler": "index.handler",
+    "LoggingConfig": {
+     "LogGroup": {
+      "Ref": "ExperimentCoreControllerLogGroup09A0FFD2"
+     }
+    },
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "ExperimentCoreControllerRole375C23C5",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs24.x",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ],
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ExperimentCoreControllerRoleDefaultPolicy5ED8645A",
+    "ExperimentCoreControllerRole375C23C5"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Controller/Function/Resource",
+    "aws:asset:path": "asset.8410ea2a4b0a127a75b4c7d88053a05bc57f5498efe0f8f6b61b945175407c2e",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ExperimentCoreControllerFunctionCallerJournalStream86117CD6": {
+   "Type": "AWS::Lambda::EventSourceMapping",
+   "Properties": {
+    "BatchSize": 1,
+    "BisectBatchOnFunctionError": false,
+    "DestinationConfig": {
+     "OnFailure": {
+      "Destination": {
+       "Fn::GetAtt": [
+        "ExperimentCoreControllerFailure5B3BAECA",
+        "Arn"
+       ]
+      }
+     }
+    },
+    "EventSourceArn": {
+     "Fn::GetAtt": [
+      "ExperimentCoreCallerJournalTableB85C1509",
+      "StreamArn"
+     ]
+    },
+    "FilterCriteria": {
+     "Filters": [
+      {
+       "Pattern": "{\"eventName\":[\"INSERT\"],\"dynamodb\":{\"NewImage\":{\"record_type\":{\"S\":[\"caller_timeout_recorded\"]}}}}"
+      }
+     ]
+    },
+    "FunctionName": {
+     "Ref": "ExperimentCoreControllerFunction36B2FDBA"
+    },
+    "MaximumBatchingWindowInSeconds": 0,
+    "MaximumRecordAgeInSeconds": 3600,
+    "MaximumRetryAttempts": 2,
+    "ParallelizationFactor": 1,
+    "StartingPosition": "TRIM_HORIZON",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/Controller/Function/CallerJournalStream/Resource"
+   }
+  },
+  "ExperimentCoreControllerFailure5B3BAECA": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "QueueName": "suc1-4f4a29c7-controller-failure",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ExperimentCore/ControllerFailure/Resource"
+   }
+  },
+  "ProbeCallerLogGroup8020B263": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/suc/study-1/4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5/probe-caller",
+    "RetentionInDays": 731,
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ProbeCaller/Caller/LogGroup/Resource"
+   }
+  },
+  "ProbeCallerRole7B33C479": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RoleName": "suc1-4f4a29c7-probe-caller",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ProbeCaller/Caller/Role/Resource"
+   }
+  },
+  "ProbeCallerRoleDefaultPolicy07876A3E": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ProbeCallerLogGroup8020B263",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:GetItem",
+        "dynamodb:ConditionCheckItem"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ExperimentCoreCallerJournalTableB85C1509",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "ExperimentCoreProviderFunctionCurrentVersion73855420e5f37a85b96edb694fb79e3c976a1584"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ProbeCallerRoleDefaultPolicy07876A3E",
+    "Roles": [
+     {
+      "Ref": "ProbeCallerRole7B33C479"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ProbeCaller/Caller/Role/DefaultPolicy/Resource"
+   }
+  },
+  "ProbeCallerFunctionF830558B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "x86_64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-111122223333-us-east-1",
+     "S3Key": "7f83ee51514cc377dd828218e4a56916f206e21b397fd68e0bac4e205cfb8a5f.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "SUC_EXECUTION_ID": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5",
+      "SUC_EXECUTION_KIND": "TRANSPORT_PROBE",
+      "SUC_PROVIDER_FUNCTION_NAME": {
+       "Ref": "ExperimentCoreProviderFunction56CA6335"
+      },
+      "SUC_PROVIDER_QUALIFIER": {
+       "Fn::GetAtt": [
+        "ExperimentCoreProviderFunctionCurrentVersion73855420e5f37a85b96edb694fb79e3c976a1584",
+        "Version"
+       ]
+      },
+      "SUC_TABLE_CALLER_JOURNAL": "suc1-4f4a29c7-caller-journal"
+     }
+    },
+    "Handler": "index.handler",
+    "LoggingConfig": {
+     "LogGroup": {
+      "Ref": "ProbeCallerLogGroup8020B263"
+     }
+    },
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "ProbeCallerRole7B33C479",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs24.x",
+    "Tags": [
+     {
+      "Key": "suc:expires_at",
+      "Value": "2026-10-07T04:06:39.012Z"
+     },
+     {
+      "Key": "suc:managed_by",
+      "Value": "rua-operator-cli"
+     },
+     {
+      "Key": "suc:project",
+      "Value": "serverless-under-constraints"
+     },
+     {
+      "Key": "suc:run_id",
+      "Value": "4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5"
+     },
+     {
+      "Key": "suc:study_id",
+      "Value": "study-1"
+     }
+    ],
+    "Timeout": 10
+   },
+   "DependsOn": [
+    "ProbeCallerRoleDefaultPolicy07876A3E",
+    "ProbeCallerRole7B33C479"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ProbeCaller/Caller/Function/Resource",
+    "aws:asset:path": "asset.7f83ee51514cc377dd828218e4a56916f206e21b397fd68e0bac4e205cfb8a5f",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ProbeCallerFunctionCurrentVersion2ED8371E27fda4424c5792ba21f1357349d8f403": {
+   "Type": "AWS::Lambda::Version",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "ProbeCallerFunctionF830558B"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "SucRua-probe-4f4a29c7/ProbeCaller/Caller/Function/CurrentVersion/Resource",
+    "aws:cdk:do-not-refactor": true
+   }
+  }
+ },
+ "Outputs": {
+  "ProviderFunctionName": {
+   "Value": {
+    "Ref": "ExperimentCoreProviderFunction56CA6335"
+   }
+  },
+  "ProviderVersion": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ExperimentCoreProviderFunctionCurrentVersion73855420e5f37a85b96edb694fb79e3c976a1584",
+     "Version"
+    ]
+   }
+  },
+  "ControllerFunctionName": {
+   "Value": {
+    "Ref": "ExperimentCoreControllerFunction36B2FDBA"
+   }
+  },
+  "ControllerFailureQueueUrl": {
+   "Value": {
+    "Ref": "ExperimentCoreControllerFailure5B3BAECA"
+   }
+  },
+  "ProbeCallerFunctionName": {
+   "Value": {
+    "Ref": "ProbeCallerFunctionF830558B"
+   }
+  },
+  "ProbeCallerVersion": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ProbeCallerFunctionCurrentVersion2ED8371E27fda4424c5792ba21f1357349d8f403",
+     "Version"
+    ]
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

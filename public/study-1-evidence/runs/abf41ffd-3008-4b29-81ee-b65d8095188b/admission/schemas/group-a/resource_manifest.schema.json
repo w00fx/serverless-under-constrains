@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/resource_manifest.schema.json",
+  "title": "resource_manifest (BR-RUA-040, BR-RUA-050)",
+  "description": "The frozen result of provisioning (design §9.8 D4): succeeded, partial or failed, the stack name and unique stack id, every discovered stack resource, the ownership tags, the stack outputs, the immutable provider version, the post-deploy configuration snapshot and the timestamps. Tags and outputs are key/value lists, and the configuration snapshot is a list of attribute entries, because their keys (suc:run_id, CloudFormation output names, AWS attribute names) are not snake_case property names. A succeeded manifest has a stack id, a provider version, a configuration snapshot and a completion time, because trials may start only after successful provisioning.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "resource_manifest" },
+    "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "execution_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "provisioning_status": { "enum": ["succeeded", "partial", "failed"] },
+    "stack_name": {
+      "description": "SucRua-<kind>-<first 8 hex digits of the execution id> (design §9.7): the kind is run, validation or probe, as the execution identity of the manifest says. That the digits are the identity's prefix is a check of the manifest builder.",
+      "type": "string",
+      "pattern": "^SucRua-(run|probe|validation)-[0-9a-f]{8}$"
+    },
+    "stack_id": {
+      "type": "string",
+      "pattern": "^arn:aws:cloudformation:[a-z]{2}(-[a-z]+)+-[0-9]+:[0-9]{12}:stack/[A-Za-z][A-Za-z0-9-]{0,127}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "logical_id": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+          "resource_type": { "type": "string", "pattern": "^[A-Za-z0-9]+::[A-Za-z0-9]+::[A-Za-z0-9]+$" },
+          "physical_id": { "type": "string", "minLength": 1 },
+          "resource_status": { "$ref": "_defs.schema.json#/$defs/upper_snake" }
+        },
+        "required": ["logical_id", "resource_type", "resource_status"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "ownership_tags": {
+      "description": "The BR-RUA-050 ownership tags of the execution stack: each of suc:project, suc:study_id, suc:run_id, suc:managed_by and suc:expires_at exactly once, and suc:variant_id at most once, valued conventional or durable. The tag marks a variant-specific stack, so only a variant validation's stack may carry it: the run stack is shared by both variants and the transport-probe stack belongs to no variant, so both omit it. A generic project tag alone never authorizes deletion.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "enum": ["suc:project", "suc:study_id", "suc:run_id", "suc:managed_by", "suc:expires_at", "suc:variant_id"]
+          },
+          "value": { "type": "string", "minLength": 1, "pattern": "^[^@]*$" }
+        },
+        "required": ["key", "value"],
+        "additionalProperties": false,
+        "if": { "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] },
+        "then": { "properties": { "value": { "enum": ["conventional", "durable"] } } }
+      },
+      "allOf": [
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:project" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:study_id" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:run_id" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:managed_by" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:expires_at" } }, "required": ["key"] },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": { "type": "object", "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      ],
+      "minItems": 5,
+      "uniqueItems": true
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+          "value": { "type": "string" }
+        },
+        "required": ["key", "value"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "provider_version": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "configuration": {
+      "description": "The post-deploy configuration snapshot (design §9.8 D4): one entry per read attribute of a stack resource, such as an event source mapping's BatchSize or a queue's VisibilityTimeout. The value is the canonical JSON text of what the AWS API returned, because AWS member names are not BR-RUA-033 property names. The schema checks only that the text is non-empty: that it parses and equals canonicalJson of its parse, and one entry per (logical_id, attribute_path), are code-level checks of the manifest builder (WP-24 buildResourceManifest, design §5.3).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/configuration_attribute" },
+      "uniqueItems": true
+    },
+    "deploy_started_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" },
+    "deploy_completed_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" },
+    "frozen_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "provisioning_status",
+    "stack_name",
+    "resources",
+    "ownership_tags",
+    "outputs",
+    "deploy_started_at",
+    "frozen_at"
+  ],
+  "oneOf": [
+    {
+      "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["run_id"]
+    },
+    {
+      "properties": { "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["variant_validation_id"]
+    },
+    {
+      "properties": { "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["transport_probe_id"]
+    }
+  ],
+  "allOf": [
+    {
+      "if": { "required": ["run_id"] },
+      "then": {
+        "properties": {
+          "stack_name": { "type": "string", "pattern": "^SucRua-run-" },
+          "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } }
+        }
+      }
+    },
+    {
+      "if": { "required": ["variant_validation_id"] },
+      "then": { "properties": { "stack_name": { "type": "string", "pattern": "^SucRua-validation-" } } }
+    },
+    {
+      "if": { "required": ["transport_probe_id"] },
+      "then": {
+        "properties": {
+          "stack_name": { "type": "string", "pattern": "^SucRua-probe-" },
+          "ownership_tags": { "not": { "$ref": "#/$defs/tags_with_variant" } }
+        }
+      }
+    }
+  ],
+  "if": {
+    "properties": { "provisioning_status": { "const": "succeeded" } },
+    "required": ["provisioning_status"]
+  },
+  "then": {
+    "properties": {
+      "stack_id": { "type": "string" },
+      "resources": { "type": "array", "minItems": 1 },
+      "provider_version": { "type": "string" },
+      "configuration": { "type": "array", "minItems": 1 },
+      "deploy_completed_at": { "type": "string" }
+    },
+    "required": ["stack_id", "provider_version", "configuration", "deploy_completed_at"]
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tags_with_variant": {
+      "description": "An ownership tag list that carries suc:variant_id (BR-RUA-050: shared resources omit it).",
+      "type": "array",
+      "contains": { "type": "object", "properties": { "key": { "const": "suc:variant_id" } }, "required": ["key"] }
+    },
+    "configuration_attribute": {
+      "type": "object",
+      "properties": {
+        "logical_id": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+        "attribute_path": { "type": "string", "pattern": "^[A-Za-z0-9]+(\\.[A-Za-z0-9]+)*$" },
+        "canonical_json": { "type": "string", "minLength": 1 }
+      },
+      "required": ["logical_id", "attribute_path", "canonical_json"],
+      "additionalProperties": false
+    }
+  }
+}

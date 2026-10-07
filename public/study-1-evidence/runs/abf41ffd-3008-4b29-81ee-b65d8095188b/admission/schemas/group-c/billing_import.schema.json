@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/billing_import.schema.json",
+  "title": "billing_import (catalogue group C, row 86)",
+  "description": "The payload of a BILLING amendment (BR-RUA-047; design §8.17): the authoritative export, the attribution window, the lines attributed by exact identity, the excluded lines with their reasons and the billed-cost check. A conclusive check states the exact USD total and has only USD lines; unverified states its reasons and no total; a period that is not final is unverified. No exchange-rate conversion or proportional allocation ever happens.",
+  "type": "object",
+  "$defs": {
+    "billing_export": {
+      "type": "object",
+      "properties": {
+        "export_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        },
+        "period_start": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "period_end": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "period_final": {
+          "type": "boolean"
+        }
+      },
+      "required": ["export_sha256", "period_start", "period_end", "period_final"],
+      "additionalProperties": false
+    },
+    "billing_line": {
+      "type": "object",
+      "properties": {
+        "line_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "product_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usage_start": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "usage_end": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "cost": {
+          "$ref": "_defs.schema.json#/$defs/money_decimal"
+        }
+      },
+      "required": [
+        "line_id",
+        "product_code",
+        "operation",
+        "resource_id",
+        "usage_start",
+        "usage_end",
+        "currency",
+        "cost"
+      ],
+      "additionalProperties": false
+    },
+    "excluded_line": {
+      "type": "object",
+      "properties": {
+        "line_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exclusion": {
+          "enum": [
+            "TAX",
+            "CREDIT",
+            "REFUND",
+            "DISCOUNT",
+            "FEE",
+            "SAVINGS_PLAN",
+            "OTHER_ACCOUNT",
+            "NOT_RUN_OWNED",
+            "OUTSIDE_USAGE_WINDOW"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["line_id", "exclusion", "detail"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    },
+    {
+      "if": {
+        "properties": {
+          "billed_cost_check": {
+            "enum": ["within_limit", "breached"]
+          }
+        },
+        "required": ["billed_cost_check"]
+      },
+      "then": {
+        "properties": {
+          "attributed_total_usd": true,
+          "reasons": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "lines_used": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "const": "USD"
+                }
+              }
+            }
+          },
+          "billing_export": {
+            "type": "object",
+            "properties": {
+              "period_final": {
+                "const": true
+              }
+            }
+          }
+        },
+        "required": ["attributed_total_usd"]
+      },
+      "else": {
+        "properties": {
+          "attributed_total_usd": false,
+          "reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "billing_import"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "original_package_index_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "billing_export": {
+      "$ref": "#/$defs/billing_export"
+    },
+    "attribution_window_start": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "attribution_window_end": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "lines_used": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/billing_line"
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/excluded_line"
+      }
+    },
+    "ceiling_usd": {
+      "$ref": "_defs.schema.json#/$defs/money_decimal"
+    },
+    "billed_cost_check": {
+      "enum": ["within_limit", "breached", "unverified"]
+    },
+    "attributed_total_usd": {
+      "$ref": "_defs.schema.json#/$defs/money_decimal"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "_defs.schema.json#/$defs/structured_reason"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "code": {
+                "enum": [
+                  "INCOMPLETE_ATTRIBUTION",
+                  "NON_USD_LINE",
+                  "MIXED_CURRENCY",
+                  "INCOMPLETE_PERIOD",
+                  "SHARED_OR_UNOWNED_CHARGE"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "imported_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "original_package_index_sha256",
+    "billing_export",
+    "attribution_window_start",
+    "attribution_window_end",
+    "lines_used",
+    "exclusions",
+    "ceiling_usd",
+    "billed_cost_check",
+    "reasons",
+    "imported_at"
+  ],
+  "additionalProperties": false
+}

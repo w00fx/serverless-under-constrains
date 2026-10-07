@@ -1,0 +1,652 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/comparison_assessment.schema.json",
+  "title": "comparison_assessment (catalogue group C, row 73)",
+  "description": "summary/comparison-assessment.json (RUN only; BR-RUA-007, BR-RUA-031, BR-RUA-052; design §8.14): the eight equality projections computed from frozen manifests and the inventoried template, and the nine eligibility conditions. A projection fails only on an undeclared difference; the comparison is eligible exactly when every condition holds. A pass or fail verdict never affects eligibility. An eligible comparison cites the four oracle results and its BR-RUA-007 equality passes (BR-RUA-031).",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "$ref": "_defs.schema.json#/$defs/package_relative_path"
+        },
+        "artifact_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_sha256"],
+      "additionalProperties": false
+    },
+    "projected_value": {
+      "type": "object",
+      "properties": {
+        "trial_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "value": {
+          "not": {
+            "type": "null"
+          }
+        }
+      },
+      "required": ["trial_id", "value"],
+      "additionalProperties": false
+    },
+    "difference": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "declared": {
+          "type": "boolean"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/projected_value"
+          },
+          "minItems": 2
+        }
+      },
+      "required": ["field", "declared", "values"],
+      "additionalProperties": false
+    },
+    "equality_projection": {
+      "type": "object",
+      "properties": {
+        "projection_id": {
+          "enum": [
+            "financial_inputs",
+            "control_parameters",
+            "treatment_parameters",
+            "message_source_protocol",
+            "provider_configuration",
+            "controller_configuration",
+            "caller_timing",
+            "observation_window"
+          ]
+        },
+        "result": {
+          "enum": ["pass", "fail", "indeterminate"]
+        },
+        "compared_fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "differences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/difference"
+          }
+        },
+        "evidence_refs": {
+          "$ref": "_defs.schema.json#/$defs/evidence_refs"
+        }
+      },
+      "required": ["projection_id", "result", "compared_fields", "differences", "evidence_refs"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "const": "pass"
+              }
+            },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "differences": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "declared": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "const": "fail"
+              }
+            },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "differences": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "declared": {
+                      "const": false
+                    }
+                  },
+                  "required": ["declared"]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "enum": ["pass", "fail"]
+              }
+            },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "comparison_check": {
+      "type": "object",
+      "properties": {
+        "check_id": {
+          "enum": [
+            "FOUR_ORACLE_RESULTS",
+            "ALL_TRIALS_VALID",
+            "CONTROLS_VERIFIED",
+            "TREATMENTS_VERIFIED",
+            "EQUALITY_PASSES",
+            "EVIDENCE_INTEGRITY_VERIFIED",
+            "LATE_EVIDENCE_ACCEPTABLE",
+            "NO_CONTRADICTORY_AMENDMENT",
+            "NO_ISOLATION_COMPROMISING_LEAK"
+          ]
+        },
+        "holds": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "$ref": "_defs.schema.json#/$defs/structured_reasons"
+        }
+      },
+      "required": ["check_id", "holds", "reasons"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "eligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "comparison_ineligibility_reasons": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "ineligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "comparison_ineligibility_reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "eligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "eligibility_checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "holds": {
+                  "const": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "ineligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "eligibility_checks": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "properties": {
+                "holds": {
+                  "const": false
+                }
+              },
+              "required": ["holds"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "equality_result": {
+            "const": "pass"
+          }
+        },
+        "required": ["equality_result"]
+      },
+      "then": {
+        "properties": {
+          "equality_projections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "const": "pass"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "comparison_eligibility": {
+            "const": "eligible"
+          }
+        },
+        "required": ["comparison_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "oracle_result_refs": {
+            "type": "array",
+            "minItems": 4
+          },
+          "equality_result": {
+            "const": "pass"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "comparison_assessment"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": false,
+    "transport_probe_id": false,
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "oracle_result_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact_ref"
+      },
+      "maxItems": 4
+    },
+    "equality_projections": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "financial_inputs"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "control_parameters"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "treatment_parameters"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "message_source_protocol"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "provider_configuration"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "controller_configuration"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "caller_timing"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/equality_projection"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "projection_id": {
+                  "const": "observation_window"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "minItems": 8,
+      "maxItems": 8,
+      "items": false
+    },
+    "equality_result": {
+      "enum": ["pass", "fail", "indeterminate"]
+    },
+    "eligibility_checks": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "FOUR_ORACLE_RESULTS"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "ALL_TRIALS_VALID"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "CONTROLS_VERIFIED"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "TREATMENTS_VERIFIED"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "EQUALITY_PASSES"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "EVIDENCE_INTEGRITY_VERIFIED"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "LATE_EVIDENCE_ACCEPTABLE"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "NO_CONTRADICTORY_AMENDMENT"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/comparison_check"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "check_id": {
+                  "const": "NO_ISOLATION_COMPROMISING_LEAK"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "minItems": 9,
+      "maxItems": 9,
+      "items": false
+    },
+    "comparison_eligibility": {
+      "enum": ["eligible", "ineligible"]
+    },
+    "comparison_ineligibility_reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "assessed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "run_id",
+    "execution_manifest_sha256",
+    "oracle_result_refs",
+    "equality_projections",
+    "equality_result",
+    "eligibility_checks",
+    "comparison_eligibility",
+    "comparison_ineligibility_reasons",
+    "assessed_at"
+  ],
+  "additionalProperties": false
+}

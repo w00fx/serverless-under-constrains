@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/attempt_registered.schema.json",
+  "title": "attempt_registered (catalogue group B, row 21)",
+  "description": "Caller journal: the durable pre-dispatch registration of one physical attempt, written in the same transaction as the PRE_DISPATCH attempt state (BR-RUA-021, INV-RUA-001). provider_qualifier is the immutable provider version the attempt will invoke.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "attempt_registered"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["conventional_caller", "durable_caller", "probe_caller"]
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "payment_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "amount_minor": {
+      "$ref": "_defs.schema.json#/$defs/amount_minor"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "provider_qualifier": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "attempt_id",
+    "provider_request_id",
+    "refund_request_id",
+    "payment_id",
+    "amount_minor",
+    "currency",
+    "provider_qualifier"
+  ],
+  "additionalProperties": false
+}

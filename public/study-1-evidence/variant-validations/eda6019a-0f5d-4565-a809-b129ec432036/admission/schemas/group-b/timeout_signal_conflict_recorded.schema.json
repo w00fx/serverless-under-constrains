@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/timeout_signal_conflict_recorded.schema.json",
+  "title": "timeout_signal_conflict_recorded (catalogue group B, row 41)",
+  "description": "Controller journal: a different caller event attempted the transition an existing signal already made; conflicting control evidence makes treatment fidelity invalid (BR-RUA-025).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "timeout_signal_conflict_recorded"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["treatment_controller"]
+    },
+    "caller_timeout_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "existing_caller_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "treatment_state": {
+      "enum": ["TIMEOUT_SIGNALLED", "TIMEOUT_OBSERVED", "RESPONSE_RELEASED"]
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "caller_timeout_event_id",
+    "existing_caller_event_id",
+    "attempt_id",
+    "treatment_state"
+  ],
+  "additionalProperties": false
+}

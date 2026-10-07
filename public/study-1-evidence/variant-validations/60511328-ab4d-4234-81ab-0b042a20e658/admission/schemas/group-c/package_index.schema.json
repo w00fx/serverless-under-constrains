@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/package_index.schema.json",
+  "title": "package_index (catalogue group C, row 79)",
+  "description": "package-index.json, written last (BR-RUA-044; design §7): every finalized package file except itself, sorted by artifact_path with unique paths, late evidence, cleanup, summaries and the complete coordination journal included. The execution kind names the one execution identity the package carries.",
+  "type": "object",
+  "$defs": {
+    "index_entry": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "allOf": [
+            {
+              "$ref": "_defs.schema.json#/$defs/package_relative_path"
+            },
+            {
+              "not": {
+                "type": "string",
+                "pattern": "^package-index\\.json$"
+              }
+            }
+          ]
+        },
+        "artifact_class": {
+          "enum": [
+            "environment_input",
+            "execution_manifest",
+            "preflight_journal",
+            "source_provenance",
+            "oracle_revision_check",
+            "transport_scope_snapshot",
+            "schema_file",
+            "deployment_assembly_file",
+            "deployment_assembly_inventory",
+            "coordination_journal",
+            "coordination_prefix_checkpoint",
+            "provisioning_journal",
+            "resource_manifest",
+            "runner_journal",
+            "provider_warmup_journal",
+            "caller_canary_journal",
+            "controller_canary_journal",
+            "provider_execution_configuration",
+            "trial_manifest",
+            "payment",
+            "approved_decision",
+            "published_message",
+            "provider_trial_configuration",
+            "treatment_state_snapshot",
+            "trial_registration",
+            "caller_journal",
+            "provider_journal",
+            "controller_journal",
+            "ledger_snapshot",
+            "source_observations",
+            "dlq_observations",
+            "dlq_snapshot",
+            "settlement_samples",
+            "durable_execution_metadata",
+            "telemetry_availability",
+            "attempt_projection",
+            "oracle_result",
+            "transport_probe_result",
+            "evidence_index",
+            "late_evidence_stream",
+            "late_evidence_assessment",
+            "pre_cleanup_snapshot",
+            "cleanup_journal",
+            "cleanup_result",
+            "leak_audit_result",
+            "comparison_assessment",
+            "safety_assessment",
+            "run_summary",
+            "validation_summary",
+            "transport_probe_summary",
+            "operational_recovery_record",
+            "billing_import",
+            "billing_export_file"
+          ]
+        },
+        "derivation": {
+          "enum": ["primary", "derived"]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_class", "derivation", "bytes", "sha256"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "execution_kind": {
+            "const": "RUN"
+          }
+        },
+        "required": ["execution_kind"]
+      },
+      "then": {
+        "properties": {
+          "run_id": true,
+          "variant_validation_id": false,
+          "transport_probe_id": false
+        },
+        "required": ["run_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "execution_kind": {
+            "const": "TRANSPORT_PROBE"
+          }
+        },
+        "required": ["execution_kind"]
+      },
+      "then": {
+        "properties": {
+          "transport_probe_id": true,
+          "run_id": false,
+          "variant_validation_id": false
+        },
+        "required": ["transport_probe_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "execution_kind": {
+            "const": "VARIANT_VALIDATION"
+          }
+        },
+        "required": ["execution_kind"]
+      },
+      "then": {
+        "properties": {
+          "variant_validation_id": true,
+          "run_id": false,
+          "transport_probe_id": false
+        },
+        "required": ["variant_validation_id"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "package_index"
+    },
+    "execution_kind": {
+      "enum": ["RUN", "TRANSPORT_PROBE", "VARIANT_VALIDATION"]
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/index_entry"
+      },
+      "minItems": 1,
+      "x-rua-evidence-ref-order": true
+    },
+    "created_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": ["schema_version", "record_type", "execution_kind", "execution_manifest_sha256", "entries", "created_at"],
+  "additionalProperties": false
+}

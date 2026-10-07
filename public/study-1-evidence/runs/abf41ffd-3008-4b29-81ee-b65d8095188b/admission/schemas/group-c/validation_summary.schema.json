@@ -1,0 +1,487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/validation_summary.schema.json",
+  "title": "validation_summary (catalogue group C, row 71)",
+  "description": "summary/validation-summary.json (BR-RUA-038; design §6.3, §8.15): one variant, two trials (CONTROL then COMMIT_THEN_TIMEOUT), no run_id and no cross-variant field. A conclusive status (verified or failed) needs a valid validation, a COMPLETED lifecycle, verified evidence integrity, clean closure, no safety breach and acceptable late evidence; failed means a trustworthy control fail; verified means control pass with a conclusive treatment. Any status other than verified states its reasons.",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "$ref": "_defs.schema.json#/$defs/package_relative_path"
+        },
+        "artifact_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_sha256"],
+      "additionalProperties": false
+    },
+    "trial_result": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "trial_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "variant_id": {
+          "enum": ["conventional", "durable"]
+        },
+        "scenario": {
+          "enum": ["CONTROL", "COMMIT_THEN_TIMEOUT"]
+        },
+        "execution_status": {
+          "enum": ["completed", "incomplete", "not_started"]
+        },
+        "oracle_result_ref": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "preservation_verdict": {
+          "enum": ["pass", "fail", "indeterminate"]
+        },
+        "correct_completion": {
+          "enum": [true, false, null]
+        },
+        "incompletion_reasons": {
+          "$ref": "_defs.schema.json#/$defs/structured_reasons"
+        }
+      },
+      "required": ["sequence", "trial_id", "variant_id", "scenario", "execution_status", "incompletion_reasons"],
+      "dependentRequired": {
+        "oracle_result_ref": ["preservation_verdict", "correct_completion"],
+        "preservation_verdict": ["oracle_result_ref"],
+        "correct_completion": ["oracle_result_ref"]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "execution_status": {
+                "const": "completed"
+              }
+            },
+            "required": ["execution_status"]
+          },
+          "then": {
+            "properties": {
+              "oracle_result_ref": true
+            },
+            "required": ["oracle_result_ref"]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "oracle_result_ref": true
+              },
+              "required": ["oracle_result_ref"]
+            }
+          },
+          "then": {
+            "properties": {
+              "incompletion_reasons": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "preservation_verdict": {
+                "const": "indeterminate"
+              }
+            },
+            "required": ["preservation_verdict"]
+          },
+          "then": {
+            "properties": {
+              "correct_completion": {
+                "const": null
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "preservation_verdict": {
+                "const": "fail"
+              }
+            },
+            "required": ["preservation_verdict"]
+          },
+          "then": {
+            "properties": {
+              "correct_completion": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "preservation_verdict": {
+                "const": "pass"
+              }
+            },
+            "required": ["preservation_verdict"]
+          },
+          "then": {
+            "properties": {
+              "correct_completion": {
+                "enum": [true, false]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "variant_id": {
+            "const": "conventional"
+          }
+        },
+        "required": ["variant_id"]
+      },
+      "then": {
+        "properties": {
+          "trial_results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variant_id": {
+                  "const": "conventional"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "variant_id": {
+            "const": "durable"
+          }
+        },
+        "required": ["variant_id"]
+      },
+      "then": {
+        "properties": {
+          "trial_results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "variant_id": {
+                  "const": "durable"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_validation_status": {
+            "enum": ["verified", "failed"]
+          }
+        },
+        "required": ["implementation_validation_status"]
+      },
+      "then": {
+        "properties": {
+          "validation_validity": {
+            "const": "valid"
+          },
+          "validation_terminal_reason": {
+            "const": "COMPLETED"
+          },
+          "cleanup_status": {
+            "const": "succeeded"
+          },
+          "leak_audit_status": {
+            "const": "clean"
+          },
+          "lease_status": {
+            "const": "released"
+          },
+          "safety_status": {
+            "enum": ["within_limits", "unverified"]
+          },
+          "late_evidence_status": {
+            "enum": ["none", "consistent"]
+          },
+          "evidence_integrity_status": {
+            "const": "verified"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_validation_status": {
+            "const": "verified"
+          }
+        },
+        "required": ["implementation_validation_status"]
+      },
+      "then": {
+        "properties": {
+          "status_reasons": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "trial_results": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "object",
+                "properties": {
+                  "preservation_verdict": {
+                    "enum": ["pass"]
+                  }
+                },
+                "required": ["preservation_verdict"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "preservation_verdict": {
+                    "enum": ["pass", "fail"]
+                  }
+                },
+                "required": ["preservation_verdict"]
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2,
+            "items": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_validation_status": {
+            "const": "failed"
+          }
+        },
+        "required": ["implementation_validation_status"]
+      },
+      "then": {
+        "properties": {
+          "status_reasons": {
+            "type": "array",
+            "minItems": 1
+          },
+          "trial_results": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "object",
+                "properties": {
+                  "preservation_verdict": {
+                    "enum": ["fail"]
+                  }
+                },
+                "required": ["preservation_verdict"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "preservation_verdict": {
+                    "enum": ["pass", "fail"]
+                  }
+                },
+                "required": ["preservation_verdict"]
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2,
+            "items": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "implementation_validation_status": {
+            "const": "indeterminate"
+          }
+        },
+        "required": ["implementation_validation_status"]
+      },
+      "then": {
+        "properties": {
+          "status_reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "validation_summary"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "run_id": false,
+    "transport_probe_id": false,
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "variant_id": {
+      "enum": ["conventional", "durable"]
+    },
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "trial_results": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/trial_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sequence": {
+                  "const": 1
+                },
+                "scenario": {
+                  "const": "CONTROL"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/trial_result"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sequence": {
+                  "const": 2
+                },
+                "scenario": {
+                  "const": "COMMIT_THEN_TIMEOUT"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2,
+      "items": false
+    },
+    "validation_terminal_reason": {
+      "enum": [
+        "COMPLETED",
+        "LEASE_ACQUISITION_FAILED",
+        "LEASE_LOST",
+        "LEASE_RELEASE_FAILED",
+        "LEASE_STATE_UNVERIFIED",
+        "PROVISIONING_FAILED",
+        "VALIDATION_INCOMPLETE",
+        "SAFETY_DEADLINE",
+        "SAFETY_LIMIT_EXCEEDED",
+        "OPERATOR_ABORT",
+        "INTERRUPTED",
+        "CLEANUP_INCOMPLETE",
+        "LEAK_AUDIT_NOT_CLEAN",
+        "EVIDENCE_FINALIZATION_FAILED"
+      ]
+    },
+    "validation_validity": {
+      "enum": ["valid", "invalid", "indeterminate"]
+    },
+    "implementation_validation_status": {
+      "enum": ["verified", "failed", "indeterminate"]
+    },
+    "status_reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "cleanup_status": {
+      "enum": ["not_started", "running", "succeeded", "partial", "failed"]
+    },
+    "leak_audit_status": {
+      "enum": ["clean", "leaks_detected", "inconclusive"]
+    },
+    "lease_status": {
+      "enum": ["released", "recovery_required", "unverified"]
+    },
+    "safety_status": {
+      "enum": ["within_limits", "breached", "unverified"]
+    },
+    "evidence_integrity_status": {
+      "enum": ["verified", "invalid", "unverified"]
+    },
+    "late_evidence_status": {
+      "enum": ["none", "consistent", "contradictory", "unverified"]
+    },
+    "cleanup_result_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "late_evidence_assessment_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "created_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "variant_validation_id",
+    "variant_id",
+    "execution_manifest_sha256",
+    "trial_results",
+    "validation_terminal_reason",
+    "validation_validity",
+    "implementation_validation_status",
+    "status_reasons",
+    "cleanup_status",
+    "leak_audit_status",
+    "lease_status",
+    "safety_status",
+    "evidence_integrity_status",
+    "late_evidence_status",
+    "cleanup_result_ref",
+    "late_evidence_assessment_ref",
+    "created_at"
+  ],
+  "additionalProperties": false
+}

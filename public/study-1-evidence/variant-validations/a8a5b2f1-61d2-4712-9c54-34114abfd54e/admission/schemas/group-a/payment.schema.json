@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/payment.schema.json",
+  "title": "payment (CTR-RUA-005)",
+  "description": "The one trial-scoped captured BRL payment that bounds its successful refunds (BR-RUA-016, OR-RUA-001). Exactly the CTR-RUA-005 fields; the amount is a positive safe integer in minor units (BR-RUA-017).",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "payment" },
+    "payment_id": { "$ref": "_defs.schema.json#/$defs/nonempty_trimmed" },
+    "captured_amount_minor": { "$ref": "_defs.schema.json#/$defs/amount_minor" },
+    "currency": { "const": "BRL" }
+  },
+  "required": ["schema_version", "record_type", "payment_id", "captured_amount_minor", "currency"],
+  "additionalProperties": false
+}

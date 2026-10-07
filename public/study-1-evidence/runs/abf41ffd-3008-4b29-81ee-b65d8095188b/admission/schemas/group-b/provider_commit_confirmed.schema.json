@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_commit_confirmed.schema.json",
+  "title": "provider_commit_confirmed (catalogue group B, row 33)",
+  "description": "Provider journal: appended right after the commit transaction was acknowledged; committed_at is the post-acknowledgement wall time that BR-RUA-010 compares with the caller timer (D-24).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provider_commit_confirmed"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "provider_commit_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_transaction_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "committed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "provider_commit_id",
+    "provider_transaction_id",
+    "provider_call_id",
+    "committed_at"
+  ],
+  "additionalProperties": false
+}

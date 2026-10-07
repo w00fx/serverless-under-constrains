@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/coordination_prefix_checkpoint.schema.json",
+  "title": "coordination_prefix_checkpoint (catalogue group B, row 65)",
+  "description": "coordination/coordination-prefix-checkpoint.json (transport probe only): the coordination journal stays open through cleanup, so the probe evidence index hashes this checkpoint of its prefix: path, prefix byte count, prefix digest, last included event and sequence, and checkpoint time (BR-RUA-044).",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "coordination_prefix_checkpoint"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "journal_path": {
+      "$ref": "_defs.schema.json#/$defs/package_relative_path"
+    },
+    "prefix_byte_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "prefix_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "last_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "last_source_sequence": {
+      "$ref": "_defs.schema.json#/$defs/source_sequence"
+    },
+    "checkpointed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "transport_probe_id",
+    "execution_manifest_sha256",
+    "journal_path",
+    "prefix_byte_count",
+    "prefix_sha256",
+    "last_event_id",
+    "last_source_sequence",
+    "checkpointed_at"
+  ],
+  "additionalProperties": false
+}

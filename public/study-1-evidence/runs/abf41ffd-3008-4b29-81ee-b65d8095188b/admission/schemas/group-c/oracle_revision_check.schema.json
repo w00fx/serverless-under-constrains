@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/oracle_revision_check.schema.json",
+  "title": "oracle_revision_check (catalogue group C, row 87)",
+  "description": "admission/oracle-revision-check.json, and the output of rua oracle revision-check (BR-RUA-055, AC-RUA-055; design §10.1 A9, D-18): the golden suite run at a commit, its counts and its coverage of every verdict-changing (rule, outcome) pair. passed needs exit 0, no failed, skipped or todo test, no uncovered pair and no reason; failed states its reasons. It precedes the manifest, so it names an admission attempt rather than an execution.",
+  "type": "object",
+  "$defs": {
+    "test_counts": {
+      "type": "object",
+      "properties": {
+        "tests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pass": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fail": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "todo": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["tests", "pass", "fail", "skipped", "todo"],
+      "additionalProperties": false
+    },
+    "rule_coverage": {
+      "type": "object",
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^((BR|INV)-RUA-[0-9]{3}|[a-z][a-z0-9_]*)$"
+        },
+        "outcome": {
+          "type": "string",
+          "pattern": "^[a-z][a-z_]*$"
+        },
+        "case_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": ["rule_id", "outcome", "case_ids"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": ["result"]
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 0
+          },
+          "test_counts": {
+            "type": "object",
+            "properties": {
+              "fail": {
+                "const": 0
+              },
+              "skipped": {
+                "const": 0
+              },
+              "todo": {
+                "const": 0
+              }
+            }
+          },
+          "uncovered": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "reasons": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "oracle_revision_check"
+    },
+    "run_id": false,
+    "variant_validation_id": false,
+    "transport_probe_id": false,
+    "admission_attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "tree_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exit_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "report_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "test_counts": {
+      "$ref": "#/$defs/test_counts"
+    },
+    "golden_minimum": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "rule_coverage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule_coverage"
+      }
+    },
+    "uncovered": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "node_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "result": {
+      "enum": ["passed", "failed"]
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "checked_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "commit_sha",
+    "tree_sha",
+    "command",
+    "exit_code",
+    "report_sha256",
+    "test_counts",
+    "golden_minimum",
+    "rule_coverage",
+    "uncovered",
+    "node_version",
+    "result",
+    "reasons",
+    "checked_at"
+  ],
+  "additionalProperties": false
+}

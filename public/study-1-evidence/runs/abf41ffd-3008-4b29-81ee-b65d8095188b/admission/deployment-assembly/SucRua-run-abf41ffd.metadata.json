@@ -1,0 +1,952 @@
+{
+  "/SucRua-run-abf41ffd": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    },
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "suc:expires_at",
+          "value": "2026-10-07T07:33:44.801Z"
+        },
+        {
+          "key": "suc:managed_by",
+          "value": "rua-operator-cli"
+        },
+        {
+          "key": "suc:project",
+          "value": "serverless-under-constraints"
+        },
+        {
+          "key": "suc:run_id",
+          "value": "abf41ffd-3008-4b29-81ee-b65d8095188b"
+        },
+        {
+          "key": "suc:study_id",
+          "value": "study-1"
+        }
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ProviderFunctionName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ProviderFunctionName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:107:17)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ProviderVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ProviderVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:108:17)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ControllerFunctionName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ControllerFunctionName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:109:17)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ControllerFailureQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ControllerFailureQueueUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:110:17)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalCallerFunctionName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalCallerFunctionName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:116:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalCallerAliasArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalCallerAliasArn"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:117:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalSourceQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalSourceQueueUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:118:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalDeadLetterQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalDeadLetterQueueUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:119:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableCallerFunctionName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableCallerFunctionName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:122:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableCallerFunctionArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableCallerFunctionArn"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:123:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableCallerAliasArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableCallerAliasArn"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:124:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableSourceQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableSourceQueueUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:125:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableDeadLetterQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableDeadLetterQueueUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "#output (file://<checkout>/study-1/infra/stacks/execution-stack.ts:131:5)",
+        "#addOutputs (file://<checkout>/study-1/infra/stacks/execution-stack.ts:126:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:102:21)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/LedgerTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "ExperimentCoreLedgerTable84EA353E"
+      }
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/ExperimentJournalTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "ExperimentCoreExperimentJournalTable448229F7"
+      }
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/CallerJournalTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "ExperimentCoreCallerJournalTableB85C1509"
+      }
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/ControlTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "ExperimentCoreControlTableC2B11426"
+      }
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/TrialRegistryTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "ExperimentCoreTrialRegistryTableE2BC3EDC"
+      }
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/LedgerTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreLedgerTable84EA353E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Table2 in aws-cdk-lib...",
+        "file://<checkout>/study-1/infra/constructs/experiment-core.ts:163: (file://<checkout>/study-1/infra/constructs/experiment-core.ts:163:1)",
+        "Array.map (:)",
+        "createTables (file://<checkout>/study-1/infra/constructs/experiment-core.ts:162:41)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:89:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/ExperimentJournalTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreExperimentJournalTable448229F7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Table2 in aws-cdk-lib...",
+        "file://<checkout>/study-1/infra/constructs/experiment-core.ts:163: (file://<checkout>/study-1/infra/constructs/experiment-core.ts:163:1)",
+        "Array.map (:)",
+        "createTables (file://<checkout>/study-1/infra/constructs/experiment-core.ts:162:41)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:89:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/CallerJournalTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreCallerJournalTableB85C1509"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Table2 in aws-cdk-lib...",
+        "file://<checkout>/study-1/infra/constructs/experiment-core.ts:163: (file://<checkout>/study-1/infra/constructs/experiment-core.ts:163:1)",
+        "Array.map (:)",
+        "createTables (file://<checkout>/study-1/infra/constructs/experiment-core.ts:162:41)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:89:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/ControlTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControlTableC2B11426"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Table2 in aws-cdk-lib...",
+        "file://<checkout>/study-1/infra/constructs/experiment-core.ts:163: (file://<checkout>/study-1/infra/constructs/experiment-core.ts:163:1)",
+        "Array.map (:)",
+        "createTables (file://<checkout>/study-1/infra/constructs/experiment-core.ts:162:41)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:89:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/TrialRegistryTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreTrialRegistryTableE2BC3EDC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Table2 in aws-cdk-lib...",
+        "file://<checkout>/study-1/infra/constructs/experiment-core.ts:163: (file://<checkout>/study-1/infra/constructs/experiment-core.ts:163:1)",
+        "Array.map (:)",
+        "createTables (file://<checkout>/study-1/infra/constructs/experiment-core.ts:162:41)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:89:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/ControllerFailure/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControllerFailure5B3BAECA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Queue2 in aws-cdk-lib...",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:118:35)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Function": [
+    {
+      "type": "aws:cdk:info",
+      "data": "Modifying an existing lambda to use durability will trigger a resource replacement [ack: aws-lambda:Function.DurableConfig]",
+      "trace": [
+        "Annotations.addMessage (<checkout>/study-1/node_modules/aws-cdk-lib/core/lib/annotations.js:1:3506)",
+        "Annotations.addInfoV2 (<checkout>/study-1/node_modules/aws-cdk-lib/core/lib/annotations.js:1:2550)",
+        "NodejsFunction.renderDurableConfig (<checkout>/study-1/node_modules/aws-cdk-lib/aws-lambda/lib/function.js:1:37214)",
+        "new Function2 (<checkout>/study-1/node_modules/aws-cdk-lib/aws-lambda/lib/function.js:1:22028)",
+        "new Function2 (<checkout>/study-1/node_modules/aws-cdk-lib/core/lib/prop-injectable.js:1:861)",
+        "new NodejsFunction (<checkout>/study-1/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/function.js:1:3682)",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:75:21)",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:92:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60:3",
+        "ModuleJob.run (node:internal/modules/esm/module_job:437:25)",
+        "async node:internal/modules/esm/loader:639:26",
+        "async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/DurableExecutionPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantDurableExecutionPolicy27D4B616"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Policy2 in aws-cdk-lib...",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:112:35)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Provider/LogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreProviderLogGroup90EED0A4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LogGroup2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:66:21)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:94:21)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Provider/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreProviderRoleD183CA86"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:70:17)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:94:21)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Provider/Function/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreProviderFunction56CA6335"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new NodejsFunction in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:75:21)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:94:21)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Controller/LogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControllerLogGroup09A0FFD2"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LogGroup2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:66:21)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:107:23)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Controller/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControllerRole375C23C5"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:70:17)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:107:23)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Controller/Function/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControllerFunction36B2FDBA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new NodejsFunction in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:75:21)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:107:23)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Source/DeadLetterQueue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantSourceDeadLetterQueue4F8C7BE3"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Queue2 in aws-cdk-lib...",
+        "new FifoMessageSource (file://<checkout>/study-1/infra/constructs/fifo-message-source.ts:41:28)",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:67:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Source/Queue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantSourceQueue3D79F97E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Queue2 in aws-cdk-lib...",
+        "new FifoMessageSource (file://<checkout>/study-1/infra/constructs/fifo-message-source.ts:46:18)",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:67:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/LogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerLogGroup6C36AD6D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LogGroup2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:66:21)",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:72:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerRole0D7FE7F1"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:70:17)",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:72:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/Function/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerFunction4BA5A736"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new NodejsFunction in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:75:21)",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:72:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Source/DeadLetterQueue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantSourceDeadLetterQueueB8E280CA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Queue2 in aws-cdk-lib...",
+        "new FifoMessageSource (file://<checkout>/study-1/infra/constructs/fifo-message-source.ts:41:28)",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:87:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Source/Queue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantSourceQueue767EEA85"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Queue2 in aws-cdk-lib...",
+        "new FifoMessageSource (file://<checkout>/study-1/infra/constructs/fifo-message-source.ts:46:18)",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:87:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/LogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerLogGroup5A494364"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LogGroup2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:66:21)",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:92:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerRoleF9415F22"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:70:17)",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:92:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Function/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerFunction28A0C35B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new NodejsFunction in aws-cdk-lib...",
+        "new ObservableFunction (file://<checkout>/study-1/infra/constructs/observable-function.ts:75:21)",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:92:19)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Provider/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreProviderRoleDefaultPolicy74033122"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Provider/Function/CurrentVersion/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreProviderFunctionCurrentVersion7385542013741a3a0b6952c05ff6c4a423bd5308"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...get currentVersion in aws-cdk-lib...",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:106:51)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Controller/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControllerRoleDefaultPolicy5ED8645A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ExperimentCore/Controller/Function/CallerJournalStream/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExperimentCoreControllerFunctionCallerJournalStream86117CD6"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...NodejsFunction.addEventSourceMapping in aws-cdk-lib...",
+        "#mapCallerJournalStream (file://<checkout>/study-1/infra/constructs/experiment-core.ts:146:30)",
+        "new ExperimentCore (file://<checkout>/study-1/infra/constructs/experiment-core.ts:124:33)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:89:17)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerRoleDefaultPolicyD7042A9D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/Function/CurrentVersion/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerFunctionCurrentVersion925DFAAE6670cb5dfe15ad9012b98e53d9a74772"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...get currentVersion in aws-cdk-lib...",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:87:47)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/Function/Aliaslive/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerFunctionAliaslive2F63638C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...NodejsFunction.<anonymous> in aws-cdk-lib...",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:88:39)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerRoleDefaultPolicyF3CD0E98"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Function/CurrentVersion/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerFunctionCurrentVersion4ABB63C2b655370dc91ba594abe21856e80259d9"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...get currentVersion in aws-cdk-lib...",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:108:47)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Function/Aliaslive/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerFunctionAliaslive34F653F7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...NodejsFunction.<anonymous> in aws-cdk-lib...",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:109:39)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/ConventionalVariant/Caller/Function/Aliaslive/SqsEventSource:SucRuarunabf41ffdConventionalVariantSourceQueueCA2816E5/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ConventionalVariantCallerFunctionAliasliveSqsEventSourceSucRuarunabf41ffdConventionalVariantSourceQueueCA2816E51D8C0EAA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.addEventSource in aws-cdk-lib...",
+        "new ConventionalVariant (file://<checkout>/study-1/infra/constructs/conventional-variant.ts:89:16)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:96:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/SucRua-run-abf41ffd/DurableVariant/Caller/Function/Aliaslive/SqsEventSource:SucRuarunabf41ffdDurableVariantSourceQueue31B0657D/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DurableVariantCallerFunctionAliasliveSqsEventSourceSucRuarunabf41ffdDurableVariantSourceQueue31B0657DBC830756"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.addEventSource in aws-cdk-lib...",
+        "new DurableVariant (file://<checkout>/study-1/infra/constructs/durable-variant.ts:110:16)",
+        "new ExecutionStack (file://<checkout>/study-1/infra/stacks/execution-stack.ts:99:9)",
+        "buildStudyApp (file://<checkout>/study-1/infra/bin/study-app.ts:51:17)",
+        "file://<checkout>/study-1/infra/bin/study-app.ts:60 (:)",
+        "...node internals..."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/telemetry_availability.schema.json",
+  "title": "telemetry_availability (catalogue group B, row 63)",
+  "description": "telemetry/telemetry-availability.json (diagnostic): whether logs, metrics and traces were available, with their locators. Absence never blocks a verdict and is never an oracle input (BR-RUA-037, AC-RUA-054).",
+  "type": "object",
+  "$defs": {
+    "signal_availability": {
+      "type": "object",
+      "properties": {
+        "availability": {
+          "enum": ["available", "unavailable"]
+        },
+        "locators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "reasons": {
+          "$ref": "_defs.schema.json#/$defs/structured_reasons"
+        }
+      },
+      "required": ["availability", "locators", "reasons"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "telemetry_availability"
+    },
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "trial_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "captured_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "logs": {
+      "$ref": "#/$defs/signal_availability"
+    },
+    "metrics": {
+      "$ref": "#/$defs/signal_availability"
+    },
+    "traces": {
+      "$ref": "#/$defs/signal_availability"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "captured_at",
+    "logs",
+    "metrics",
+    "traces"
+  ],
+  "dependentRequired": {
+    "trial_id": ["trial_manifest_sha256"],
+    "trial_manifest_sha256": ["trial_id"]
+  },
+  "additionalProperties": false
+}

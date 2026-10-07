@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/controller_canary_acknowledged.schema.json",
+  "title": "controller_canary_acknowledged (catalogue group B, row 44)",
+  "description": "Controller journal, reserved partition <execution_id>#canary only: the controller consumed the runner canary caller_timeout_recorded, proving end-to-end readiness before publication (BR-RUA-025, D-10). It carries no trial identity.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "controller_canary_acknowledged"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["treatment_controller"]
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "canary_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "canary_event_id"],
+  "additionalProperties": false
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_execution_configuration.schema.json",
+  "title": "provider_execution_configuration (BR-RUA-018, AC-RUA-042, Owner amendment A-09)",
+  "description": "The immutable execution-level control item (pk <execution_id>#execution, sk config) the runner writes once at execution start, before the probe, the canary, any warm-up and any trial. It declares the execution kind, the execution identity of that kind and the frozen execution-manifest digest. The provider reads it with a consistent read to journal a call it cannot attribute to a trial partition: such a call records provider_call_rejected in the experiment-journal partition <execution_id>#provider under this digest (human decision A-09).",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "provider_execution_configuration" },
+    "execution_kind": { "enum": ["RUN", "TRANSPORT_PROBE", "VARIANT_VALIDATION"] },
+    "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "execution_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "written_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": ["schema_version", "record_type", "execution_kind", "execution_manifest_sha256", "written_at"],
+  "oneOf": [
+    {
+      "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["run_id"]
+    },
+    {
+      "properties": { "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["variant_validation_id"]
+    },
+    {
+      "properties": { "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["transport_probe_id"]
+    }
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "execution_kind": { "const": "RUN" } }, "required": ["execution_kind"] },
+      "then": {
+        "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+        "required": ["run_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "execution_kind": { "const": "VARIANT_VALIDATION" } },
+        "required": ["execution_kind"]
+      },
+      "then": {
+        "properties": { "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+        "required": ["variant_validation_id"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "execution_kind": { "const": "TRANSPORT_PROBE" } },
+        "required": ["execution_kind"]
+      },
+      "then": {
+        "properties": { "transport_probe_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+        "required": ["transport_probe_id"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

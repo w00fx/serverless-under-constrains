@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/source_provenance.schema.json",
+  "title": "source_provenance (BR-RUA-042)",
+  "description": "Source provenance of an admitted evidence-bearing execution: commit and tree identities, the branch when HEAD is attached (a detached HEAD is acceptable and carries no branch), the clean confirmation, the tracked lockfile path and digest, and the tool versions. Only a clean source admits, so clean_confirmed is always true; a dirty tree produces an admission_rejection instead. Git object ids are SHA-1 (40 hex) or SHA-256 (64 hex).",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "source_provenance" },
+    "admission_attempt_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$" },
+    "tree_sha": { "type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$" },
+    "detached_head": { "type": "boolean" },
+    "branch": { "$ref": "_defs.schema.json#/$defs/nonempty_trimmed" },
+    "clean_confirmed": { "const": true },
+    "lockfile_path": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+    "lockfile_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "tool_versions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "additionalProperties": { "$ref": "_defs.schema.json#/$defs/nonempty_trimmed" },
+      "minProperties": 1
+    },
+    "recorded_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "admission_attempt_id",
+    "commit_sha",
+    "tree_sha",
+    "detached_head",
+    "clean_confirmed",
+    "lockfile_path",
+    "lockfile_sha256",
+    "tool_versions",
+    "recorded_at"
+  ],
+  "if": {
+    "properties": { "detached_head": { "const": true } },
+    "required": ["detached_head"]
+  },
+  "then": {
+    "properties": { "branch": false }
+  },
+  "else": {
+    "properties": { "branch": { "$ref": "_defs.schema.json#/$defs/nonempty_trimmed" } },
+    "required": ["branch"]
+  },
+  "additionalProperties": false
+}

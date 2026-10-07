@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/request_state_recorded.schema.json",
+  "title": "request_state_recorded (catalogue group B, row 27)",
+  "description": "Caller journal: one versioned transition of the logical request state, written with the version-conditioned request item (BR-RUA-022, BR-RUA-024, BR-RUA-004). A terminal reason is present exactly when processing is FINISHED. refund_request_id may be absent only when the message was rejected before its identity could be read.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["processing_state"],
+        "properties": {
+          "processing_state": {
+            "const": "FINISHED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "processing_terminal_reason": true
+        },
+        "required": ["processing_terminal_reason"]
+      },
+      "else": {
+        "properties": {
+          "processing_terminal_reason": false
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["processing_terminal_reason"],
+        "properties": {
+          "processing_terminal_reason": {
+            "const": "MESSAGE_REJECTED"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "refund_request_id": true
+        },
+        "required": ["refund_request_id"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "request_state_recorded"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["conventional_caller", "durable_caller", "probe_caller"]
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "processing_state": {
+      "enum": ["NOT_STARTED", "RUNNING", "FINISHED"]
+    },
+    "processing_terminal_reason": {
+      "enum": [
+        "SUCCEEDED",
+        "RETRIES_EXHAUSTED",
+        "MESSAGE_REJECTED",
+        "PROVIDER_REJECTED",
+        "INTERRUPTED",
+        "SAFETY_DEADLINE"
+      ]
+    },
+    "effect_knowledge": {
+      "enum": ["NOT_ATTEMPTED", "NO_EFFECT_CONFIRMED", "ONE_EFFECT_CONFIRMED", "MULTIPLE_EFFECTS_CONFIRMED", "UNKNOWN"]
+    },
+    "attempt_ids": {
+      "type": "array",
+      "items": {
+        "$ref": "_defs.schema.json#/$defs/uuid4"
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "version",
+    "processing_state",
+    "effect_knowledge",
+    "attempt_ids"
+  ],
+  "additionalProperties": false
+}

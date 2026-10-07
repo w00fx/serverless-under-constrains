@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/trial_registration.schema.json",
+  "title": "trial_registration (BR-RUA-036, D-21)",
+  "description": "The trial-registry item that tells one variant's consumer which trial is active: the variant, the run or variant-validation identity with its frozen manifest digest, and the active trial identity with its frozen trial-manifest digest. The consumer validates each delivered trial_message against it (BR-RUA-036, AC-RUA-019). registry_version increases with every conditional runner write. It is neither treatment-control state nor the ledger.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "trial_registration" },
+    "variant_id": { "enum": ["conventional", "durable"] },
+    "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "execution_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "trial_id": { "$ref": "_defs.schema.json#/$defs/uuid4" },
+    "trial_manifest_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "registry_version": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "registered_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "variant_id",
+    "execution_manifest_sha256",
+    "trial_id",
+    "trial_manifest_sha256",
+    "registry_version",
+    "registered_at"
+  ],
+  "oneOf": [
+    {
+      "properties": { "run_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["run_id"]
+    },
+    {
+      "properties": { "variant_validation_id": { "$ref": "_defs.schema.json#/$defs/uuid4" } },
+      "required": ["variant_validation_id"]
+    }
+  ],
+  "additionalProperties": false
+}

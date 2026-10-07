@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/deployment_assembly_inventory.schema.json",
+  "title": "deployment_assembly_inventory (BR-RUA-042)",
+  "description": "The canonical inventory of the frozen deployment assembly copied into the evidence package (design §9.8 S3). Each entry is one regular file: its normalized path relative to assembly_path, byte count, permission bits as four octal digits, and SHA-256. Symlinks, special files and container-image assets are rejected before an inventory exists, so the inventory has no field to describe them. Entries are sorted by path in strictly ascending code-point order, so each path appears once, and inventory_sha256 is the digest of the canonical JSON of the entry list; path uniqueness, that order and that digest are checked in code by the assembly inventory builder and the evidence-package verifier, not by this schema, which rejects only byte-identical duplicate entries.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "deployment_assembly_inventory" },
+    "assembly_path": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "$ref": "_defs.schema.json#/$defs/package_relative_path" },
+          "bytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+          "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
+          "sha256": { "$ref": "_defs.schema.json#/$defs/sha256" }
+        },
+        "required": ["path", "bytes", "mode", "sha256"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "inventory_sha256": { "$ref": "_defs.schema.json#/$defs/sha256" },
+    "inventoried_at": { "$ref": "_defs.schema.json#/$defs/utc_millis" }
+  },
+  "required": ["schema_version", "record_type", "assembly_path", "files", "inventory_sha256", "inventoried_at"],
+  "additionalProperties": false
+}

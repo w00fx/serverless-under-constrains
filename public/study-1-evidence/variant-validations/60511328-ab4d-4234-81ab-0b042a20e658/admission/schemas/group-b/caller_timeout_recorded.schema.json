@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/caller_timeout_recorded.schema.json",
+  "title": "caller_timeout_recorded (catalogue group B, row 24)",
+  "description": "Caller journal: the durable application timeout of BR-RUA-023 and the only record the treatment controller consumes (BR-RUA-025). Causation names the dispatch_started origin. A correct writer records arbiter_winner TIMER and transport_settled_at_claim false; the schema admits the other values so the oracle can judge them under BR-RUA-011. The runner writes one only into the reserved execution-level canary partition <execution_id>#canary (D-10), so a runner-written timeout carries no trial identity.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "const": "runner"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "trial_id": false,
+          "trial_manifest_sha256": false
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "caller_timeout_recorded"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "source": {
+      "enum": ["conventional_caller", "durable_caller", "probe_caller", "runner"]
+    },
+    "causation_event_ids": {
+      "$ref": "_defs.schema.json#/$defs/causation_ids"
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "elapsed_ns": {
+      "$ref": "_defs.schema.json#/$defs/monotonic_ns"
+    },
+    "monotonic_origin_event_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "dispatch_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "deadline_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "timer_fired_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "abort_requested_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "recorded_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "arbiter_winner": {
+      "enum": ["TIMER", "TRANSPORT"]
+    },
+    "transport_settled_at_claim": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "causation_event_ids",
+    "attempt_id",
+    "provider_request_id",
+    "refund_request_id",
+    "elapsed_ns",
+    "monotonic_origin_event_id",
+    "dispatch_at",
+    "deadline_at",
+    "timer_fired_at",
+    "abort_requested_at",
+    "recorded_at",
+    "arbiter_winner",
+    "transport_settled_at_claim"
+  ],
+  "additionalProperties": false
+}

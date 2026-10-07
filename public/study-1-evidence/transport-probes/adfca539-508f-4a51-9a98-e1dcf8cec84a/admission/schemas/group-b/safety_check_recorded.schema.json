@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/safety_check_recorded.schema.json",
+  "title": "safety_check_recorded (catalogue group B, row 54)",
+  "description": "Runner journal: one safety check with its boundary, declared limit, observed value when available, result, evidence and check time (BR-RUA-046). A conclusive result states the observed value.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["result"],
+        "properties": {
+          "result": {
+            "enum": ["within_limits", "breached"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed": true
+        },
+        "required": ["observed"]
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "safety_check_recorded"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["runner"]
+    },
+    "boundary": {
+      "enum": [
+        "ACCOUNT_ALLOWLIST",
+        "REGION",
+        "REQUIRED_CAPABILITIES",
+        "OWNERSHIP_STRATEGY",
+        "ESTIMATED_COST",
+        "CONFLICTING_LEASE",
+        "ACTIVE_TIME",
+        "TOTAL_TIME",
+        "CLEANUP_TERMINAL",
+        "BILLED_COST"
+      ]
+    },
+    "declared_limit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observed": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result": {
+      "enum": ["within_limits", "breached", "unverified"]
+    },
+    "evidence_refs": {
+      "$ref": "_defs.schema.json#/$defs/evidence_refs"
+    },
+    "checked_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "boundary",
+    "declared_limit",
+    "result",
+    "evidence_refs",
+    "checked_at"
+  ],
+  "additionalProperties": false
+}

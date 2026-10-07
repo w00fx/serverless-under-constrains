@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/trial_message_published.schema.json",
+  "title": "trial_message_published (catalogue group B, row 49)",
+  "description": "Runner journal: the exact trial message bytes were sent to the variant FIFO source; SQS returned MessageId, SequenceNumber and MD5OfMessageBody (BR-RUA-036).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "trial_message_published"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["runner"]
+    },
+    "trial_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "variant_id": {
+      "enum": ["conventional", "durable"]
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence_number": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "md5_of_message_body": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "message_body_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "message_group_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message_deduplication_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "trial_id",
+    "trial_manifest_sha256",
+    "variant_id",
+    "message_id",
+    "sequence_number",
+    "md5_of_message_body",
+    "message_body_sha256",
+    "message_group_id",
+    "message_deduplication_id"
+  ],
+  "additionalProperties": false
+}
