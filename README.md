@@ -14,11 +14,38 @@ Protocol rules, fixtures, acceptance criteria, and delivery gates live in the [S
 
 ## Repository status
 
-Study 1 is implemented under [`study-1/`](study-1/): the controlled provider, both caller variants, the CDK infrastructure, the evidence model and oracle, and the `rua` operator CLI that admits, executes, cleans up and verifies each execution. It has unit, contract, integration, golden and fuzz suites, run locally through `npm run check`. The coverage gate requires 100% line, branch, function and statement coverage for every file except the AWS and Node bindings, the Lambda handlers, the CLI entry point and the infrastructure code. Mutation testing has not run yet.
+Study 1 is implemented under [`study-1/`](study-1/): the controlled provider, both caller variants, the CDK infrastructure, the evidence model and oracle, and the `rua` operator CLI that admits, executes, cleans up and verifies each execution. It has unit, contract, integration, golden and fuzz suites, run locally through `npm run check`. The coverage gate requires 100% line, branch, function and statement coverage for every file except the AWS and Node bindings, the Lambda handlers, the CLI entry point and the infrastructure code. Mutation testing has run only on the results and redaction tools under `study-1/tools/lib/`; the gate over the whole target set has not run yet.
 
 The first sandbox study ran on 2026-10-07 in `us-east-1`. It covered one transport probe, a variant validation for each variant, and one run of four trials. The run verified as complete and comparison-eligible: every trial was valid, cleanup succeeded and the leak audit was clean. Both variants passed `CONTROL` with one refund. Under `COMMIT_THEN_TIMEOUT`, each variant created two provider transactions, refunding 20000 for an approved 10000, so both failed the preservation verdict. This is the result the specification predicts when the provider has no idempotency key.
 
-The study's AWS resources were removed after the run. Evidence packages stay local under `study-1/evidence/`, which git ignores. The specification is still a draft, and its `[PROPOSED]` items are not ratified.
+The study's AWS resources were removed after the run. The raw evidence packages stay private under `study-1/evidence/`, which git ignores, because they hold environment identifiers; [`public/study-1-evidence/`](public/study-1-evidence/) is their redacted copy. The specification is still a draft, and its `[PROPOSED]` items are not ratified.
+
+## Re-verify Study 1 from bytes
+
+The evidence packages are the authority. Each package is identified by the SHA-256 of its `package-index.json`, and each file in it by the digest its index records. Everything else is derived from those bytes by a script:
+
+- [`results/study-1/results.json`](results/study-1/results.json) is the derived results file. Every value cites the artifact it was read from, by package-relative path and SHA-256, and every package by `package_index_sha256`.
+- [`public/study-1-evidence/`](public/study-1-evidence/) is the redacted copy of the packages. Only the sandbox account id and local filesystem paths are replaced. Its [README](public/study-1-evidence/README.md) lists the rules, and `redaction-manifest.json` records each file's original and redacted digest.
+
+With `jq` and `shasum`, from `public/study-1-evidence/`:
+
+```sh
+# Every file in the copy matches the manifest.
+jq -r '.files[] | "\(.redacted_sha256)  \(.path)"' redaction-manifest.json | shasum -a 256 -c --quiet -
+
+# Every package index matches the identity that results.json cites.
+jq -r '(.canonical_runs + .within_variant_reproductions + .excluded_executions)[]
+  | "\(.package_index_sha256)  \(.package_directory)/package-index.json"' ../../results/study-1/results.json \
+  | shasum -a 256 -c -
+
+# The only files that differ from their package index are the ones the manifest says were redacted.
+diff <(for index in */*/package-index.json; do
+         jq -r --arg d "${index%/package-index.json}" '.entries[] | "\(.sha256)  \($d)/\(.artifact_path)"' "$index"
+       done | shasum -a 256 -c - 2>/dev/null | grep -v ': OK$' | sed 's/: FAILED$//' | sort) \
+     <(jq -r '.files[] | select(.rules_applied != {}) | .path' redaction-manifest.json | sort)
+```
+
+`verdict-recheck.json` in the copy re-derives the canonical run's verdicts from the redacted ledgers and compares each with the original oracle result. With the raw packages, `npm run rua -- run verify <package>` re-verifies a package from its own bytes, and `npm run results -- --check` and `npm run redact -- --check` re-derive both files byte for byte (all from `study-1/`).
 
 ## Start here
 
