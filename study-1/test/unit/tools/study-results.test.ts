@@ -20,7 +20,9 @@ const OTHER_ID = '00000000-0000-4000-8000-000000000003';
 const USAGE =
   'usage: node tools/derive-study-results.ts --evidence-root <dir> --spec <spec.md> --run <id> ' +
   '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> [--check]';
-const IDS_REFUSAL = 'expected at least one --run and distinct lowercase UUID ids';
+const idsRefusal = (argv: readonly string[], detail: string): { readonly message: string } => ({
+  message: `${USAGE}; got ${JSON.stringify(argv)}; ${detail}`,
+});
 
 describe('deriveStudyResults', () => {
   it('places each execution by role: the canonical run, the reproductions and the excluded validations', () => {
@@ -82,6 +84,12 @@ describe('limitationOf', () => {
     });
     assert.throws(() => limitationOf('# CAP-RUA\n9. Elsewhere.\n', 9), /holds no limitation 9/);
   });
+
+  it('ignores a numbered line in the section that follows the limitations', () => {
+    const spec =
+      '# CAP-RUA\n\n## Threats to Validity and Limitations\n\n1. One.\n\n## Non-Goals\n\n9. Not a limitation.\n';
+    assert.throws(() => limitationOf(spec, 9), /holds no limitation 9/);
+  });
 });
 
 describe('parseDeriveArguments', () => {
@@ -130,7 +138,27 @@ describe('parseDeriveArguments', () => {
       assert.throws(() => parseDeriveArguments(argv), usage, JSON.stringify(argv));
     }
     assert.throws(() => parseDeriveArguments([...base, '--out', 'again.json']), /with 2 --out$/);
-    assert.throws(() => parseDeriveArguments([...base, '--run', RUN_ID]), /distinct lowercase UUID ids$/);
+    const twice = [...base, '--run', RUN_ID];
+    assert.throws(
+      () => parseDeriveArguments(twice),
+      idsRefusal(twice, `got repeated ids ["${RUN_ID}"]; expected each id once`),
+    );
+  });
+
+  it('names why the ids are refused: no run, the malformed ids, or the repeated ids', () => {
+    const noRun = ['--evidence-root', 'evidence', '--spec', 's.md', '--out', 'r.json'];
+    assert.throws(() => parseDeriveArguments(noRun), idsRefusal(noRun, 'expected at least one --run'));
+    const upper = 'ABCDEF00-0000-4000-8000-000000000001';
+    const malformed = [...base, '--validation', '../runs/x', '--excluded-validation', upper];
+    assert.throws(
+      () => parseDeriveArguments(malformed),
+      idsRefusal(malformed, `got malformed ids ["../runs/x","${upper}"]; expected lowercase UUID ids`),
+    );
+    const repeated = [...base, '--validation', OTHER_ID, '--excluded-validation', OTHER_ID, '--validation', RUN_ID];
+    assert.throws(
+      () => parseDeriveArguments(repeated),
+      idsRefusal(repeated, `got repeated ids ["${RUN_ID}","${OTHER_ID}"]; expected each id once`),
+    );
   });
 
   it('states the full usage when a flag is followed by another flag instead of its value', () => {
@@ -141,9 +169,10 @@ describe('parseDeriveArguments', () => {
   it('refuses an id with anything before or after the UUID, such as a ../ prefix', () => {
     for (const id of [`../${VALIDATION_ID}`, `x${VALIDATION_ID}`, `${VALIDATION_ID}/..`, `${VALIDATION_ID}x`]) {
       const argv = [...base, '--validation', id];
-      assert.throws(() => parseDeriveArguments(argv), {
-        message: `${USAGE}; got ${JSON.stringify(argv)}; ${IDS_REFUSAL}`,
-      });
+      assert.throws(
+        () => parseDeriveArguments(argv),
+        idsRefusal(argv, `got malformed ids ${JSON.stringify([id])}; expected lowercase UUID ids`),
+      );
     }
   });
 });

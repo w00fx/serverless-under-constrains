@@ -110,15 +110,21 @@ export function deriveStudyResults(input: StudyResultsInput): StudyResults {
  * limitationOf(specText, 9); // 'Variant-validation evidence is non-comparative and cannot substitute for …'
  */
 export function limitationOf(specMarkdown: string, number: number): string {
-  const section = specMarkdown.split(`\n${LIMITATIONS_HEADING}\n`)[1]?.split('\n## ')[0] ?? '';
   const prefix = `${String(number)}. `;
-  const line = section.split('\n').find((one) => one.startsWith(prefix));
-  if (line === undefined) {
-    throw new Error(
-      `the spec holds no limitation ${String(number)} under "${LIMITATIONS_HEADING}"; expected a line "${prefix}…"`,
-    );
+  // Every "## " heading opens a new section; only lines under the limitations heading count.
+  let inLimitations = false;
+  for (const line of specMarkdown.split('\n')) {
+    if (line.startsWith('## ')) {
+      inLimitations = line === LIMITATIONS_HEADING;
+      continue;
+    }
+    if (inLimitations && line.startsWith(prefix)) {
+      return line.slice(prefix.length);
+    }
   }
-  return line.slice(prefix.length);
+  throw new Error(
+    `the spec holds no limitation ${String(number)} under "${LIMITATIONS_HEADING}"; expected a line "${prefix}…"`,
+  );
 }
 
 /**
@@ -161,11 +167,9 @@ export function parseDeriveArguments(argv: readonly string[]): DeriveArguments {
   const runs = values.get('--run') ?? [];
   const validations = values.get('--validation') ?? [];
   const excludedValidations = values.get('--excluded-validation') ?? [];
-  const ids = [...runs, ...validations, ...excludedValidations];
-  if (runs.length === 0 || ids.some((id) => !EXECUTION_ID.test(id)) || new Set(ids).size !== ids.length) {
-    throw new Error(
-      `usage: ${USAGE}; got ${JSON.stringify(argv)}; expected at least one --run and distinct lowercase UUID ids`,
-    );
+  const idRefusal = executionIdRefusal(runs, [...runs, ...validations, ...excludedValidations]);
+  if (idRefusal !== undefined) {
+    throw new Error(`usage: ${USAGE}; got ${JSON.stringify(argv)}; ${idRefusal}`);
   }
   return {
     evidenceRoot: single('--evidence-root'),
@@ -176,4 +180,21 @@ export function parseDeriveArguments(argv: readonly string[]): DeriveArguments {
     out: single('--out'),
     check,
   };
+}
+
+// Why the ids cannot name the packages, or undefined when they can: no run, an id that is not a
+// lowercase UUID (a path such as ../x would leave the evidence root), or an id named twice.
+function executionIdRefusal(runs: readonly string[], ids: readonly string[]): string | undefined {
+  if (runs.length === 0) {
+    return 'expected at least one --run';
+  }
+  const malformed = ids.filter((id) => !EXECUTION_ID.test(id));
+  if (malformed.length > 0) {
+    return `got malformed ids ${JSON.stringify(malformed)}; expected lowercase UUID ids`;
+  }
+  const repeated = ids.filter((id, index) => ids.indexOf(id) !== index);
+  if (repeated.length > 0) {
+    return `got repeated ids ${JSON.stringify(repeated)}; expected each id once`;
+  }
+  return undefined;
 }

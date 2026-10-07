@@ -237,7 +237,8 @@ export function deriveExcludedExecution(input: ExecutionInput): ExcludedExecutio
     ...described,
     exclusion: { criterion: REPRODUCTION_CRITERION, status_reasons: statusReasons },
     trials: objectsOf(summary.record, 'trial_results', subject).map((entry) => excludedTrial(pkg, entry)),
-    evidence_refs: [provenance.ref, summary.ref].sort(byArtifactPath),
+    // Both paths are fixed for a variant validation, and admission/ sorts before summary/.
+    evidence_refs: [provenance.ref, summary.ref],
   };
 }
 
