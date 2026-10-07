@@ -12,6 +12,8 @@ import {
   exactlyOne,
   REPRODUCTION_CRITERION,
 } from './study-results-execution.ts';
+import type { FinancialFixture } from './study-results-inputs.ts';
+import { assertFixtureInputs } from './study-results-inputs.ts';
 
 /** The whole derived results file. */
 export interface StudyResults {
@@ -26,12 +28,13 @@ export interface StudyResults {
   readonly excluded_executions: readonly ExcludedExecution[];
 }
 
-/** Everything one derivation reads: the executions by role and spec limitation 9's text. */
+/** Everything one derivation reads: the executions by role, spec limitation 9's text and OR-RUA-001. */
 export interface StudyResultsInput {
   readonly runs: readonly ExecutionInput[];
   readonly validations: readonly ExecutionInput[];
   readonly excludedValidations: readonly ExecutionInput[];
   readonly limitation9: string;
+  readonly financialFixture: FinancialFixture;
 }
 
 /** The parsed command line of tools/derive-study-results.ts. */
@@ -42,7 +45,8 @@ export interface DeriveArguments {
   readonly validations: readonly string[];
   readonly excludedValidations: readonly string[];
   readonly out: string;
-  readonly readme: string;
+  /** The documents that hold the study block: the root README and the close-out note. */
+  readonly readmes: readonly string[];
   readonly check: boolean;
 }
 
@@ -59,12 +63,15 @@ const VALUE_FLAGS: readonly string[] = [
 ];
 const USAGE =
   'node tools/derive-study-results.ts --evidence-root <dir> --spec <spec.md> --run <id> ' +
-  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> --readme <README.md> [--check]';
+  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> --readme <file.md> ' +
+  '[--readme <file.md> ...] [--check]';
 
 export const FIELD_DEFINITIONS: Readonly<Record<string, string>> = {
   paths:
     'Every artifact path is relative to its package directory; package and verification paths are relative to the evidence root.',
   package_index_sha256: "SHA-256 of the package's package-index.json bytes: the package's identity.",
+  inputs:
+    "Approved and captured amounts in minor units of currency, and the Region: the execution manifest's, equal to each trial's payment and approved decision and to the spec's OR-RUA-001.",
   'safety.estimated_cost': "The safety assessment's pre-billing cost estimate (BR-RUA-046), not billed cost.",
   'safety.active_time': "The safety assessment's observed active time against its declared limit.",
   'trials[].preservation_verdict': "The frozen oracle result's verdict on the single-refund invariant.",
@@ -89,9 +96,15 @@ export const FIELD_DEFINITIONS: Readonly<Record<string, string>> = {
  * The derived results of the given executions, each list in the order given.
  *
  * @example
- * deriveStudyResults({ runs: [run], validations, excludedValidations: [], limitation9 }).canonical_runs[0].trials.length; // 4
+ * deriveStudyResults({ runs: [run], validations, excludedValidations: [], limitation9, financialFixture })
+ *   .canonical_runs[0].trials.length; // 4
  */
 export function deriveStudyResults(input: StudyResultsInput): StudyResults {
+  const counted = (one: ExecutionInput): ExecutionResult => {
+    const result = deriveExecutionResult(one, input.limitation9);
+    assertFixtureInputs(result.inputs, input.financialFixture, result.package_directory);
+    return result;
+  };
   return {
     record_type: 'study_results',
     schema_version: 1,
@@ -99,8 +112,8 @@ export function deriveStudyResults(input: StudyResultsInput): StudyResults {
     derived_by: 'study-1/tools/derive-study-results.ts',
     authority: "Each package's package-index.json digest is the authority; this file is a derived view.",
     field_definitions: FIELD_DEFINITIONS,
-    canonical_runs: input.runs.map((one) => deriveExecutionResult(one, input.limitation9)),
-    within_variant_reproductions: input.validations.map((one) => deriveExecutionResult(one, input.limitation9)),
+    canonical_runs: input.runs.map(counted),
+    within_variant_reproductions: input.validations.map(counted),
     excluded_executions: input.excludedValidations.map(deriveExcludedExecution),
   };
 }
@@ -166,6 +179,13 @@ export function parseDeriveArguments(argv: readonly string[]): DeriveArguments {
     const found = values.get(flag) ?? [];
     return exactlyOne(found, `usage: ${USAGE}; got ${JSON.stringify(argv)} with ${String(found.length)} ${flag}`);
   };
+  const atLeastOne = (flag: string): readonly string[] => {
+    const found = values.get(flag) ?? [];
+    if (found.length === 0) {
+      throw new Error(`usage: ${USAGE}; got ${JSON.stringify(argv)} with 0 ${flag}`);
+    }
+    return found;
+  };
   const runs = values.get('--run') ?? [];
   const validations = values.get('--validation') ?? [];
   const excludedValidations = values.get('--excluded-validation') ?? [];
@@ -180,7 +200,7 @@ export function parseDeriveArguments(argv: readonly string[]): DeriveArguments {
     validations,
     excludedValidations,
     out: single('--out'),
-    readme: single('--readme'),
+    readmes: atLeastOne('--readme'),
     check,
   };
 }

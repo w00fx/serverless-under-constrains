@@ -18,6 +18,8 @@ import {
   readRecord,
   stringOf,
 } from './study-results-reading.ts';
+import type { ExecutionInputs } from './study-results-inputs.ts';
+import { deriveExecutionInputs } from './study-results-inputs.ts';
 import type { TrialResult } from './study-results-trial.ts';
 import { citedOracleResult, deriveTrialResult } from './study-results-trial.ts';
 
@@ -89,6 +91,7 @@ export interface ExecutionResult extends ExecutionIdentity {
   readonly comparative: boolean;
   readonly non_comparative_basis: string | null;
   readonly selected_probe: { readonly transport_probe_id: string; readonly original_package_index_sha256: string };
+  readonly inputs: ExecutionInputs;
   readonly safety: SafetyResult;
   readonly trials: readonly TrialResult[];
   readonly evidence_refs: readonly ArtifactRef[];
@@ -195,6 +198,7 @@ export function deriveExecutionResult(input: ExecutionInput, limitation9: string
   }
   const manifest = readRecord(pkg, MANIFEST);
   const safety = readRecord(pkg, SAFETY);
+  const trials = objectsOf(summary.record, 'trial_results', subject).map((entry) => agreedTrial(pkg, entry));
   return {
     execution_kind: identity.execution_kind,
     execution_id: identity.execution_id,
@@ -205,11 +209,16 @@ export function deriveExecutionResult(input: ExecutionInput, limitation9: string
     package_index_sha256: identity.package_index_sha256,
     source_commit: identity.source_commit,
     selected_probe: selectedProbeOf(manifest.record, `${pkg.directory}/${MANIFEST}`),
+    inputs: deriveExecutionInputs(
+      pkg,
+      manifest,
+      trials.map((trial) => trial.trial_id),
+    ),
     outcome: identity.outcome,
     closure: identity.closure,
     safety: safetyResult(safety.record, `${pkg.directory}/${SAFETY}`),
     verifications: identity.verifications,
-    trials: objectsOf(summary.record, 'trial_results', subject).map((entry) => agreedTrial(pkg, entry)),
+    trials,
     evidence_refs: [manifest.ref, provenance.ref, summary.ref, safety.ref].sort(byArtifactPath),
   };
 }

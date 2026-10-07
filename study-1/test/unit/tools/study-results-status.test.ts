@@ -16,7 +16,13 @@ import {
 import type { TrialResult } from '../../../tools/lib/study-results-trial.ts';
 import type { StudyResults } from '../../../tools/lib/study-results.ts';
 import { deriveStudyResults } from '../../../tools/lib/study-results.ts';
-import { indeterminateValidationInput, LIMITATION_9, runInput, validationInput } from './support/execution-inputs.ts';
+import {
+  FINANCIAL_FIXTURE,
+  indeterminateValidationInput,
+  LIMITATION_9,
+  runInput,
+  validationInput,
+} from './support/execution-inputs.ts';
 import { InMemoryEvidence } from './support/in-memory-evidence.ts';
 
 function fixtureResults(): StudyResults {
@@ -25,6 +31,7 @@ function fixtureResults(): StudyResults {
     validations: [validationInput(new InMemoryEvidence())],
     excludedValidations: [indeterminateValidationInput(new InMemoryEvidence())],
     limitation9: LIMITATION_9,
+    financialFixture: FINANCIAL_FIXTURE,
   });
 }
 
@@ -46,6 +53,9 @@ describe('repositoryStatus', () => {
           'run_terminal_reason `COMPLETED`, execution_status `completed`, comparison_eligibility `eligible`. ' +
           'Closure: cleanup_status `succeeded`, leak_audit_status `clean`, lease_status `released`, ' +
           'safety_status `within_limits`, evidence_integrity_status `verified`.',
+        '',
+        'Inputs of every trial: approved `10000` and captured `10000` minor units of `BRL`, in Region `us-east-1`. ' +
+          'Estimated cost before billing: `0.28` USD against a `5.00` USD limit (`within_limits`).',
         '',
         '| Trial | Scenario | Variant | Successful provider transactions | Refunded, in minor units | Preservation verdict |',
         '|---|---|---|---|---|---|',

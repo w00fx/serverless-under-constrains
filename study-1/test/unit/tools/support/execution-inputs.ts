@@ -3,6 +3,7 @@
 // tests apply to them.
 
 import type { ExecutionInput, LooseFile } from '../../../../tools/lib/study-results-execution.ts';
+import type { FinancialFixture } from '../../../../tools/lib/study-results-inputs.ts';
 import type { EditableRecord, FileMap } from './in-memory-evidence.ts';
 import {
   bytesOf,
@@ -17,6 +18,12 @@ import {
 
 export const LIMITATION_9 =
   'Variant-validation evidence is non-comparative and cannot substitute for the canonical four-cell run.';
+/** The OR-RUA-001 fixture the in-memory packages are admitted with. */
+export const FINANCIAL_FIXTURE: FinancialFixture = {
+  approved_amount_minor: '10000',
+  captured_amount_minor: '10000',
+  currency: 'BRL',
+};
 export const RUN_DIRECTORY = `runs/${RUN_ID}`;
 export const VALIDATION_DIRECTORY = `variant-validations/${VALIDATION_ID}`;
 export const VALIDATION_SUMMARY = 'summary/validation-summary.json';

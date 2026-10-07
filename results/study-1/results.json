@@ -7,6 +7,7 @@
   "field_definitions": {
     "paths": "Every artifact path is relative to its package directory; package and verification paths are relative to the evidence root.",
     "package_index_sha256": "SHA-256 of the package's package-index.json bytes: the package's identity.",
+    "inputs": "Approved and captured amounts in minor units of currency, and the Region: the execution manifest's, equal to each trial's payment and approved decision and to the spec's OR-RUA-001.",
     "safety.estimated_cost": "The safety assessment's pre-billing cost estimate (BR-RUA-046), not billed cost.",
     "safety.active_time": "The safety assessment's observed active time against its declared limit.",
     "trials[].preservation_verdict": "The frozen oracle result's verdict on the single-refund invariant.",
@@ -33,6 +34,59 @@
       "selected_probe": {
         "transport_probe_id": "adfca539-508f-4a51-9a98-e1dcf8cec84a",
         "original_package_index_sha256": "1a1411b2e6956a6c42179896a6a0fff9a8dc064e93b1845e2b163181cb314f87"
+      },
+      "inputs": {
+        "approved_amount_minor": "10000",
+        "captured_amount_minor": "10000",
+        "currency": "BRL",
+        "region": "us-east-1",
+        "evidence_refs": [
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "admission/execution-manifest.json",
+            "artifact_sha256": "3d26529048074578c43c303781c3ff54d17c0f4f22f6916fa1348955b66f202e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          }
+        ]
       },
       "outcome": {
         "run_terminal_reason": "COMPLETED",
@@ -370,6 +424,39 @@
         "transport_probe_id": "adfca539-508f-4a51-9a98-e1dcf8cec84a",
         "original_package_index_sha256": "1a1411b2e6956a6c42179896a6a0fff9a8dc064e93b1845e2b163181cb314f87"
       },
+      "inputs": {
+        "approved_amount_minor": "10000",
+        "captured_amount_minor": "10000",
+        "currency": "BRL",
+        "region": "us-east-1",
+        "evidence_refs": [
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "admission/execution-manifest.json",
+            "artifact_sha256": "5459474242d205254c43b902dc31625e8ad7681fb9dafcba08a53ee38be92fec"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          }
+        ]
+      },
       "outcome": {
         "validation_terminal_reason": "COMPLETED",
         "implementation_validation_status": "verified",
@@ -552,6 +639,39 @@
       "selected_probe": {
         "transport_probe_id": "adfca539-508f-4a51-9a98-e1dcf8cec84a",
         "original_package_index_sha256": "1a1411b2e6956a6c42179896a6a0fff9a8dc064e93b1845e2b163181cb314f87"
+      },
+      "inputs": {
+        "approved_amount_minor": "10000",
+        "captured_amount_minor": "10000",
+        "currency": "BRL",
+        "region": "us-east-1",
+        "evidence_refs": [
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "admission/execution-manifest.json",
+            "artifact_sha256": "c39605d9b960dacf90d6d55523843d7e08b0e9def09fdbcb0b0263ea191986df"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          }
+        ]
       },
       "outcome": {
         "validation_terminal_reason": "COMPLETED",

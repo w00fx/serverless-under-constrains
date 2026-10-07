@@ -1,6 +1,7 @@
-// tools/derive-study-results.ts as a process (the owner's item 4): it writes results.json and the
-// README's study block, and with --check exits 1 when either drifts from a fresh derivation, while
-// the README's text outside the block stays free. Fixture packages are written to a scratch
+// tools/derive-study-results.ts as a process (the owner's item 4, and the close-out note): it writes
+// results.json and the study block of each --readme document, and with --check exits 1 when one
+// drifts from a fresh derivation, while the text outside the block stays free. It stops when the
+// packages disagree with the spec's OR-RUA-001 fixture. Fixture packages are written to a scratch
 // evidence root, so the real evidence is never read.
 
 import assert from 'node:assert/strict';
@@ -18,11 +19,19 @@ import {
   withRepositoryStatus,
 } from '../../../tools/lib/study-results-status.ts';
 import { deriveStudyResults, serializeStudyResults } from '../../../tools/lib/study-results.ts';
-import { LIMITATION_9, runInput, validationInput } from '../../unit/tools/support/execution-inputs.ts';
+import {
+  FINANCIAL_FIXTURE,
+  LIMITATION_9,
+  runInput,
+  validationInput,
+} from '../../unit/tools/support/execution-inputs.ts';
 import { InMemoryEvidence, RUN_ID, VALIDATION_ID } from '../../unit/tools/support/in-memory-evidence.ts';
 
 const STUDY_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-const SPEC = `# CAP-RUA\n\n## Threats to Validity and Limitations\n\n9. ${LIMITATION_9}\n`;
+const FIXTURE_TABLE =
+  '### OR-RUA-001 — Financial fixture\n\n| Field | Value |\n|---|---:|\n| `currency` | `BRL` |\n' +
+  '| `captured_amount_minor` | `10000` |\n| `approved_amount_minor` | `10000` |\n';
+const SPEC = `# CAP-RUA\n\n${FIXTURE_TABLE}\n## Threats to Validity and Limitations\n\n9. ${LIMITATION_9}\n`;
 const README = `# Title\n\n${STATUS_BEGIN}\n${STATUS_END}\n\nAfter.\n`;
 const scratchRoots: string[] = [];
 after(() => {
@@ -38,7 +47,7 @@ interface ProcessResult {
 }
 
 // The fixture run and validation with empty verifications/ folders, the spec and a README.
-function scratchStudy(readme = README): string {
+function scratchStudy(readme = README, spec = SPEC): string {
   const root = mkdtempSync(join(tmpdir(), 'rua-results-'));
   scratchRoots.push(root);
   const evidence = new InMemoryEvidence();
@@ -50,7 +59,7 @@ function scratchStudy(readme = README): string {
   }
   mkdirSync(join(root, 'evidence', 'verifications', RUN_ID), { recursive: true });
   mkdirSync(join(root, 'evidence', 'verifications', VALIDATION_ID), { recursive: true });
-  writeFileSync(join(root, 'spec.md'), SPEC);
+  writeFileSync(join(root, 'spec.md'), spec);
   writeFileSync(join(root, 'README.md'), readme);
   return root;
 }
@@ -77,6 +86,7 @@ function expectedResults(): ReturnType<typeof deriveStudyResults> {
     validations: [validationInput(evidence)],
     excludedValidations: [],
     limitation9: LIMITATION_9,
+    financialFixture: FINANCIAL_FIXTURE,
   });
 }
 
@@ -126,6 +136,36 @@ describe('derive-study-results', () => {
         'study results: README.md matches a fresh derivation\n',
       stderr: '',
     });
+  });
+
+  it('fills and checks the study block of every --readme document', () => {
+    const root = scratchStudy();
+    const note = join(root, 'STUDY-1.md');
+    writeFileSync(note, `# Close-out\n\n${STATUS_BEGIN}\n${STATUS_END}\n`);
+    assert.deepEqual(results(root, '--readme', 'STUDY-1.md'), {
+      status: 0,
+      stdout: 'study results: wrote out/results.json and the study block of README.md and STUDY-1.md\n',
+      stderr: '',
+    });
+    const status = repositoryStatus(expectedResults());
+    assert.equal(readFileSync(note, 'utf8'), `# Close-out\n\n${STATUS_BEGIN}\n${status}${STATUS_END}\n`);
+    writeFileSync(note, readFileSync(note, 'utf8').replace('`10000`', '`20000`'));
+    assert.deepEqual(results(root, '--readme', 'STUDY-1.md', '--check'), {
+      status: 1,
+      stdout:
+        'study results: out/results.json matches a fresh derivation\n' +
+        'study results: README.md matches a fresh derivation\n' +
+        'study results: STUDY-1.md DIFFERS from a fresh derivation\n',
+      stderr: '',
+    });
+  });
+
+  it('stops when the packages disagree with the OR-RUA-001 fixture, writing nothing', () => {
+    const root = scratchStudy(README, SPEC.replace('| `currency` | `BRL` |', '| `currency` | `USD` |'));
+    const result = results(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /runs\/[0-9a-f-]+ states currency BRL; expected OR-RUA-001's currency USD/);
+    assert.throws(() => readFileSync(join(root, 'out/results.json')), /ENOENT/);
   });
 
   it('fails on a README without the study block markers, writing nothing', () => {

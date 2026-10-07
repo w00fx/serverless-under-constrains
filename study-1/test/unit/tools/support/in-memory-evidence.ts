@@ -29,6 +29,7 @@ export const VALIDATION_ID = '00000000-0000-4000-8000-000000000002';
 export const PROBE_ID = '00000000-0000-4000-8000-0000000000aa';
 export const PROBE_INDEX = 'a'.repeat(64);
 export const COMMIT = 'c'.repeat(40);
+export const REGION = 'us-east-1';
 
 export const CONTROL_CONVENTIONAL: TrialFixture = {
   id: '10000000-0000-4000-8000-000000000001',
@@ -114,11 +115,13 @@ export class InMemoryEvidence {
   };
 }
 
-/** The files of one trial: manifest, oracle result, ledger, caller journal and Durable history. */
+/** The files of one trial: manifest, inputs, oracle result, ledger, caller journal and Durable history. */
 export function trialFiles(trial: TrialFixture): FileMap {
   const directory = `trials/${trial.id}`;
   const files: FileMap = new Map();
   files.set(`${directory}/trial-manifest.json`, { scenario: trial.scenario, variant_id: trial.variant });
+  files.set(`${directory}/inputs/payment.json`, { captured_amount_minor: 10000, currency: 'BRL' });
+  files.set(`${directory}/inputs/approved-decision.json`, { approved_amount_minor: 10000, currency: 'BRL' });
   files.set(`${directory}/derived/oracle-result.json`, {
     preservation_verdict: trial.verdict,
     correct_completion: trial.verdict === 'pass',
@@ -169,6 +172,9 @@ export function executionFiles(
   editTrials(files);
   files.set('admission/execution-manifest.json', {
     qualification: { transport_probe_id: PROBE_ID, original_package_index_sha256: PROBE_INDEX },
+    financial_inputs: { approved_amount_minor: 10000, captured_amount_minor: 10000, currency: 'BRL' },
+    environment: { region: REGION },
+    safety: { region: REGION },
   });
   files.set('admission/source-provenance.json', { commit_sha: COMMIT });
   files.set('summary/safety-assessment.json', safetyAssessment());

@@ -23,6 +23,8 @@ Every value in this block is read from [`results/study-1/results.json`](results/
 
 The canonical run `abf41ffd` ran 4 trials from source commit `9ce4ad7`, qualified by transport probe `adfca539`; refund commit dates (UTC): 2026-10-07. 4 of the 4 trials were valid. Outcome: run_terminal_reason `COMPLETED`, execution_status `completed`, comparison_eligibility `eligible`. Closure: cleanup_status `succeeded`, leak_audit_status `clean`, lease_status `released`, safety_status `within_limits`, evidence_integrity_status `verified`.
 
+Inputs of every trial: approved `10000` and captured `10000` minor units of `BRL`, in Region `us-east-1`. Estimated cost before billing: `0.28` USD against a `5.00` USD limit (`within_limits`).
+
 | Trial | Scenario | Variant | Successful provider transactions | Refunded, in minor units | Preservation verdict |
 |---|---|---|---|---|---|
 | 1 | `CONTROL` | `conventional` | 1 | 10000 BRL | `pass` |

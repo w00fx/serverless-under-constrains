@@ -60,6 +60,11 @@ function canonicalRunLines(run: ExecutionResult): readonly string[] {
       `refund commit dates (UTC): ${listOrNone(dates.sort(), ', ')}. ${String(valid)} of the ${String(run.trials.length)} trials were valid. ` +
       `Outcome: ${statuses(run.outcome)}. Closure: ${statuses(run.closure)}.`,
     '',
+    `Inputs of every trial: approved \`${run.inputs.approved_amount_minor}\` and captured ` +
+      `\`${run.inputs.captured_amount_minor}\` minor units of \`${run.inputs.currency}\`, in Region \`${run.inputs.region}\`. ` +
+      `Estimated cost before billing: \`${run.safety.estimated_cost.observed_usd}\` USD against a ` +
+      `\`${run.safety.estimated_cost.declared_limit_usd}\` USD limit (\`${run.safety.estimated_cost.result}\`).`,
+    '',
     '| Trial | Scenario | Variant | Successful provider transactions | Refunded, in minor units | Preservation verdict |',
     '|---|---|---|---|---|---|',
     ...run.trials.map(
