@@ -16,6 +16,7 @@ import type { SourceProvenance } from '../record-contract/records/group-a/source
 import type { TrialManifest } from '../record-contract/records/group-a/trial_manifest.ts';
 import type { LeaseEventRecorded } from '../record-contract/records/group-b/lease_event_recorded.ts';
 import type { PhaseTransitionRecorded } from '../record-contract/records/group-b/phase_transition_recorded.ts';
+import type { SafetyCheckRecorded } from '../record-contract/records/group-b/safety_check_recorded.ts';
 import type { TrialInterrupted } from '../record-contract/records/group-b/trial_interrupted.ts';
 import type { CleanupResult } from '../record-contract/records/group-c/cleanup_result.ts';
 import type { ComparisonAssessment } from '../record-contract/records/group-c/comparison_assessment.ts';
@@ -54,6 +55,7 @@ export interface StudyComparisonRecords {
   readonly run_summary: RunSummary;
   readonly phase_transition_recorded: PhaseTransitionRecorded;
   readonly trial_interrupted: TrialInterrupted;
+  readonly safety_check_recorded: SafetyCheckRecorded;
   readonly lease_event_recorded: LeaseEventRecorded;
 }
 export type StudyComparisonRecordType = keyof StudyComparisonRecords;

@@ -1,13 +1,15 @@
 // The execution-level records a probe or validation summary cites at P9 (design §10.2; CTR-RUA-003,
 // BR-RUA-038), read back from the package the runner wrote: the cleanup result, the leak audit, the
 // safety assessment, the late-evidence assessment, and the runner and coordination journal events
-// the terminal reason is derived from. The bytes are read as untrusted (A-05): a file that cannot be
+// the terminal reason is derived from (the runner's P9 safety checks apart, since only a validation
+// has a terminal reason for a breached limit). The bytes are read as untrusted (A-05): a file that cannot be
 // read, or a record of another execution manifest, is reported and treated as absent, and the
 // summary writer judges the absence. A run reads the same records through `readRunPackage`.
 
 import { EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
 import type { Sha256Hex, StructuredReason } from '../record-contract/primitives.ts';
 import type { LeaseEventRecorded } from '../record-contract/records/group-b/lease_event_recorded.ts';
+import type { SafetyCheckRecorded } from '../record-contract/records/group-b/safety_check_recorded.ts';
 import type { CleanupResult } from '../record-contract/records/group-c/cleanup_result.ts';
 import type { LateEvidenceAssessment } from '../record-contract/records/group-c/late_evidence_assessment.ts';
 import type { LeakAuditResult } from '../record-contract/records/group-c/leak_audit_result.ts';
@@ -29,6 +31,8 @@ export interface ExecutionClosureRecords {
   readonly late_evidence: FrozenRecord<LateEvidenceAssessment> | undefined;
   /** Runner phase and interruption events, in file order. */
   readonly runner_events: readonly RunnerEvent[];
+  /** The runner's `safety_check_recorded` events, in file order. */
+  readonly safety_checks: readonly SafetyCheckRecorded[];
   /** Coordination lease events, in file order. */
   readonly lease_events: readonly LeaseEventRecorded[];
   /** Every file or line that could not be read, and every record of another manifest. */
@@ -73,19 +77,24 @@ export function readClosureRecords(
   const runner = readJournalRecords(
     files,
     EXECUTION_PATHS.runnerJournal,
-    ['phase_transition_recorded', 'trial_interrupted'],
+    ['phase_transition_recorded', 'trial_interrupted', 'safety_check_recorded'],
     deps,
   );
   const lease = readJournalRecords(files, EXECUTION_PATHS.coordinationJournal, ['lease_event_recorded'], deps);
   reasons.push(...runner.reasons, ...lease.reasons);
-  return {
+  const records = {
     cleanup: own(EXECUTION_PATHS.cleanupResult, 'cleanup_result'),
     leak_audit: own(EXECUTION_PATHS.leakAuditResult, 'leak_audit_result'),
     safety: own(EXECUTION_PATHS.safetyAssessment, 'safety_assessment'),
     late_evidence: own(EXECUTION_PATHS.lateEvidenceAssessment, 'late_evidence_assessment'),
-    runner_events: runner.records.filter((event) =>
-      ownedBy(event, manifestSha256, EXECUTION_PATHS.runnerJournal, reasons),
-    ),
+  };
+  const runnerOwned = runner.records.filter((event) =>
+    ownedBy(event, manifestSha256, EXECUTION_PATHS.runnerJournal, reasons),
+  );
+  return {
+    ...records,
+    runner_events: runnerOwned.filter((event) => event.record_type !== 'safety_check_recorded'),
+    safety_checks: runnerOwned.filter((event) => event.record_type === 'safety_check_recorded'),
     lease_events: lease.records.filter((event) =>
       ownedBy(event, manifestSha256, EXECUTION_PATHS.coordinationJournal, reasons),
     ),

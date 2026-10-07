@@ -142,7 +142,39 @@ describe('AC-RUA-056 the finalized probe carries what usability judges', () => {
     );
     const usability = assessProbeUsability(facts);
     assert.equal(usability.probe_usability, 'not_usable');
-    assert.ok(JSON.stringify(usability.reasons).includes('safety'));
+    assert.equal(usability.safety_status, 'breached');
+    // The exact BR-RUA-026 row, not any text that mentions safety: other rows also fail offline
+    // (runner-journal references, fixture artifacts), so only this row's presence is pinned.
+    assert.ok(
+      usability.reasons.some((reason) => reason.code === 'KNOWN_SAFETY_BREACH'),
+      `${JSON.stringify(usability.reasons.map((reason) => reason.code))} should include KNOWN_SAFETY_BREACH`,
+    );
+  });
+
+  it('journals each frozen safety check at P9, which the probe terminal reason does not read', () => {
+    const events = completed.journalEvents();
+    const checks = events.filter((event) => event['record_type'] === 'safety_check_recorded');
+    const assessed = completed.record(EXECUTION_PATHS.safetyAssessment)['checks'] as readonly JsonObject[];
+    const fields = ['boundary', 'declared_limit', 'observed', 'result', 'evidence_refs', 'checked_at'];
+    const pick = (check: JsonObject): readonly unknown[] => fields.map((field) => check[field]);
+    assert.deepEqual(checks.map(pick), assessed.map(pick));
+    assert.deepEqual(
+      checks.map((check) => [check['boundary'], check['result']]),
+      [
+        ['ACTIVE_TIME', 'within_limits'],
+        ['TOTAL_TIME', 'within_limits'],
+        ['ESTIMATED_COST', 'breached'],
+      ],
+    );
+    for (const check of checks) {
+      assert.equal(lifecycleValidator().validateAs('safety_check_recorded', check as JsonValue).valid, true);
+    }
+    const position = (matches: (event: JsonObject) => boolean): number => events.findIndex(matches);
+    const summaryStarted = position((event) => event['phase'] === 'SUMMARY' && event['status'] === 'started');
+    const summaryEnded = position((event) => event['phase'] === 'SUMMARY' && event['status'] !== 'started');
+    const first = position((event) => event['record_type'] === 'safety_check_recorded');
+    assert.ok(summaryStarted < first && first + checks.length <= summaryEnded, 'the checks precede the summary');
+    assert.equal(summaryOf(completed)['probe_terminal_reason'], 'COMPLETED');
   });
 });
 

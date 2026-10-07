@@ -3,17 +3,15 @@
 // - the trials: each declared trial's outcome (validation-trial-outcomes.ts);
 // - the scientific defects outside the trials: the admission evidence (`readAdmissionEvidence`);
 // - the terminal reason: `deriveValidationTerminalReason` over the runner and coordination journal
-//   events in time order and the original closure;
+//   events in time order, the runner's P9 safety checks among them, and the original closure;
 // - the closure: the frozen cleanup result, the leak audit (`inconclusive` when absent) and the
 //   final lease status the coordination journal settles;
 // - evidence integrity: the run-level derivation over the declared trials (INV-RUA-001 across them).
 // The summary cites the cleanup result and the late-evidence assessment and builds its status on
 // the safety assessment, so the absence of any of them fails the SUMMARY phase, as for a run.
-//
-// Safety checks are not journaled as `safety_check_recorded` events (the supervisor's checks are
-// frozen in the safety assessment), so a breach other than the active-time deadline (which ends
-// the trials as a `SAFETY_DEADLINE` interruption) is not a terminal reason here; the safety
-// standing still keeps the status from `verified` (evidence/CMP-05/decisions.md).
+// A breached limit other than the active-time deadline (a cleanup past the total target, a cost
+// estimate above its ceiling) is `SAFETY_LIMIT_EXCEEDED` unless an earlier cause stopped the
+// lifecycle (CMP-05 review, evidence/CMP-05/decisions.md).
 
 import { EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
 import { serializeRecordFile } from '../record-contract/canonical-json.ts';
@@ -82,7 +80,7 @@ export class ValidationSummaryWriter implements SummaryWriter {
       trials: trials.outcomes,
       scientific_defects: admission.value.defects,
       terminal_reason: deriveValidationTerminalReason(
-        inJournalTime([...closure.runner_events, ...closure.lease_events]),
+        inJournalTime([...closure.runner_events, ...closure.safety_checks, ...closure.lease_events]),
         original,
       ),
       closure: original,

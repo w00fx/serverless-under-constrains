@@ -176,3 +176,42 @@ describe('AC-RUA-049 the safety deadline is reached', () => {
     assert.equal(world.file(`trials/${second}/trial-manifest.json`), undefined);
   });
 });
+
+// BR-RUA-038 SAFETY_LIMIT_EXCEEDED: a breach other than the active-time deadline interrupts nothing,
+// so only the runner's P9 safety checks carry it into the validation terminal reason. The total
+// target is placed 1 ms after cleanup starts; the active limit stays the run maximum.
+describe('a variant validation whose cleanup runs past the total target', () => {
+  it('journals the TOTAL_TIME breach and ends SAFETY_LIMIT_EXCEEDED', async () => {
+    const calibration = await RunnerWorld.create({ name: 'validation-conventional' });
+    await calibration.run();
+    const cleanupStarted = calibration.elapsedMsAt(
+      (event) => event['phase'] === 'CLEANUP' && event['status'] === 'started',
+    );
+    const unbreached = calibration.record(EXECUTION_PATHS.validationSummary);
+    assert.equal(calibration.record(EXECUTION_PATHS.safetyAssessment)['safety_status'], 'within_limits');
+    assert.equal(unbreached['validation_terminal_reason'], 'LEASE_STATE_UNVERIFIED', 'the lease is the only cause');
+
+    const world = await RunnerWorld.create({
+      name: 'validation-conventional',
+      limits: { ...RUN_SAFETY, total_ms: cleanupStarted + 1 },
+    });
+    const outcome = await world.run();
+
+    assert.equal(outcome.interruption, undefined, 'a total-time breach interrupts nothing');
+    assert.equal(outcome.cleanup_status, 'succeeded');
+    assert.equal(world.record(EXECUTION_PATHS.cleanupResult)['cleanup_mode'], 'NORMAL');
+    const checks = world.journal(EXECUTION_PATHS.runnerJournal).filter(eventOf('safety_check_recorded'));
+    assert.deepEqual(
+      checks.map((check) => [check['boundary'], check['result']]),
+      [
+        ['ACTIVE_TIME', 'within_limits'],
+        ['TOTAL_TIME', 'breached'],
+        ['ESTIMATED_COST', 'within_limits'],
+      ],
+    );
+    const summary = world.record(EXECUTION_PATHS.validationSummary);
+    assert.equal(summary['validation_terminal_reason'], 'SAFETY_LIMIT_EXCEEDED');
+    assert.equal(summary['safety_status'], 'breached');
+    assert.equal(summary['implementation_validation_status'], 'indeterminate');
+  });
+});
