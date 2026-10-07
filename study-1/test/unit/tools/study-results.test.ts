@@ -17,6 +17,10 @@ import { InMemoryEvidence, RUN_ID, VALIDATION_ID } from './support/in-memory-evi
 
 const SPEC = `# CAP-RUA\n\n## Threats to Validity and Limitations\n\n1. One.\n9. ${LIMITATION_9}\n\n## Non-Goals\n\n9. Not a limitation.\n`;
 const OTHER_ID = '00000000-0000-4000-8000-000000000003';
+const USAGE =
+  'usage: node tools/derive-study-results.ts --evidence-root <dir> --spec <spec.md> --run <id> ' +
+  '[--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> [--check]';
+const IDS_REFUSAL = 'expected at least one --run and distinct lowercase UUID ids';
 
 describe('deriveStudyResults', () => {
   it('places each execution by role: the canonical run, the reproductions and the excluded validations', () => {
@@ -127,5 +131,48 @@ describe('parseDeriveArguments', () => {
     }
     assert.throws(() => parseDeriveArguments([...base, '--out', 'again.json']), /with 2 --out$/);
     assert.throws(() => parseDeriveArguments([...base, '--run', RUN_ID]), /distinct lowercase UUID ids$/);
+  });
+
+  it('states the full usage when a flag is followed by another flag instead of its value', () => {
+    const argv = [...base, '--spec', '--check'];
+    assert.throws(() => parseDeriveArguments(argv), { message: `${USAGE}; got ${JSON.stringify(argv)}` });
+  });
+
+  it('refuses an id with anything before or after the UUID, such as a ../ prefix', () => {
+    for (const id of [`../${VALIDATION_ID}`, `x${VALIDATION_ID}`, `${VALIDATION_ID}/..`, `${VALIDATION_ID}x`]) {
+      const argv = [...base, '--validation', id];
+      assert.throws(() => parseDeriveArguments(argv), {
+        message: `${USAGE}; got ${JSON.stringify(argv)}; ${IDS_REFUSAL}`,
+      });
+    }
+  });
+});
+
+describe('FIELD_DEFINITIONS', () => {
+  it('defines every field in words', () => {
+    assert.deepEqual(FIELD_DEFINITIONS, {
+      paths:
+        'Every artifact path is relative to its package directory; package and verification paths are relative to the evidence root.',
+      package_index_sha256: "SHA-256 of the package's package-index.json bytes: the package's identity.",
+      'safety.estimated_cost': "The safety assessment's pre-billing cost estimate (BR-RUA-046), not billed cost.",
+      'safety.active_time': "The safety assessment's observed active time against its declared limit.",
+      'trials[].preservation_verdict': "The frozen oracle result's verdict on the single-refund invariant.",
+      'trials[].successful_transaction_count':
+        'SUCCEEDED transactions in the frozen ledger snapshot, cross-checked with the oracle.',
+      'trials[].refunded_total_minor': 'Sum of amount_minor over those transactions, in minor units of currency.',
+      'trials[].commit_gap_seconds':
+        'Seconds from the first to the second commit_requested_at; null with fewer than two commits.',
+      'trials[].retry.source_receive_count': 'Highest approximate_receive_count over the caller journal invocations.',
+      'trials[].retry.durable_step_attempt':
+        'Highest step_attempt over the caller journal invocations; null for a conventional caller.',
+      'trials[].retry.durable_executions':
+        'Each Durable execution: its status, last history event and highest step attempt.',
+      'trials[].retry.mechanism':
+        'source_redelivery when receive count > 1; durable_step_retry when step attempt > 1; both or none.',
+      within_variant_reproductions:
+        'Variant validations: one variant each, never comparative (spec limitation 9). A variant validation is a within-variant reproduction only when its summary states implementation_validation_status verified and validation_validity valid.',
+      excluded_executions:
+        'Variant validations that fail that criterion: never counted, listed with the status reasons, unverified gates and indeterminate reason codes their own packages state.',
+    });
   });
 });

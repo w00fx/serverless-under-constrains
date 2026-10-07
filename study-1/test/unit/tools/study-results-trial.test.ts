@@ -9,7 +9,12 @@ import type { JsonObject, UtcMillis } from '../../../src/record-contract/primiti
 import type { EvidencePackage } from '../../../tools/lib/study-results-reading.ts';
 import { loadPackage, objectsOf, readRecord } from '../../../tools/lib/study-results-reading.ts';
 import type { TrialResult } from '../../../tools/lib/study-results-trial.ts';
-import { commitGapSeconds, deriveTrialResult, retryMechanismOf } from '../../../tools/lib/study-results-trial.ts';
+import {
+  citedOracleResult,
+  commitGapSeconds,
+  deriveTrialResult,
+  retryMechanismOf,
+} from '../../../tools/lib/study-results-trial.ts';
 import type { EditableRecord, FileMap, TrialFixture } from './support/in-memory-evidence.ts';
 import {
   CONTROL_CONVENTIONAL,
@@ -19,6 +24,7 @@ import {
   firstOf,
   InMemoryEvidence,
   RUN_ID,
+  TIMEOUT_CONVENTIONAL,
   TIMEOUT_DURABLE,
 } from './support/in-memory-evidence.ts';
 
@@ -260,6 +266,59 @@ describe('deriveTrialResult', () => {
     };
     assert.throws(() => derive(TIMEOUT_DURABLE, noAttempt), {
       message: `${durableDirectory}/${journal}: the caller journal reaches step attempt null; expected the Durable history's 2`,
+    });
+  });
+});
+
+describe('a trial delivered more than once', () => {
+  it('derives a source redelivery from the highest receive count, as trial 2c1a67fd', () => {
+    const result = derive(TIMEOUT_CONVENTIONAL);
+    assert.deepEqual(result.retry, {
+      mechanism: 'source_redelivery',
+      source_receive_count: 2,
+      durable_step_attempt: null,
+      durable_executions: [],
+    });
+    assert.equal(result.successful_transaction_count, 2);
+    assert.equal(result.commit_gap_seconds, 59.105);
+  });
+});
+
+describe('refusals name the summary entry or file they read', () => {
+  const pkg = packageOf(CONTROL_CONVENTIONAL);
+  const entry = firstSummaryEntry(pkg);
+  const without = (name: string): JsonObject =>
+    Object.fromEntries(Object.entries(entry).filter(([member]) => member !== name));
+
+  it('names the summary entry for a missing trial id, sequence or oracle reference', () => {
+    const noTrialId = `${DIRECTORY} summary trial: trial_id is absent; expected a string`;
+    assert.throws(() => deriveTrialResult(pkg, without('trial_id')), { message: noTrialId });
+    assert.throws(() => citedOracleResult(pkg, without('trial_id')), { message: noTrialId });
+    assert.throws(() => deriveTrialResult(pkg, without('sequence')), {
+      message: `${DIRECTORY} summary trial ${CONTROL_CONVENTIONAL.id}: sequence is absent; expected a safe integer`,
+    });
+    assert.throws(() => deriveTrialResult(pkg, without('oracle_result_ref')), {
+      message: `${conventionalDirectory} summary entry: oracle_result_ref is absent; expected an object`,
+    });
+    assert.throws(() => deriveTrialResult(pkg, { ...entry, oracle_result_ref: {} }), {
+      message: `${conventionalDirectory} summary entry oracle_result_ref: artifact_sha256 is absent; expected a string`,
+    });
+  });
+
+  it('names the trial manifest and the oracle result for a missing member', () => {
+    for (const name of ['variant_id', 'scenario']) {
+      const dropped = edit(CONTROL_CONVENTIONAL, 'trial-manifest.json', (record) => {
+        record[name] = undefined;
+      });
+      assert.throws(() => derive(CONTROL_CONVENTIONAL, dropped), {
+        message: `${conventionalDirectory}/trial-manifest.json: ${name} is absent; expected a string`,
+      });
+    }
+    const noVerdict = edit(CONTROL_CONVENTIONAL, 'derived/oracle-result.json', (record) => {
+      record['preservation_verdict'] = undefined;
+    });
+    assert.throws(() => derive(CONTROL_CONVENTIONAL, noVerdict), {
+      message: `${conventionalDirectory}/derived/oracle-result.json: preservation_verdict is absent; expected a string`,
     });
   });
 });

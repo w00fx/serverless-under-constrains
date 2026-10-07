@@ -40,6 +40,17 @@ export const CONTROL_CONVENTIONAL: TrialFixture = {
   verdict: 'pass',
 };
 
+// Delivered twice: the source redelivered after the timeout, as run abf41ffd's trial 2c1a67fd.
+export const TIMEOUT_CONVENTIONAL: TrialFixture = {
+  id: '10000000-0000-4000-8000-000000000003',
+  sequence: 3,
+  scenario: 'COMMIT_THEN_TIMEOUT',
+  variant: 'conventional',
+  commits: ['2026-10-07T06:12:11.884Z', '2026-10-07T06:13:10.989Z'],
+  receiveCounts: [1, 2],
+  verdict: 'fail',
+};
+
 export const TIMEOUT_DURABLE: TrialFixture = {
   id: '10000000-0000-4000-8000-000000000002',
   sequence: 2,

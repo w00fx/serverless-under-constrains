@@ -64,8 +64,12 @@ export function validationInput(
   return { kind: 'variant_validation', id: VALIDATION_ID, read: evidence.read, verifications: [] };
 }
 
-/** A Durable validation whose trial the oracle could not conclude, as eda6019a's. */
-export function indeterminateValidationInput(evidence: InMemoryEvidence): ExecutionInput {
+/** A Durable validation whose trial the oracle could not conclude, as eda6019a's, edited further by a test. */
+export function indeterminateValidationInput(
+  evidence: InMemoryEvidence,
+  editTrials: (files: FileMap) => void = () => undefined,
+  editSummary: (summary: EditableRecord) => void = () => undefined,
+): ExecutionInput {
   const oraclePath = `trials/${TIMEOUT_DURABLE.id}/derived/oracle-result.json`;
   const inconclusive = (files: FileMap): void => {
     const oracle = editableIn(files, oraclePath);
@@ -83,6 +87,7 @@ export function indeterminateValidationInput(evidence: InMemoryEvidence): Execut
       { code: 'SETTLEMENT_NOT_ESTABLISHED' },
     ];
     files.set(oraclePath, oracle);
+    editTrials(files);
   };
   return validationInput(evidence, inconclusive, (summary) => {
     summary['implementation_validation_status'] = 'indeterminate';
@@ -90,6 +95,7 @@ export function indeterminateValidationInput(evidence: InMemoryEvidence): Execut
     summary['status_reasons'] = [
       { code: 'TRIAL_NOT_VALID', subject: 'trial 1', detail: 'trial_validity is indeterminate' },
     ];
+    editSummary(summary);
   });
 }
 

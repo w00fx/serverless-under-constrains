@@ -29,6 +29,7 @@ import {
   COMMIT,
   CONTROL_CONVENTIONAL,
   digestOf,
+  editableIn,
   firstOf,
   InMemoryEvidence,
   PROBE_ID,
@@ -115,6 +116,16 @@ describe('deriveExecutionResult', () => {
       implementation_validation_status: 'verified',
       validation_validity: 'valid',
     });
+    // Sorting matters for a validation: summary/safety-assessment sorts before summary/validation-summary.
+    assert.deepEqual(
+      result.evidence_refs.map((ref) => ref.artifact_path),
+      [
+        'admission/execution-manifest.json',
+        'admission/source-provenance.json',
+        'summary/safety-assessment.json',
+        VALIDATION_SUMMARY,
+      ],
+    );
   });
 
   it('refuses to count a validation that fails the reproduction criterion on either member', () => {
@@ -163,9 +174,20 @@ describe('deriveExecutionResult', () => {
       comparison_eligibility: 'eligible',
       package_eligibility: 'eligible',
     });
-    assert.equal(
-      deriveVerification({ record_type: 'variant_validation_verification', checked_at: 't3' }).recorded_at,
-      't3',
+    const validationVerification = deriveVerification({
+      record_type: 'variant_validation_verification',
+      checked_at: 't3',
+    });
+    assert.deepEqual(
+      [validationVerification.recorded_at, validationVerification.outcome],
+      [
+        't3',
+        {
+          effective_implementation_validation_status: 'verified',
+          validation_validity: 'valid',
+          package_eligibility: 'eligible',
+        },
+      ],
     );
   });
 
@@ -240,6 +262,81 @@ describe('deriveExecutionResult', () => {
     assert.throws(() => deriveExecutionResult(editedRun(safety(badTime)), LIMITATION_9), {
       message: `${subject}: observed is "1.5 ms"; expected a quantity matching /^(\\d+) ms$/`,
     });
+  });
+});
+
+describe('refusals name the file or summary entry they read', () => {
+  it('names the manifest, its qualification and the source provenance', () => {
+    const manifestPath = 'admission/execution-manifest.json';
+    const cases: readonly (readonly [EditableRecord, string])[] = [
+      [{}, `${RUN_DIRECTORY}/${manifestPath}: qualification is absent; expected an object`],
+      [
+        { qualification: { original_package_index_sha256: PROBE_INDEX } },
+        `${RUN_DIRECTORY}/${manifestPath} qualification: transport_probe_id is absent; expected a string`,
+      ],
+      [
+        { qualification: { transport_probe_id: PROBE_ID } },
+        `${RUN_DIRECTORY}/${manifestPath} qualification: original_package_index_sha256 is absent; expected a string`,
+      ],
+    ];
+    for (const [manifest, message] of cases) {
+      const input = editedRun((files) => {
+        files.set(manifestPath, manifest);
+      });
+      assert.throws(() => deriveExecutionResult(input, LIMITATION_9), { message });
+    }
+    const noCommit = editedRun((files) => {
+      files.set('admission/source-provenance.json', {});
+    });
+    assert.throws(() => deriveExecutionResult(noCommit, LIMITATION_9), {
+      message: `${RUN_DIRECTORY}/admission/source-provenance.json: commit_sha is absent; expected a string`,
+    });
+  });
+
+  it("names an excluded trial's summary entry, manifest and oracle result", () => {
+    const trialDirectory = `${VALIDATION_DIRECTORY}/trials/${TIMEOUT_DURABLE.id}`;
+    const excludedWith = (
+      editTrials?: (files: FileMap) => void,
+      editSummary?: (summary: EditableRecord) => void,
+    ): unknown =>
+      deriveExcludedExecution(indeterminateValidationInput(new InMemoryEvidence(), editTrials, editSummary));
+    const entryWithout =
+      (name: string) =>
+      (summary: EditableRecord): void => {
+        firstOf(summary, 'trial_results')[name] = undefined;
+      };
+    const fileWithout =
+      (file: string, name: string) =>
+      (files: FileMap): void => {
+        const path = `trials/${TIMEOUT_DURABLE.id}/${file}`;
+        const record = editableIn(files, path);
+        record[name] = undefined;
+        files.set(path, record);
+      };
+    assert.throws(() => excludedWith(undefined, entryWithout('trial_id')), {
+      message: `${VALIDATION_DIRECTORY} summary trial: trial_id is absent; expected a string`,
+    });
+    assert.throws(() => excludedWith(undefined, entryWithout('sequence')), {
+      message: `${VALIDATION_DIRECTORY} summary trial ${TIMEOUT_DURABLE.id}: sequence is absent; expected a safe integer`,
+    });
+    for (const name of ['scenario', 'variant_id']) {
+      assert.throws(() => excludedWith(fileWithout('trial-manifest.json', name)), {
+        message: `${trialDirectory}/trial-manifest.json: ${name} is absent; expected a string`,
+      });
+    }
+    assert.throws(() => excludedWith(fileWithout('derived/oracle-result.json', 'validity_gates')), {
+      message: `${trialDirectory}/derived/oracle-result.json: validity_gates is absent; expected an array of objects`,
+    });
+  });
+});
+
+describe('REPRODUCTION_CRITERION', () => {
+  it('states the criterion in words', () => {
+    assert.equal(
+      REPRODUCTION_CRITERION,
+      'A variant validation is a within-variant reproduction only when its summary states ' +
+        'implementation_validation_status verified and validation_validity valid.',
+    );
   });
 });
 
