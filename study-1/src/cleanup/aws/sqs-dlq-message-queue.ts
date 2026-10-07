@@ -8,9 +8,13 @@
 // - `DeleteMessage` uses the receipt handle of this receive;
 // - `ChangeMessageVisibility(0)` releases a held message at once.
 //
+// `DeleteMessage` through an old receipt handle "will succeed, but the message might not be
+// deleted" (SQS API reference, API_DeleteMessage, read 2026-10-06), so a `done` delete is only
+// as good as its handle: the sweep deletes a captured message with the handle of the receive
+// that just returned it, inside that receive's hold, which is then the latest handle.
+//
 // UNVERIFIED (cloud phase): that a long-polled empty receive of a FIFO DLQ with no message in
-// flight proves it holds none, and how `DeleteMessage` answers a receipt handle whose
-// visibility timeout already ended.
+// flight proves it holds none.
 
 import { ChangeMessageVisibilityCommand, DeleteMessageCommand, ReceiveMessageCommand } from '@aws-sdk/client-sqs';
 import type { SQSClient } from '@aws-sdk/client-sqs';
