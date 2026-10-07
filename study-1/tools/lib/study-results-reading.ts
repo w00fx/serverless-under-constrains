@@ -206,10 +206,8 @@ export function memberOf(record: JsonObject, name: string): JsonValue | undefine
  * [manifestRef, summaryRef].sort(byArtifactPath);
  */
 export function byArtifactPath(a: ArtifactRef, b: ArtifactRef): number {
-  if (a.artifact_path === b.artifact_path) {
-    return 0;
-  }
-  return a.artifact_path < b.artifact_path ? -1 : 1;
+  // Code-unit order, never localeCompare: the same order on every machine and locale.
+  return a.artifact_path < b.artifact_path ? -1 : Number(a.artifact_path > b.artifact_path);
 }
 
 function indexedFile(entry: JsonObject, directory: string, read: EvidenceFileReader): PackageFile {
