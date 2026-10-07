@@ -97,4 +97,17 @@ describe('planProbeWorkload', () => {
       }
     }
   });
+
+  it('quotes an oversized target within the bounded detail (A-05)', () => {
+    const planned = planProbeWorkload(PROBE_MANIFEST, MANIFEST_SHA, {
+      ...TARGETS,
+      provider_version: 'x'.repeat(100_000),
+    });
+    assert.equal(planned.ok, false);
+    assert.match(
+      planned.error.detail,
+      /^provider_version "x+…\[truncated\] is not a published version number; expected /,
+    );
+    assert.ok(planned.error.detail.length < 500, `detail of ${String(planned.error.detail.length)} characters`);
+  });
 });

@@ -6,6 +6,7 @@
 // `probe_workload_request`: the probe's identity and manifest digest, the declared payment and
 // refund request, and the approved amount.
 
+import { boundedJsonText } from '../record-contract/json-value.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, Sha256Hex, StructuredReason } from '../record-contract/primitives.ts';
 import type { ExecutionManifest } from '../record-contract/records/group-a/execution_manifest.ts';
@@ -74,7 +75,7 @@ export function planProbeWorkload(
     (name) => !PUBLISHED_VERSION.test(targets[name]),
   );
   if (unpublished !== undefined) {
-    return err(planReason(`${unpublished} ${JSON.stringify(targets[unpublished])} is not a published version number`));
+    return err(planReason(`${unpublished} ${boundedJsonText(targets[unpublished])} is not a published version number`));
   }
   const financial = declaredFinancialRecords(manifest);
   const inputs = manifest.financial_inputs;
