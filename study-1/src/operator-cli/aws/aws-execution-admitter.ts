@@ -31,7 +31,6 @@ import { ChildProcessCommandRunner } from '../../deployment-assembly/node/child-
 import { NodeAssemblyFileSystem } from '../../deployment-assembly/node/node-assembly-file-system.ts';
 import { createStoreDynamoDbClient } from '../../durable-store/aws/dynamodb-client.ts';
 import { createDynamoDbItemStore } from '../../durable-store/aws/dynamodb-item-store.ts';
-import { NodeAppendOnlyFile } from '../../event-journal/node/node-append-only-file.ts';
 import { NodePackageFileSystem } from '../../evidence-package/node/node-package-file-system.ts';
 import type { Uuid4, WallClock } from '../../record-contract/primitives.ts';
 import { EsbuildBundleInputResolver } from '../../transport-qualification/scope/node/esbuild-bundle-input-resolver.ts';
@@ -39,6 +38,7 @@ import { GitCommittedSourceReader } from '../../transport-qualification/scope/no
 import { NodeModulesPackageReader } from '../../transport-qualification/scope/node/node-modules-package-reader.ts';
 import type { ExecutionAdmitter, InputFileReader } from '../admit-commands.ts';
 import { EnvironmentLeaseReader } from '../environment-lease-reader.ts';
+import { DirectoryCreatingAppendOnlyFile } from '../node/directory-creating-append-only-file.ts';
 import { awsCdkTools } from './aws-cdk-tools.ts';
 import type { AwsCompositionSettings } from './aws-cdk-tools.ts';
 
@@ -108,7 +108,8 @@ function admissionPorts(
       validator,
     },
     files,
-    journal: new NodeAppendOnlyFile(),
+    // The attempt directory does not exist before A1's first append (decision 84).
+    journal: new DirectoryCreatingAppendOnlyFile(),
     clock,
     ids: { next: (): Uuid4 => randomUUID() as Uuid4 },
     validator,
