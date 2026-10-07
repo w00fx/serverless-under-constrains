@@ -10,6 +10,7 @@ import type { CleanupSafetyClock, StepReport } from '../cleanup/cleanup-ports.ts
 import { readCleanupHistory } from '../cleanup/cleanup-history.ts';
 import { CleanupOrchestrator } from '../cleanup/cleanup-orchestrator.ts';
 import type { CleanupRunOutcome } from '../cleanup/cleanup-orchestrator.ts';
+import { guardLeaseStore } from '../coordination-lease/guarded-lease-store.ts';
 import { finalizeLease } from '../coordination-lease/lease-finalization.ts';
 import type { LeaseStorePort } from '../coordination-lease/lease-store-port.ts';
 import { leaseOwnerOf } from '../coordination-lease/lease-store-port.ts';
@@ -255,8 +256,10 @@ async function repairLease(
   if (original === 'released') {
     return { status: 'released', reasons: [] };
   }
+  // A store adapter that throws must not reject the recovery: the guard turns a thrown write into
+  // an ambiguous one and a thrown read into a failed one (WP-22 review residual).
   const verdict = await finalizeLease({
-    store: deps.lease,
+    store: guardLeaseStore(deps.lease),
     owner: leaseOwnerOf(admitted.identity, admitted.manifest_sha256),
     closure: clean ? 'clean' : 'unclean',
     // Used only when the pre-finalization read fails; the conditional write then decides.

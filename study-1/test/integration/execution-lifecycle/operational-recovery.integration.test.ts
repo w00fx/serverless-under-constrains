@@ -20,6 +20,7 @@ import type { JsonObject, JsonValue, Uuid4 } from '../../../src/record-contract/
 import { SettableCleanupSafetyClock } from '../../support/cleanup/settable-cleanup-safety-clock.ts';
 import { formatUtcMillis } from '../../../src/record-contract/timestamps.ts';
 import { FakeLeaseStore } from '../../support/coordination-lease/fake-lease-store.ts';
+import { ThrowingLeaseStore } from '../../support/coordination-lease/throwing-lease-store.ts';
 import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 import { FOREIGN_OWNER } from '../../support/coordination-lease/lease-fixtures.ts';
 import { OfflinePackageStorage } from '../../support/offline-cloud/offline-package-storage.ts';
@@ -213,6 +214,23 @@ describe('recoverExecution', () => {
       recovered.value.record.reasons.map((reason) => reason.code),
       ['LEASE_NOT_REPAIRED'],
     );
+  });
+
+  it('reports a lease whose store adapter throws as not repaired, instead of rejecting', async () => {
+    const { world, store } = await leakedExecution();
+    const throwing = new ThrowingLeaseStore(store);
+    throwing.throwOnNextReads(10, { mode: 'reject', error: new TypeError('adapter defect') });
+    throwing.throwOnNextWrites(10, { mode: 'throw', error: new TypeError('adapter defect') });
+    const recovered = await world.drive(
+      recoverExecution(world.admitted, { ...recoveryDeps(world, store), lease: throwing }),
+    );
+    assert.ok(recovered.ok);
+    assert.equal(recovered.value.record.recovered_closure.lease_status, 'unverified');
+    assert.deepEqual(
+      recovered.value.record.reasons.map((reason) => reason.code),
+      ['LEASE_NOT_REPAIRED'],
+    );
+    assert.ok(throwing.pendingFaultCount() < 20, 'the guarded store was called');
   });
 
   it('counts a missing cleanup result as failed and a missing audit as inconclusive', async () => {
