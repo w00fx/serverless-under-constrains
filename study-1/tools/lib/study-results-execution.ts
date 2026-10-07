@@ -275,8 +275,8 @@ function criterionValues(summary: JsonObject, subject: string): string {
 }
 
 function excludedTrial(pkg: EvidencePackage, entry: JsonObject): ExcludedTrial {
-  const oracle = citedOracleResult(pkg, entry);
   const trialId = stringOf(entry, 'trial_id', `${pkg.directory} summary trial`);
+  const oracle = citedOracleResult(pkg, entry);
   const manifest = readRecord(pkg, `trials/${trialId}/trial-manifest.json`);
   const subject = `${pkg.directory}/${oracle.ref.artifact_path}`;
   const unverifiedGates = objectsOf(oracle.record, 'validity_gates', subject)
