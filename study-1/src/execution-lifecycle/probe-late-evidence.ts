@@ -211,13 +211,13 @@ function reevaluateProbe(
     return ok({ counted: 0, changes: [], problems: [] });
   }
   const augmented = augmentFrozenEvidence(probe.frozen, accepted, validator);
-  const baseline = rederived(probe, probe.frozen, assessedAt, validator);
-  const reassessed = rederived(probe, augmented.input, assessedAt, validator);
-  if (!baseline.ok) {
-    return baseline;
-  }
-  if (!reassessed.ok) {
-    return reassessed;
+  // Late records only join journals and the ledger, never the scope the derivation is refused on,
+  // so both derivations succeed or fail together; every reason is kept either way.
+  const derived = [probe.frozen, augmented.input].map((input) => rederived(probe, input, assessedAt, validator));
+  const refused = derived.flatMap((result) => (result.ok ? [] : result.error));
+  const [baseline, reassessed] = derived;
+  if (baseline?.ok !== true || reassessed?.ok !== true) {
+    return err(refused);
   }
   const unexplained = probeProjectionChanges(probe.result, baseline.value);
   const [first] = unexplained;

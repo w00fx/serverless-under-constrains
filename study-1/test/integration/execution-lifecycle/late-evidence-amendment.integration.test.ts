@@ -162,12 +162,9 @@ describe('AC-RUA-030 late-evidence assess writes a LATE_EVIDENCE amendment', () 
     const original = jsonAt(PROBE.files, EXECUTION_PATHS.lateEvidenceAssessment);
     assert.equal(assessment['monitoring_started_at'], original['monitoring_started_at']);
     assert.equal(assessment['monitoring_ended_at'], original['monitoring_ended_at']);
-    const refs = assessment['evidence_refs'] as readonly JsonObject[];
-    assert.deepEqual(
-      refs.filter((ref) => ref['artifact_path'] === AMENDMENT_PATHS.lateEvidenceStream),
-      [{ artifact_path: AMENDMENT_PATHS.lateEvidenceStream, artifact_sha256: sha256Hex(stream) }],
-    );
-    assert.ok(refs.every((ref) => ref['artifact_path'] !== EXECUTION_PATHS.lateEvidenceStream));
+    assert.deepEqual(assessment['evidence_refs'], [
+      { artifact_path: AMENDMENT_PATHS.lateEvidenceStream, artifact_sha256: sha256Hex(stream) },
+    ]);
     const index = jsonAt(written, AMENDMENT_PATHS.amendmentIndex);
     assert.equal(index['amendment_kind'], 'LATE_EVIDENCE');
     assert.equal(index['sequence'], 1);

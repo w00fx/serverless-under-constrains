@@ -102,7 +102,7 @@ export async function assessLateEvidenceAmendment(
   if (!assessment.ok) {
     return assessment;
   }
-  const amended = citingPayloadStream(assessment.value);
+  const amended = citingPayloadStream(assessment.value, stream.value.bytes);
   const written = await writeAmendmentPackage(deps.files, services, {
     admitted,
     kind: 'LATE_EVIDENCE',
@@ -203,15 +203,12 @@ function frozenTargets(files: PackageFiles, services: ExecutionServices): Execut
   return targets?.ok === true ? targets.value : undefined;
 }
 
-// The assessment cites the stream it read; in the amendment that is the payload copy.
-function citingPayloadStream(assessment: LateEvidenceAssessment): LateEvidenceAssessment {
+// The assessment cites exactly the stream it read (both assessors do); in the amendment that
+// stream is the payload copy, the same bytes at the payload path.
+function citingPayloadStream(assessment: LateEvidenceAssessment, stream: Uint8Array): LateEvidenceAssessment {
   return {
     ...assessment,
-    evidence_refs: assessment.evidence_refs.map((ref) =>
-      ref.artifact_path === EXECUTION_PATHS.lateEvidenceStream
-        ? { ...ref, artifact_path: AMENDMENT_PATHS.lateEvidenceStream }
-        : ref,
-    ),
+    evidence_refs: [{ artifact_path: AMENDMENT_PATHS.lateEvidenceStream, artifact_sha256: sha256Hex(stream) }],
   };
 }
 
