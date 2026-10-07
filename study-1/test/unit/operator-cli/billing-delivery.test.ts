@@ -14,6 +14,7 @@ import {
   checkDelivery,
 } from '../../../src/operator-cli/billing-delivery.ts';
 import type { DeliveryEntry } from '../../../src/operator-cli/billing-delivery.ts';
+import { QUOTED_JSON_LIMIT } from '../../../src/record-contract/json-value.ts';
 import type { UtcMillis } from '../../../src/record-contract/primitives.ts';
 
 const ACCOUNT = '012345678901';
@@ -25,6 +26,10 @@ const EXPECTATIONS = { account_id: ACCOUNT, window: WINDOW };
 const MANIFEST_PATH = 'metadata/suc-cur-Manifest.json';
 const DATA_PATH = 'data/BILLING_PERIOD=2026-10/suc-cur-00001.csv.gz';
 const DATA_BYTES = new TextEncoder().encode('line_item_line_item_type\nUsage\n');
+// Owner amendment A-05 hostile shapes: 100,000 levels of nesting, as an array and as an object.
+const DEPTH = 100_000;
+const DEEP_ARRAY = `${'['.repeat(DEPTH)}${']'.repeat(DEPTH)}`;
+const DEEP_OBJECT = `${'{"a":'.repeat(DEPTH)}1${'}'.repeat(DEPTH)}`;
 
 function manifestOf(members: Record<string, unknown>): DeliveryEntry {
   return { path: MANIFEST_PATH, bytes: new TextEncoder().encode(JSON.stringify(members)) };
@@ -270,6 +275,61 @@ describe('checkDelivery', () => {
         { path: DATA_PATH, bytes: DATA_BYTES },
       ]),
       `"${MANIFEST_PATH}" member dataFiles is null; expected an array of exactly one data file key`,
+    );
+  });
+
+  // Owner amendment A-05 (WP-28 review F5): the fuzz properties reach these shapes only through
+  // fc.constantFrom; each is pinned here, with the bounded quotation its reason carries.
+  it('refuses a manifest nested 100,000 levels deep without throwing', () => {
+    const notObject = `"${MANIFEST_PATH}" is not one JSON object; expected a Data Exports manifest object`;
+    const manifestOfText = (text: string): DeliveryEntry[] => [
+      { path: MANIFEST_PATH, bytes: new TextEncoder().encode(text) },
+      { path: DATA_PATH, bytes: DATA_BYTES },
+    ];
+    assert.equal(refusedDetail(manifestOfText(DEEP_ARRAY)), notObject);
+    assert.equal(
+      refusedDetail(manifestOfText(DEEP_OBJECT)),
+      `"${MANIFEST_PATH}" member dataFiles is null; expected an array of exactly one data file key`,
+    );
+    assert.equal(
+      refusedDetail(manifestOfText(`{"dataFiles":[${DEEP_ARRAY}]}`)),
+      `"${MANIFEST_PATH}" member dataFiles is ${'['.repeat(QUOTED_JSON_LIMIT)}…[truncated]; expected an array of exactly one data file key`,
+    );
+  });
+
+  it('refuses a manifest holding a number beyond the double range such as 1e400', () => {
+    const bytes = new TextEncoder().encode(
+      `{"dataFiles":["${DATA_PATH}"],"billingPeriod":{"start":1e400,"end":"2026-11-01T00:00:00Z"}}`,
+    );
+    assert.equal(
+      refusedDetail([
+        { path: MANIFEST_PATH, bytes },
+        { path: DATA_PATH, bytes: DATA_BYTES },
+      ]),
+      `"${MANIFEST_PATH}" is not one JSON object; expected a Data Exports manifest object`,
+    );
+  });
+
+  it('demotes a billing period nested 100,000 levels deep with a bounded quotation', () => {
+    const bytes = new TextEncoder().encode(
+      `{"dataFiles":["${DATA_PATH}"],"billingPeriod":${DEEP_OBJECT},"usageAccountIds":["${ACCOUNT}"]}`,
+    );
+    const checked = checkDelivery(
+      [
+        { path: MANIFEST_PATH, bytes },
+        { path: DATA_PATH, bytes: DATA_BYTES },
+      ],
+      EXPECTATIONS,
+    );
+    assert.equal(checked.ok, true);
+    assert.deepEqual(
+      checked.value.reasons.map((reason) => [reason.code, reason.detail.split(';')[0]]),
+      [
+        [
+          'INCOMPLETE_PERIOD',
+          `the delivery manifest states its billingPeriod as ${'{"a":'.repeat(QUOTED_JSON_LIMIT / 5)}…[truncated], not as readable UTC instants`,
+        ],
+      ],
     );
   });
 

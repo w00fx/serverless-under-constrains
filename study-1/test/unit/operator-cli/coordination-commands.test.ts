@@ -158,4 +158,30 @@ describe('coordination verify', () => {
       assert.deepEqual(reader.reads, []);
     }
   });
+  // Owner amendment A-05 (WP-28 review F5): a hostile environment file is the same usage error,
+  // never a throw: 100,000 levels of nesting, a number beyond the double range, inherited names.
+  it('is a usage error for a hostile environment input, before any read', async () => {
+    const valid = JSON.stringify(environmentInput());
+    const outOfRange = valid.replace('"schema_version":1', '"schema_version":1e400');
+    assert.notEqual(outOfRange, valid, 'the fixture states schema_version 1');
+    const hostile = [
+      `${'['.repeat(100_000)}${']'.repeat(100_000)}`,
+      `${'{"a":'.repeat(100_000)}1${'}'.repeat(100_000)}`,
+      outOfRange,
+      `{"__proto__":${valid},"constructor":${valid}}`,
+    ];
+    for (const contents of hostile) {
+      const reader = new ScriptedCoordinationReader(CLEAN);
+      const run = await runCli(
+        ['coordination', 'verify', '--env', ENV_PATH],
+        [verifyCommand(reader, environmentFile(contents))],
+      );
+      assert.equal(run.exit_code, 2);
+      assert.deepEqual(
+        run.result.reasons.map((reason) => reason.detail),
+        [`--env "${ENV_PATH}" is not a valid environment_input; expected a readable environment_input JSON file`],
+      );
+      assert.deepEqual(reader.reads, []);
+    }
+  });
 });
