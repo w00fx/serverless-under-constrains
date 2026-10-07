@@ -1,8 +1,8 @@
 # Study 1 evidence: public redacted copy
 
-A derived view of the 6 Study 1 evidence packages. Each original package-index.json digest is the authority; this copy is a derived view of the packages (spec limitation 10).
-The raw packages stay private because they hold environment identifiers. This copy replaces
-those identifiers and changes nothing else.
+A derived view of the 6 Study 1 evidence packages and their 17 verification records.
+Each original package-index.json digest is the authority for its package's files, and each verification record's original SHA-256, which results.json cites, for that record; this copy is a derived view (spec limitation 10). The raw packages stay private because they hold environment identifiers.
+This copy replaces those identifiers and changes nothing else.
 
 ## Packages
 
@@ -15,6 +15,12 @@ those identifiers and changes nothing else.
 | `variant-validations/60511328-ab4d-4234-81ab-0b042a20e658` | `b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8` | `b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8` |
 | `variant-validations/eda6019a-0f5d-4565-a809-b129ec432036` | `f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c` | `f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c` |
 
+## Verification records
+
+`verifications/<execution id>/` holds the records that the operator CLI's verify commands wrote
+for these packages, outside any package. `results/study-1/results.json` cites the ones it reports
+by path and SHA-256. 17 of the 17 records are byte-identical to the originals.
+
 ## What was redacted
 
 - `aws-account-id`: The AWS account id that the ARN account segments name becomes 111122223333 wherever it appears: ARNs, bucket names, queue URLs and plain values. Files changed: 88; replacements: 426.
@@ -22,7 +28,17 @@ those identifiers and changes nothing else.
 - `home-path`: Any other /Users/<name> or /home/<name> prefix becomes <home>. Files changed: 0; replacements: 0.
 - `temp-path`: A macOS temporary directory, /var/folders/<a>/<b>/T with or without /private, becomes <temp-dir>. Files changed: 6; replacements: 6.
 
-863 of the 963 files are byte-identical to the originals.
+880 of the 980 files are byte-identical to the originals.
+
+## What this copy re-derives, and what it does not
+
+- The three monetary rules re-derive from the ledgers. `verdict-recheck.json` recomputes BR-RUA-001,
+  BR-RUA-002 and BR-RUA-009 and the preservation verdict for the canonical run's 4 trials
+  from their ledger snapshots, each equal to the original oracle result; 4 of those
+  4 ledger snapshots are byte-identical to the originals.
+- The trial-validity gates were evaluated on the private packages, not on this copy. The gates
+  read the trial journals, and redaction changed 6 of the 30 journal files here, so
+  each trial's validity in this copy is the original oracle result's, not re-derived.
 
 ## How to check this copy
 
@@ -30,10 +46,10 @@ those identifiers and changes nothing else.
    index records, and `redacted_sha256`, the digest of the bytes here. A file no rule changed
    has the same digest in both, so it checks directly against its package index.
 2. `results/study-1/results.json` cites each package by `package_index_sha256`: the original
-   digest in the table above.
-3. `verdict-recheck.json` re-derives the canonical run's 4 verdicts from the redacted
-   ledgers: BR-RUA-001, BR-RUA-002 and BR-RUA-009, and the preservation verdict, each equal to
-   the original oracle result.
+   digest in the table above. It cites each verification record by `path` and `sha256`: the
+   `original_sha256` the manifest lists for that path.
+3. `verdict-recheck.json` holds the recomputed rules beside the oracle result, and the ledger
+   digests on both sides.
 4. The owner of the raw packages re-verifies each one from its own bytes with
    `npm run rua -- run verify <package>` (or `validation verify`, `probe verify`), and re-derives
    this copy byte for byte with `npm run redact -- --check` in `study-1/`.
