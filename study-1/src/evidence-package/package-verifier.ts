@@ -4,7 +4,8 @@
 // 2. every indexed file, and every digest the package records about itself, matches the stored
 //    bytes (`ALTERED_BYTES`);
 // 3. nothing is stored that the index does not list (`UNINDEXED_FILE`);
-// 4. every reference of a derived record resolves (`UNRESOLVED_REFERENCE`);
+// 4. every reference of a derived record resolves (`UNRESOLVED_REFERENCE`); a runner-journal
+//    reference may cite a line-boundary prefix of the journal (A-15, reference-resolution.ts);
 // 5. the summary exists and its cleanup status is terminal (`NON_TERMINAL_STATUS`);
 // 6. the amendment graph is a complete, linear, digest-valid, cycle-free selected chain whose final
 //    assessment is not contradictory (amendment-chain.ts, amendment-snapshots.ts);
@@ -180,11 +181,14 @@ function indexedPackageReasons(
       deps.digest,
     ),
     ...nestedIndexReasons(input.original.files, deps),
-    ...unresolvedReferenceReasons({
-      entries: index.entries,
-      files: input.original.files,
-      referenced_package_indexes: input.referenced_package_indexes,
-    }),
+    ...unresolvedReferenceReasons(
+      {
+        entries: index.entries,
+        files: input.original.files,
+        referenced_package_indexes: input.referenced_package_indexes,
+      },
+      deps.digest,
+    ),
   ];
 }
 

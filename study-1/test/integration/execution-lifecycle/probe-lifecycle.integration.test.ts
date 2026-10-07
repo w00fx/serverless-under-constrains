@@ -144,7 +144,9 @@ describe('AC-RUA-056 the finalized probe carries what usability judges', () => {
     assert.equal(usability.probe_usability, 'not_usable');
     assert.equal(usability.safety_status, 'breached');
     // The exact BR-RUA-026 row, not any text that mentions safety: other rows also fail offline
-    // (runner-journal references, fixture artifacts), so only this row's presence is pinned.
+    // (fixture artifacts: the canonical deployment-assembly inventory, no transport-scope snapshot,
+    // an unverified scripted lease and cleanup), so only this row's presence is pinned. Runner-journal
+    // references resolve since A-15 (runner-package-verification.integration.test.ts).
     assert.ok(
       usability.reasons.some((reason) => reason.code === 'KNOWN_SAFETY_BREACH'),
       `${JSON.stringify(usability.reasons.map((reason) => reason.code))} should include KNOWN_SAFETY_BREACH`,

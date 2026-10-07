@@ -50,7 +50,7 @@ function scopeWith(record: JsonValue, extraFiles: readonly PackageFile[] = []): 
 }
 
 function problems(record: JsonValue): readonly string[] {
-  return unresolvedReferenceReasons(scopeWith(record)).map((reason) => reason.detail);
+  return unresolvedReferenceReasons(scopeWith(record), sha256Hex).map((reason) => reason.detail);
 }
 
 describe('unresolvedReferenceReasons', () => {
@@ -123,7 +123,7 @@ describe('unresolvedReferenceReasons', () => {
       files: [BAD_JSON, BROKEN_JSONL],
       referenced_package_indexes: [],
     };
-    const reasons = unresolvedReferenceReasons(scope);
+    const reasons = unresolvedReferenceReasons(scope, sha256Hex);
     assert.deepEqual(
       reasons.map((reason) => [reason.code, reason.artifact_path]),
       [
@@ -136,7 +136,7 @@ describe('unresolvedReferenceReasons', () => {
   it('reports a reference into a file that is indexed but absent', () => {
     const ghost = textFile('probe/state/trial-registration.json', '{}');
     const scope = scopeWith({ evidence_refs: [ref(ghost, { json_pointer: '' })] });
-    const reasons = unresolvedReferenceReasons({ ...scope, entries: [...scope.entries, entryOf(ghost)] });
+    const reasons = unresolvedReferenceReasons({ ...scope, entries: [...scope.entries, entryOf(ghost)] }, sha256Hex);
     assert.match(reasons[0]?.detail ?? '', /points into a file that cannot be read/);
   });
 
@@ -147,7 +147,9 @@ describe('unresolvedReferenceReasons', () => {
       [event],
     );
     assert.deepEqual(
-      unresolvedReferenceReasons(scope).map((reason) => reason.detail.includes('event_id the file does not hold')),
+      unresolvedReferenceReasons(scope, sha256Hex).map((reason) =>
+        reason.detail.includes('event_id the file does not hold'),
+      ),
       [true],
     );
   });

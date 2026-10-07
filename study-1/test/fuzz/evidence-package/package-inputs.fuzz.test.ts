@@ -108,19 +108,22 @@ describe('evidence-package input boundaries are total (property)', () => {
       fc.property(fc.jsonValue({ maxDepth: 4 }), (record) => {
         const bytes = encoder.encode(JSON.stringify({ evidence_refs: [record], x_ref: record }));
         const path = 'probe/derived/transport-probe-result.json';
-        const reasons = unresolvedReferenceReasons({
-          entries: [
-            {
-              artifact_path: path,
-              artifact_class: 'transport_probe_result',
-              derivation: 'derived',
-              bytes: bytes.length,
-              sha256: sha256Hex(bytes),
-            },
-          ],
-          files: [{ path, bytes }],
-          referenced_package_indexes: [],
-        });
+        const reasons = unresolvedReferenceReasons(
+          {
+            entries: [
+              {
+                artifact_path: path,
+                artifact_class: 'transport_probe_result',
+                derivation: 'derived',
+                bytes: bytes.length,
+                sha256: sha256Hex(bytes),
+              },
+            ],
+            files: [{ path, bytes }],
+            referenced_package_indexes: [],
+          },
+          sha256Hex,
+        );
         assert.ok(reasons.every((reason) => reason.code === 'UNRESOLVED_REFERENCE'));
       }),
       fuzzParameters(),
