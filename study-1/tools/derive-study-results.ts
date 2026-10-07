@@ -1,7 +1,7 @@
 // Derives results/study-1/results.json from the frozen evidence packages (close-out Phase 1).
 // Usage (or `npm run results [-- --check]`):
 //   node tools/derive-study-results.ts --evidence-root <dir> --spec <spec.md> --run <id>
-//     [--validation <id> ...] --out <results.json> [--check]
+//     [--validation <id> ...] [--excluded-validation <id> ...] --out <results.json> [--check]
 // Reads only: every package file is checked against its package-index entry, and nothing under
 // the evidence root is written. `--check` writes nothing and exits 1 when the file differs from a
 // fresh derivation.
@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 
 import type { EvidenceFileReader } from './lib/study-results-reading.ts';
-import type { ExecutionInput, ExecutionKind } from './lib/study-results.ts';
+import type { ExecutionInput, ExecutionKind } from './lib/study-results-execution.ts';
 import { deriveStudyResults, limitationOf, parseDeriveArguments, serializeStudyResults } from './lib/study-results.ts';
 
 let args;
@@ -33,10 +33,12 @@ const inputOf = (kind: ExecutionKind, id: string): ExecutionInput => ({
     .map((name) => ({ path: `verifications/${id}/${name}`, bytes: read(`verifications/${id}/${name}`) })),
 });
 
-const results = deriveStudyResults(
-  [...args.runs.map((id) => inputOf('run', id)), ...args.validations.map((id) => inputOf('variant_validation', id))],
-  limitationOf(readFileSync(args.spec, 'utf8'), 9),
-);
+const results = deriveStudyResults({
+  runs: args.runs.map((id) => inputOf('run', id)),
+  validations: args.validations.map((id) => inputOf('variant_validation', id)),
+  excludedValidations: args.excludedValidations.map((id) => inputOf('variant_validation', id)),
+  limitation9: limitationOf(readFileSync(args.spec, 'utf8'), 9),
+});
 const serialized = serializeStudyResults(results);
 
 if (args.check) {

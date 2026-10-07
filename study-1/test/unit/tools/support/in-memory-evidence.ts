@@ -108,6 +108,11 @@ export function trialFiles(trial: TrialFixture): FileMap {
     correct_completion: trial.verdict === 'pass',
     trial_validity: 'valid',
     treatment_fidelity: 'faithful',
+    validity_gates: [
+      { gate: 'traceability', value: 'verified' },
+      { gate: 'control_integrity', value: 'not_applicable' },
+    ],
+    indeterminate_reasons: [],
     monetary_observations: {
       successful_transaction_count: trial.commits.length,
       refunded_total_minor: String(trial.commits.length * 10000),
@@ -160,6 +165,7 @@ export function executionFiles(
           validation_terminal_reason: 'COMPLETED',
           implementation_validation_status: 'verified',
           validation_validity: 'valid',
+          status_reasons: [],
         }),
     execution_status: 'completed',
     cleanup_status: 'succeeded',

@@ -10,7 +10,7 @@
 import { signedDifferenceMs, sumMinorUnits } from '../../src/record-contract/decimal.ts';
 import type { JsonObject, UtcMillis } from '../../src/record-contract/primitives.ts';
 import { isUtcMillis } from '../../src/record-contract/timestamps.ts';
-import type { ArtifactRef, EvidencePackage } from './study-results-reading.ts';
+import type { ArtifactRef, CitedRecord, EvidencePackage } from './study-results-reading.ts';
 import {
   booleanOf,
   byArtifactPath,
@@ -90,11 +90,10 @@ export function deriveTrialResult(pkg: EvidencePackage, summaryEntry: JsonObject
   const trialId = stringOf(summaryEntry, 'trial_id', `${pkg.directory} summary trial`);
   const directory = `trials/${trialId}`;
   const manifest = readRecord(pkg, `${directory}/trial-manifest.json`);
-  const oracle = readRecord(pkg, `${directory}/derived/oracle-result.json`);
+  const oracle = citedOracleResult(pkg, summaryEntry);
   const ledger = readRecord(pkg, `${directory}/ledger/ledger-snapshot.json`);
   const caller = readLines(pkg, `${directory}/journals/caller-journal.jsonl`);
   const subject = `${pkg.directory}/${directory}`;
-  assertSummaryCites(summaryEntry, oracle.ref, subject);
   const variantId = stringOf(manifest.record, 'variant_id', `${subject}/trial-manifest.json`);
   const money = ledgerMoney(ledger.record, `${subject}/ledger/ledger-snapshot.json`);
   assertOracleMoney(oracle.record, money, `${subject}/derived/oracle-result.json`);
@@ -117,6 +116,27 @@ export function deriveTrialResult(pkg: EvidencePackage, summaryEntry: JsonObject
     retry: retryPath(caller.records, durable.executions, `${subject}/journals/caller-journal.jsonl`),
     evidence_refs: [manifest.ref, oracle.ref, ledger.ref, caller.ref, ...durable.refs].sort(byArtifactPath),
   };
+}
+
+/**
+ * The oracle result of the trial a summary entry names, refused unless the summary cites exactly
+ * the indexed bytes: otherwise the summary reports a verdict of other bytes.
+ *
+ * @example
+ * citedOracleResult(pkg, summary.trial_results[0]).record.preservation_verdict; // 'pass'
+ */
+export function citedOracleResult(pkg: EvidencePackage, summaryEntry: JsonObject): CitedRecord {
+  const trialId = stringOf(summaryEntry, 'trial_id', `${pkg.directory} summary trial`);
+  const subject = `${pkg.directory}/trials/${trialId}`;
+  const oracle = readRecord(pkg, `trials/${trialId}/derived/oracle-result.json`);
+  const cited = objectOf(summaryEntry, 'oracle_result_ref', `${subject} summary entry`);
+  const digest = stringOf(cited, 'artifact_sha256', `${subject} summary entry oracle_result_ref`);
+  if (digest !== oracle.ref.artifact_sha256) {
+    throw new Error(
+      `${subject}: the summary cites oracle result ${digest}; expected the indexed ${oracle.ref.artifact_sha256}`,
+    );
+  }
+  return oracle;
 }
 
 /**
@@ -150,17 +170,6 @@ export function commitGapSeconds(commitTimes: readonly UtcMillis[]): number | nu
     return null;
   }
   return Number(signedDifferenceMs(second, first)) / 1000;
-}
-
-// The summary must cite this exact oracle result, or it reports a verdict of other bytes.
-function assertSummaryCites(summaryEntry: JsonObject, oracleRef: ArtifactRef, subject: string): void {
-  const cited = objectOf(summaryEntry, 'oracle_result_ref', `${subject} summary entry`);
-  const digest = stringOf(cited, 'artifact_sha256', `${subject} summary entry oracle_result_ref`);
-  if (digest !== oracleRef.artifact_sha256) {
-    throw new Error(
-      `${subject}: the summary cites oracle result ${digest}; expected the indexed ${oracleRef.artifact_sha256}`,
-    );
-  }
 }
 
 function ledgerMoney(ledger: JsonObject, subject: string): LedgerMoney {
