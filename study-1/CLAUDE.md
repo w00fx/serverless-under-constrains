@@ -13,10 +13,16 @@ to this capability's code; what must be true lives in its spec.
 ## Working here
 
 - The stack is normative for this study (BR-RUA-053).
-- Install and build: <fill in>
-- Fast loop: <the check-study-1 command that /prep declared>
-- Golden: <fill in>
-- Operator CLI: not declared yet (OQ-RUA-003).
+- Install and build: Node `>=24.12.0 <25` and npm 11, then `npm ci`. There is no build
+  step: Node runs the TypeScript sources directly.
+- Fast loop: `npm run typecheck && npm run lint && npm run test:unit`.
+- Golden: `npm run test:golden` (it also checks the generated fixtures).
+- Full gate: `npm run check` (typecheck, lint, all suites, `FC_RUNS=10000` fuzz, 100%
+  coverage, mutation).
+- Operator CLI: `npm run rua -- <command>` (`node src/operator-cli/main.ts`). It prints one
+  `cli_result` JSON line. The exit codes are 0 completed, 2 usage error, 3 admission
+  rejected, 4 execution incomplete, 5 verification failed, 6 operational closure not
+  clean, 7 lease problem, 10 internal failure.
 
 ## Before anything touches the cloud
 
