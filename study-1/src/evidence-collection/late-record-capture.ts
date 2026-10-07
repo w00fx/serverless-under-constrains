@@ -10,7 +10,8 @@
 // - the ledger, a strongly consistent paged read, one LEDGER record when a transaction is new;
 // - for a queued trial, the DLQ received without deletion and correlated by the same rule as at
 //   freeze (MessageGroupId = trial id, AC-RUA-020), one DLQ record when a message is new;
-// - for a Durable trial, the execution listing, one record when an execution is new.
+// - for a Durable trial, the execution listing, one record when an execution new to the trial's
+//   listing window is listed (`durableListingWindow`: the listing has no trial filter).
 // A re-captured document is carried as read, restricted to its new items: its frozen items are
 // already evidence, and repeating them with values that changed since (a DLQ message's receive
 // count, an execution's status) would add a second copy of a frozen record.
@@ -35,6 +36,7 @@ import type {
   Result,
   Sha256Hex,
   StructuredReason,
+  UtcMillis,
   WallClock,
 } from '../record-contract/primitives.ts';
 import type { LateEvidenceSource } from '../record-contract/records/group-c/vocabulary.ts';
@@ -181,13 +183,14 @@ async function captureUnit(
   pushEach(state.failures, ledger.failures);
   keepDocument(state, context, { kind: 'ledger_transaction', key: 'ledgerSnapshot', source: 'LEDGER' }, ledger.record);
   if (isTrialScope(scope)) {
-    await captureQueuedEvidence(ports, unit, scope, context, state);
+    await captureQueuedEvidence(ports, plan.units, unit, scope, context, state);
   }
 }
 
 // DLQ and Durable evidence exist only for trials (design §7: the probe has no queues).
 async function captureQueuedEvidence(
   ports: LateCapturePorts,
+  units: readonly LateCaptureUnit[],
   unit: LateCaptureUnit,
   scope: TrialCaptureScope,
   context: ReadContext,
@@ -206,13 +209,53 @@ async function captureQueuedEvidence(
   if (unit.durable !== undefined) {
     const metadata = await collectDurableExecutionMetadata(ports.durable, unit.durable, scope, ports.clock);
     pushEach(state.failures, metadata.failures);
+    const window = durableListingWindow(units, unit.durable);
     const document = {
       kind: 'durable_execution',
       key: 'durableExecutions',
       source: 'DURABLE_EXECUTION_METADATA',
+      within: (execution: JsonValue) => startsWithin(execution, window),
     } as const;
     keepDocument(state, context, document, metadata.record);
   }
+}
+
+/** The start instants of one Durable trial's executions: from its publication to the next one's. */
+interface DurableWindow {
+  readonly from: UtcMillis;
+  /** The next publication of the same caller alias in the plan; undefined for the last trial. */
+  readonly until: UtcMillis | undefined;
+}
+
+// CMP-03 review F3. The listing has no trial filter (`durable-metadata.ts`): every Durable trial of
+// an execution lists the same caller function and alias from its own publication on, so re-listing
+// an earlier trial also returns every later trial's executions, which that trial never froze. The
+// trials run one after another (spec: "The canonical run contains exactly four sequential trials"),
+// so an execution belongs to the one trial whose window holds its start: from the trial's
+// publication up to the next publication of the same alias, the window its freeze read.
+function durableListingWindow(units: readonly LateCaptureUnit[], request: DurableListingRequest): DurableWindow {
+  const later = units.flatMap((other) =>
+    other.durable !== undefined && publishedLater(other.durable, request) ? [other.durable.started_after] : [],
+  );
+  return { from: request.started_after, until: later.sort()[0] };
+}
+
+function publishedLater(other: DurableListingRequest, request: DurableListingRequest): boolean {
+  return (
+    other.function_arn === request.function_arn &&
+    other.qualifier === request.qualifier &&
+    other.started_after > request.started_after
+  );
+}
+
+// UtcMillis instants have one fixed-width form, so they order as strings. An execution without a
+// start instant cannot be placed in a window and is kept: nothing shows it is another trial's.
+function startsWithin(execution: JsonValue, window: DurableWindow): boolean {
+  const startedAt = ownValue(execution, 'started_at');
+  return (
+    typeof startedAt !== 'string' ||
+    (startedAt >= window.from && (window.until === undefined || startedAt < window.until))
+  );
 }
 
 async function captureExecutionPartitions(
@@ -278,6 +321,8 @@ interface DocumentRead {
   readonly source: LateEvidenceSource;
   /** True when its absence at freeze means no item was frozen (the conditional DLQ snapshot). */
   readonly conditional?: boolean;
+  /** Which new items belong to the unit; all of them when absent. */
+  readonly within?: (item: JsonValue) => boolean;
 }
 
 // The document is carried as read, restricted to the items the frozen copy lacks; nothing new adds nothing.
@@ -288,11 +333,12 @@ function keepDocument(state: CaptureState, context: ReadContext, read: DocumentR
     state.failures.push(late.error);
     return;
   }
-  if (late.value.length === 0) {
+  const kept = read.within === undefined ? late.value : late.value.filter(read.within);
+  if (kept.length === 0) {
     return;
   }
   const capturedAt = ownValue(document, 'captured_at');
-  const restricted = { ...document, [DOCUMENT_ITEM_MEMBERS[read.kind]]: [...late.value] };
+  const restricted = { ...document, [DOCUMENT_ITEM_MEMBERS[read.kind]]: [...kept] };
   keepObservation(state, context, read.source, String(capturedAt), restricted);
 }
 

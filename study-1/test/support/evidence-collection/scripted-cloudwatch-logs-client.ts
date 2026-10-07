@@ -5,8 +5,10 @@
 // pattern and whose timestamp is inside [startTime, endTime] (both ends included, as the API
 // reference says "events with a timestamp before/later than this time are not returned"). An
 // unknown group fails with ResourceNotFoundException, and an operation the probe never sends is
-// refused as UnsupportedOperation. A group can be scripted to stop its search
-// early, answering no event and a `nextToken`. Every call is recorded with its decoded input.
+// refused as UnsupportedOperation. A group can be scripted to stop its search early: its first
+// pages answer no event and a `nextToken` naming the next page, and a request carrying that token
+// continues the search ("this operation can return empty results while there are more log events
+// available through the token"). Every call is recorded with its decoded input.
 
 import type { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
 import type { HttpRequest, HttpResponse } from '@smithy/types';
@@ -14,7 +16,14 @@ import type { HttpRequest, HttpResponse } from '@smithy/types';
 import { createTelemetryClients } from '../../../src/evidence-collection/aws/aws-telemetry-probe.ts';
 import type { TelemetryClientSettings } from '../../../src/evidence-collection/aws/aws-telemetry-probe.ts';
 import type { JsonObject } from '../../../src/record-contract/primitives.ts';
-import { jsonResponse, jsonTargetOperation, requestJson, SCRIPTED_CREDENTIALS } from './scripted-http.ts';
+import {
+  jsonResponse,
+  jsonTargetOperation,
+  requestJson,
+  SCRIPTED_CREDENTIALS,
+  scriptedPage,
+  scriptedPageToken,
+} from './scripted-http.ts';
 import type { RecordedTelemetryCall, ScriptedServiceError } from './scripted-http.ts';
 
 const LOGS_TARGET_PREFIX = 'Logs_20140328.';
@@ -28,7 +37,8 @@ export interface ScriptedLogEvent {
 
 interface LogGroupModel {
   readonly events: ScriptedLogEvent[];
-  stopsEarly: boolean;
+  /** How many pages of each search answer nothing before the matching events. */
+  emptyPages: number;
 }
 
 /**
@@ -64,9 +74,9 @@ export class ScriptedCloudWatchLogsClient {
     this.#group(logGroupName).events.push(event);
   }
 
-  /** Every search of the group stops before it finds anything, with a continuation token. */
-  stopSearchEarly(logGroupName: string): void {
-    this.#group(logGroupName).stopsEarly = true;
+  /** The first `pages` pages of every search of the group (all of them by default) find nothing and name the next page. */
+  stopSearchEarly(logGroupName: string, pages = Number.POSITIVE_INFINITY): void {
+    this.#group(logGroupName).emptyPages = pages;
   }
 
   /** The next request fails with this CloudWatch Logs error type. */
@@ -83,7 +93,7 @@ export class ScriptedCloudWatchLogsClient {
     if (existing !== undefined) {
       return existing;
     }
-    const created: LogGroupModel = { events: [], stopsEarly: false };
+    const created: LogGroupModel = { events: [], emptyPages: 0 };
     this.#groups.set(logGroupName, created);
     return created;
   }
@@ -103,8 +113,9 @@ export class ScriptedCloudWatchLogsClient {
     if (group === undefined) {
       return jsonResponse(400, LOGS_CONTENT_TYPE, { __type: 'ResourceNotFoundException', message: 'no such group' });
     }
-    if (group.stopsEarly) {
-      return jsonResponse(200, LOGS_CONTENT_TYPE, { events: [], nextToken: 'scripted-next' });
+    const page = scriptedPage(input['nextToken']);
+    if (page <= group.emptyPages) {
+      return jsonResponse(200, LOGS_CONTENT_TYPE, { events: [], nextToken: scriptedPageToken(page + 1) });
     }
     return jsonResponse(200, LOGS_CONTENT_TYPE, { events: matchingEvents(group.events, input) });
   }

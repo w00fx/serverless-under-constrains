@@ -2,13 +2,17 @@
 // design §5.3, §9.4, §12.2). Real SDK clients built by `createTelemetryClients` serialize every
 // request; the scripted clients answer as CloudWatch Logs, CloudWatch and X-Ray do. Proves the
 // exact wire requests (quoted filter term, the unit window, limit 1, the Lambda Invocations metric
-// per function, X-Ray epoch seconds), the pinned region and attempts, failures recorded as
+// per function, X-Ray epoch seconds and a filter on the unit's functions), continuation of a search
+// that stopped early up to the page limit, the pinned region and attempts, failures recorded as
 // unavailable telemetry, and the `telemetry_availability` record of a real lookup.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createAwsTelemetryProbe } from '../../../src/evidence-collection/aws/aws-telemetry-probe.ts';
+import {
+  createAwsTelemetryProbe,
+  TELEMETRY_PAGE_LIMIT,
+} from '../../../src/evidence-collection/aws/aws-telemetry-probe.ts';
 import type { TelemetryClientSettings } from '../../../src/evidence-collection/aws/aws-telemetry-probe.ts';
 import { captureTelemetryAvailability } from '../../../src/evidence-collection/telemetry-availability.ts';
 import type { TelemetryProbe } from '../../../src/evidence-collection/telemetry-availability.ts';
@@ -42,6 +46,7 @@ const UNIT_FUNCTIONS = [
   FUNCTION_NAMES['refund-provider'],
   FUNCTION_NAMES['treatment-controller'],
 ] as const;
+const UNIT_TRACE_FILTER = UNIT_FUNCTIONS.map((name) => `service("${name}")`).join(' OR ');
 
 interface ScriptedTelemetry {
   readonly logs: ScriptedCloudWatchLogsClient;
@@ -118,9 +123,53 @@ describe('AWS telemetry probe: logs', () => {
     });
   });
 
-  it('reports a search that stopped early as incomplete, not as nothing found', async () => {
+  it('reports a search that never finishes within the page limit as incomplete, not as nothing found', async () => {
     const telemetry = scriptedTelemetry();
     telemetry.logs.stopSearchEarly(CALLER_GROUP);
+    assert.deepEqual(await telemetry.probe.locate('logs', TRIAL_SCOPE), {
+      ok: false,
+      error: { code: 'LogSearchIncomplete' },
+    });
+    const callerSearches = telemetry.logs.calls().filter((call) => call.input['logGroupName'] === CALLER_GROUP);
+    assert.equal(TELEMETRY_PAGE_LIMIT, 10);
+    assert.deepEqual(
+      callerSearches.map((call) => call.input['nextToken']),
+      [
+        undefined,
+        'scripted-next-2',
+        'scripted-next-3',
+        'scripted-next-4',
+        'scripted-next-5',
+        'scripted-next-6',
+        'scripted-next-7',
+        'scripted-next-8',
+        'scripted-next-9',
+        'scripted-next-10',
+      ],
+    );
+  });
+
+  it('follows the continuation token of a search that stopped early until it finds the event', async () => {
+    const telemetry = scriptedTelemetry();
+    telemetry.logs.putEvent(PROVIDER_GROUP, { timestamp: LOOKUP_MS, message: TRIAL_ID });
+    telemetry.logs.stopSearchEarly(PROVIDER_GROUP, TELEMETRY_PAGE_LIMIT - 1);
+    assert.deepEqual(await telemetry.probe.locate('logs', TRIAL_SCOPE), { ok: true, value: [PROVIDER_GROUP] });
+    const providerSearches = telemetry.logs.calls().filter((call) => call.input['logGroupName'] === PROVIDER_GROUP);
+    assert.equal(providerSearches.length, TELEMETRY_PAGE_LIMIT);
+    assert.deepEqual(providerSearches.at(-1)?.input, {
+      logGroupName: PROVIDER_GROUP,
+      startTime: UNIT_STARTED_MS,
+      endTime: LOOKUP_MS,
+      filterPattern: `"${TRIAL_ID}"`,
+      limit: 1,
+      nextToken: `scripted-next-${String(TELEMETRY_PAGE_LIMIT)}`,
+    });
+  });
+
+  it('stops at the page limit even when the event would be found on the next page', async () => {
+    const telemetry = scriptedTelemetry();
+    telemetry.logs.putEvent(PROVIDER_GROUP, { timestamp: LOOKUP_MS, message: TRIAL_ID });
+    telemetry.logs.stopSearchEarly(PROVIDER_GROUP, TELEMETRY_PAGE_LIMIT);
     assert.deepEqual(await telemetry.probe.locate('logs', TRIAL_SCOPE), {
       ok: false,
       error: { code: 'LogSearchIncomplete' },
@@ -191,17 +240,65 @@ describe('AWS telemetry probe: metrics', () => {
 });
 
 describe('AWS telemetry probe: traces', () => {
-  it('searches trace summaries once over the unit window in epoch seconds and finds none', async () => {
+  it("searches trace summaries once over the unit window in epoch seconds, filtered to the unit's functions", async () => {
     const telemetry = scriptedTelemetry();
     assert.deepEqual(await telemetry.probe.locate('traces', TRIAL_SCOPE), { ok: true, value: [] });
     assert.deepEqual(telemetry.traces.calls(), [
-      { operation: 'POST /TraceSummaries', input: { StartTime: UNIT_STARTED_MS / 1000, EndTime: LOOKUP_MS / 1000 } },
+      {
+        operation: 'POST /TraceSummaries',
+        input: { StartTime: UNIT_STARTED_MS / 1000, EndTime: LOOKUP_MS / 1000, FilterExpression: UNIT_TRACE_FILTER },
+      },
     ]);
+  });
+
+  it("never records a trace of another workload in the account as the unit's trace", async () => {
+    const telemetry = scriptedTelemetry();
+    telemetry.traces.putTrace({ id: '1-elsewhere', started_ms: UNIT_STARTED_MS, services: ['another-workload'] });
+    telemetry.traces.putTrace({
+      id: '1-conventional',
+      started_ms: UNIT_STARTED_MS,
+      services: [FUNCTION_NAMES['conventional-caller']],
+    });
+    assert.deepEqual(await telemetry.probe.locate('traces', TRIAL_SCOPE), { ok: true, value: [] });
+  });
+
+  it('refuses a trace search for a unit whose function is unbound or misnamed, without a request', async () => {
+    const { 'treatment-controller': _dropped, ...unbound } = FUNCTION_NAMES;
+    const missing = scriptedTelemetry({ ...RUN_BINDING, function_names: unbound });
+    assert.deepEqual(await missing.probe.locate('traces', TRIAL_SCOPE), {
+      ok: false,
+      error: { code: 'TelemetryFunctionUnbound' },
+    });
+    const misnamed = scriptedTelemetry({
+      ...RUN_BINDING,
+      function_names: { ...FUNCTION_NAMES, 'refund-provider': 'fn") OR service("x' },
+    });
+    assert.deepEqual(await misnamed.probe.locate('traces', TRIAL_SCOPE), {
+      ok: false,
+      error: { code: 'TelemetryFunctionNameInvalid' },
+    });
+    assert.deepEqual([...missing.traces.calls(), ...misnamed.traces.calls()], []);
+  });
+
+  it('follows the continuation token of a trace search that stopped early', async () => {
+    const telemetry = scriptedTelemetry();
+    const traceId = '1-6702a0b4-0123456789abcdef01234567';
+    telemetry.traces.putTrace({ id: traceId, started_ms: LOOKUP_MS, services: [FUNCTION_NAMES['refund-provider']] });
+    telemetry.traces.stopSearchEarly(2);
+    assert.deepEqual(await telemetry.probe.locate('traces', TRIAL_SCOPE), { ok: true, value: [traceId] });
+    assert.deepEqual(
+      telemetry.traces.calls().map((call) => call.input['NextToken']),
+      [undefined, 'scripted-next-2', 'scripted-next-3'],
+    );
   });
 
   it('lists the trace ids found, and reports a failed or stopped search', async () => {
     const telemetry = scriptedTelemetry();
-    telemetry.traces.putTrace({ id: '1-6702a0b4-0123456789abcdef01234567', started_ms: UNIT_STARTED_MS });
+    telemetry.traces.putTrace({
+      id: '1-6702a0b4-0123456789abcdef01234567',
+      started_ms: UNIT_STARTED_MS,
+      services: [FUNCTION_NAMES['durable-caller']],
+    });
     assert.deepEqual(await telemetry.probe.locate('traces', TRIAL_SCOPE), {
       ok: true,
       value: ['1-6702a0b4-0123456789abcdef01234567'],

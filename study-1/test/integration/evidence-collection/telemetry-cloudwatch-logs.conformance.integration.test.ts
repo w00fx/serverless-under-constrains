@@ -70,7 +70,28 @@ describe('ScriptedCloudWatchLogsClient conformance', () => {
     logs.stopSearchEarly(GROUP);
     const output = await logs.client.send(search(0, 1000));
     assert.deepEqual(output.events, []);
-    assert.equal(output.nextToken, 'scripted-next');
+    assert.equal(output.nextToken, 'scripted-next-2');
+  });
+
+  it('continues a search with its token, finding the events once the empty pages are read', async () => {
+    const logs = new ScriptedCloudWatchLogsClient();
+    logs.putEvent(GROUP, { timestamp: 200, message: TERM });
+    logs.stopSearchEarly(GROUP, 2);
+    const first = await logs.client.send(search(0, 1000));
+    assert.deepEqual([first.events, first.nextToken], [[], 'scripted-next-2']);
+    const second = await logs.client.send(
+      new FilterLogEventsCommand({ ...search(0, 1000).input, nextToken: first.nextToken }),
+    );
+    assert.deepEqual([second.events, second.nextToken], [[], 'scripted-next-3']);
+    const third = await logs.client.send(
+      new FilterLogEventsCommand({ ...search(0, 1000).input, nextToken: second.nextToken }),
+    );
+    assert.deepEqual(
+      third.events?.map((event) => event.timestamp),
+      [200],
+    );
+    assert.equal(third.nextToken, undefined);
+    assert.equal(logs.calls()[2]?.input['nextToken'], 'scripted-next-3');
   });
 
   it('fails an unknown group as the SDK class and a scripted error by its type, once', async () => {
