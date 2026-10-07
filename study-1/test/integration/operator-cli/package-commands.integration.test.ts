@@ -121,14 +121,17 @@ describe('package commands over an offline-finalized package', () => {
     assert.equal(result.result_record?.['record_type'], 'study_completion_assessment');
   });
 
-  it('validation verify refuses a validation package the runner finalized without its summary', async () => {
-    // The runner world binds the run summary writer only (evidence/WP-27/decisions.md: a variant
-    // validation binds its own summary writer), so the package has no validation summary and the
-    // CTR-RUA-004 verifier cannot answer: exit 5, nothing written.
+  it('validation verify reads the runner-written summary and writes its outputs beside the package', async () => {
+    // Since CMP-05 the runner binds the summary writer of its own kind (summaryWriterFor), so a
+    // validation package carries its validation summary. The offline package is still ineligible
+    // to the package verifier (the runner journal grows after the results cite its freeze-time
+    // digest: the CMP-05 finding recorded in evidence/WP-28/decisions.md), so the answer is exit 5
+    // with the verifier's reasons, written under `verifications/`, never inside the package.
     const world = await RunnerWorld.create({ name: 'validation-conventional' });
     await world.run();
-    assert.equal(world.file(EXECUTION_PATHS.validationSummary), undefined);
+    assert.ok(world.file(EXECUTION_PATHS.validationSummary) !== undefined);
     const storage = world.cloud.storage;
+    const before = world.cloud.packageFiles();
     const command = new ValidationVerifyCommand({
       files: (): PackageFileSystem => storage,
       validator,
@@ -140,10 +143,16 @@ describe('package commands over an offline-finalized package', () => {
       [command],
     );
     assert.equal(exitCode, 5);
+    assert.equal(result.outcome, 'verification_failed');
+    assert.equal(result.reasons[0]?.code, 'PACKAGE_INELIGIBLE');
+    const id = executionIdOf(world.admitted.identity);
     assert.deepEqual(
-      result.reasons.map((reason) => reason.code),
-      ['SCIENTIFIC_EVIDENCE_MISSING'],
+      result.written_paths.map((path) => path.replace(/\/\d{4}-\d{2}-\d{2}T[\d:.]+Z-/, '/<at>-')),
+      [`verifications/${id}/<at>-variant-validation-verification.json`],
     );
-    assert.deepEqual(result.written_paths, []);
+    for (const path of result.written_paths) {
+      assert.equal((await storage.read(path)).ok, true, path);
+    }
+    assert.deepEqual(world.cloud.packageFiles(), before);
   });
 });
