@@ -2,15 +2,18 @@
 // cleanup's mutations as AWS does, so the orchestrator can run over the AWS-bound ports:
 // - `UpdateEventSourceMapping(Enabled=false)` disables the source mapping;
 // - `StopDurableExecution` ends the running durable execution;
-// - `DeleteStack` deletes the stack and everything it manages, unless a durable execution still
-//   runs: the stack then ends `DELETE_FAILED` with every member in place (RK-10);
+// - `DeleteStack` deletes the stack and everything it manages (the stack then reads
+//   DELETE_COMPLETE by its unique id), unless a durable execution still runs: the stack then ends
+//   `DELETE_FAILED` with every member in place (RK-10). CloudFormation first waits up to an hour
+//   for the execution ([R-durable] §3.2); time is not modelled, so the wait is skipped, and the
+//   DELETE_IN_PROGRESS path is covered by WP-19's FakeStackApi;
 // - `ReceiveMessage` of the DLQ answers the messages queued with `enqueueDlqMessage`, then empty;
 //   `DeleteMessage` removes one by its receipt handle, `ChangeMessageVisibility` releases one.
 // Reads are scripted by `scriptLiveRun`. Every request is recorded by the endpoint.
 
-import { EXECUTION_ID, NAMES, STACK_ID, STACK_NAME } from '../cleanup-fixtures.ts';
-import { scriptLiveRun } from './live-run-script.ts';
-import type { LiveResource } from './live-run-script.ts';
+import { EXECUTION_ID, NAMES, runTags } from '../cleanup-fixtures.ts';
+import { describeRunStack, scriptLiveRun } from './live-run-script.ts';
+import type { LiveResource, LiveStackStatus } from './live-run-script.ts';
 import { refuse, reply, ScriptedCleanupEndpoint, sqsMessage } from './scripted-cleanup-endpoint.ts';
 
 const STACK_MEMBERS: readonly LiveResource[] = ['functions', 'mapping', 'queue', 'table', 'log_group', 'role'];
@@ -27,7 +30,7 @@ export class ScriptedRunAccount {
   readonly #gone = new Set<LiveResource>();
   readonly #dlq: { readonly id: string; hidden_by?: string }[] = [];
   #mappingState = 'Enabled';
-  #stackStatus: 'CREATE_COMPLETE' | 'DELETE_FAILED' = 'CREATE_COMPLETE';
+  #stackStatus: LiveStackStatus = 'CREATE_COMPLETE';
   #receipts = 0;
 
   constructor() {
@@ -74,18 +77,13 @@ export class ScriptedRunAccount {
     return reply('');
   }
 
-  // A failed deletion leaves the stack listed in DELETE_FAILED rather than CREATE_COMPLETE.
+  // A failed deletion leaves the stack listed in DELETE_FAILED rather than CREATE_COMPLETE; a
+  // deleted one reads DELETE_COMPLETE by its unique id.
   #scriptStackStatus(): void {
-    this.endpoint.respond('cloudformation:DescribeStacks', () => {
-      if (this.#gone.has('stack')) {
-        return refuse('ValidationError', `Stack with id ${STACK_ID} does not exist`);
-      }
-      return reply(
-        `<Stacks><member><StackId>${STACK_ID}</StackId><StackName>${STACK_NAME}</StackName>` +
-          `<Tags><member><Key>suc:run_id</Key><Value>${EXECUTION_ID}</Value></member></Tags>` +
-          `<CreationTime>2026-10-05T11:30:00.000Z</CreationTime><StackStatus>${this.#stackStatus}</StackStatus></member></Stacks>`,
-      );
-    });
+    const tags = runTags(EXECUTION_ID);
+    this.endpoint.respond('cloudformation:DescribeStacks', (call) =>
+      describeRunStack(call, this.#gone.has('stack') ? 'DELETE_COMPLETE' : this.#stackStatus, tags),
+    );
   }
 
   #scriptDlq(): void {

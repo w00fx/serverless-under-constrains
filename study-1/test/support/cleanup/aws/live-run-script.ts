@@ -3,15 +3,19 @@
 // version, an alias and a running durable execution), the source mapping, the durable DLQ, the
 // control table, the provider log group and role, each tagged with the run tags, and the tag
 // index listing the taggable ones. A resource listed in `gone` answers "not found" on its native
-// describe, as it does once deleted. The discovery targets match `liveRunManifest()`.
+// describe, as it does once deleted, except the stack: CloudFormation keeps describing a deleted
+// stack by its unique id, as DELETE_COMPLETE. The discovery targets match `liveRunManifest()`.
 
 import { tableName } from '../../../../infra/ownership/resource-naming.ts';
 import type { ResourceTag } from '../../../../src/cleanup/discovery.ts';
-import { FUNCTION_VERSION_RESOURCE_TYPE } from '../../../../src/cleanup/resource-types.ts';
+import {
+  FUNCTION_ALIAS_RESOURCE_TYPE,
+  FUNCTION_VERSION_RESOURCE_TYPE,
+} from '../../../../src/cleanup/resource-types.ts';
 import type { JsonValue } from '../../../../src/record-contract/primitives.ts';
 import type { ResourceManifest } from '../../../../src/record-contract/records/group-a/resource_manifest.ts';
 import { EXECUTION_ID, NAMES, resourceManifest, runTags, STACK_ID, STACK_NAME } from '../cleanup-fixtures.ts';
-import type { ScriptedCleanupEndpoint } from './scripted-cleanup-endpoint.ts';
+import type { RecordedCleanupCall, ScriptedCleanupEndpoint, ScriptedReply } from './scripted-cleanup-endpoint.ts';
 import { refuse, reply } from './scripted-cleanup-endpoint.ts';
 
 export const ACCOUNT = '123456789012';
@@ -33,7 +37,8 @@ export const LIVE = {
 export type LiveResource = 'stack' | 'functions' | 'mapping' | 'execution' | 'queue' | 'table' | 'log_group' | 'role';
 
 /**
- * The run's succeeded manifest with the DLQ and Durable caller outputs and the caller's version.
+ * The run's succeeded manifest with the DLQ and Durable caller outputs and the caller's version
+ * and alias.
  *
  * @example
  * discoveryTargetsOf({ manifest: liveRunManifest(), execution: EXECUTION });
@@ -48,6 +53,15 @@ export function liveRunManifest(): ResourceManifest {
         logical_id: 'DurableCallerVersion',
         resource_type: FUNCTION_VERSION_RESOURCE_TYPE,
         physical_id: `${LIVE.durableArn}:3`,
+        resource_status: 'CREATE_COMPLETE',
+      },
+      // The stack records the caller's `live` alias (infra durable-variant `addAlias`) under its
+      // ARN, the identifier the functions surface reports for it; without this row the alias
+      // the account lists reads as ambiguous rather than owned.
+      {
+        logical_id: 'DurableCallerAlias',
+        resource_type: FUNCTION_ALIAS_RESOURCE_TYPE,
+        physical_id: `${LIVE.durableArn}:live`,
         resource_status: 'CREATE_COMPLETE',
       },
     ],
@@ -136,31 +150,77 @@ export function scriptLiveRun(
   );
 }
 
+/** The stack status `DescribeStacks` reports while the stack exists. */
+export type LiveStackStatus = 'CREATE_COMPLETE' | 'DELETE_FAILED';
+
+/**
+ * `DescribeStacks` of the run's stack as CloudFormation answers it: by name or unique id while it
+ * exists; once deleted, DELETE_COMPLETE by its unique id (kept for 90 days) and "does not exist"
+ * by its name ("Deleted stacks: You must specify the unique stack ID", [R-aws] §6.3).
+ *
+ * @example
+ * endpoint.respond('cloudformation:DescribeStacks', (call) => describeRunStack(call, 'CREATE_COMPLETE', tags));
+ */
+export function describeRunStack(
+  call: RecordedCleanupCall,
+  status: LiveStackStatus | 'DELETE_COMPLETE',
+  tags: readonly ResourceTag[],
+): ScriptedReply {
+  const ref = String(call.input['StackName']);
+  if (!stackAnswers(ref, status === 'DELETE_COMPLETE')) {
+    return stackMissing(ref);
+  }
+  return reply(
+    `<Stacks><member><StackId>${STACK_ID}</StackId><StackName>${STACK_NAME}</StackName>${tagsXml(tags)}` +
+      `<CreationTime>2026-10-05T11:30:00.000Z</CreationTime><StackStatus>${status}</StackStatus></member></Stacks>`,
+  );
+}
+
+// A live stack answers by name or id, a deleted one by its unique id only.
+function stackAnswers(ref: string, deleted: boolean): boolean {
+  return ref === STACK_ID || (!deleted && ref === STACK_NAME);
+}
+
+function stackMissing(ref: string): ScriptedReply {
+  return refuse('ValidationError', `Stack with id ${ref} does not exist`);
+}
+
+// The stack's members: CREATE_COMPLETE while it exists, DELETE_COMPLETE once deleted (a deleted
+// stack's resources and events stay listed by its unique id for 90 days).
 function scriptStack(
   endpoint: ScriptedCleanupEndpoint,
   goneSet: ReadonlySet<LiveResource>,
   tags: readonly ResourceTag[],
 ): void {
-  const missing = refuse('ValidationError', `Stack with id ${STACK_ID} does not exist`);
-  const stack =
-    `<Stacks><member><StackId>${STACK_ID}</StackId><StackName>${STACK_NAME}</StackName>${tagsXml(tags)}` +
-    '<CreationTime>2026-10-05T11:30:00.000Z</CreationTime><StackStatus>CREATE_COMPLETE</StackStatus></member></Stacks>';
-  endpoint.respond('cloudformation:DescribeStacks', () => (goneSet.has('stack') ? missing : reply(stack)));
-  const summary = (logical: string, type: string, physical: string): string =>
+  endpoint.respond('cloudformation:DescribeStacks', (call) =>
+    describeRunStack(call, goneSet.has('stack') ? 'DELETE_COMPLETE' : 'CREATE_COMPLETE', tags),
+  );
+  const summary = (logical: string, type: string, physical: string, status: string): string =>
     `<member><LogicalResourceId>${logical}</LogicalResourceId><PhysicalResourceId>${physical}</PhysicalResourceId>` +
-    `<ResourceType>${type}</ResourceType><ResourceStatus>CREATE_COMPLETE</ResourceStatus>` +
+    `<ResourceType>${type}</ResourceType><ResourceStatus>${status}</ResourceStatus>` +
     '<LastUpdatedTimestamp>2026-10-05T11:30:00.000Z</LastUpdatedTimestamp></member>';
-  endpoint.respond('cloudformation:ListStackResources', () =>
-    goneSet.has('stack')
-      ? missing
-      : reply(
-          `<StackResourceSummaries>${summary('ControlTable', 'AWS::DynamoDB::Table', NAMES.controlTable)}` +
-            `${summary('ProviderRole', 'AWS::IAM::Role', NAMES.providerRole)}</StackResourceSummaries>`,
-        ),
-  );
-  endpoint.respond('cloudformation:DescribeStackEvents', () =>
-    goneSet.has('stack') ? missing : reply('<StackEvents></StackEvents>'),
-  );
+  endpoint.respond('cloudformation:ListStackResources', (call) => {
+    const ref = String(call.input['StackName']);
+    const status = goneSet.has('stack') ? 'DELETE_COMPLETE' : 'CREATE_COMPLETE';
+    return stackAnswers(ref, goneSet.has('stack'))
+      ? reply(
+          `<StackResourceSummaries>${summary('ControlTable', 'AWS::DynamoDB::Table', NAMES.controlTable, status)}` +
+            `${summary('ProviderRole', 'AWS::IAM::Role', NAMES.providerRole, status)}</StackResourceSummaries>`,
+        )
+      : stackMissing(ref);
+  });
+  const stackEvent =
+    `<member><EventId>e-1</EventId><StackId>${STACK_ID}</StackId><StackName>${STACK_NAME}</StackName>` +
+    `<LogicalResourceId>${STACK_NAME}</LogicalResourceId><PhysicalResourceId>${STACK_ID}</PhysicalResourceId>` +
+    '<ResourceType>AWS::CloudFormation::Stack</ResourceType><ResourceStatus>DELETE_COMPLETE</ResourceStatus>' +
+    '<Timestamp>2026-10-05T12:00:00.000Z</Timestamp></member>';
+  endpoint.respond('cloudformation:DescribeStackEvents', (call) => {
+    const ref = String(call.input['StackName']);
+    if (!stackAnswers(ref, goneSet.has('stack'))) {
+      return stackMissing(ref);
+    }
+    return reply(`<StackEvents>${goneSet.has('stack') ? stackEvent : ''}</StackEvents>`);
+  });
 }
 
 function scriptLambda(endpoint: ScriptedCleanupEndpoint, state: LiveRunState, tags: readonly ResourceTag[]): void {

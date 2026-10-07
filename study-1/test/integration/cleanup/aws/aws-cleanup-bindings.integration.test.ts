@@ -135,11 +135,23 @@ describe('AWS-bound cleanup ports under the orchestrator', () => {
 
     assertConsistentOutcome(world, outcome);
     const result = outcome.cleanup_result;
-    assert.notEqual(result.cleanup_status, 'succeeded');
+    // BR-RUA-051: a DELETE_FAILED owned resource makes the cleanup `partial`, and the stack the
+    // audit still observes is a leak, not an inconclusive or clean audit.
+    assert.equal(result.cleanup_status, 'partial', JSON.stringify(result.steps));
     assert.equal(stepStatuses(result)[5], 'failed');
     assert.equal(resourceActions(result)[`${STACK_RESOURCE_TYPE} ${STACK_ID}`], 'DELETE_FAILED/recorded_stack');
     assert.equal(account.stackDeleted(), false);
-    assert.notEqual(outcome.leak_audit_result.leak_audit_status, 'clean');
-    assert.ok(account.endpoint.calls('lambda:UpdateEventSourceMapping').length > 0);
+    assert.equal(
+      outcome.leak_audit_result.leak_audit_status,
+      'leaks_detected',
+      JSON.stringify(outcome.leak_audit_result),
+    );
+    // Steps 3, 5 and 9 in order: the stop was tried before the one stack deletion attempt.
+    assert.deepEqual(mutations(account).slice(0, 3), [
+      'UpdateEventSourceMapping',
+      'StopDurableExecution',
+      'DeleteStack',
+    ]);
+    assert.equal(account.endpoint.calls('cloudformation:DeleteStack').length, 1);
   });
 });
