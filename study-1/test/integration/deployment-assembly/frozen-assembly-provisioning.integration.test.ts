@@ -7,18 +7,28 @@
 //   CloudFormation created, with the stack id as ownership boundary (AC-RUA-011);
 // - drift of the package copy (D3) is reported and keeps provisioning from succeeding;
 // - the stored manifest digest is the one every trial manifest carries (AC-RUA-008);
-// - the provider's immutable version is recorded and no provisioned concurrency exists (AC-RUA-053).
+// - the provider's immutable version is recorded and no provisioned concurrency exists (AC-RUA-053),
+//   on the fixture template and on the run assembly the study app synthesizes (design §9.2: three
+//   published versions and two caller aliases, each read for provisioned concurrency).
 
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
 
 import { ownershipContextFromManifest, STUDY_BASELINE_EXCLUSIONS } from '../../../src/cleanup/ownership-context.ts';
 import { proveOwnership } from '../../../src/cleanup/ownership.ts';
 import { sha256Hex } from '../../../src/record-contract/digests.ts';
-import type { JsonValue, UtcMillis } from '../../../src/record-contract/primitives.ts';
+import type { JsonObject, JsonValue, UtcMillis } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { functionNameOf, stackIdOf } from '../../support/deployment-assembly/deployed-account.ts';
-import { declaredTags, EXECUTION_ID, RUN_STACK } from '../../support/deployment-assembly/deployment-fixtures.ts';
+import {
+  declaredTags,
+  EXECUTION_ID,
+  RUN_STACK,
+  synthContext,
+} from '../../support/deployment-assembly/deployment-fixtures.ts';
 import { FIXTURE_IDS } from '../../support/deployment-assembly/execution-template-fixture.ts';
 import {
   COPY_DIR,
@@ -29,6 +39,7 @@ import {
   storedManifest,
   storedManifestBytes,
 } from '../../support/deployment-assembly/provisioning-rig.ts';
+import { synthesizeExecution } from '../../support/deployment-assembly/study-synth.ts';
 
 const STACK_ID = stackIdOf(RUN_STACK);
 const validator = createRecordValidator();
@@ -267,5 +278,88 @@ describe('FrozenAssemblyProvisioner', () => {
     assert.ok(provisioned.value.reasons.length > 0);
     assert.ok(provisioned.value.reasons.every((reason) => reason.subject === 'BR-RUA-042'));
     assert.equal(provisioned.value.resource_manifest.provisioning_status, 'partial');
+  });
+});
+
+describe('FrozenAssemblyProvisioner over the synthesized run assembly', () => {
+  let workDir = '';
+  let assemblyDir = '';
+  let resources: Readonly<Record<string, { readonly Type: string; readonly Properties?: JsonObject }>> = {};
+
+  before(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'rua-provision-'));
+    const run = synthesizeExecution(synthContext('RUN'), workDir);
+    assemblyDir = run.assemblyDir;
+    resources = run.json['Resources'] as unknown as typeof resources;
+  });
+
+  after(() => {
+    rmSync(workDir, { recursive: true, force: true });
+  });
+
+  function logicalIdsOf(type: string): readonly string[] {
+    return Object.keys(resources)
+      .filter((logicalId) => resources[logicalId]?.Type === type)
+      .sort();
+  }
+
+  function aliasStartingWith(prefix: string): { readonly logical_id: string; readonly function_id: string } {
+    const logicalId = logicalIdsOf('AWS::Lambda::Alias').find((id) => id.startsWith(prefix));
+    const target = (resources[logicalId ?? '']?.Properties?.['FunctionName'] as JsonObject | undefined)?.['Ref'];
+    assert.ok(logicalId !== undefined && typeof target === 'string', `no alias ${prefix}* naming its function`);
+    return { logical_id: logicalId, function_id: target };
+  }
+
+  it('ac053: provisions the real stack with provider version 7 and no provisioned concurrency anywhere', async () => {
+    const versions = logicalIdsOf('AWS::Lambda::Version');
+    const aliases = logicalIdsOf('AWS::Lambda::Alias');
+    assert.equal(versions.length, 3, 'the provider and both callers publish one version each');
+    assert.equal(aliases.length, 2, 'each caller is invoked through its live alias');
+    const rig = await provisioningRig({ synthesized_assembly_dir: assemblyDir });
+    const provisioned = await rig.provisioner.provision(rig.subject);
+    assert.ok(provisioned.ok);
+    assert.deepEqual(provisioned.value.reasons, []);
+    const manifest = provisioned.value.resource_manifest;
+    assert.equal(manifest.provisioning_status, 'succeeded');
+    assert.equal(manifest.provider_version, '7');
+    assert.deepEqual(
+      manifest.ownership_tags,
+      [...declaredTags()].sort((left, right) => left.key.localeCompare(right.key)),
+    );
+    const configuration = manifest.configuration;
+    const concurrency = configuration.filter((entry) => entry.attribute_path === 'ProvisionedConcurrencyConfig');
+    assert.deepEqual(
+      concurrency.map((entry) => [entry.logical_id, entry.canonical_json]),
+      [...versions, ...aliases].sort().map((logicalId) => [logicalId, 'null']),
+    );
+    const provider = versions.find((logicalId) => logicalId.startsWith('ExperimentCoreProviderFunctionCurrentVersion'));
+    const version = configuration.find((entry) => entry.logical_id === provider && entry.attribute_path === 'Version');
+    assert.equal(version?.canonical_json, '"7"');
+    const states = configuration.filter((entry) => entry.attribute_path === 'State');
+    assert.deepEqual(
+      states.map((entry) => [entry.logical_id, entry.canonical_json]),
+      logicalIdsOf('AWS::Lambda::EventSourceMapping').map((logicalId) => [logicalId, '"Enabled"']),
+    );
+    assert.equal(sha256Hex(await storedManifestBytes(rig)), provisioned.value.resource_manifest_sha256);
+  });
+
+  it('ac053: provisioned concurrency on the durable caller alias keeps the real stack from succeeding', async () => {
+    const rig = await provisioningRig({ synthesized_assembly_dir: assemblyDir });
+    const alias = aliasStartingWith('DurableVariantCallerFunctionAliaslive');
+    rig.account.concurrency[`${functionNameOf(alias.function_id)}:live`] = {
+      RequestedProvisionedConcurrentExecutions: 2,
+      AllocatedProvisionedConcurrentExecutions: 2,
+      AvailableProvisionedConcurrentExecutions: 2,
+      Status: 'READY',
+    };
+    const provisioned = await rig.provisioner.provision(rig.subject);
+    assert.ok(provisioned.ok);
+    assert.deepEqual(codes(provisioned.value.reasons), ['PROVISIONED_CONCURRENCY_PRESENT']);
+    assert.match(
+      provisioned.value.reasons[0]?.detail ?? '',
+      new RegExp(`^${alias.logical_id} has provisioned concurrency`),
+    );
+    assert.equal(provisioned.value.resource_manifest.provisioning_status, 'partial');
+    assert.equal((await storedManifest(rig))['provisioning_status'], 'partial');
   });
 });

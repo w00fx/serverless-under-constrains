@@ -4,8 +4,11 @@
 // exactly as admission freezes it; the package holds that inventory record. Deployment runs the
 // production CdkAssemblyDeployer over the FakeCommandRunner, and the post-deploy reads answer from a
 // DeployedAccount through the FakePostDeployReader. Tests change the parts before provisioning.
+// `synthesized_assembly_dir` replaces the fixture assembly with a cloud assembly the study app
+// synthesized to disk, so AC-RUA-053 is also proved on the stack the study actually deploys.
 
-import { join } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 import { CdkAssemblyDeployer } from '../../../src/deployment-assembly/cdk-assembly-deployer.ts';
 import { FrozenAssemblyProvisioner } from '../../../src/deployment-assembly/frozen-assembly-provisioner.ts';
@@ -49,6 +52,7 @@ export const COPY_DIR = `${DEPLOY_STAGING_ROOT}/${EXECUTION_ID}`;
 export const EXECUTION_MANIFEST_SHA = 'e'.repeat(64) as Sha256Hex;
 export const RESOURCE_MANIFEST_PATH = `${PACKAGE_DIRECTORY}/${EXECUTION_PATHS.resourceManifest}`;
 export const PROVISIONING_JOURNAL_PATH = `${PACKAGE_DIRECTORY}/${EXECUTION_PATHS.provisioningJournal}`;
+const TEMPLATE_FILE = `${RUN_STACK}.template.json`;
 export const DEPLOYED_OUTPUTS = `{"${RUN_STACK}":{"ProviderVersion":"7","ControllerFunctionName":"suc1-3f1c2a9e-controller"}}`;
 
 const encoder = new TextEncoder();
@@ -63,6 +67,13 @@ export interface ProvisioningRigOptions {
   readonly validator?: FrozenAssemblyProvisionerDeps['validator'];
   /** The stored inventory record's bytes; the canonical record by default. */
   readonly inventory_bytes?: Uint8Array;
+  /** A run cloud assembly synthesized to disk; its files, modes and template replace the fixture's. */
+  readonly synthesized_assembly_dir?: string;
+}
+
+interface FrozenTemplate {
+  readonly template: JsonObject;
+  readonly bytes: Uint8Array;
 }
 
 export interface ProvisioningRig {
@@ -85,13 +96,11 @@ export interface ProvisioningRig {
  * const provisioned = await rig.provisioner.provision(rig.subject);
  */
 export async function provisioningRig(options: ProvisioningRigOptions = {}): Promise<ProvisioningRig> {
-  const template = options.template ?? runTemplate();
   const assembly_files = new MemoryAssemblyFileSystem();
-  const templateFile = `${RUN_STACK}.template.json`;
-  await place(assembly_files, 'manifest.json', assemblyManifest(templateFile, options.manifest_tags));
-  await place(assembly_files, templateFile, templateBytes(template));
-  await place(assembly_files, `${RUN_STACK}.assets.json`, encoder.encode('{"files":{},"dockerImages":{}}'));
-  await place(assembly_files, 'asset.abc123/index.mjs', encoder.encode('export const handler = () => 1;\n'));
+  const { template, bytes } =
+    options.synthesized_assembly_dir === undefined
+      ? await placeFixtureAssembly(assembly_files, options)
+      : await placeSynthesizedAssembly(assembly_files, options.synthesized_assembly_dir);
   const inventory = await inventoryOf(assembly_files);
   const package_files = new MemoryPackageFileSystem();
   await package_files.writeOnce(
@@ -122,8 +131,8 @@ export async function provisioningRig(options: ProvisioningRigOptions = {}): Pro
     deployment_assembly: {
       assembly_path: FROZEN_ASSEMBLY,
       inventory_sha256: inventory.inventory_sha256,
-      template_path: `${FROZEN_ASSEMBLY}/${templateFile}`,
-      template_sha256: sha256Hex(templateBytes(template)),
+      template_path: `${FROZEN_ASSEMBLY}/${TEMPLATE_FILE}`,
+      template_sha256: sha256Hex(bytes),
     },
     package_directory: PACKAGE_DIRECTORY,
   };
@@ -181,6 +190,31 @@ export async function storedManifest(rig: ProvisioningRig): Promise<Readonly<Rec
   return JSON.parse(decoder.decode(await storedManifestBytes(rig))) as Readonly<Record<string, JsonValue>>;
 }
 
+async function placeFixtureAssembly(
+  files: MemoryAssemblyFileSystem,
+  options: ProvisioningRigOptions,
+): Promise<FrozenTemplate> {
+  const template = options.template ?? runTemplate();
+  const bytes = templateBytes(template);
+  await place(files, 'manifest.json', assemblyManifest(TEMPLATE_FILE, options.manifest_tags));
+  await place(files, TEMPLATE_FILE, bytes);
+  await place(files, `${RUN_STACK}.assets.json`, encoder.encode('{"files":{},"dockerImages":{}}'));
+  await place(files, 'asset.abc123/index.mjs', encoder.encode('export const handler = () => 1;\n'));
+  return { template, bytes };
+}
+
+// Every regular file below `directory`, with its permission bits, placed as admission freezes it;
+// the template is the one the assembly holds, byte for byte.
+async function placeSynthesizedAssembly(files: MemoryAssemblyFileSystem, directory: string): Promise<FrozenTemplate> {
+  const entries = readdirSync(directory, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
+  for (const entry of entries) {
+    const path = join(entry.parentPath, entry.name);
+    await place(files, relative(directory, path), new Uint8Array(readFileSync(path)), statSync(path).mode);
+  }
+  const bytes = new Uint8Array(readFileSync(join(directory, TEMPLATE_FILE)));
+  return { template: JSON.parse(decoder.decode(bytes)) as JsonObject, bytes };
+}
+
 function assemblyManifest(templateFile: string, tags: JsonValue | undefined): Uint8Array {
   const declared = Object.fromEntries(declaredTags().map((tag) => [tag.key, tag.value]));
   return encoder.encode(
@@ -197,8 +231,8 @@ function assemblyManifest(templateFile: string, tags: JsonValue | undefined): Ui
   );
 }
 
-async function place(files: MemoryAssemblyFileSystem, path: string, bytes: Uint8Array): Promise<void> {
-  const written = await files.createFile(join(FROZEN_DIR, path), bytes, 0o644);
+async function place(files: MemoryAssemblyFileSystem, path: string, bytes: Uint8Array, mode = 0o644): Promise<void> {
+  const written = await files.createFile(join(FROZEN_DIR, path), bytes, mode);
   if (!written.ok) {
     throw new Error(`fixture write of ${path} failed: ${written.error.code}; expected a fresh memory file system`);
   }

@@ -51,6 +51,7 @@ import { readAssemblyListing } from './assembly-listing.ts';
 import type { AssemblyDeployer, DeployReport } from './assembly-ports.ts';
 import { verifyAssemblyUnchanged } from './assembly-verification.ts';
 import {
+  ASSEMBLY_MANIFEST_FILE,
   configurationSnapshotOf,
   declaredStackTags,
   planPostDeployReads,
@@ -74,7 +75,6 @@ import type { StackDescription } from './resource-manifest.ts';
 
 /** The file `cdk deploy` writes the stack outputs to, inside the temporary copy. */
 export const DEPLOY_OUTPUTS_FILE = 'outputs.json';
-const ASSEMBLY_MANIFEST = 'manifest.json';
 const decoder = new TextDecoder();
 
 export interface FrozenAssemblyProvisionerDeps {
@@ -221,13 +221,13 @@ export class FrozenAssemblyProvisioner {
     stackName: string,
     identity: ExecutionIdentity,
   ): Promise<Result<KeyValueEntry[], readonly StructuredReason[]>> {
-    const bytes = await this.#deps.assembly_files.read(join(frozenDir, ASSEMBLY_MANIFEST));
+    const bytes = await this.#deps.assembly_files.read(join(frozenDir, ASSEMBLY_MANIFEST_FILE));
     if (!bytes.ok) {
       return err([
         deploymentReason(
           'DECLARED_TAGS_UNREADABLE',
           'BR-RUA-050',
-          `${bytes.error.code}: ${bytes.error.detail}; expected the frozen ${ASSEMBLY_MANIFEST} declaring the stack tags`,
+          `${bytes.error.code}: ${bytes.error.detail}; expected the frozen ${ASSEMBLY_MANIFEST_FILE} declaring the stack tags`,
         ),
       ]);
     }

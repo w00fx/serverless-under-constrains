@@ -277,7 +277,9 @@ export async function listAllStackResources(
   reader: PostDeployReader,
   stack: string,
 ): Promise<Result<readonly StackResourceSummary[], StructuredReason>> {
-  const resources: StackResourceSummary[] = [];
+  // Pages are joined by `flat`, never `push(...page)`: a spread argument list overflows the call
+  // stack past about 120,000 entries, and a page's length is the endpoint's to choose (A-05).
+  const pages: (readonly StackResourceSummary[])[] = [];
   const tokens = new Set<string>();
   let token: string | undefined;
   for (let page = 0; page < MAX_RESOURCE_PAGES; page += 1) {
@@ -285,11 +287,11 @@ export async function listAllStackResources(
     if (!listed.ok) {
       return err(stackReadReason('ListStackResources', stack, listed.error));
     }
-    resources.push(...listed.value.resources);
+    pages.push(listed.value.resources);
     token = listed.value.next_token;
     if (token === undefined || tokens.has(token)) {
       return token === undefined
-        ? ok(resources)
+        ? ok(pages.flat())
         : err(pagingReason(stack, `repeated NextToken ${boundedJsonText(token)}`));
     }
     tokens.add(token);

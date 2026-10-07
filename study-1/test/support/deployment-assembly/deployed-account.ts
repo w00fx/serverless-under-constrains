@@ -127,10 +127,23 @@ function physicalIdOf(logicalId: string, resource: TemplateResource, target: str
     case 'AWS::Lambda::EventSourceMapping':
       return `5a0e1c2d-0000-4000-8000-${String(mapping).padStart(12, '0')}`;
     case 'AWS::SQS::Queue':
-      return `${QUEUE_URL_PREFIX}${functionNameOf(logicalId)}${resource.Properties?.['FifoQueue'] === true ? '.fifo' : ''}`;
+      return `${QUEUE_URL_PREFIX}${explicitName(resource, 'QueueName') ?? generatedQueueName(logicalId, resource)}`;
+    case 'AWS::DynamoDB::Table':
+      return explicitName(resource, 'TableName') ?? functionNameOf(logicalId);
     default:
       return functionNameOf(logicalId);
   }
+}
+
+// CloudFormation names a resource with the name its template gives (the real execution stack names
+// every queue and table, design §9.7), and generates one otherwise.
+function explicitName(resource: TemplateResource, property: string): string | undefined {
+  const name = resource.Properties?.[property];
+  return typeof name === 'string' ? name : undefined;
+}
+
+function generatedQueueName(logicalId: string, resource: TemplateResource): string {
+  return `${functionNameOf(logicalId)}${resource.Properties?.['FifoQueue'] === true ? '.fifo' : ''}`;
 }
 
 function aliasName(resource: TemplateResource): string {
@@ -163,7 +176,7 @@ function answerResource(
     account.mappings[id] = mappingAnswer(id, properties);
   }
   if (resource.Type === 'AWS::SQS::Queue') {
-    account.queues[id] = queueAnswer(logicalId, properties);
+    account.queues[id] = queueAnswer(id.slice(QUEUE_URL_PREFIX.length), properties);
   }
   if (resource.Type === 'AWS::DynamoDB::Table') {
     account.tables[id] = tableAnswer(id, properties);
@@ -198,10 +211,10 @@ function mappingAnswer(uuid: string, properties: JsonObject): MutableObject {
   };
 }
 
-function queueAnswer(logicalId: string, properties: JsonObject): Record<string, string> {
+function queueAnswer(queueName: string, properties: JsonObject): Record<string, string> {
   const fifo = properties['FifoQueue'] === true;
   return {
-    QueueArn: `arn:aws:sqs:us-east-1:${DEPLOYED_ACCOUNT_ID}:${functionNameOf(logicalId)}${fifo ? '.fifo' : ''}`,
+    QueueArn: `arn:aws:sqs:us-east-1:${DEPLOYED_ACCOUNT_ID}:${queueName}`,
     VisibilityTimeout: JSON.stringify(properties['VisibilityTimeout'] ?? 30),
     ...(fifo
       ? {

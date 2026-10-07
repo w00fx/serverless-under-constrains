@@ -89,7 +89,8 @@ const QUALIFIED_ARN = /^arn:aws:lambda:[a-z0-9-]+:[0-9]{12}:function:([A-Za-z0-9
 const MAPPING_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const QUEUE_URL = /^https:\/\/\S+\/[0-9]{12}\/[A-Za-z0-9_-]{1,80}(\.fifo)?$/;
 const TABLE_NAME = /^[A-Za-z0-9_.-]{3,255}$/;
-const ASSEMBLY_MANIFEST = 'manifest.json';
+/** The cloud-assembly manifest of a frozen assembly, which declares each stack's tags. */
+export const ASSEMBLY_MANIFEST_FILE = 'manifest.json';
 
 /**
  * The tags the frozen cloud-assembly manifest declares for `stackName`, sorted by key, or the
@@ -112,11 +113,16 @@ export function declaredStackTags(
   const entries = isJsonObject(tags) ? Object.entries(tags) : [];
   const strings = entries.filter((entry): entry is [string, string] => typeof entry[1] === 'string');
   if (!isJsonObject(tags) || strings.length !== entries.length) {
+    // A manifest that is not JSON (bad UTF-8, a syntax error, or a number past the double range,
+    // which the kernel parser refuses) says so, instead of reading as "declares no tags".
+    const found = parsed.ok
+      ? `declares stack tags ${describeJson(tags)}`
+      : `is not one JSON document (${parsed.error.kind})`;
     return err(
       deploymentReason(
         'DECLARED_TAGS_UNREADABLE',
         'BR-RUA-050',
-        `${ASSEMBLY_MANIFEST} declares stack tags ${describeJson(tags)}; expected artifacts.${boundedJsonText(stackName)}.properties.tags as an object of string values`,
+        `${ASSEMBLY_MANIFEST_FILE} ${found}; expected artifacts.${boundedJsonText(stackName)}.properties.tags as an object of string values`,
       ),
     );
   }

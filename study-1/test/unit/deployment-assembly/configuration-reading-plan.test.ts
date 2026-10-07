@@ -22,6 +22,7 @@ import {
   runTemplate,
   templateBytes,
 } from '../../support/deployment-assembly/execution-template-fixture.ts';
+import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 
 const encoder = new TextEncoder();
 const VERSION_ARN = 'arn:aws:lambda:us-east-1:123456789012:function:suc1-3f1c2a9e-provider:7';
@@ -83,6 +84,38 @@ describe('declaredStackTags', () => {
       detail.ok ? '' : detail.error.detail,
       /expected artifacts\."SucRua-run-3f1c2a9e"\.properties\.tags as an object of string values$/,
     );
+  });
+
+  // A-05 regressions (CMP-02 single-pass review): the frozen manifest is untrusted package bytes.
+  it('reads 100,000-level tag towers as one bounded reason, never a RangeError', () => {
+    for (const shape of ['array', 'object', 'mixed'] as const) {
+      const tower = towerText(shape, DEEP_NESTING, '"v"');
+      for (const text of [
+        `{"artifacts":{"${RUN_STACK}":{"properties":{"tags":${tower}}}}}`,
+        `{"artifacts":{"${RUN_STACK}":{"properties":{"tags":{"suc:project":${tower}}}}}}`,
+      ]) {
+        const tags = declaredStackTags(encoder.encode(text), RUN_STACK);
+        assert.equal(tags.ok ? 'ok' : tags.error.code, 'DECLARED_TAGS_UNREADABLE', shape);
+        assert.ok(tags.ok || tags.error.detail.length < 1_000, shape);
+      }
+    }
+  });
+
+  it('names a manifest that is not JSON, a number past the double range included', () => {
+    const tags = declaredStackTags(
+      encoder.encode(`{"artifacts":{"${RUN_STACK}":{"properties":{"tags":{"suc:project":1e400}}}}}`),
+      RUN_STACK,
+    );
+    assert.match(tags.ok ? '' : tags.error.detail, /^manifest\.json is not one JSON document \(invalid_json\); /);
+    const binary = declaredStackTags(new Uint8Array([0xff]), RUN_STACK);
+    assert.match(binary.ok ? '' : binary.error.detail, /^manifest\.json is not one JSON document \(invalid_utf8\); /);
+  });
+
+  it('never reads an inherited member name as a declared stack', () => {
+    for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const tags = declaredStackTags(encoder.encode('{"artifacts":{}}'), name);
+      assert.equal(tags.ok ? 'ok' : tags.error.code, 'DECLARED_TAGS_UNREADABLE', name);
+    }
   });
 });
 
