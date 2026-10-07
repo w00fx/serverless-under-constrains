@@ -6,7 +6,8 @@
 
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, Sha256Hex, StructuredReason } from '../record-contract/primitives.ts';
-import type { DeclaredTrial, ExecutionManifest } from '../record-contract/records/group-a/execution_manifest.ts';
+import type { DeclaredTrial } from '../record-contract/records/group-a/execution_manifest.ts';
+import { declaredFinancialRecords } from '../trial-execution/probe-workload-plan.ts';
 import type { TrialExecution, TrialPlan } from '../trial-execution/trial-execution-ports.ts';
 import type { AdmittedExecution, AdmittedTrialExecution, ExecutionTargets } from './execution-ports.ts';
 
@@ -63,7 +64,8 @@ function planOf(
       variant_id: trial.variant_id,
       scenario: trial.scenario,
     },
-    ...financialRecords(manifest),
+    // OR-RUA-001: the same payment and approved decision for every trial of the execution.
+    ...declaredFinancialRecords(manifest),
     provider_timing: {
       safety_release_ms: manifest.timing.provider_safety_release_ms,
       treatment_poll_interval_ms: manifest.timing.treatment_poll_interval_ms,
@@ -74,32 +76,9 @@ function planOf(
   });
 }
 
-// OR-RUA-001: the same payment and approved decision for every trial of the execution.
-function financialRecords(manifest: ExecutionManifest): Pick<TrialPlan, 'payment' | 'approved_decision'> {
-  const inputs = manifest.financial_inputs;
-  return {
-    payment: {
-      schema_version: 1,
-      record_type: 'payment',
-      payment_id: inputs.payment_id,
-      captured_amount_minor: inputs.captured_amount_minor,
-      currency: inputs.currency,
-    },
-    approved_decision: {
-      schema_version: 1,
-      record_type: 'approved_decision',
-      refund_request_id: inputs.refund_request_id,
-      payment_id: inputs.payment_id,
-      decision: inputs.decision,
-      approved_amount_minor: inputs.approved_amount_minor,
-      currency: inputs.currency,
-    },
-  };
-}
-
 /**
- * The admitted execution as one with trials; `undefined` for a probe, whose workload phases this
- * runner does not bind.
+ * The admitted execution as one with trials; `undefined` for a probe, which has no trial and runs
+ * through the probe workload (probe-workload.ts) instead.
  *
  * @example
  * asTrialExecution(admitted)?.identity; // { execution_kind: 'RUN', run_id }

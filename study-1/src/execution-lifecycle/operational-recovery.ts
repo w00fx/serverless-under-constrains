@@ -10,15 +10,14 @@ import type { CleanupSafetyClock, StepReport } from '../cleanup/cleanup-ports.ts
 import { readCleanupHistory } from '../cleanup/cleanup-history.ts';
 import { CleanupOrchestrator } from '../cleanup/cleanup-orchestrator.ts';
 import type { CleanupRunOutcome } from '../cleanup/cleanup-orchestrator.ts';
+import { guardLeaseStore } from '../coordination-lease/guarded-lease-store.ts';
 import { finalizeLease } from '../coordination-lease/lease-finalization.ts';
 import type { LeaseStorePort } from '../coordination-lease/lease-store-port.ts';
 import { leaseOwnerOf } from '../coordination-lease/lease-store-port.ts';
 import { createJsonlJournalPort } from '../event-journal/jsonl-journal-port.ts';
 import { JournalWriter } from '../event-journal/journal-writer.ts';
-import { buildAmendment } from '../evidence-package/amendments.ts';
-import type { PackageFile, PackageFileSystem } from '../evidence-package/package-file-system.ts';
+import type { PackageFileSystem } from '../evidence-package/package-file-system.ts';
 import { AMENDMENT_PATHS, EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
-import { readAmendmentSnapshots } from '../evidence-package/package-snapshot.ts';
 import { serializeRecordFile } from '../record-contract/canonical-json.ts';
 import { sha256Hex } from '../record-contract/digests.ts';
 import { executionIdentityFields } from '../record-contract/envelope.ts';
@@ -40,6 +39,7 @@ import { readJournalRecords, readRecordFile } from '../study-comparison/record-f
 import { finalLeaseStatus } from '../study-comparison/run-terminal-reason.ts';
 import { RUNNER_DEFINITIVE_RETRIES } from '../trial-execution/runner-trial-journal.ts';
 import { AmendmentPayload } from './amendment-payload.ts';
+import { writeAmendmentPackage } from './amendment-writer.ts';
 import { ExecutionCleanupEvidence } from './cleanup-evidence.ts';
 import { planCleanup } from './cleanup-plan.ts';
 import type {
@@ -138,7 +138,13 @@ export async function recoverExecution(
     completed_at: formatUtcMillis(services.clock.now()),
   };
   await payload.writeOnce(AMENDMENT_PATHS.operationalRecoveryRecord, serializeRecordFile(record));
-  const written = await writeAmendment(admitted, original.value.index_sha256, payload.files(), deps);
+  const written = await writeAmendmentPackage(deps.files, services, {
+    admitted,
+    kind: 'OPERATIONAL_RECOVERY',
+    original_index_sha256: original.value.index_sha256,
+    payload: payload.files(),
+    subject: 'BR-RUA-038',
+  });
   return written.ok ? ok({ amendment_directory: written.value, record }) : written;
 }
 
@@ -255,8 +261,10 @@ async function repairLease(
   if (original === 'released') {
     return { status: 'released', reasons: [] };
   }
+  // A store adapter that throws must not reject the recovery: the guard turns a thrown write into
+  // an ambiguous one and a thrown read into a failed one (WP-22 review residual).
   const verdict = await finalizeLease({
-    store: deps.lease,
+    store: guardLeaseStore(deps.lease),
     owner: leaseOwnerOf(admitted.identity, admitted.manifest_sha256),
     closure: clean ? 'clean' : 'unclean',
     // Used only when the pre-finalization read fails; the conditional write then decides.
@@ -292,48 +300,6 @@ function stepsRun(
     )
     .map(({ body }) => body.step);
   return [...new Set(steps)].toSorted((a, b) => a - b);
-}
-
-async function writeAmendment(
-  admitted: AdmittedExecution,
-  originalIndexSha256: Sha256Hex,
-  payload: readonly PackageFile[],
-  deps: RecoveryDeps,
-): Promise<Result<string, readonly StructuredReason[]>> {
-  const existing = await readAmendmentSnapshots(deps.files, admitted.identity);
-  if (!existing.ok) {
-    return err([recoveryReason('AMENDMENTS_UNREADABLE', `${existing.error.code}: ${existing.error.detail}`)]);
-  }
-  const parent = existing.value
-    .toSorted((a, b) => (a.directory < b.directory ? -1 : 1))
-    .at(-1)
-    ?.files.find((file) => file.path === AMENDMENT_PATHS.amendmentIndex);
-  const built = buildAmendment({
-    identity: admitted.identity,
-    execution_manifest_sha256: admitted.manifest_sha256,
-    amendment_id: deps.services.ids.next(),
-    amendment_kind: 'OPERATIONAL_RECOVERY',
-    sequence: existing.value.length + 1,
-    original_package_index_sha256: originalIndexSha256,
-    parent_amendment_index_sha256: parent === undefined ? null : sha256Hex(parent.bytes),
-    payload,
-    created_at: formatUtcMillis(deps.services.clock.now()),
-  });
-  if (!built.ok) {
-    return built;
-  }
-  for (const file of built.value.files) {
-    const written = await deps.files.writeOnce(`${built.value.directory}/${file.path}`, file.bytes);
-    if (!written.ok) {
-      return err([
-        recoveryReason(
-          'AMENDMENT_NOT_WRITTEN',
-          `${built.value.directory}/${file.path}: ${written.error.code}: ${written.error.detail}`,
-        ),
-      ]);
-    }
-  }
-  return ok(built.value.directory);
 }
 
 // A cleanup result that never reached a terminal status counts as failed (BR-RUA-038 repairs only

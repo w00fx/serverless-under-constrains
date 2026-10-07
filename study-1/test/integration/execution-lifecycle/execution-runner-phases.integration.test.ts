@@ -45,6 +45,29 @@ describe('ExecutionRunner P1: the lease', () => {
     assert.equal(outcome.interruption, undefined);
   });
 
+  it('finalizes an unresolved acquisition, which may have landed, as a clean closure (WP-22)', async () => {
+    const ambiguous = {
+      code: 'LEASE_WRITE_AMBIGUOUS',
+      subject: 'BR-RUA-045',
+      detail: 'the put timed out and the resolving read failed',
+    };
+    const lease = new ScriptedExecutionLease({ refusal: ambiguous });
+    const world = await RunnerWorld.create({ deps: () => ({ lease }) });
+    const outcome = await world.run();
+    assert.deepEqual(world.runnerEvents(), [
+      'LEASE_ACQUISITION:started',
+      'LEASE_ACQUISITION:failed',
+      'LEASE_FINALIZATION:started',
+      'LEASE_FINALIZATION:succeeded',
+      'SUMMARY:started',
+      'SUMMARY:failed',
+    ]);
+    assert.deepEqual(lease.calls(), ['acquire', 'stopHeartbeats', 'finalize:clean']);
+    assert.equal(world.provisioner.provisions(), 0);
+    assert.equal(outcome.lease_status, 'released');
+    assert.equal(outcome.package_finalized, true);
+  });
+
   it('records an abort before the lease and skips acquisition', async () => {
     const world = await RunnerWorld.create();
     assert.equal(world.runner.abort('SIGINT'), 'interrupting');

@@ -1,5 +1,6 @@
 // The coordination lease as the runner sees it, scripted: acquisition succeeds or is refused, a
-// test loses the lease at the moment it chooses, and finalization answers the status the test
+// test loses the lease, or leaves its ownership unconfirmed (publication paused while the heartbeat
+// recovers, design §10.3), at the moment it chooses, and finalization answers the status the test
 // asked for. The real `SessionExecutionLease` over `FakeLeaseStore` is used where the lease's own
 // writes are the evidence (AC-RUA-008); this fake isolates the runner's reactions to the lease.
 
@@ -48,6 +49,11 @@ export class ScriptedExecutionLease implements ExecutionLease {
       health: 'LOST_OWNERSHIP_MISMATCH',
       reason: { code: 'LEASE_OWNERSHIP_MISMATCH', subject: 'BR-RUA-045', detail: 'a foreign owner holds the lease' },
     });
+  }
+
+  /** The heartbeat cannot confirm ownership yet: publication pauses, and no loss is reported. */
+  suspend(): void {
+    this.#allowed = false;
   }
 
   acquire(): Promise<{ readonly acquired: true } | { readonly acquired: false; readonly reason: StructuredReason }> {

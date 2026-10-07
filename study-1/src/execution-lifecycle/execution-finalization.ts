@@ -1,9 +1,12 @@
 // P9 (design §10.2, §7; BR-RUA-043, BR-RUA-044, CTR-RUA-002): the summary records, then the journals
 // made read-only, then `package-index.json`, written last so it hashes every other file of the
 // package exactly as finalized. A run's summary is the comparison assessment and the run summary
-// derived from the frozen records (`finalizeRunAssessments`); the other kinds bind their own
-// summary writer (evidence/WP-27/decisions.md).
+// derived from the frozen records (`finalizeRunAssessments`) and the deployment projection of the
+// frozen run template (Owner amendment A-13); a probe binds `TransportProbeSummaryWriter` and a
+// validation `ValidationSummaryWriter`.
 
+import { projectDeploymentTemplate } from '../deployment-assembly/deployment-projection.ts';
+import type { DeploymentTemplateProjection } from '../deployment-assembly/deployment-projection.ts';
 import type { AppendOnlyFile } from '../event-journal/append-only-file.ts';
 import { buildPackageIndex } from '../evidence-package/package-index.ts';
 import { EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
@@ -11,6 +14,7 @@ import { serializeRecordFile } from '../record-contract/canonical-json.ts';
 import { sha256Hex } from '../record-contract/digests.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, Sha256Hex, StructuredReason, UtcMillis } from '../record-contract/primitives.ts';
+import type { FrozenDeploymentAssembly } from '../record-contract/records/group-a/execution_manifest.ts';
 import type { RecordValidator } from '../record-contract/schema-registry.ts';
 import { finalizeRunAssessments } from '../study-comparison/run-package-assessment.ts';
 import { readRunPackage } from '../study-comparison/run-package-reader.ts';
@@ -61,11 +65,13 @@ export class RunSummaryWriter implements SummaryWriter {
     if (!records.ok) {
       return records.error;
     }
-    // The inventoried template's deployment projection has no package reader yet (A-13 residual,
-    // evidence/WP-27/decisions.md); without it the equality projections are indeterminate.
     const finalized = finalizeRunAssessments(
       records.value,
-      { deployment: undefined, contradictory_amendments: [], finalized_at: finalizedAt },
+      {
+        deployment: frozenDeploymentProjection(filesByPath(files.value), admitted.manifest.deployment_assembly),
+        contradictory_amendments: [],
+        finalized_at: finalizedAt,
+      },
       sha256Hex,
     );
     if (!finalized.ok) {
@@ -77,6 +83,31 @@ export class RunSummaryWriter implements SummaryWriter {
       await pkg.writeOnce(summary.path, summary.bytes),
     ].filter((reason) => reason !== undefined);
   }
+}
+
+/**
+ * The deployment projection of the run template the execution manifest froze (A-13), read from its
+ * package-relative `template_path` and checked against its `template_sha256`; undefined when the
+ * template is not in the package or cannot be projected, which leaves the template-derived equality
+ * projections indeterminate rather than failing the summary.
+ *
+ * @example
+ * frozenDeploymentProjection(filesByPath(files), admitted.manifest.deployment_assembly)?.variants.durable;
+ */
+export function frozenDeploymentProjection(
+  files: ReadonlyMap<string, Uint8Array>,
+  assembly: FrozenDeploymentAssembly,
+): DeploymentTemplateProjection | undefined {
+  const bytes = files.get(assembly.template_path);
+  if (bytes === undefined) {
+    return undefined;
+  }
+  const projection = projectDeploymentTemplate({
+    template_path: assembly.template_path,
+    template_bytes: bytes,
+    template_sha256: assembly.template_sha256,
+  });
+  return projection.ok ? projection.value : undefined;
 }
 
 /**

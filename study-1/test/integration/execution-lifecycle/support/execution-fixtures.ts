@@ -81,6 +81,7 @@ export function targetsOf(execution: OfflineExecution): ExecutionTargets {
     },
     event_source_mapping_ids: [SOURCE_MAPPING_ID],
     durable_function_names: [callerName],
+    function_names: {},
   };
 }
 

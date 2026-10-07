@@ -105,4 +105,24 @@ describe('planCleanup', () => {
     });
     assert.equal(!plan.ok && plan.error.code, 'OWNERSHIP_CONTEXT_INVALID');
   });
+
+  it('proves nothing owned when provisioning froze no resource manifest', () => {
+    const plan = planCleanup({
+      admitted,
+      resource_manifest: undefined,
+      targets: undefined,
+      history: EMPTY_HISTORY,
+      started_at: STARTED_AT,
+    });
+    assert.deepEqual(plan, {
+      ok: false,
+      error: {
+        code: 'RESOURCE_MANIFEST_ABSENT',
+        subject: 'BR-RUA-050',
+        artifact_path: 'provisioning/resource-manifest.json',
+        detail:
+          'provisioning/resource-manifest.json was never frozen; expected the manifest that proves what the execution owns',
+      },
+    });
+  });
 });

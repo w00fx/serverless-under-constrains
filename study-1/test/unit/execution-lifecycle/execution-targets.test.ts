@@ -70,8 +70,78 @@ describe('executionTargetsOf', () => {
         durable_caller: { function_arn: CALLER_ARN, qualifier: 'live' },
         event_source_mapping_ids: [NAMES.sourceMapping],
         durable_function_names: ['suc1-aaaaaaaa-durable-caller'],
+        function_names: { 'durable-caller': 'suc1-aaaaaaaa-durable-caller' },
       },
     });
+  });
+
+  it('reads the provider, the probe caller and every function telemetry looks up', () => {
+    const targets = executionTargetsOf(
+      withOutputs([
+        out(STACK_OUTPUT_KEYS.providerFunctionName, 'suc1-aaaaaaaa-refund-provider'),
+        out(STACK_OUTPUT_KEYS.controllerFunctionName, 'suc1-aaaaaaaa-treatment-controller'),
+        out(STACK_OUTPUT_KEYS.probeCallerFunctionName, 'suc1-aaaaaaaa-probe-caller'),
+        out(STACK_OUTPUT_KEYS.probeCallerVersion, '12'),
+        out(STACK_OUTPUT_KEYS.conventionalCallerFunctionName, 'suc1-aaaaaaaa-conventional-caller'),
+      ]),
+    );
+    assert.equal(targets.ok, true);
+    assert.equal(targets.value.provider_function_name, 'suc1-aaaaaaaa-refund-provider');
+    assert.deepEqual(targets.value.probe_caller, { function_name: 'suc1-aaaaaaaa-probe-caller', version: '12' });
+    assert.deepEqual(targets.value.function_names, {
+      'conventional-caller': 'suc1-aaaaaaaa-conventional-caller',
+      'probe-caller': 'suc1-aaaaaaaa-probe-caller',
+      'refund-provider': 'suc1-aaaaaaaa-refund-provider',
+      'treatment-controller': 'suc1-aaaaaaaa-treatment-controller',
+    });
+  });
+
+  it('leaves out the provider name and the probe caller a stack does not output', () => {
+    const targets = executionTargetsOf(withOutputs([]));
+    assert.equal(targets.ok, true);
+    assert.equal(Object.hasOwn(targets.value, 'provider_function_name'), false);
+    assert.equal(Object.hasOwn(targets.value, 'probe_caller'), false);
+    assert.deepEqual(targets.value.function_names, {});
+  });
+
+  for (const [name, outputs] of [
+    ['a probe caller name without its version', [out(STACK_OUTPUT_KEYS.probeCallerFunctionName, 'f')]],
+    ['a probe caller version without its name', [out(STACK_OUTPUT_KEYS.probeCallerVersion, '3')]],
+    [
+      'an empty probe caller name',
+      [out(STACK_OUTPUT_KEYS.probeCallerFunctionName, ''), out(STACK_OUTPUT_KEYS.probeCallerVersion, '3')],
+    ],
+    [
+      'the unpublished $LATEST version',
+      [out(STACK_OUTPUT_KEYS.probeCallerFunctionName, 'f'), out(STACK_OUTPUT_KEYS.probeCallerVersion, '$LATEST')],
+    ],
+    [
+      'a version with a leading zero',
+      [out(STACK_OUTPUT_KEYS.probeCallerFunctionName, 'f'), out(STACK_OUTPUT_KEYS.probeCallerVersion, '07')],
+    ],
+    [
+      'a version followed by text',
+      [out(STACK_OUTPUT_KEYS.probeCallerFunctionName, 'f'), out(STACK_OUTPUT_KEYS.probeCallerVersion, '7a')],
+    ],
+  ] as const) {
+    it(`refuses ${name}`, () => {
+      const targets = executionTargetsOf(withOutputs(outputs));
+      assert.equal(targets.ok, false);
+      assert.match(targets.error.detail, /probe caller outputs are .*expected a function name and a published version/);
+    });
+  }
+
+  it('reports the first unresolved group: queues before the Durable caller before the probe caller', () => {
+    const broken = [FULL[0], FULL[6], out(STACK_OUTPUT_KEYS.probeCallerVersion, '3')] as readonly KeyValueEntry[];
+    const queues = executionTargetsOf(withOutputs(broken));
+    assert.equal(queues.ok, false);
+    assert.match(queues.error.detail, /conventional queue outputs/);
+    const durableQueues = executionTargetsOf(withOutputs([FULL[3], FULL[6]] as readonly KeyValueEntry[]));
+    assert.equal(durableQueues.ok, false);
+    assert.match(durableQueues.error.detail, /durable queue outputs/);
+    const caller = executionTargetsOf(withOutputs(broken.slice(1)));
+    assert.equal(caller.ok, false);
+    assert.match(caller.error.detail, /Durable caller outputs/);
   });
 
   it('leaves out a variant and the caller the stack did not deploy', () => {

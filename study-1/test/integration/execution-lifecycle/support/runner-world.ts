@@ -6,7 +6,6 @@
 
 import { ExecutionRunner } from '../../../../src/execution-lifecycle/execution-runner.ts';
 import type { ExecutionRunnerDeps } from '../../../../src/execution-lifecycle/execution-runner.ts';
-import { RunSummaryWriter } from '../../../../src/execution-lifecycle/execution-finalization.ts';
 import type {
   AdmittedTrialExecution,
   ExecutionLogLine,
@@ -18,6 +17,7 @@ import type {
 import { EXECUTION_PATHS } from '../../../../src/evidence-package/package-layout.ts';
 import type { JsonObject, JsonValue } from '../../../../src/record-contract/primitives.ts';
 import type { ResourceManifest } from '../../../../src/record-contract/records/group-a/resource_manifest.ts';
+import { summaryWriterFor } from '../../../../src/execution-lifecycle/summary-writers.ts';
 import { RUN_SAFETY } from '../../../../src/safety/safety-limits.ts';
 import type { SafetyLimits } from '../../../../src/safety/safety-limits.ts';
 import { SafetySupervisor } from '../../../../src/safety/safety-supervisor.ts';
@@ -25,6 +25,7 @@ import { OfflineCloud } from '../../../support/offline-cloud/offline-cloud.ts';
 import type { OfflineExecutionName } from '../../../support/offline-cloud/offline-execution.ts';
 import { OfflineProvisioner } from '../fakes/offline-provisioner.ts';
 import { ScriptedExecutionLease } from '../fakes/scripted-execution-lease.ts';
+import { ScriptedProbeRunner } from '../fakes/scripted-probe-runner.ts';
 import { admittedOf, lifecycleServices, lifecycleValidator, targetsOf } from './execution-fixtures.ts';
 import { cleanupBindings, offlineAccount } from './offline-account.ts';
 import type { OfflineAccount } from './offline-account.ts';
@@ -55,6 +56,8 @@ export class RunnerWorld {
   /** The resource manifest bytes the deploy freezes (the offline cloud's golden manifest). */
   readonly resourceManifestBytes: Uint8Array;
   readonly lease = new ScriptedExecutionLease();
+  /** The probe runner a trial execution never calls (a guard: a call fails the probe's P4). */
+  readonly probe = new ScriptedProbeRunner();
   readonly provisioner: OfflineProvisioner;
   readonly logs: ExecutionLogLine[];
   readonly services: ExecutionServices;
@@ -86,11 +89,12 @@ export class RunnerWorld {
       provisioner: this.provisioner,
       readiness: { consumers: this.account.consumers },
       trials: cloud.executor,
+      probe: this.probe,
       safety,
       cleanup: cleanupBindings(this.account, cloud.store, cloud.time),
-      readers: { store: cloud.store, queues: cloud.counters, durable: cloud.durable },
+      readers: { store: cloud.store, queues: cloud.counters, durable: cloud.durable, dlq: cloud.dlqReceiver },
       evidence: { files: cloud.storage, journals: cloud.storage },
-      summary: new RunSummaryWriter(lifecycleValidator()),
+      summary: summaryWriterFor(this.admitted.identity.execution_kind, lifecycleValidator()),
       services,
     };
     this.deps = { ...base, ...options.deps?.(this) };

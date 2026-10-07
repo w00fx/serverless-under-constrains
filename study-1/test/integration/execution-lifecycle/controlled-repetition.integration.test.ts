@@ -24,9 +24,12 @@ import { resourceManifest, runTags } from '../../support/cleanup/cleanup-fixture
 import { InMemoryItemStore } from '../../support/durable-store/in-memory-item-store.ts';
 import { ScriptedDurableExecutionReader } from '../../support/evidence-collection/scripted-durable-execution-reader.ts';
 import { VirtualTimeScheduler } from '../../support/kernel/virtual-time-scheduler.ts';
+import { OfflineDlqReceiver } from '../../support/offline-cloud/offline-dlq-receiver.ts';
+import { OfflineMessageLog } from '../../support/offline-cloud/offline-message-log.ts';
 import { OfflinePackageStorage } from '../../support/offline-cloud/offline-package-storage.ts';
 import { OfflineQueueCounterReader } from '../../support/offline-cloud/offline-queue-counter-reader.ts';
 import { OfflineProvisioner } from './fakes/offline-provisioner.ts';
+import { ScriptedProbeRunner } from './fakes/scripted-probe-runner.ts';
 import { ScriptedTrialRunner } from './fakes/scripted-trial-runner.ts';
 import { filesNamingADigest, manifestDigestsNamed } from './support/digest-references.ts';
 import { lifecycleServices, lifecycleValidator } from './support/execution-fixtures.ts';
@@ -90,9 +93,15 @@ function harnessRunner(run: AdmittedHarnessRun, time: VirtualTimeScheduler): Exe
     }),
     readiness: { consumers: account.consumers },
     trials: new ScriptedTrialRunner(),
+    probe: new ScriptedProbeRunner(),
     safety: (startedNs) => new SafetySupervisor({ monotonic: time, wall: time, limits: RUN_SAFETY, startedNs }),
     cleanup: cleanupBindings(account, store, time),
-    readers: { store, queues: new OfflineQueueCounterReader(new Map()), durable: new ScriptedDurableExecutionReader() },
+    readers: {
+      store,
+      queues: new OfflineQueueCounterReader(new Map()),
+      durable: new ScriptedDurableExecutionReader(),
+      dlq: new OfflineDlqReceiver(new Map(), new OfflineMessageLog(time)),
+    },
     evidence: { files: storage, journals: storage },
     summary: new RunSummaryWriter(lifecycleValidator()),
     services,
