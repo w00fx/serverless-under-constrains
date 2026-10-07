@@ -20,19 +20,28 @@ import { before, describe, it } from 'node:test';
 
 import { PACKAGE_LAYOUT } from '../../src/evidence-package/package-layout.ts';
 import { isJsonArray, isJsonObject } from '../../src/record-contract/json-value.ts';
-import type { JsonObject, JsonValue } from '../../src/record-contract/primitives.ts';
+import type { ExecutionIdentity, JsonObject, JsonValue } from '../../src/record-contract/primitives.ts';
 import { HAPPENED_BEFORE_PATTERN } from '../golden/transport-qualification/verdict/support/probe-golden.ts';
-import { admittedPackage, assertCompleted, e2eSettings, packageRecord, runOperator } from './support/rua-operator.ts';
+import {
+  admittedPackage,
+  assertCompleted,
+  assertExecuted,
+  e2eSettings,
+  packageRecord,
+  runOperator,
+} from './support/rua-operator.ts';
 import type { OperatorRun } from './support/rua-operator.ts';
 
 describe('AC-RUA-002 and AC-RUA-021 real-cloud transport probe', () => {
   let execute: OperatorRun;
   let verify: OperatorRun;
   let probeResult: JsonObject;
+  let probe: ExecutionIdentity;
 
   before(async () => {
     const { confirmed_id: probeId } = e2eSettings(process.env);
-    const packageDirectory = admittedPackage({ execution_kind: 'TRANSPORT_PROBE', transport_probe_id: probeId });
+    probe = { execution_kind: 'TRANSPORT_PROBE', transport_probe_id: probeId };
+    const packageDirectory = admittedPackage(probe);
     execute = await runOperator(['probe', 'execute', packageDirectory, '--confirm-cloud-mutation', probeId]);
     verify = await runOperator(['probe', 'verify', packageDirectory]);
     probeResult = packageRecord(
@@ -43,7 +52,7 @@ describe('AC-RUA-002 and AC-RUA-021 real-cloud transport probe', () => {
   });
 
   it('ac002-real-probe', () => {
-    assertCompleted(execute);
+    assertExecuted(execute, probe);
     const conditions = probeResult['condition_results'];
     assert.ok(isJsonArray(conditions) && conditions.length === 6, 'six condition results');
     for (const condition of conditions) {
@@ -62,7 +71,7 @@ describe('AC-RUA-002 and AC-RUA-021 real-cloud transport probe', () => {
   });
 
   it('ac021-real-probe-pass', () => {
-    assertCompleted(execute);
+    assertExecuted(execute, probe);
     assert.equal(probeResult['transport_probe_verdict'], 'pass');
     assert.deepEqual(probeResult['probe_cardinality'], {
       caller_invocations: 1,

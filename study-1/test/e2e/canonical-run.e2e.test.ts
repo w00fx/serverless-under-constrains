@@ -18,10 +18,11 @@ import { before, describe, it } from 'node:test';
 
 import { EXECUTION_PATHS } from '../../src/evidence-package/package-layout.ts';
 import { isJsonArray, isJsonObject } from '../../src/record-contract/json-value.ts';
-import type { JsonObject } from '../../src/record-contract/primitives.ts';
+import type { JsonObject, Uuid4 } from '../../src/record-contract/primitives.ts';
 import {
   admittedPackage,
   assertCompleted,
+  assertExecuted,
   e2eSettings,
   packageRecord,
   runOperator,
@@ -33,9 +34,10 @@ describe('AC-RUA-027 real-cloud canonical run', () => {
   let execute: OperatorRun;
   let verify: OperatorRun;
   let summary: JsonObject;
+  let runId: Uuid4;
 
   before(async () => {
-    const { confirmed_id: runId } = e2eSettings(process.env);
+    runId = e2eSettings(process.env).confirmed_id;
     const packageDirectory = admittedPackage({ execution_kind: 'RUN', run_id: runId });
     const manifest = packageRecord(packageDirectory, EXECUTION_PATHS.executionManifest, 'execution_manifest');
     execute = await runOperator(['run', 'execute', packageDirectory, '--confirm-cloud-mutation', runId]);
@@ -44,7 +46,7 @@ describe('AC-RUA-027 real-cloud canonical run', () => {
   });
 
   it('ac027-canonical-run', () => {
-    assertCompleted(execute);
+    assertExecuted(execute, { execution_kind: 'RUN', run_id: runId });
     const trials = summary['trial_results'];
     assert.ok(isJsonArray(trials) && trials.length === 4, 'four trial results');
     for (const trial of trials) {

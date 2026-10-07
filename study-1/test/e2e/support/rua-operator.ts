@@ -154,6 +154,25 @@ export function assertCompleted(run: OperatorRun): void {
 }
 
 /**
+ * Asserts an execute command completed for exactly `execution` and names its finalized package
+ * index as the one written path (design §11: the `cli_result` of an execute command).
+ *
+ * @example
+ * assertExecuted(execute, { execution_kind: 'RUN', run_id: runId });
+ */
+export function assertExecuted(run: OperatorRun, execution: ExecutionIdentity): void {
+  assertCompleted(run);
+  const named = run.result as unknown as Readonly<Record<string, unknown>>;
+  // The result names the execution by its id member alone (`cli_result` carries no kind).
+  for (const [field, value] of Object.entries(execution).filter(([name]) => name !== 'execution_kind')) {
+    assert.equal(named[field], value, `cli_result ${field}`);
+  }
+  assert.deepEqual(run.result.written_paths, [
+    `${PACKAGE_LAYOUT.executionDirectory(execution)}/${EXECUTION_PATHS.packageIndex}`,
+  ]);
+}
+
+/**
  * The string member `name` of a record, asserted to be a string.
  *
  * @example

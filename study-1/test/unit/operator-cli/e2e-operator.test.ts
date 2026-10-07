@@ -10,10 +10,13 @@ import {
   E2E_EVIDENCE_ROOT,
   STUDY_ROOT,
   admittedPackage,
+  assertExecuted,
   e2eSettings,
   stringMember,
 } from '../../e2e/support/rua-operator.ts';
+import type { OperatorRun } from '../../e2e/support/rua-operator.ts';
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
+import type { CliResult } from '../../../src/record-contract/records/group-c/cli_result.ts';
 
 const RUN_ID = '0b6d7a52-3c4e-4f80-9a1b-2c3d4e5f6a7b' as Uuid4;
 
@@ -50,5 +53,35 @@ describe('stringMember and admittedPackage', () => {
         `runs/${RUN_ID}/admission/execution-manifest.json is absent; expected the operator to have admitted RUN`,
       ),
     );
+  });
+});
+
+describe('assertExecuted', () => {
+  const run = (result: Partial<CliResult>, exitCode = 0): OperatorRun => ({
+    argv: ['run', 'execute'],
+    exit_code: exitCode,
+    stderr: '',
+    result: { outcome: 'completed', reasons: [], written_paths: [], ...result } as unknown as CliResult,
+  });
+  const execution = { execution_kind: 'RUN', run_id: RUN_ID } as const;
+
+  it('accepts a completed execute that names the confirmed execution and its package index', () => {
+    assert.doesNotThrow(() => {
+      assertExecuted(run({ run_id: RUN_ID, written_paths: [`runs/${RUN_ID}/package-index.json`] }), execution);
+    });
+  });
+
+  it('refuses another execution, another written path or a failed exit', () => {
+    const other = '1b6d7a52-3c4e-4f80-9a1b-2c3d4e5f6a7b';
+    const index = [`runs/${RUN_ID}/package-index.json`];
+    assert.throws(() => {
+      assertExecuted(run({ run_id: other as Uuid4, written_paths: index }), execution);
+    }, /cli_result run_id/);
+    assert.throws(() => {
+      assertExecuted(run({ run_id: RUN_ID, written_paths: [] }), execution);
+    });
+    assert.throws(() => {
+      assertExecuted(run({ run_id: RUN_ID, written_paths: index }, 6), execution);
+    }, /rua run execute/);
   });
 });
