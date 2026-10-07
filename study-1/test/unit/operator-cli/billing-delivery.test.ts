@@ -272,4 +272,21 @@ describe('checkDelivery', () => {
       `"${MANIFEST_PATH}" member dataFiles is null; expected an array of exactly one data file key`,
     );
   });
+
+  // Fuzz regression (billing-delivery.fuzz.test.ts, FC_RUNS=10000, seed 437808079, path
+  // "5503:3:2:2:2"): a manifest listing itself as the data file was imported as its own export.
+  it('refuses a manifest that lists itself as the data file', () => {
+    const selfListing = new TextEncoder().encode('{"dataFiles":["m-Manifest.json"]}');
+    assert.equal(
+      refusedDetail([{ path: 'm-Manifest.json', bytes: selfListing }]),
+      'the listed data file "m-Manifest.json" matches 0 delivered files; expected exactly one',
+    );
+    assert.equal(
+      refusedDetail([
+        { path: MANIFEST_PATH, bytes: new TextEncoder().encode(`{"dataFiles":["s3://b/${MANIFEST_PATH}"]}`) },
+        { path: DATA_PATH, bytes: DATA_BYTES },
+      ]),
+      `the listed data file "s3://b/${MANIFEST_PATH}" matches 0 delivered files; expected exactly one`,
+    );
+  });
 });

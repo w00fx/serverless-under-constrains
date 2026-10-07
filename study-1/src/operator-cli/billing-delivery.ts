@@ -9,7 +9,7 @@
 //   `payload/billing-export/` (BR-RUA-035);
 // - not exactly one manifest file (`*Manifest.json`), or a manifest that is not one JSON object;
 // - a manifest that does not list exactly one data file, or a listed file that is not exactly one
-//   delivered file, or any delivered file the manifest does not list.
+//   delivered file other than the manifest itself, or any delivered file the manifest does not list.
 // Read but `unverified` (the amendment is still written, with these reasons):
 // - a billing period the manifest does not state readably, or one that does not contain the
 //   execution's attribution window (INCOMPLETE_PERIOD);
@@ -149,7 +149,10 @@ function listedDataFile(
       ),
     );
   }
-  const matches = files.filter((file) => key === file.path || key.endsWith(`/${file.path}`));
+  // The manifest is never its own data file (fuzz regression: seed 437808079, a self-listing manifest).
+  const matches = files.filter(
+    (file) => file.path !== manifestPath && (key === file.path || key.endsWith(`/${file.path}`)),
+  );
   const [match] = matches;
   if (match === undefined || matches.length !== 1) {
     return err(
