@@ -3,15 +3,15 @@
 // their journals by paths relative to the evidence root (`<package>/runner/runner-journal.jsonl`),
 // exactly as the package file system names package files. Each path is checked as a normalized
 // relative POSIX path (BR-RUA-035) before it is joined to the root, so a journal can never be
-// written outside the evidence directory, and the parent directory is created first, because
-// `NodeAppendOnlyFile` appends to an existing directory only. Every outcome is the inner file's.
+// written outside the evidence directory, and the parent directory is created first by the default
+// inner `DirectoryCreatingAppendOnlyFile`, because `NodeAppendOnlyFile` appends to an existing
+// directory only. Every outcome is the inner file's.
 
-import { mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import type { AppendOnlyFile, FileAppendOutcome, FileFinalizeOutcome } from '../../event-journal/append-only-file.ts';
-import { NodeAppendOnlyFile } from '../../event-journal/node/node-append-only-file.ts';
 import { invalidPathReason } from '../../evidence-package/artifact-classification.ts';
+import { DirectoryCreatingAppendOnlyFile } from './directory-creating-append-only-file.ts';
 
 /** The refusal code of a path that would leave the evidence root. */
 export const INVALID_JOURNAL_PATH = 'INVALID_PATH';
@@ -27,31 +27,25 @@ export class EvidenceJournalFile implements AppendOnlyFile {
   readonly #root: string;
   readonly #inner: AppendOnlyFile;
 
-  constructor(root: string, inner: AppendOnlyFile = new NodeAppendOnlyFile()) {
+  constructor(root: string, inner: AppendOnlyFile = new DirectoryCreatingAppendOnlyFile()) {
     this.#root = root;
     this.#inner = inner;
   }
 
   async append(path: string, bytes: Uint8Array): Promise<FileAppendOutcome> {
-    const target = await this.#prepared(path);
+    const target = this.#prepared(path);
     return target === undefined
       ? { kind: 'not_written', code: INVALID_JOURNAL_PATH }
       : this.#inner.append(target, bytes);
   }
 
   async finalize(path: string): Promise<FileFinalizeOutcome> {
-    const target = await this.#prepared(path);
+    const target = this.#prepared(path);
     return target === undefined ? { kind: 'failed', code: INVALID_JOURNAL_PATH } : this.#inner.finalize(target);
   }
 
-  // The absolute path with its parent directory present; undefined for a path outside the root.
-  // A directory that cannot be created is left to the inner file, which reports its open failure.
-  async #prepared(path: string): Promise<string | undefined> {
-    if (invalidPathReason(path) !== undefined) {
-      return undefined;
-    }
-    const target = join(this.#root, path);
-    await mkdir(dirname(target), { recursive: true }).catch(() => undefined);
-    return target;
+  // The absolute path below the root; undefined for a path outside the root.
+  #prepared(path: string): string | undefined {
+    return invalidPathReason(path) === undefined ? join(this.#root, path) : undefined;
   }
 }
