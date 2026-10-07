@@ -2,6 +2,17 @@
 // cleanup sends in each service's wire protocol, answers scripted bodies the SDK deserializes,
 // answers scripted errors under the error names the SDK raises against AWS, repeats the last
 // queued reply, and answers an unscripted operation with a failure.
+//
+// Sources (RK-17): the protocols are those of the pinned SDK clients themselves ([R-toolchain],
+// `@aws-sdk/client-*` 3.1146.0): CloudFormation and IAM `awsQuery`, SQS and DynamoDB
+// `awsJson1_0`, CloudWatch Logs and the Tagging API `awsJson1_1`, Lambda `restJson1`. The real
+// serializers and deserializers run against the endpoint, so a request or reply that does not
+// fit the protocol fails these tests rather than passing on a fiction. The error codes answered
+// are the documented ones: CloudFormation `ValidationError` ("If the stack doesn't exist, a
+// ValidationError is returned", API_DescribeStacks, read 2026-10-06), Lambda `GetFunction` and
+// DynamoDB `DescribeTable` `ResourceNotFoundException` ([R-aws] §6.2); SQS `QueueDoesNotExist`
+// and IAM `NoSuchEntity` are the error shapes the pinned clients model (no live call confirmed
+// them; UNVERIFIED until the first real-cloud run).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

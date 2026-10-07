@@ -24,6 +24,7 @@ import {
   sightingWithTags,
   stackDeleteOutcome,
   stackReadOutcome,
+  stopAsDeletion,
   stopNeedsStatusRead,
   surfaceAnswer,
 } from '../../../src/cleanup/sdk-call-outcomes.ts';
@@ -259,6 +260,12 @@ describe('durable stop outcomes', () => {
     assert.deepEqual(durableStopOutcome(REFUSED, { kind: 'found', value: 'RUNNING' }, ARN), failed);
     assert.deepEqual(durableStopOutcome(REFUSED, { kind: 'failed', reason: REASON }, ARN), failed);
     assert.deepEqual(durableStopOutcome(REFUSED, undefined, ARN), failed);
+  });
+
+  it('reads a step-9 stop as a deletion: stopped deleted, ended already absent, failed failed', () => {
+    assert.deepEqual(stopAsDeletion({ kind: 'stopped' }), { kind: 'deleted' });
+    assert.deepEqual(stopAsDeletion({ kind: 'not_running' }), { kind: 'already_absent' });
+    assert.deepEqual(stopAsDeletion({ kind: 'failed', reason: REASON }), { kind: 'failed', reason: REASON });
   });
 });
 

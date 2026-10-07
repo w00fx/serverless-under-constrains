@@ -54,9 +54,9 @@ describe('sdkFailureOf', () => {
   });
 
   it('bounds a long name to 64 characters', () => {
-    const failure = sdkFailureOf({ name: 'N'.repeat(200), message: '' });
-    assert.ok(failure.name.length <= 64, failure.name);
-    assert.ok(failure.name.startsWith('NNNN'));
+    assert.equal(sdkFailureOf({ name: 'N'.repeat(200), message: '' }).name, 'N'.repeat(64));
+    assert.equal(sdkFailureOf({ name: `${'N'.repeat(63)}X`, message: '' }).name, `${'N'.repeat(63)}X`);
+    assert.equal(sdkFailureOf({ name: `${'N'.repeat(64)}X`, message: '' }).name, 'N'.repeat(64));
   });
 
   it('never throws on a value whose members throw when read', () => {

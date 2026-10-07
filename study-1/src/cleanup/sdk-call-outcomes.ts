@@ -296,6 +296,21 @@ export function durableStopOutcome(
 }
 
 /**
+ * A step-9 stop of a remaining durable execution read as its deletion: a stopped execution is
+ * deleted, and one that ended or is gone already absent (AC-RUA-011), as step 5 reads them, so an
+ * execution that ended after the surface saw it is never a failed deletion.
+ *
+ * @example
+ * stopAsDeletion({ kind: 'not_running' }); // { kind: 'already_absent' }
+ */
+export function stopAsDeletion(outcome: DurableStopOutcome): ResourceDeletion {
+  if (outcome.kind === 'failed') {
+    return outcome;
+  }
+  return outcome.kind === 'stopped' ? { kind: 'deleted' } : { kind: 'already_absent' };
+}
+
+/**
  * One `ReceiveMessage` of a DLQ sweep.
  *
  * @example

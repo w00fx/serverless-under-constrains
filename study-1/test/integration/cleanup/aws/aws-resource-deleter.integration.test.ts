@@ -1,7 +1,8 @@
 // AwsResourceDeleter over the real clients (BR-RUA-048 step 9, AC-RUA-011): each remaining owned
 // resource is deleted by the one request its type takes, in the form that request names it; a
 // resource the service no longer knows is already absent; a conflict (a role that still has
-// policies) or any other failure is a failed deletion; a type with no direct delete sends nothing.
+// policies) or any other failure is a failed deletion; a durable execution that ended before its
+// stop is already absent; a type with no direct delete sends nothing.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -109,6 +110,34 @@ describe('AwsResourceDeleter', () => {
     });
     const logGroup = await deleter.delete(discovered(LOG_GROUP_RESOURCE_TYPE, NAMES.providerLogGroup, 'log_groups'));
     assert.equal(logGroup.kind === 'failed' && logGroup.reason.code, 'OPERATION_ABORTED_EXCEPTION');
+  });
+
+  it('stops a durable execution as step 5 does: one that ended since it was seen is already absent', async () => {
+    const execution = `${FUNCTION_ARN}:3/durable-execution/e/1`;
+    const resource = discovered(DURABLE_EXECUTION_RESOURCE_TYPE, execution, 'durable_executions');
+    const endpoint = new ScriptedCleanupEndpoint();
+    endpoint.answer('lambda:StopDurableExecution', refuse('InvalidParameterValueException', 'not running'));
+    endpoint.answer(
+      'lambda:GetDurableExecution',
+      reply({ DurableExecutionArn: execution, Status: 'SUCCEEDED' }),
+      reply({ DurableExecutionArn: execution, Status: 'RUNNING' }),
+    );
+    const deleter = new AwsResourceDeleter(endpoint.clients);
+    assert.deepEqual(await deleter.delete(resource), { kind: 'already_absent' });
+    const stillRunning = await deleter.delete(resource);
+    assert.equal(stillRunning.kind === 'failed' && stillRunning.reason.code, 'INVALID_PARAMETER_VALUE_EXCEPTION');
+    endpoint.answer('lambda:StopDurableExecution', refuse('ResourceNotFoundException', 'gone', 404));
+    assert.deepEqual(await deleter.delete(resource), { kind: 'already_absent' });
+    assert.deepEqual(
+      endpoint.calls().map((call) => call.operation),
+      [
+        'StopDurableExecution',
+        'GetDurableExecution',
+        'StopDurableExecution',
+        'GetDurableExecution',
+        'StopDurableExecution',
+      ],
+    );
   });
 
   it('sends nothing for a type with no direct delete', async () => {

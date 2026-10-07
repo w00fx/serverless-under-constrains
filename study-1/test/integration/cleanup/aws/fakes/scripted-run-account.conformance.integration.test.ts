@@ -1,7 +1,18 @@
 // Conformance of ScriptedRunAccount with the AWS behavior cleanup's adapters depend on, through
 // the real clients: a disabled mapping reads `Disabled`; a stack deletion with a durable execution
 // still running fails (`DELETE_FAILED`, RK-10) and, once it is stopped, removes the stack and its
-// members; the DLQ hides what it returns until a delete or release by receipt handle.
+// members, the deleted stack then reading DELETE_COMPLETE by its unique id and "does not exist"
+// by its name; the DLQ hides what it returns until a delete or release by receipt handle.
+//
+// Sources (RK-17): [R-aws] §6.3, ESM `State` values and "Deleted stacks: you must pass the unique
+// stack ID"; the CloudFormation API reference (read 2026-10-06): `DescribeStacks` "If the stack
+// doesn't exist, a ValidationError is returned", `ListStackResources` "For deleted stacks ...
+// returns resource information for up to 90 days after the stack has been deleted"
+// (https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_DescribeStacks.html,
+// https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_ListStackResources.html);
+// [R-durable] §3.2 and §8 R8, "Deletion for durable functions will wait for all running
+// executions to complete. CloudFormation will wait up to 1 hour" (the wait is not modelled: the
+// deletion fails at once); [R-aws] §3, a received message stays hidden until deleted or visible.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -19,7 +30,7 @@ import { ChangeMessageVisibilityCommand, DeleteMessageCommand, ReceiveMessageCom
 import { settleCleanupCall } from '../../../../../src/cleanup/sdk-call-outcomes.ts';
 import { LIVE } from '../../../../support/cleanup/aws/live-run-script.ts';
 import { ScriptedRunAccount } from '../../../../support/cleanup/aws/scripted-run-account.ts';
-import { NAMES, STACK_ID } from '../../../../support/cleanup/cleanup-fixtures.ts';
+import { NAMES, STACK_ID, STACK_NAME } from '../../../../support/cleanup/cleanup-fixtures.ts';
 
 describe('ScriptedRunAccount', () => {
   it('disables the source mapping', async () => {
@@ -44,8 +55,11 @@ describe('ScriptedRunAccount', () => {
     await lambda.send(new StopDurableExecutionCommand({ DurableExecutionArn: LIVE.executionArn }));
     await cloudformation.send(new DeleteStackCommand({ StackName: STACK_ID }));
     assert.equal(account.stackDeleted(), true);
-    const describe_ = await settleCleanupCall(() => status());
-    assert.equal(!describe_.ok && describe_.error.message, `Stack with id ${STACK_ID} does not exist`);
+    assert.equal(await status(), 'DELETE_COMPLETE', 'a deleted stack is still described by its unique id');
+    const byName = await settleCleanupCall(() =>
+      cloudformation.send(new DescribeStacksCommand({ StackName: STACK_NAME })),
+    );
+    assert.equal(!byName.ok && byName.error.message, `Stack with id ${STACK_NAME} does not exist`);
     const fn = await settleCleanupCall(() =>
       lambda.send(new GetFunctionCommand({ FunctionName: NAMES.providerFunction })),
     );

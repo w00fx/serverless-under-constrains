@@ -27,7 +27,6 @@ import {
   resourceManifest,
   runTags,
   STACK_ID,
-  STACK_MEMBERS,
   STACK_NAME,
   STUDY_ID,
 } from '../../support/cleanup/cleanup-fixtures.ts';
@@ -185,6 +184,5 @@ describe('discoveryTargetsOf', () => {
       EXECUTION_STACK_OUTPUTS.durableDeadLetterQueueUrl,
     ]);
     assert.equal(DURABLE_FUNCTION_OUTPUT_KEY, EXECUTION_STACK_OUTPUTS.durableCallerFunctionName);
-    assert.equal(STACK_MEMBERS.length > 0, true);
   });
 });
