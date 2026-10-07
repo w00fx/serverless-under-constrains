@@ -56,6 +56,15 @@ describe('loadsBareAwsSdk', () => {
     ]);
   });
 
+  // Ported from the dropped A-14 fix e49cda1 (decision 72): a call of any other function, a load of
+  // a non-SDK module and a load whose argument is not a string literal never count.
+  it('ignores other calls, non-SDK loads and non-literal or absent load arguments', () => {
+    check([
+      ['import { join } from "node:path"; const x = require("@smithy/x"); const y = load("@aws-sdk/z");', false],
+      ['const name = "@aws-sdk/q7"; require(name); import(name); require(); import();', false],
+    ]);
+  });
+
   it('reads `/` after an operator, an opening bracket, a block or a keyword as a regular expression', () => {
     check([
       [`const r = a + /'/.test(b) + 'require("@aws-sdk/a")';`, false],
