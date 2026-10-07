@@ -1,24 +1,26 @@
 // CloudWatch Logs, CloudWatch and X-Ray binding of the collector's `TelemetryProbe` port (design
 // §5.3, §9.4; BR-RUA-037, AC-RUA-054). WP-25 left the port unbound (evidence/WP-25/decisions.md);
 // this binding is made per execution from its log groups, function names and unit start instants
-// (`TelemetryBinding`). Thin by construction: each lookup sends one request per log group, one per
+// (`TelemetryBinding`). Thin by construction: each lookup is one paged search per log group, one per
 // function or one in all, and the pure `telemetry-targets.ts` decides the unit's targets, its
-// window and what each output locates. The clients are built with region us-east-1 and
-// `maxAttempts: 1`: a lookup that fails is recorded as unavailable telemetry, never retried behind
-// the collector's back.
+// window, what each output locates and whether a page is continued. The clients are built with
+// region us-east-1 and `maxAttempts: 1`: a lookup that fails is recorded as unavailable telemetry,
+// never retried behind the collector's back.
 //
 // - logs: FilterLogEvents({ logGroupName, filterPattern: the quoted trial or probe id, startTime,
 //   endTime, limit: 1 }) per log group of the unit.
 // - metrics: ListMetrics({ Namespace: 'AWS/Lambda', MetricName: 'Invocations', Dimensions:
 //   [{ Name: 'FunctionName', Value }] }) per function of the unit.
-// - traces: GetTraceSummaries({ StartTime, EndTime }). The functions have no active tracing, so
-//   traces normally read unavailable; that is diagnostic only.
+// - traces: GetTraceSummaries({ StartTime, EndTime, FilterExpression: the unit's functions as
+//   `service("<name>") OR …` }). The functions have no active tracing, so traces normally read
+//   unavailable; that is diagnostic only.
+// A page that found nothing but carries a continuation token is followed with that token (a
+// FilterLogEvents page "can return empty results while there are more log events available through
+// the token"), up to TELEMETRY_PAGE_LIMIT pages; a search still unfinished then is incomplete.
 //
-// UNVERIFIED (cloud phase, evidence/CMP-03/decisions.md): FilterLogEvents with `limit: 1` scans a
-// bounded amount of data per call, so a match may need a continuation the binding does not follow
-// (reported as `LogSearchIncomplete`); ListMetrics lists a metric that had data in the last two
-// weeks, not necessarily inside the unit's window; GetTraceSummaries is not filtered by function,
-// so a traced workload elsewhere in the account would be listed for the unit.
+// UNVERIFIED (cloud phase, evidence/CMP-03/decisions.md): how many FilterLogEvents pages a real
+// search of a run's log group needs; ListMetrics lists a metric that had data in the last two
+// weeks, not necessarily inside the unit's window; the X-Ray time-range limits of GetTraceSummaries.
 
 import { CloudWatchClient, ListMetricsCommand } from '@aws-sdk/client-cloudwatch';
 import type { CloudWatchClientConfig } from '@aws-sdk/client-cloudwatch';
@@ -38,8 +40,10 @@ import {
   logFilterPattern,
   logLookupOutcome,
   metricLookupOutcome,
+  searchContinuation,
   telemetryUnit,
   telemetryWindow,
+  traceFilterExpression,
   traceLocators,
   unitFunctionNames,
   unitLogGroups,
@@ -47,6 +51,8 @@ import {
 import type { LookupOutcome, TelemetryBinding, TelemetryUnit, TelemetryWindow } from '../telemetry-targets.ts';
 
 export const TELEMETRY_CLIENT_OPTIONS = { region: 'us-east-1', maxAttempts: 1 } as const;
+/** The most pages one search reads before it reports the search incomplete. */
+export const TELEMETRY_PAGE_LIMIT = 10;
 const PINNED_SETTING_NAMES: ReadonlySet<string> = new Set(['region', 'maxAttempts', 'retryStrategy', 'retryMode']);
 
 type PinnedSetting = 'region' | 'maxAttempts' | 'retryStrategy' | 'retryMode';
@@ -132,18 +138,24 @@ async function locateLogs(
 ): Promise<Result<readonly string[], CollectorReadFailure>> {
   const outcomes: LookupOutcome[] = [];
   for (const logGroup of unitLogGroups(deps.binding, unit)) {
-    const output = await settleSdkCall(() =>
-      deps.clients.logs.send(
-        new FilterLogEventsCommand({
-          logGroupName: logGroup,
-          filterPattern: logFilterPattern(unit.correlation_id),
-          startTime: window.start_ms,
-          endTime: window.end_ms,
-          limit: 1,
-        }),
-      ),
-    );
-    outcomes.push(output.ok ? logLookupOutcome(logGroup, output.value) : output);
+    const search: PagedSearch<string | undefined> = {
+      tokenMember: 'nextToken',
+      send: (nextToken) =>
+        settleSdkCall(() =>
+          deps.clients.logs.send(
+            new FilterLogEventsCommand({
+              logGroupName: logGroup,
+              filterPattern: logFilterPattern(unit.correlation_id),
+              startTime: window.start_ms,
+              endTime: window.end_ms,
+              limit: 1,
+              ...(nextToken === undefined ? {} : { nextToken }),
+            }),
+          ),
+        ),
+      outcomeOf: (output) => logLookupOutcome(logGroup, output),
+    };
+    outcomes.push(await searchPages(search, undefined, 1));
   }
   return combineLookups(outcomes);
 }
@@ -158,31 +170,78 @@ async function locateMetrics(
   }
   const outcomes: LookupOutcome[] = [];
   for (const functionName of functionNames.value) {
-    const output = await settleSdkCall(() =>
-      deps.clients.metrics.send(
-        new ListMetricsCommand({
-          Namespace: LAMBDA_INVOCATIONS_METRIC.namespace,
-          MetricName: LAMBDA_INVOCATIONS_METRIC.metric_name,
-          Dimensions: [{ Name: 'FunctionName', Value: functionName }],
-        }),
-      ),
-    );
-    outcomes.push(output.ok ? metricLookupOutcome(functionName, output.value) : output);
+    const search: PagedSearch<string | undefined> = {
+      tokenMember: 'NextToken',
+      send: (nextToken) =>
+        settleSdkCall(() =>
+          deps.clients.metrics.send(
+            new ListMetricsCommand({
+              Namespace: LAMBDA_INVOCATIONS_METRIC.namespace,
+              MetricName: LAMBDA_INVOCATIONS_METRIC.metric_name,
+              Dimensions: [{ Name: 'FunctionName', Value: functionName }],
+              ...(nextToken === undefined ? {} : { NextToken: nextToken }),
+            }),
+          ),
+        ),
+      outcomeOf: (output) => metricLookupOutcome(functionName, output),
+    };
+    outcomes.push(await searchPages(search, undefined, 1));
   }
   return combineLookups(outcomes);
 }
 
 async function locateTraces(
   deps: AwsTelemetryProbeDeps,
-  _unit: TelemetryUnit,
+  unit: TelemetryUnit,
   window: TelemetryWindow,
 ): Promise<Result<readonly string[], CollectorReadFailure>> {
-  const output = await settleSdkCall(() =>
-    deps.clients.traces.send(
-      new GetTraceSummariesCommand({ StartTime: new Date(window.start_ms), EndTime: new Date(window.end_ms) }),
-    ),
-  );
-  return output.ok ? traceLocators(output.value) : output;
+  const functionNames = unitFunctionNames(deps.binding, unit);
+  const filter = functionNames.ok ? traceFilterExpression(functionNames.value) : functionNames;
+  if (!filter.ok) {
+    return filter;
+  }
+  const search: PagedSearch<readonly string[]> = {
+    tokenMember: 'NextToken',
+    send: (nextToken) =>
+      settleSdkCall(() =>
+        deps.clients.traces.send(
+          new GetTraceSummariesCommand({
+            StartTime: new Date(window.start_ms),
+            EndTime: new Date(window.end_ms),
+            FilterExpression: filter.value,
+            ...(nextToken === undefined ? {} : { NextToken: nextToken }),
+          }),
+        ),
+      ),
+    outcomeOf: traceLocators,
+  };
+  return searchPages(search, undefined, 1);
+}
+
+/** One paged service search: how to send a page and what a page locates. */
+interface PagedSearch<T> {
+  readonly tokenMember: string;
+  readonly send: (nextToken: string | undefined) => Promise<Result<unknown, CollectorReadFailure>>;
+  readonly outcomeOf: (output: unknown) => Result<T, CollectorReadFailure>;
+}
+
+// Sends pages while a page found nothing but names a continuation (`searchContinuation`), at most
+// TELEMETRY_PAGE_LIMIT of them; the last page's outcome stands.
+async function searchPages<T>(
+  search: PagedSearch<T>,
+  nextToken: string | undefined,
+  page: number,
+): Promise<Result<T, CollectorReadFailure>> {
+  const output = await search.send(nextToken);
+  if (!output.ok) {
+    return output;
+  }
+  const outcome = search.outcomeOf(output.value);
+  const continuation = searchContinuation(outcome, output.value, search.tokenMember);
+  if (continuation === undefined || page >= TELEMETRY_PAGE_LIMIT) {
+    return outcome;
+  }
+  return searchPages(search, continuation, page + 1);
 }
 
 // A cast can smuggle a pinned key past the type, so pinned keys are dropped at run time too.

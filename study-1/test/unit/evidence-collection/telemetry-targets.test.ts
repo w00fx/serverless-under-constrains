@@ -1,6 +1,6 @@
 // Telemetry targets of a capture unit and the mapping of lookup outputs to locators (BR-RUA-037,
-// AC-RUA-054; design §9.4, §9.7, A-13). Exact log groups, windows, filter patterns and locators,
-// every refusal code, and the incomplete-page rule.
+// AC-RUA-054; design §9.4, §9.7, A-13). Exact log groups, windows, filter patterns, trace filter
+// expressions and locators, every refusal code, the incomplete-page rule and search continuation.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -11,8 +11,10 @@ import {
   logLookupOutcome,
   metricLocator,
   metricLookupOutcome,
+  searchContinuation,
   telemetryUnit,
   telemetryWindow,
+  traceFilterExpression,
   traceLocators,
   unitFunctionNames,
   unitLogGroups,
@@ -229,6 +231,41 @@ describe('traceLocators', () => {
       ok: false,
       error: { code: 'TraceSearchIncomplete' },
     });
+  });
+});
+
+describe('traceFilterExpression', () => {
+  it("joins one service term per function with OR, so only the unit's traces match", () => {
+    assert.deepEqual(traceFilterExpression(['fn-a']), { ok: true, value: 'service("fn-a")' });
+    assert.deepEqual(traceFilterExpression([FUNCTION, 'Fn_2-b']), {
+      ok: true,
+      value: `service("${FUNCTION}") OR service("Fn_2-b")`,
+    });
+    assert.deepEqual(traceFilterExpression(['a'.repeat(64)]), { ok: true, value: `service("${'a'.repeat(64)}")` });
+  });
+
+  it('refuses no function, and any name a Lambda function cannot have, rather than widen the search', () => {
+    for (const names of [[], [''], ['fn a'], ['fn"a'], ['fn") OR service("x'], ['a'.repeat(65)], ['fn-a', 'é']]) {
+      assert.deepEqual(traceFilterExpression(names), { ok: false, error: { code: 'TelemetryFunctionNameInvalid' } });
+    }
+  });
+});
+
+describe('searchContinuation', () => {
+  const incomplete = { ok: false, error: { code: 'LogSearchIncomplete' } } as const;
+
+  it("continues an incomplete search with the output's own non-empty token", () => {
+    assert.equal(searchContinuation(incomplete, { nextToken: 't-2' }, 'nextToken'), 't-2');
+    assert.equal(searchContinuation(incomplete, { NextToken: 'T-2' }, 'NextToken'), 'T-2');
+  });
+
+  it('stops a search that found its answer, or one with no usable token', () => {
+    assert.equal(searchContinuation({ ok: true, value: 'g' }, { nextToken: 't-2' }, 'nextToken'), undefined);
+    assert.equal(searchContinuation(incomplete, { nextToken: '' }, 'nextToken'), undefined);
+    assert.equal(searchContinuation(incomplete, { nextToken: 7 }, 'nextToken'), undefined);
+    assert.equal(searchContinuation(incomplete, { NextToken: 't-2' }, 'nextToken'), undefined);
+    assert.equal(searchContinuation(incomplete, Object.create({ nextToken: 't-2' }), 'nextToken'), undefined);
+    assert.equal(searchContinuation(incomplete, undefined, 'nextToken'), undefined);
   });
 });
 

@@ -71,3 +71,27 @@ export const SCRIPTED_CREDENTIALS = {
   accessKeyId: 'AKIDSCRIPTEDTELEMETRY',
   secretAccessKey: 'scripted-telemetry-not-a-secret',
 } as const;
+
+const PAGE_TOKEN = /^scripted-next-([0-9]+)$/;
+
+/**
+ * The continuation token a scripted search answers to name its next page.
+ *
+ * @example
+ * scriptedPageToken(2); // 'scripted-next-2'
+ */
+export function scriptedPageToken(page: number): string {
+  return `scripted-next-${String(page)}`;
+}
+
+/**
+ * The page a scripted search request asks for: 1 without a token of `scriptedPageToken`'s shape.
+ *
+ * @example
+ * scriptedPage(undefined); // 1
+ * scriptedPage('scripted-next-3'); // 3
+ */
+export function scriptedPage(token: unknown): number {
+  const match = typeof token === 'string' ? PAGE_TOKEN.exec(token) : null;
+  return match === null ? 1 : Number(match[1]);
+}

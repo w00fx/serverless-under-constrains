@@ -3,8 +3,9 @@
 // its log groups are the execution's stack-owned groups of its roles, its window is the declared
 // start to the lookup instant, and its function names resolve exactly when every role has an own
 // non-empty name. Over arbitrary service outputs (wrong types, inherited members), each output
-// maps to locators exactly as an independent model of the page rule says, and the lookups combine
-// by the found-first, then first-failure law. Nothing throws.
+// maps to locators exactly as an independent model of the page rule says, an incomplete search
+// continues exactly with an own non-empty token, a trace filter is built exactly from valid Lambda
+// function names, and the lookups combine by the found-first, then first-failure law. Nothing throws.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -17,9 +18,11 @@ import {
   logLookupOutcome,
   metricLocator,
   metricLookupOutcome,
+  searchContinuation,
   TELEMETRY_FUNCTION_ROLES,
   telemetryUnit,
   telemetryWindow,
+  traceFilterExpression,
   traceLocators,
   unitFunctionNames,
   unitLogGroups,
@@ -37,6 +40,7 @@ const IDS = [
 const FUNCTION = 'SucRua-run-RefundProviderFn';
 const MIN_MS = Date.UTC(2026, 0, 1);
 const MAX_MS = Date.UTC(2027, 0, 1);
+const LAMBDA_NAME_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-';
 
 const variant = fc.constantFrom<VariantId>('durable', 'conventional');
 const instant = fc.integer({ min: MIN_MS, max: MAX_MS });
@@ -99,6 +103,20 @@ function ownOf(holder: unknown, key: string): unknown {
 function tokenOf(holder: unknown, key: string): boolean {
   const token = ownOf(holder, key);
   return typeof token === 'string' && token !== '';
+}
+
+// The model of a Lambda function name (Lambda API reference, FunctionName): 1 to 64 letters,
+// digits, hyphens or underscores, checked one UTF-16 unit at a time.
+function isLambdaFunctionName(candidate: string): boolean {
+  if (candidate.length < 1 || candidate.length > 64) {
+    return false;
+  }
+  for (let index = 0; index < candidate.length; index += 1) {
+    if (!LAMBDA_NAME_CHARACTERS.includes(candidate.charAt(index))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function listOfOwn(holder: unknown, key: string): readonly unknown[] {
@@ -217,6 +235,42 @@ describe('telemetry locator mapping', () => {
           return;
         }
         assert.deepEqual(located, { ok: true, value: [...new Set(ids)] });
+      }),
+      fuzzParameters(),
+    );
+  });
+
+  it('continues a search exactly when it is incomplete and its output holds an own non-empty token', () => {
+    const outcome: fc.Arbitrary<LookupOutcome> = fc.oneof(
+      fc.constantFrom('g1', undefined).map((value) => ({ ok: true as const, value })),
+      fc.constant({ ok: false as const, error: { code: 'LogSearchIncomplete' } }),
+    );
+    const output = withInherited(fc.record({ nextToken: loose, NextToken: loose }, { requiredKeys: [] }));
+    fc.assert(
+      fc.property(outcome, output, fc.constantFrom('nextToken', 'NextToken'), (searched, page, member) => {
+        const expected = !searched.ok && tokenOf(page, member) ? ownOf(page, member) : undefined;
+        assert.equal(searchContinuation(searched, page, member), expected);
+      }),
+      fuzzParameters(),
+    );
+  });
+
+  it('builds a trace filter of OR-joined service terms exactly from valid Lambda function names', () => {
+    const nameChar = fc.oneof(
+      { weight: 9, arbitrary: fc.constantFrom('a', 'Z', '0', '9', '_', '-') },
+      { weight: 1, arbitrary: fc.constantFrom('"', ' ', ')', '\\', 'é', '\n') },
+    );
+    const name = fc.oneof(
+      fc.array(nameChar, { maxLength: 6 }).map((chars) => chars.join('')),
+      fc.integer({ min: 63, max: 66 }).map((length) => 'f'.repeat(length)),
+    );
+    fc.assert(
+      fc.property(fc.array(name, { maxLength: 4 }), (names) => {
+        const valid = names.length > 0 && names.every(isLambdaFunctionName);
+        const expected = valid
+          ? { ok: true, value: names.map((candidate) => 'service("' + candidate + '")').join(' OR ') }
+          : { ok: false, error: { code: 'TelemetryFunctionNameInvalid' } };
+        assert.deepEqual(traceFilterExpression(names), expected);
       }),
       fuzzParameters(),
     );

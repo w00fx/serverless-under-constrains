@@ -6,12 +6,13 @@
 // provider and the treatment controller. Each has the explicit stack-owned log group
 // `/suc/study-1/<execution_id>/<logical>` (A-13) and a CloudFormation-generated function name the
 // resource manifest records (no explicit names, [R-durable]), which the binding supplies. The
-// unit's window runs from the instant the unit started to the lookup instant, and its log events
-// are found by the quoted trial id, or for the probe the quoted transport-probe id.
+// unit's window runs from the instant the unit started to the lookup instant, its log events are
+// found by the quoted trial id, or for the probe the quoted transport-probe id, and its traces by
+// the X-Ray service nodes of its functions (never every trace of the account in the window).
 //
 // The mapping reads SDK outputs as untrusted input (Owner amendment A-05): own members only, and a
-// lookup that stopped early (an empty page with a continuation token) is reported as incomplete
-// rather than as nothing found.
+// lookup that stopped early (an empty page with a continuation token) is continued, and reported
+// as incomplete rather than as nothing found when it never finishes.
 
 import { executionIdOf } from '../event-journal/journal-scope.ts';
 import { logGroupName } from '../../infra/ownership/resource-naming.ts';
@@ -65,6 +66,9 @@ export type LookupOutcome = Result<string | undefined, CollectorReadFailure>;
 
 const SHARED_ROLES: readonly TelemetryFunctionRole[] = ['refund-provider', 'treatment-controller'];
 const PROBE_UNIT_KEY = 'probe';
+// A Lambda function name: 1 to 64 letters, digits, hyphens or underscores (Lambda API reference,
+// FunctionName). Such a name can be quoted in an X-Ray filter expression as it is.
+const LAMBDA_FUNCTION_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * The unit a capture scope names within the bound execution, or why it is not bound.
@@ -186,6 +190,41 @@ export function metricLookupOutcome(functionName: string, output: unknown): Look
  */
 export function metricLocator(functionName: string): string {
   return `${LAMBDA_INVOCATIONS_METRIC.namespace}:${LAMBDA_INVOCATIONS_METRIC.metric_name}:FunctionName=${functionName}`;
+}
+
+/**
+ * The X-Ray filter expression that keeps only the traces through one of the unit's functions, or
+ * why it cannot be written. Without it GetTraceSummaries lists every trace of the account in the
+ * window, so a traced workload elsewhere would be recorded as this unit's traces. `service("<name>")`
+ * matches both nodes a Lambda function makes (the function and the service), both named after the
+ * function (X-Ray filter expressions, "id function"). A name outside the Lambda function-name shape
+ * is refused rather than written into the expression.
+ *
+ * @example
+ * traceFilterExpression(['fn-a', 'fn-b']); // { ok: true, value: 'service("fn-a") OR service("fn-b")' }
+ */
+export function traceFilterExpression(functionNames: readonly string[]): Result<string, CollectorReadFailure> {
+  if (functionNames.length === 0 || !functionNames.every((name) => LAMBDA_FUNCTION_NAME.test(name))) {
+    return err({ code: 'TelemetryFunctionNameInvalid' });
+  }
+  return ok(functionNames.map((name) => `service("${name}")`).join(' OR '));
+}
+
+/**
+ * The token to continue a search with: the page's own non-empty continuation token when the page's
+ * outcome is a failure (a search that stopped before it found anything), otherwise none. A
+ * FilterLogEvents page "can return empty results while there are more log events available through
+ * the token", so a lookup follows it before it reports the search incomplete.
+ *
+ * @example
+ * searchContinuation({ ok: false, error: { code: 'LogSearchIncomplete' } }, { nextToken: 't' }, 'nextToken'); // 't'
+ */
+export function searchContinuation(
+  outcome: Result<unknown, CollectorReadFailure>,
+  output: unknown,
+  tokenMember: string,
+): string | undefined {
+  return outcome.ok ? undefined : nonEmptyString(ownValue(output, tokenMember));
 }
 
 /**
