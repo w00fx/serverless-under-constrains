@@ -12,8 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { parseSuiteMinimums } from '../../../tools/lib/suite-accounting.ts';
 
 const MINIMUMS_PATH = fileURLToPath(new URL('../../../quality/suite-minimums/trial-execution.json', import.meta.url));
-/** The CMP-04 counts (WP-26 ratified 24, 72 and 2 after its single-pass review). */
-const RATIFIED_FLOOR = { unit: 57, integration: 122, fuzz: 7 } as const;
+/** The CMP-04 counts after its single-pass review (WP-26 ratified 24, 72 and 2 after its own). */
+const RATIFIED_FLOOR = { unit: 67, integration: 122, fuzz: 7 } as const;
 /** Design §14: AC-RUA-019 has two integration cases and AC-RUA-020 four. */
 const AC_INTEGRATION_CASES = 6;
 
