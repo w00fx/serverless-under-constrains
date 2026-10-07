@@ -10,7 +10,8 @@
 //   P6 late monitoring of at least 120 s with consumers enabled
 //   P7 cleanup steps 1-12, normal or emergency
 //   P8 lease finalization: release after a clean closure, otherwise recovery
-//   P9 safety assessment, summary, journals made read-only, package-index.json last
+//   P9 safety assessment (each check also journaled), summary, journals made read-only,
+//      package-index.json last
 // The heartbeat runs beside P2-P8. Lease loss, SIGINT and the active-time deadline latch the gate:
 // no unit starts after it, the active unit freezes indeterminate, monitoring is skipped and
 // cleanup runs in emergency mode, past the total target if it must (a duration breach).
@@ -394,6 +395,7 @@ export class ExecutionRunner {
     await this.#journal.phase('SUMMARY', 'started');
     const now = formatUtcMillis(services.clock.now());
     const assessment = safety === undefined ? undefined : buildSafetyAssessment(this.#admitted, safety.checks(), now);
+    await this.#journal.safetyChecked(assessment?.checks ?? []);
     const unwritten =
       assessment === undefined
         ? undefined

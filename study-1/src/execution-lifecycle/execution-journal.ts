@@ -2,8 +2,11 @@
 // CTR-RUA-002). Each phase P1-P9 records `phase_transition_recorded` when it starts and when it
 // ends, and an interruption the runner observes outside a trial (between trials, during
 // provisioning, readiness or monitoring) records `trial_interrupted` without a trial id, so the run
-// terminal reason names the interruption cause instead of an incomplete trial. Trials keep their own
-// runner instances (`RunnerTrialJournal`); this one is scoped to the execution partition.
+// terminal reason names the interruption cause instead of an incomplete trial. At P9 each check of
+// the safety assessment is also journaled as `safety_check_recorded` (design §6.2 row 54, §8.17), so
+// a breached limit is a lifecycle event the validation terminal reason can name (BR-RUA-038
+// SAFETY_LIMIT_EXCEEDED). Trials keep their own runner instances (`RunnerTrialJournal`); this one is
+// scoped to the execution partition.
 //
 // A stopped writer is reported and the runner carries on: the evidence it is about to collect is
 // still worth freezing, and the missing event shows in the package (BR-RUA-033).
@@ -16,6 +19,7 @@ import { EXECUTION_PATHS } from '../evidence-package/package-layout.ts';
 import type { StructuredReason, Uuid4 } from '../record-contract/primitives.ts';
 import type { EventRecordType } from '../record-contract/record-types.ts';
 import type { ExecutionPhase, StepStatus } from '../record-contract/records/group-b/vocabulary.ts';
+import type { SafetyCheck } from '../record-contract/records/group-c/safety_assessment.ts';
 import { RUNNER_DEFINITIVE_RETRIES } from '../trial-execution/runner-trial-journal.ts';
 import type { TrialInterruption } from '../trial-execution/trial-execution-ports.ts';
 import type { AdmittedExecution, ExecutionServices } from './execution-ports.ts';
@@ -70,6 +74,18 @@ export class ExecutionPhaseJournal {
    */
   async interrupted(interruption: TrialInterruption): Promise<void> {
     await this.#record('trial_interrupted', { cause: interruption.cause, detail: interruption.detail });
+  }
+
+  /**
+   * Records each safety check of the assessment the runner freezes at P9, in assessment order.
+   *
+   * @example
+   * await journal.safetyChecked(assessment.checks); // one safety_check_recorded per check
+   */
+  async safetyChecked(checks: readonly SafetyCheck[]): Promise<void> {
+    for (const check of checks) {
+      await this.#record('safety_check_recorded', check);
+    }
   }
 
   async #record<T extends EventRecordType>(type: T, body: EventBody<T>): Promise<Uuid4 | undefined> {

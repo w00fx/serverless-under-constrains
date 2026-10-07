@@ -1,7 +1,8 @@
 // The closure records a probe or validation summary cites: read only when they are valid records of
 // this execution's manifest, every unreadable file, unreadable journal line and foreign record
-// reported and left out; the summary inputs that are missing named by path; and the runner and
-// coordination journals merged in time order, keeping the given order within one instant.
+// reported and left out; the runner's P9 safety checks kept apart from its phase and interruption
+// events; the summary inputs that are missing named by path; and the runner and coordination
+// journals merged in time order, keeping the given order within one instant.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -16,6 +17,7 @@ import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import type { Sha256Hex } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
 import { interruptionEvent, leaseEvent, phaseEvent } from '../study-comparison/support/runner-events.ts';
+import { safetyEvent } from '../variant-validation/support/lifecycle-events.ts';
 
 const deps = { validator: createRecordValidator(), digest: sha256Hex };
 const OWN = leaseEvent('ACQUIRED', 1).execution_manifest_sha256;
@@ -74,9 +76,38 @@ describe('readClosureRecords', () => {
     assert.ok(foreign.every((reason) => reason.code === 'ARTIFACT_UNREADABLE' && reason.subject === 'BR-RUA-033'));
   });
 
+  it('reads the safety checks of this manifest apart from the phase and interruption events', () => {
+    const breached = { ...safetyEvent('TOTAL_TIME', 'breached'), execution_manifest_sha256: OWN };
+    const foreign = { ...safetyEvent('ESTIMATED_COST', 'breached'), execution_manifest_sha256: OTHER };
+    const files = new Map([
+      [
+        EXECUTION_PATHS.runnerJournal,
+        jsonl(
+          JSON.stringify(phaseEvent('SUMMARY', 'started', 30)),
+          JSON.stringify(breached),
+          JSON.stringify(foreign),
+          JSON.stringify({ ...breached, result: 'breached', observed: undefined }),
+        ),
+      ],
+    ]);
+    const closure = readClosureRecords(files, OWN, deps);
+    assert.deepEqual(closure.safety_checks, [breached]);
+    assert.deepEqual(
+      closure.runner_events.map((event) => event.record_type),
+      ['phase_transition_recorded'],
+    );
+    assert.deepEqual(
+      closure.reasons.map((reason) => reason.code),
+      ['ARTIFACT_UNREADABLE', 'ARTIFACT_UNREADABLE'],
+      'a conclusive check without its observed value is unreadable, and a foreign one is reported',
+    );
+    assert.match(closure.reasons[0]?.detail ?? '', /line 4: .*expected a valid safety_check_recorded/);
+  });
+
   it('reads an empty package as no record and no event', () => {
     const closure = readClosureRecords(new Map(), OWN, deps);
     assert.deepEqual(closure.runner_events, []);
+    assert.deepEqual(closure.safety_checks, []);
     assert.deepEqual(closure.lease_events, []);
     assert.deepEqual(closure.reasons, []);
   });
