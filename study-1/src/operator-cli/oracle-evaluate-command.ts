@@ -27,7 +27,7 @@ import { evaluateTrial } from '../trial-oracle/evaluate-trial.ts';
 import { operandOf, usageReason } from './arg-parsing.ts';
 import { failedOutcome } from './cli-result.ts';
 import type { CliCommand, CliOutcomeReport, CommandContext, CommandSpec, ParsedArgs } from './cli-types.ts';
-import { frozenTrialInput } from './frozen-trial-input.ts';
+import { trialEvaluationInput } from './trial-evaluation-input.ts';
 import { locatePackage } from './package-location.ts';
 
 /** What the evaluation reads and stamps its result with. */
@@ -75,7 +75,7 @@ export class OracleEvaluateCommand implements CliCommand {
       const detail = `${snapshot.error.code}: ${snapshot.error.detail}; expected a readable package directory`;
       return failedOutcome('verification_failed', [{ code: 'PACKAGE_UNREADABLE', subject: 'BR-RUA-044', detail }]);
     }
-    const input = frozenTrialInput(snapshot.value.files, trialId, this.#deps.validator);
+    const input = trialEvaluationInput(snapshot.value.files, trialId, this.#deps.validator);
     if (!input.ok) {
       return { ...failedOutcome('verification_failed', [input.error]), execution };
     }

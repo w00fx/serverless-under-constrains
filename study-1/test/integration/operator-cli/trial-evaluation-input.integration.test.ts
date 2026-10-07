@@ -1,9 +1,9 @@
 // Rebuilding a frozen trial's ingestion input from a package the execution runner finalized
 // offline, and `oracle evaluate`'s refusals (design §8.2 I3, D-16, §11): the input holds the
 // trial's own files without what was derived from them, the execution-level files of freeze time,
-// the earlier trials as execution scope and the evidence index's digests; every missing or
-// unreadable input is a reason naming its path; a trial directory that names no trial is a usage
-// error. No AWS.
+// the earlier trials as execution scope (all composed by the lifecycle's `frozenTrialInput`) and
+// the evidence index's digests; every missing or unreadable input is a reason naming its path; a
+// trial directory that names no trial is a usage error. No AWS.
 
 import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
@@ -11,7 +11,7 @@ import { before, describe, it } from 'node:test';
 import type { PackageFileSystem } from '../../../src/evidence-package/package-file-system.ts';
 import { EXECUTION_PATHS, PACKAGE_LAYOUT } from '../../../src/evidence-package/package-layout.ts';
 import type { PackageFile } from '../../../src/evidence-package/package-file-system.ts';
-import { frozenTrialInput } from '../../../src/operator-cli/frozen-trial-input.ts';
+import { trialEvaluationInput } from '../../../src/operator-cli/trial-evaluation-input.ts';
 import { OracleEvaluateCommand, locateTrial } from '../../../src/operator-cli/oracle-evaluate-command.ts';
 import type { Uuid4 } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
@@ -49,7 +49,7 @@ describe('frozen trial inputs of an offline-finalized run', () => {
 
   it('composes the subject, the freeze-time execution files, the earlier trials and the index digests', () => {
     const subject = trials[2] ?? OTHER_ID;
-    const input = frozenTrialInput(files, subject, validator);
+    const input = trialEvaluationInput(files, subject, validator);
     assert.equal(input.ok, true);
     const artifactPaths = input.value.artifacts.map((file) => file.path);
     assert.ok(artifactPaths.includes(PACKAGE_LAYOUT.unitFile({ kind: 'trial', trial_id: subject }, 'trialManifest')));
@@ -65,7 +65,7 @@ describe('frozen trial inputs of an offline-finalized run', () => {
   });
 
   it('gives the first trial no execution scope', () => {
-    const input = frozenTrialInput(files, trials[0] ?? OTHER_ID, validator);
+    const input = trialEvaluationInput(files, trials[0] ?? OTHER_ID, validator);
     assert.deepEqual(input.ok && input.value.execution_scope_artifacts, []);
   });
 
@@ -86,28 +86,52 @@ describe('frozen trial inputs of an offline-finalized run', () => {
         `${EXECUTION_PATHS.executionManifest} declares no trial ${OTHER_ID}; expected one of the declared trials [${trials.join(', ')}]`,
       ],
       [
-        replaced(manifestPath, undefined),
-        subject,
-        `${manifestPath} is absent; expected the trial's frozen trial_manifest`,
-      ],
-      [
-        replaced(manifestPath, utf8('{')),
-        subject,
-        `${manifestPath} is not a valid record; expected one UTF-8 JSON trial_manifest document`,
-      ],
-      [
         replaced(indexPath, utf8('{"record_type":"evidence_index"}')),
+        subject,
+        `${indexPath} is not a valid record; expected one UTF-8 JSON evidence_index document`,
+      ],
+      [
+        replaced(indexPath, utf8('{')),
         subject,
         `${indexPath} is not a valid record; expected one UTF-8 JSON evidence_index document`,
       ],
     ];
     for (const [packageFiles, trialId, detail] of cases) {
-      assert.deepEqual(frozenTrialInput(packageFiles, trialId, validator), {
+      assert.deepEqual(trialEvaluationInput(packageFiles, trialId, validator), {
         ok: false,
         error: { code: 'FROZEN_TRIAL_INPUT_UNREADABLE', subject: 'CTR-RUA-001', detail },
       });
     }
-    const unreadable = frozenTrialInput(replaced(EXECUTION_PATHS.executionManifest, utf8('[]')), subject, validator);
+    // The trial manifest is read by the lifecycle's own helper, which reports under BR-RUA-043.
+    const lifecycleSuffix = '; expected the trial manifest its oracle result was derived from';
+    assert.deepEqual(trialEvaluationInput(replaced(manifestPath, undefined), subject, validator), {
+      ok: false,
+      error: {
+        code: 'FROZEN_TRIAL_INPUT_UNREADABLE',
+        subject: 'BR-RUA-043',
+        detail: `${manifestPath} is absent${lifecycleSuffix}`,
+      },
+    });
+    const malformed = trialEvaluationInput(replaced(manifestPath, utf8('{')), subject, validator);
+    assert.equal(malformed.ok, false);
+    assert.equal(malformed.error.code, 'FROZEN_TRIAL_INPUT_UNREADABLE');
+    assert.equal(malformed.error.subject, 'BR-RUA-043');
+    assert.ok(malformed.error.detail.endsWith(lifecycleSuffix), malformed.error.detail);
+    assert.ok(malformed.error.detail.includes(manifestPath), malformed.error.detail);
+    const noIndex = trialEvaluationInput(replaced(indexPath, undefined), subject, validator);
+    assert.deepEqual(noIndex, {
+      ok: false,
+      error: {
+        code: 'FROZEN_TRIAL_INPUT_UNREADABLE',
+        subject: 'CTR-RUA-001',
+        detail: `${indexPath} is absent; expected the trial's frozen evidence_index`,
+      },
+    });
+    const unreadable = trialEvaluationInput(
+      replaced(EXECUTION_PATHS.executionManifest, utf8('[]')),
+      subject,
+      validator,
+    );
     assert.equal(unreadable.ok, false);
     assert.notEqual(unreadable.error.code, 'FROZEN_TRIAL_INPUT_UNREADABLE');
   });
