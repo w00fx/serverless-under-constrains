@@ -17,6 +17,7 @@ import { sha256Hex } from '../../../src/record-contract/digests.ts';
 import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { JsonValue, Sha256Hex } from '../../../src/record-contract/primitives.ts';
 import type { IndexEntry } from '../../../src/record-contract/records/group-c/shared-shapes.ts';
+import { DEEP_NESTING, towerText } from '../../support/kernel/deep-json.ts';
 import { uuid } from '../../support/record-contract/record-builders.ts';
 import { textFile, utf8 } from '../../support/evidence-package/package-files.ts';
 
@@ -67,9 +68,17 @@ function expectedDetail(reference: JsonValue, problem: string): string {
   return `"${RESULT_PATH}": reference ${boundedJsonText(reference)} ${problem}`;
 }
 
+const PREFIX_EXPECTATION =
+  '; expected that digest or the digest of a line-boundary prefix of the indexed journal (A-15)';
+
+// Only a runner-journal mismatch names the prefix alternative; every other path keeps the old text.
 function digestMismatch(reference: JsonValue, indexed: PackageFile): string {
   const cited = (reference as { readonly artifact_sha256: string }).artifact_sha256;
-  return expectedDetail(reference, `names sha256 ${cited}; the indexed file has ${sha256Hex(indexed.bytes)}`);
+  const expectation = indexed.path === EXECUTION_PATHS.runnerJournal ? PREFIX_EXPECTATION : '';
+  return expectedDetail(
+    reference,
+    `names sha256 ${cited}; the indexed file has ${sha256Hex(indexed.bytes)}${expectation}`,
+  );
 }
 
 describe('A-15 a runner-journal reference resolves by a line-boundary prefix', () => {
@@ -162,6 +171,25 @@ describe('A-15 a runner-journal reference resolves by a line-boundary prefix', (
       reasons.map((reason) => reason.code),
       ['UNRESOLVED_REFERENCE'],
     );
+  });
+
+  it('resolves inside a hostile prefix: 100,000 levels, a non-finite number, inherited names (A-05)', () => {
+    const deep = `{"event_id":"${uuid(1)}","deep":${towerText('array', DEEP_NESTING, '7')}}\n`;
+    const inherited = '{"event_id":"constructor","__proto__":{"x":1}}\n';
+    const nonFinite = '{"n":1e400}\n';
+    const prefix = deep + inherited + nonFinite;
+    const journal = textFile(RUNNER.path, `${prefix}{"event_id":"toString"}\n`);
+    const intoTower = prefixRef(RUNNER.path, prefix, {
+      event_id: uuid(1),
+      json_pointer: `/deep${'/0'.repeat(DEEP_NESTING)}`,
+    });
+    const ownProto = prefixRef(RUNNER.path, prefix, { event_id: 'constructor', json_pointer: '/__proto__/x' });
+    const appended = prefixRef(RUNNER.path, prefix, { event_id: 'toString' });
+    const lines = prefixRef(RUNNER.path, prefix, { json_pointer: '/0' });
+    assert.deepEqual(details([intoTower, ownProto, appended, lines], [journal]), [
+      expectedDetail(appended, 'names an event_id the file does not hold'),
+      expectedDetail(lines, 'points into a JSONL file with an unparseable line'),
+    ]);
   });
 
   it('digests the journal prefixes once per verification, through the injected digest', () => {

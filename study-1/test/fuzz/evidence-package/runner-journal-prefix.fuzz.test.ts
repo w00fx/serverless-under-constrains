@@ -107,7 +107,10 @@ describe('A-15 runner-journal prefix references (property)', () => {
         fc.pre(!prefixDigests.has(randomDigest));
         const details = reasonsFor(journal, [{ artifact_path: RUNNER, artifact_sha256: randomDigest }]);
         assert.equal(details.length, 1);
-        assert.match(details[0] ?? '', /names sha256 [0-9a-f]{64}; the indexed file has [0-9a-f]{64}$/);
+        assert.equal(
+          details[0],
+          `"${RESULT_PATH}": reference {"artifact_path":"${RUNNER}","artifact_sha256":"${randomDigest}"} names sha256 ${randomDigest}; the indexed file has ${sha256Hex(journal)}; expected that digest or the digest of a line-boundary prefix of the indexed journal (A-15)`,
+        );
       }),
       fuzzParameters(),
     );

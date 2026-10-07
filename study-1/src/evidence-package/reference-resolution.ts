@@ -147,9 +147,16 @@ function referenceProblem(reference: JsonValue, scope: ReferenceScope, cache: Re
   }
   const bytes = referencedBytes(entry, digest, scope.files, cache);
   if (bytes === undefined) {
-    return `names sha256 ${digest}; the indexed file has ${entry.sha256}`;
+    return `names sha256 ${digest}; the indexed file has ${entry.sha256}${prefixExpectation(entry)}`;
   }
   return locationProblem(reference, () => artifactAt(path, bytes, scope.files, cache));
+}
+
+// The runner journal also accepts a prefix digest, so its mismatch says so (expected shape).
+function prefixExpectation(entry: IndexEntry): string {
+  return entry.artifact_path === EXECUTION_PATHS.runnerJournal
+    ? '; expected that digest or the digest of a line-boundary prefix of the indexed journal (A-15)'
+    : '';
 }
 
 // A-15 / BR-RUA-044: the runner journal is still appended after the freezes whose records cite it,

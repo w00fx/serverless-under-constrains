@@ -121,30 +121,34 @@ function assertCitesAStrictLinePrefix(snapshot: PackageSnapshot, refs: readonly 
   }
 }
 
-describe('CMP-05 R1 (A-15) a run package cites its runner journal by a resolvable prefix', async () => {
-  const world = await RunnerWorld.create();
-  const outcome = await world.run();
-  const verified = await verifiedPackage(world.cloud.storage, world.admitted.identity, outcome, world.cloud.time.now());
+// The run and a variant validation freeze trials the same way, and the cloud phase verifies both.
+for (const name of ['run', 'validation-conventional'] as const) {
+  describe(`CMP-05 R1 (A-15) a ${name} package cites its runner journal by a resolvable prefix`, async () => {
+    const world = await RunnerWorld.create({ name });
+    const outcome = await world.run();
+    const now = world.cloud.time.now();
+    const verified = await verifiedPackage(world.cloud.storage, world.admitted.identity, outcome, now);
 
-  it('freezes trials whose oracle results cite earlier runner-journal prefixes', () => {
-    assert.equal(verified.outcome.package_finalized, true);
-    assert.ok(verified.outcome.trials.length > 0, 'the run executes trials');
-    for (const trial of verified.outcome.trials) {
-      const path = PACKAGE_LAYOUT.unitFile({ kind: 'trial', trial_id: trial.trial_id }, 'oracleResult');
-      const refs = runnerJournalRefs(recordAt(verified.snapshot, path));
-      assert.equal(refs.length, 3, `${path} cites three distinct runner-journal references`);
-      assertCitesAStrictLinePrefix(verified.snapshot, refs);
-    }
-  });
+    it('freezes trials whose oracle results cite earlier runner-journal prefixes', () => {
+      assert.equal(verified.outcome.package_finalized, true);
+      assert.ok(verified.outcome.trials.length > 0, `the ${name} executes trials`);
+      for (const trial of verified.outcome.trials) {
+        const path = PACKAGE_LAYOUT.unitFile({ kind: 'trial', trial_id: trial.trial_id }, 'oracleResult');
+        const refs = runnerJournalRefs(recordAt(verified.snapshot, path));
+        assert.equal(refs.length, 3, `${path} cites three distinct runner-journal references`);
+        assertCitesAStrictLinePrefix(verified.snapshot, refs);
+      }
+    });
 
-  it('reports no UNRESOLVED_REFERENCE naming the runner journal', () => {
-    assert.deepEqual(runnerJournalReasons(verified.verification), []);
-  });
+    it('reports no UNRESOLVED_REFERENCE naming the runner journal', () => {
+      assert.deepEqual(runnerJournalReasons(verified.verification), []);
+    });
 
-  it('reports no reason beyond the offline deployment-assembly fixture', () => {
-    assert.deepEqual(nonFixtureReasons(verified.verification), []);
+    it('reports no reason beyond the offline deployment-assembly fixture', () => {
+      assert.deepEqual(nonFixtureReasons(verified.verification), []);
+    });
   });
-});
+}
 
 describe('CMP-05 R1 (A-15) a probe package cites its runner journal by a resolvable prefix', async () => {
   const world = await ProbeRunnerWorld.create();

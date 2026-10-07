@@ -25,10 +25,11 @@ const AC_CASE_FILES = [
   },
 ] as const;
 /**
- * The WP-13 counts at first delivery, raised by its single-pass review (unit 135 to 142) and by the
- * A-15 runner-journal prefix fix (unit 142 to 158, fuzz 11 to 16).
+ * The WP-13 counts at first delivery, raised by its single-pass review (unit 135 to 142), by the
+ * A-15 runner-journal prefix fix (unit 142 to 158, fuzz 11 to 16) and by its single-pass review
+ * (unit 158 to 159).
  */
-const RATIFIED_FLOOR = { unit: 158, golden: 3, integration: 23, fuzz: 16 } as const;
+const RATIFIED_FLOOR = { unit: 159, golden: 3, integration: 23, fuzz: 16 } as const;
 
 function minimums(): ReturnType<typeof parseSuiteMinimums> {
   return parseSuiteMinimums(MINIMUMS_PATH, JSON.parse(readFileSync(MINIMUMS_PATH, 'utf8')));
