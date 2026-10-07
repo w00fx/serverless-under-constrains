@@ -213,6 +213,8 @@ export class ExecutionRunner {
     const startedAt = formatUtcMillis(services.clock.now());
     const acquisition = await this.#deps.lease.acquire();
     if (!acquisition.acquired) {
+      // The outcome names why, not only the journal: the CLI reports it beside LEASE_NOT_ACQUIRED.
+      this.#reasons.push(acquisition.reason);
       await this.#journal.phase('LEASE_ACQUISITION', 'failed', [acquisition.reason]);
       const unresolved = acquisition.reason.code === LEASE_REASON_CODES.writeAmbiguous;
       return unresolved ? { lease_status: await this.#finalizeLease('clean') } : {};

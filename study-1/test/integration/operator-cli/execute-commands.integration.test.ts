@@ -83,7 +83,8 @@ describe('run execute over the offline runner', () => {
     assert.equal(run.exit_code, 7, JSON.stringify(run.result.reasons));
     assert.equal(world.provisioner.provisions(), 0);
     assert.deepEqual(run.result.reasons.map((reason) => reason.code).at(-1), 'LEASE_NOT_ACQUIRED');
-    // The runner journals the refusal; its outcome carries only the missing closure (residual).
+    // The runner journals the refusal and its outcome names it (CMP-05 review, WP-28 residual).
+    assert.equal(run.result.reasons[0]?.code, 'LEASE_HELD');
     assert.ok(world.runnerEvents().includes('LEASE_ACQUISITION:failed'));
     assert.match(JSON.stringify(world.journal(EXECUTION_PATHS.runnerJournal)), /"code":"LEASE_HELD"/);
   });

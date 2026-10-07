@@ -43,6 +43,7 @@ describe('ExecutionRunner P1: the lease', () => {
     assert.equal(outcome.lease_status, undefined);
     assert.equal(outcome.cleanup_status, undefined);
     assert.equal(outcome.interruption, undefined);
+    assert.deepEqual(outcome.reasons[0], REFUSAL, 'the outcome names why the lease was not acquired');
   });
 
   it('finalizes an unresolved acquisition, which may have landed, as a clean closure (WP-22)', async () => {
@@ -66,6 +67,7 @@ describe('ExecutionRunner P1: the lease', () => {
     assert.equal(world.provisioner.provisions(), 0);
     assert.equal(outcome.lease_status, 'released');
     assert.equal(outcome.package_finalized, true);
+    assert.deepEqual(outcome.reasons[0], ambiguous);
   });
 
   it('records an abort before the lease and skips acquisition', async () => {
