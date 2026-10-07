@@ -29,6 +29,7 @@ import {
   ROLE_RESOURCE_TYPE,
   STACK_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
 } from '../resource-types.ts';
 import type { Described, SdkCallResult } from '../sdk-call-outcomes.ts';
 import { described, describedPages, presenceOf, settleCleanupCall, surfaceAnswer } from '../sdk-call-outcomes.ts';
@@ -80,6 +81,9 @@ const PRESENCE_READS: ReadonlyMap<string, PresenceRead> = new Map<string, Presen
   [EVENT_SOURCE_MAPPING_RESOURCE_TYPE, describeMapping],
   [QUEUE_RESOURCE_TYPE, describeQueue],
   [TABLE_RESOURCE_TYPE, describeTable],
+  // A table's stream outlives the table, DISABLED and undeletable, for up to 24 hours: it is
+  // present only while its table exists (A-16; seen in the first real probe, decision 85).
+  [TABLE_STREAM_RESOURCE_TYPE, describeStreamTable],
   [LOG_GROUP_RESOURCE_TYPE, describeLogGroup],
   [ROLE_RESOURCE_TYPE, describeRole],
 ]);
@@ -153,7 +157,14 @@ function describeMapping(clients: CleanupAwsClients, identifier: string): Promis
 }
 
 function describeTable(clients: CleanupAwsClients, identifier: string): Promise<Described<boolean>> {
-  const name = canonicalResourceName(TABLE_RESOURCE_TYPE, identifier);
+  return describeTableNamed(clients, canonicalResourceName(TABLE_RESOURCE_TYPE, identifier), identifier);
+}
+
+function describeStreamTable(clients: CleanupAwsClients, identifier: string): Promise<Described<boolean>> {
+  return describeTableNamed(clients, canonicalResourceName(TABLE_STREAM_RESOURCE_TYPE, identifier), identifier);
+}
+
+function describeTableNamed(clients: CleanupAwsClients, name: string, identifier: string): Promise<Described<boolean>> {
   return exists(
     () => clients.dynamodb.send(new DescribeTableCommand({ TableName: name })),
     identifier,

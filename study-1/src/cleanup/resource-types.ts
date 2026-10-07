@@ -21,3 +21,9 @@ export const DURABLE_EXECUTION_RESOURCE_TYPE = 'AWS::Lambda::DurableExecution';
 export const DLQ_MESSAGE_RESOURCE_TYPE = 'AWS::SQS::Message';
 /** Pseudo type: the treatment item of one control-table partition, named by its partition key. */
 export const TREATMENT_ITEM_RESOURCE_TYPE = 'AWS::DynamoDB::TreatmentItem';
+/**
+ * Pseudo type: the stream of a run-owned table, as the tag index lists it with the table's tags.
+ * DynamoDB keeps a deleted table's stream readable (DISABLED) for up to 24 hours and offers no
+ * way to delete it, so the stream is present only while its table exists (A-16, decision 85).
+ */
+export const TABLE_STREAM_RESOURCE_TYPE = 'AWS::DynamoDB::TableStream';

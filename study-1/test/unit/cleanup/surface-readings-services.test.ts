@@ -15,6 +15,7 @@ import {
   ROLE_RESOURCE_TYPE,
   STACK_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
 } from '../../../src/cleanup/resource-types.ts';
 import { MALFORMED_OUTPUT } from '../../../src/cleanup/surface-readings.ts';
 import {
@@ -119,6 +120,9 @@ describe('resourceTypeOfArn', () => {
       [`${FUNCTION_ARN}:3a`, FUNCTION_ALIAS_RESOURCE_TYPE],
       [ROLE_ARN, ROLE_RESOURCE_TYPE],
       [`arn:aws:s3:::bucket`, UNRECOGNIZED_TAGGED_RESOURCE_TYPE],
+      // A-16: the tag index lists a table's stream with the table's tags (first real probe).
+      [`${TABLE_ARN}/stream/2026-10-07T03:47:38.240`, TABLE_STREAM_RESOURCE_TYPE],
+      [`${TABLE_ARN}/stream/a/b`, UNRECOGNIZED_TAGGED_RESOURCE_TYPE],
     ];
     for (const [arn, type] of cases) {
       assert.equal(resourceTypeOfArn(arn), type, arn);

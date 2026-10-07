@@ -22,6 +22,7 @@ import {
   ROLE_RESOURCE_TYPE,
   STACK_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
 } from '../../../../src/cleanup/resource-types.ts';
 import { STACK_LISTING_TAGS } from '../../../../src/cleanup/surface-readings-services.ts';
 import type { UtcMillis } from '../../../../src/record-contract/primitives.ts';
@@ -388,6 +389,20 @@ describe('AwsDiscoverySurfaces.confirmPresence', () => {
     assert.deepEqual(await surfaces.confirmPresence(tagIndexEntry(LOG_GROUP_RESOURCE_TYPE, LIVE.logGroupArn)), {
       kind: 'absent',
     });
+  });
+
+  // Regression (decision 85): DynamoDB keeps a deleted table's stream DISABLED and readable for up
+  // to 24 hours, and the tag index keeps listing it with the run's tags. The first real probe's
+  // leak audit read that undeletable stream as an unrecognized present resource and closed
+  // `inconclusive`, so its lease went to recovery_required (A-16).
+  it('describes a table stream through its table: present while the table lives, absent after', async () => {
+    const stream = tagIndexEntry(TABLE_STREAM_RESOURCE_TYPE, `${LIVE.tableArn}/stream/2026-10-07T03:47:38.240`);
+    const live = liveSurfaces();
+    assert.deepEqual(await live.surfaces.confirmPresence(stream), { kind: 'present' });
+    assert.deepEqual(live.endpoint.operations(), ['dynamodb:DescribeTable']);
+    assert.deepEqual(live.endpoint.calls('dynamodb:DescribeTable')[0]?.input, { TableName: NAMES.controlTable });
+    const gone = liveSurfaces(['table']);
+    assert.deepEqual(await gone.surfaces.confirmPresence(stream), { kind: 'absent' });
   });
 
   it('reports a failed describe failed, and an entry it cannot describe present', async () => {

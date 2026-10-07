@@ -16,6 +16,7 @@ import {
   ROLE_RESOURCE_TYPE,
   STACK_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
 } from '../../../src/cleanup/resource-types.ts';
 
 const QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/123456789012/suc1-aaaaaaaa-durable-dlq.fifo';
@@ -61,6 +62,8 @@ describe('canonicalResourceName of tag-index ARNs', () => {
       [LOG_GROUP_RESOURCE_TYPE, LOG_GROUP_ARN, '/suc/study-1/aaaaaaaa/refund-provider'],
       [LOG_GROUP_RESOURCE_TYPE, `${LOG_GROUP_ARN}:*`, '/suc/study-1/aaaaaaaa/refund-provider'],
       [TABLE_RESOURCE_TYPE, `arn:aws-us-gov:dynamodb::123456789012:table/t`, 't'],
+      // A-16: a stream is named by its table.
+      [TABLE_STREAM_RESOURCE_TYPE, `${TABLE_ARN}/stream/2026-10-07T03:47:38.240`, 'suc1-aaaaaaaa-control'],
     ];
     for (const [type, arn, name] of reduced) {
       assert.equal(canonicalResourceName(type, arn), name, arn);
@@ -82,6 +85,11 @@ describe('canonicalResourceName of tag-index ARNs', () => {
       [QUEUE_RESOURCE_TYPE, `arn:aws:sqs:${REGION_ACCOUNT}:`],
       [TABLE_RESOURCE_TYPE, `${TABLE_ARN}/stream/2026-10-05T12:00:00.000`],
       [TABLE_RESOURCE_TYPE, `arn:aws:dynamodb:${REGION_ACCOUNT}:table/`],
+      [TABLE_STREAM_RESOURCE_TYPE, TABLE_ARN],
+      [TABLE_STREAM_RESOURCE_TYPE, `${TABLE_ARN}/stream/`],
+      [TABLE_STREAM_RESOURCE_TYPE, `${TABLE_ARN}/stream/a/b`],
+      [TABLE_STREAM_RESOURCE_TYPE, `${TABLE_ARN}/index/i`],
+      [TABLE_STREAM_RESOURCE_TYPE, `arn:aws:dynamodb:${REGION_ACCOUNT}:table//stream/s`],
       [LOG_GROUP_RESOURCE_TYPE, `${LOG_GROUP_ARN}:log-stream:s`],
       [LOG_GROUP_RESOURCE_TYPE, `${LOG_GROUP_ARN}:`],
       [LOG_GROUP_RESOURCE_TYPE, `arn:aws:logs:${REGION_ACCOUNT}:log-group:`],

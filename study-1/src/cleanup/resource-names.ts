@@ -15,6 +15,7 @@ import {
   QUEUE_RESOURCE_TYPE,
   STACK_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
 } from './resource-types.ts';
 
 // arn:<partition>:cloudformation:<region>:<account>:stack/<name>/<guid>
@@ -29,6 +30,8 @@ const FUNCTION_ARN_PATTERN = /^arn:[^:]+:lambda:[^:]*:[^:]*:function:([^:]+)$/;
 const EVENT_SOURCE_MAPPING_ARN_PATTERN = /^arn:[^:]+:lambda:[^:]*:[^:]*:event-source-mapping:([^:]+)$/;
 // arn:<partition>:dynamodb:<region>:<account>:table/<name>
 const TABLE_ARN_PATTERN = /^arn:[^:]+:dynamodb:[^:]*:[^:]*:table\/([^/]+)$/;
+// arn:<partition>:dynamodb:<region>:<account>:table/<name>/stream/<label>, named by its table
+const TABLE_STREAM_ARN_PATTERN = /^arn:[^:]+:dynamodb:[^:]*:[^:]*:table\/([^/]+)\/stream\/[^/]+$/;
 // arn:<partition>:logs:<region>:<account>:log-group:<name>, with the `:*` that DescribeLogGroups appends
 const LOG_GROUP_ARN_PATTERN = /^arn:[^:]+:logs:[^:]*:[^:]*:log-group:([^:]+)(?::\*)?$/;
 
@@ -39,13 +42,14 @@ const NAME_PATTERNS: ReadonlyMap<string, readonly RegExp[]> = new Map([
   [FUNCTION_RESOURCE_TYPE, [FUNCTION_ARN_PATTERN]],
   [EVENT_SOURCE_MAPPING_RESOURCE_TYPE, [EVENT_SOURCE_MAPPING_ARN_PATTERN]],
   [TABLE_RESOURCE_TYPE, [TABLE_ARN_PATTERN]],
+  [TABLE_STREAM_RESOURCE_TYPE, [TABLE_STREAM_ARN_PATTERN]],
   [LOG_GROUP_RESOURCE_TYPE, [LOG_GROUP_ARN_PATTERN]],
 ]);
 
 /**
  * The canonical name of a resource: the queue name of a queue URL or ARN, the stack name of a
  * stack ARN, the name (or mapping UUID) inside the ARN of a function, mapping, table or log
- * group, and the identifier itself otherwise.
+ * group, the table name of a table stream ARN, and the identifier itself otherwise.
  *
  * @example
  * canonicalResourceName('AWS::SQS::Queue', 'https://sqs.us-east-1.amazonaws.com/123456789012/suc1-3f1c2a9e-durable-dlq.fifo');

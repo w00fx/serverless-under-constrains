@@ -19,6 +19,7 @@ import {
   ROLE_RESOURCE_TYPE,
   STACK_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
 } from './resource-types.ts';
 import type { Page, Reading } from './surface-readings.ts';
 import {
@@ -61,6 +62,7 @@ const ARN_NAMED_TYPES = [
   FUNCTION_RESOURCE_TYPE,
   EVENT_SOURCE_MAPPING_RESOURCE_TYPE,
   TABLE_RESOURCE_TYPE,
+  TABLE_STREAM_RESOURCE_TYPE,
   LOG_GROUP_RESOURCE_TYPE,
 ];
 // https://<host>/<account>/<name>, the queue URL CloudFormation records.
