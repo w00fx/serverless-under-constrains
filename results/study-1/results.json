@@ -17,7 +17,8 @@
     "trials[].retry.durable_step_attempt": "Highest step_attempt over the caller journal invocations; null for a conventional caller.",
     "trials[].retry.durable_executions": "Each Durable execution: its status, last history event and highest step attempt.",
     "trials[].retry.mechanism": "source_redelivery when receive count > 1; durable_step_retry when step attempt > 1; both or none.",
-    "within_variant_reproductions": "Variant validations: one variant each, never comparative (spec limitation 9)."
+    "within_variant_reproductions": "Variant validations: one variant each, never comparative (spec limitation 9). A variant validation is a within-variant reproduction only when its summary states implementation_validation_status verified and validation_validity valid.",
+    "excluded_executions": "Variant validations that fail that criterion: never counted, listed with the status reasons, unverified gates and indeterminate reason codes their own packages state."
   },
   "canonical_runs": [
     {
@@ -741,6 +742,144 @@
           "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
           "artifact_path": "summary/validation-summary.json",
           "artifact_sha256": "49093576104f53f960b6f5ffc29d5d4aa593ccca8ae37368a5e5ca38147bfbec"
+        }
+      ]
+    }
+  ],
+  "excluded_executions": [
+    {
+      "execution_kind": "variant_validation",
+      "execution_id": "eda6019a-0f5d-4565-a809-b129ec432036",
+      "role": "excluded",
+      "comparative": false,
+      "package_directory": "variant-validations/eda6019a-0f5d-4565-a809-b129ec432036",
+      "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+      "source_commit": "111a44cb3c9fd216a163f4a3065fd4ca0a03d859",
+      "outcome": {
+        "validation_terminal_reason": "COMPLETED",
+        "implementation_validation_status": "indeterminate",
+        "validation_validity": "indeterminate"
+      },
+      "closure": {
+        "cleanup_status": "succeeded",
+        "leak_audit_status": "clean",
+        "lease_status": "released",
+        "safety_status": "within_limits",
+        "evidence_integrity_status": "verified"
+      },
+      "verifications": [
+        {
+          "path": "verifications/eda6019a-0f5d-4565-a809-b129ec432036/2026-10-07T05:43:26.091Z-variant-validation-verification.json",
+          "sha256": "581884ff73519aa5b955336d505c7b9ed3ae48a1cd473f057191e4c73a405102",
+          "record_type": "variant_validation_verification",
+          "recorded_at": "2026-10-07T05:43:26.091Z",
+          "outcome": {
+            "effective_implementation_validation_status": "indeterminate",
+            "validation_validity": "indeterminate",
+            "package_eligibility": "eligible"
+          }
+        }
+      ],
+      "exclusion": {
+        "criterion": "A variant validation is a within-variant reproduction only when its summary states implementation_validation_status verified and validation_validity valid.",
+        "status_reasons": [
+          {
+            "code": "TRIAL_NOT_VALID",
+            "subject": "trial 1 (CONTROL)",
+            "detail": "trial_validity is indeterminate; expected valid"
+          },
+          {
+            "code": "CONTROL_VERDICT_INDETERMINATE",
+            "subject": "trial 1 (CONTROL)",
+            "detail": "preservation_verdict is indeterminate; expected a conclusive pass or fail"
+          },
+          {
+            "code": "TRIAL_NOT_VALID",
+            "subject": "trial 2 (COMMIT_THEN_TIMEOUT)",
+            "detail": "trial_validity is indeterminate; expected valid"
+          },
+          {
+            "code": "TREATMENT_VERDICT_INDETERMINATE",
+            "subject": "trial 2 (COMMIT_THEN_TIMEOUT)",
+            "detail": "preservation_verdict is indeterminate; expected a conclusive pass or fail"
+          },
+          {
+            "code": "LATE_EVIDENCE_UNVERIFIED",
+            "subject": "late_evidence_status",
+            "detail": "late_evidence_status is unverified; expected none or consistent"
+          }
+        ]
+      },
+      "trials": [
+        {
+          "trial_id": "7aeb0d62-5c7e-4494-9002-0063c4e65f03",
+          "sequence": 1,
+          "scenario": "CONTROL",
+          "variant_id": "durable",
+          "preservation_verdict": "indeterminate",
+          "trial_validity": "indeterminate",
+          "unverified_gates": [
+            "independent_oracle=unverified",
+            "settlement=unverified"
+          ],
+          "indeterminate_reason_codes": [
+            "INNER_EXECUTION_ACTIVE",
+            "LEDGER_NOT_INDEPENDENT",
+            "SETTLEMENT_NOT_ESTABLISHED"
+          ],
+          "evidence_refs": [
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/7aeb0d62-5c7e-4494-9002-0063c4e65f03/derived/oracle-result.json",
+              "artifact_sha256": "d3abbad4e00f655b838d44e7a0723f0ff2a857693b1b79a60f3eb111c0d6725a"
+            },
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/7aeb0d62-5c7e-4494-9002-0063c4e65f03/trial-manifest.json",
+              "artifact_sha256": "841b8637ca840fe97576069953c47732fdf88a87aea0e91cac8c78fd39ec4043"
+            }
+          ]
+        },
+        {
+          "trial_id": "1eb6ecba-5dc4-4ae0-8bd5-6fcc9a365572",
+          "sequence": 2,
+          "scenario": "COMMIT_THEN_TIMEOUT",
+          "variant_id": "durable",
+          "preservation_verdict": "indeterminate",
+          "trial_validity": "indeterminate",
+          "unverified_gates": [
+            "independent_oracle=unverified",
+            "settlement=unverified"
+          ],
+          "indeterminate_reason_codes": [
+            "INNER_EXECUTION_ACTIVE",
+            "LEDGER_NOT_INDEPENDENT",
+            "SETTLEMENT_NOT_ESTABLISHED"
+          ],
+          "evidence_refs": [
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/1eb6ecba-5dc4-4ae0-8bd5-6fcc9a365572/derived/oracle-result.json",
+              "artifact_sha256": "ae5819cd24cec06af758de5a4bed38dcb8d061c54c5721c355690aee7255a1d3"
+            },
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/1eb6ecba-5dc4-4ae0-8bd5-6fcc9a365572/trial-manifest.json",
+              "artifact_sha256": "d2ca0ab40649dc05c159baad1169d89dbf895488a52c9ad0fb97085e2ba3c1cd"
+            }
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+          "artifact_path": "admission/source-provenance.json",
+          "artifact_sha256": "c0a0459acf05ce5042d69d78ecff0cc6260d7b3d4ad4f612b74dfdc928623149"
+        },
+        {
+          "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+          "artifact_path": "summary/validation-summary.json",
+          "artifact_sha256": "2b8b43f9a7f3635d01d35dab03f25bca5cd592781da3e4335a2eee7c8cce7e5d"
         }
       ]
     }
