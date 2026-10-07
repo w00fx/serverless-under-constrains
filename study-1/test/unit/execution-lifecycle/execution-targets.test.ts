@@ -16,7 +16,9 @@ import type {
   KeyValueEntry,
   ResourceManifest,
 } from '../../../src/record-contract/records/group-a/resource_manifest.ts';
-import { ACCOUNT_SQS_HOST, NAMES, resourceManifest } from '../../support/cleanup/cleanup-fixtures.ts';
+import { FUNCTION_VERSION_RESOURCE_TYPE } from '../../../src/cleanup/resource-types.ts';
+import type { MemberSpec } from '../../support/cleanup/cleanup-fixtures.ts';
+import { ACCOUNT_SQS_HOST, NAMES, resourceManifest, STACK_MEMBERS } from '../../support/cleanup/cleanup-fixtures.ts';
 
 const SOURCE = `${ACCOUNT_SQS_HOST}/suc1-aaaaaaaa-conventional-source.fifo`;
 const DLQ = `${ACCOUNT_SQS_HOST}/suc1-aaaaaaaa-conventional-dlq.fifo`;
@@ -24,7 +26,18 @@ const DURABLE_SOURCE = `${ACCOUNT_SQS_HOST}/suc1-aaaaaaaa-durable-source.fifo`;
 const DURABLE_DLQ = `${ACCOUNT_SQS_HOST}/suc1-aaaaaaaa-durable-dlq.fifo`;
 const CALLER_ARN = 'arn:aws:lambda:us-east-1:123456789012:function:suc1-aaaaaaaa-durable-caller';
 
-function withOutputs(outputs: readonly KeyValueEntry[], manifest = resourceManifest()): ResourceManifest {
+function versionOf(logicalId: string, identifier: string): MemberSpec {
+  return { logical_id: logicalId, resource_type: FUNCTION_VERSION_RESOURCE_TYPE, identifier, surface: 'functions' };
+}
+
+// The deployed stack records the version the Durable caller's alias points at (CDK currentVersion).
+const DURABLE_VERSION = versionOf('DurableCallerCurrentVersion', `${CALLER_ARN}:3`);
+
+function withVersions(...versions: readonly MemberSpec[]): ResourceManifest {
+  return resourceManifest('succeeded', { members: [...STACK_MEMBERS, ...versions] });
+}
+
+function withOutputs(outputs: readonly KeyValueEntry[], manifest = withVersions(DURABLE_VERSION)): ResourceManifest {
   return { ...manifest, outputs };
 }
 
@@ -67,7 +80,7 @@ describe('executionTargetsOf', () => {
             dlq: { queue_url: DURABLE_DLQ, queue_name: 'suc1-aaaaaaaa-durable-dlq.fifo' },
           },
         },
-        durable_caller: { function_arn: CALLER_ARN, qualifier: 'live' },
+        durable_caller: { function_arn: CALLER_ARN, qualifier: '3' },
         event_source_mapping_ids: [NAMES.sourceMapping],
         durable_function_names: ['suc1-aaaaaaaa-durable-caller'],
         function_names: { 'durable-caller': 'suc1-aaaaaaaa-durable-caller' },
@@ -187,6 +200,39 @@ describe('executionTargetsOf', () => {
       const targets = executionTargetsOf(withOutputs(outputs as readonly KeyValueEntry[]));
       assert.equal(targets.ok, false);
       assert.match(targets.error.detail, /Durable caller outputs are .*<function-arn>:<alias>/);
+    });
+  }
+});
+
+// Regression (decision 90): ListDurableExecutionsByFunction answers InvalidParameterValueException
+// "Cannot filter by alias", so listing under the alias `live` left every real durable trial
+// unsettled (INNER_EXECUTION_ACTIVE) and indeterminate. The qualifier is the recorded version.
+describe('executionTargetsOf Durable caller version', () => {
+  it('lists under the one version the manifest records for the caller, never its alias', () => {
+    const other = versionOf(
+      'ProviderCurrentVersion',
+      'arn:aws:lambda:us-east-1:123456789012:function:suc1-aaaaaaaa-provider:7',
+    );
+    const targets = executionTargetsOf(withOutputs(FULL, withVersions(other, DURABLE_VERSION)));
+    assert.equal(targets.ok, true);
+    assert.deepEqual(targets.value.durable_caller, { function_arn: CALLER_ARN, qualifier: '3' });
+  });
+
+  for (const [name, versions] of [
+    ['no recorded version', []],
+    ['two recorded versions', [DURABLE_VERSION, versionOf('Second', `${CALLER_ARN}:4`)]],
+    ['only a version of another function', [versionOf('Other', `${CALLER_ARN}x:3`)]],
+    ['only $LATEST', [versionOf('Latest', `${CALLER_ARN}:$LATEST`)]],
+    ['only the alias recorded as a version', [versionOf('Alias', `${CALLER_ARN}:live`)]],
+  ] as const) {
+    it(`refuses a Durable caller with ${name}`, () => {
+      const targets = executionTargetsOf(withOutputs(FULL, withVersions(...versions)));
+      assert.equal(targets.ok, false);
+      assert.equal(targets.error.code, 'EXECUTION_TARGETS_UNRESOLVED');
+      assert.match(
+        targets.error.detail,
+        /Durable caller outputs are .*with recorded versions .*; expected a function ARN, its alias ARN <function-arn>:<alias> and exactly one recorded version <function-arn>:<n>$/,
+      );
     });
   }
 });

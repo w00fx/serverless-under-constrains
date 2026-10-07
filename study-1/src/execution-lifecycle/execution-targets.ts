@@ -5,7 +5,7 @@
 // stack declares (`infra/stacks/execution-stack.ts` `EXECUTION_STACK_OUTPUTS`); `src` may not import
 // that stack (design §5.4), so they are spelled here once and a unit test pins them to the stack's.
 
-import { EVENT_SOURCE_MAPPING_RESOURCE_TYPE } from '../cleanup/resource-types.ts';
+import { EVENT_SOURCE_MAPPING_RESOURCE_TYPE, FUNCTION_VERSION_RESOURCE_TYPE } from '../cleanup/resource-types.ts';
 import { boundedJsonText } from '../record-contract/json-value.ts';
 import { err, ok } from '../record-contract/primitives.ts';
 import type { Result, StructuredReason, VariantId } from '../record-contract/primitives.ts';
@@ -67,7 +67,7 @@ export function executionTargetsOf(manifest: ResourceManifest): Result<Execution
   const outputs: Outputs = new Map(manifest.outputs.map((entry) => [entry.key, entry.value]));
   const conventional = variantQueues(outputs, 'conventional');
   const durable = variantQueues(outputs, 'durable');
-  const caller = durableCaller(outputs);
+  const caller = durableCaller(outputs, manifest);
   const probeCaller = probeCallerOf(outputs);
   if (!conventional.ok) {
     return conventional;
@@ -142,24 +142,45 @@ function variantQueues(outputs: Outputs, variant: VariantId): Result<VariantQueu
   });
 }
 
-// The Durable caller is listed by its function ARN and the alias the event-source mapping invokes.
-function durableCaller(outputs: Outputs): Result<ExecutionTargets['durable_caller'], StructuredReason> {
+// The Durable caller is listed by its function ARN and the published version its alias invokes.
+// `ListDurableExecutionsByFunction` refuses an alias qualifier ("Cannot filter by alias", seen in
+// the first real durable validation, decision 90), so the qualifier is the one version of that
+// function the resource manifest records; the alias output only proves the stack matches the
+// template.
+function durableCaller(
+  outputs: Outputs,
+  manifest: ResourceManifest,
+): Result<ExecutionTargets['durable_caller'], StructuredReason> {
   const functionArn = outputs.get(STACK_OUTPUT_KEYS.durableCallerFunctionArn);
   const aliasArn = outputs.get(STACK_OUTPUT_KEYS.durableCallerAliasArn);
   if (functionArn === undefined && aliasArn === undefined) {
     return ok(undefined);
   }
   const prefix = `${functionArn ?? ''}:`;
-  const qualifier = aliasArn?.startsWith(prefix) === true ? aliasArn.slice(prefix.length) : '';
-  if (functionArn === undefined || !ALIAS_NAME_PATTERN.test(qualifier)) {
-    const shown = `${boundedJsonText(functionArn ?? null)} and ${boundedJsonText(aliasArn ?? null)}`;
+  const alias = aliasArn?.startsWith(prefix) === true ? aliasArn.slice(prefix.length) : '';
+  const versions = functionArn === undefined ? [] : recordedVersionsOf(manifest, functionArn);
+  const [version] = versions;
+  if (functionArn === undefined || !ALIAS_NAME_PATTERN.test(alias) || version === undefined || versions.length > 1) {
+    const shown = `${boundedJsonText(functionArn ?? null)} and ${boundedJsonText(aliasArn ?? null)} with recorded versions ${boundedJsonText(versions)}`;
     return err(
       targetsReason(
-        `the Durable caller outputs are ${shown}; expected a function ARN and its alias ARN <function-arn>:<alias>`,
+        `the Durable caller outputs are ${shown}; expected a function ARN, its alias ARN <function-arn>:<alias> and exactly one recorded version <function-arn>:<n>`,
       ),
     );
   }
-  return ok({ function_arn: functionArn, qualifier });
+  return ok({ function_arn: functionArn, qualifier: version });
+}
+
+// The published versions of one function the manifest records, by their `<function-arn>:<n>` ids.
+function recordedVersionsOf(manifest: ResourceManifest, functionArn: string): readonly string[] {
+  const prefix = `${functionArn}:`;
+  return manifest.resources.flatMap((resource) => {
+    const id = resource.physical_id;
+    const qualifier = id?.startsWith(prefix) === true ? id.slice(prefix.length) : '';
+    return resource.resource_type === FUNCTION_VERSION_RESOURCE_TYPE && PUBLISHED_VERSION.test(qualifier)
+      ? [qualifier]
+      : [];
+  });
 }
 
 // The probe caller is listed by its function name and the published version the runner invokes:
