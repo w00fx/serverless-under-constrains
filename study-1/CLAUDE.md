@@ -22,7 +22,7 @@ to this capability's code; what must be true lives in its spec.
 - Operator CLI: `npm run rua -- <command>` (`node src/operator-cli/main.ts`). It prints one
   `cli_result` JSON line. The exit codes are 0 completed, 2 usage error, 3 admission
   rejected, 4 execution incomplete, 5 verification failed, 6 operational closure not
-  clean, 7 lease problem, 10 internal failure.
+  clean, 7 lease problem, 10 internal failure (the spec contract is still open: OQ-RUA-003).
 
 ## Before anything touches the cloud
 
