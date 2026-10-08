@@ -1,14 +1,14 @@
 // The in-memory emulator of the fixture generator's file-system port. It answers the same
 // questions as `NodeFixtureFileSystem` over a map of root-relative POSIX paths: the case-file and
-// fixture-directory globs are matched by their equivalent regular expressions, and a directory
-// exists exactly when some file lies below it. The shared conformance suite holds it to the
+// fixture-entry globs are matched by their equivalent regular expressions, and a directory exists
+// exactly when some file lies below it. The shared conformance suite holds it to the
 // binding's behavior (`fixture-file-system-conformance.ts`).
 
 import type { FixtureFileSystem } from '../../../tools/golden/lib/fixture-file-system.ts';
 
 // `test/golden/**/cases/*.case.ts` and `test/golden/**/fixtures/*`, with `**` as zero or more segments.
 const CASE_FILE_PATH = /^test\/golden\/(?:[^/]+\/)*cases\/[^/]+\.case\.ts$/;
-const FIXTURE_DIRECTORY_PATH = /^test\/golden\/(?:[^/]+\/)*fixtures\/[^/]+$/;
+const FIXTURE_ENTRY_PATH = /^test\/golden\/(?:[^/]+\/)*fixtures\/[^/]+$/;
 
 /**
  * A fixture file system held in memory; `files` seeds it with root-relative paths.
@@ -37,34 +37,21 @@ export class MemoryFixtureFileSystem implements FixtureFileSystem {
   }
 
   /**
-   * Directories that match the fixture-directory glob and hold at least one file, sorted.
+   * Files and directories that match the fixture-entry glob, sorted.
    *
    * @example
-   * files.findFixtureDirectories(); // ['test/golden/x/fixtures/a']
+   * files.findFixtureEntries(); // ['test/golden/x/fixtures/a.fixture.json']
    */
-  findFixtureDirectories(): readonly string[] {
-    const directories = new Set(this.#paths().flatMap((path) => directoriesOf(path)));
-    return [...directories].filter((directory) => FIXTURE_DIRECTORY_PATH.test(directory)).sort();
-  }
-
-  /**
-   * Files below a directory, relative to it and sorted.
-   *
-   * @example
-   * files.listFiles('test/golden/x/fixtures/a'); // ['admission/execution-manifest.json']
-   */
-  listFiles(directory: string): readonly string[] {
-    const prefix = `${directory}/`;
-    return this.#paths()
-      .filter((path) => path.startsWith(prefix))
-      .map((path) => path.slice(prefix.length));
+  findFixtureEntries(): readonly string[] {
+    const entries = new Set(this.#paths().flatMap((path) => [...directoriesOf(path), path]));
+    return [...entries].filter((entry) => FIXTURE_ENTRY_PATH.test(entry)).sort();
   }
 
   /**
    * A copy of a file's bytes, or undefined.
    *
    * @example
-   * files.readFile('test/golden/x/fixtures/a/runner/runner-journal.jsonl');
+   * files.readFile('test/golden/x/fixtures/a.fixture.json');
    */
   readFile(path: string): Uint8Array | undefined {
     const bytes = this.#files.get(path);
@@ -75,20 +62,10 @@ export class MemoryFixtureFileSystem implements FixtureFileSystem {
    * Stores a copy of the bytes, replacing any earlier file at the path.
    *
    * @example
-   * files.writeFile('test/golden/x/fixtures/a/b.json', bytes);
+   * files.writeFile('test/golden/x/fixtures/a.fixture.json', bytes);
    */
   writeFile(path: string, bytes: Uint8Array): void {
     this.#files.set(path, Uint8Array.from(bytes));
-  }
-
-  /**
-   * Removes a file; an absent file is ignored.
-   *
-   * @example
-   * files.deleteFile('test/golden/x/fixtures/a/stale.json');
-   */
-  deleteFile(path: string): void {
-    this.#files.delete(path);
   }
 
   #paths(): readonly string[] {

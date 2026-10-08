@@ -16,15 +16,17 @@ import type { StudyRecord } from '../../../../src/record-contract/records/index.
 import type { UNIT_PATHS } from '../../../../src/evidence-package/package-layout.ts';
 import { PACKAGE_LAYOUT } from '../../../../src/evidence-package/package-layout.ts';
 import type { RunPackageRecords } from '../../../../src/study-comparison/run-package-reader.ts';
+import { decodeFixtureBundle } from '../../../../tools/golden/lib/fixture-bundle.ts';
 import type { FixtureBytes } from '../../../support/golden-builder/digest-links.ts';
 import { loadGoldenCase } from '../../../golden/_harness/golden-harness.ts';
 import { finalizeGoldenRun, readGoldenRun } from '../../../golden/study-comparison/support/golden-run.ts';
 
 export { GOLDEN_DEPS as READ_DEPS } from '../../../golden/study-comparison/support/golden-run.ts';
 
-const PROBE_MANIFEST = fileURLToPath(
-  new URL('../../../golden/_harness/fixtures/base-probe/admission/execution-manifest.json', import.meta.url),
+const PROBE_FIXTURE = fileURLToPath(
+  new URL('../../../golden/_harness/fixtures/base-probe.fixture.json', import.meta.url),
 );
+const MANIFEST_PATH = 'admission/execution-manifest.json';
 const CLEAN_CASE = 'test/golden/study-comparison/cases/ac027-four-cell-completion.case.ts';
 const encoder = new TextEncoder();
 
@@ -167,5 +169,10 @@ export function storedDigest(files: FixtureBytes, path: string): Sha256Hex {
  * withBytes(files, 'admission/execution-manifest.json', probeManifestBytes());
  */
 export function probeManifestBytes(): Uint8Array {
-  return readFileSync(PROBE_MANIFEST);
+  const files = decodeFixtureBundle(readFileSync(PROBE_FIXTURE));
+  const manifest = files.ok ? files.value.get(MANIFEST_PATH) : undefined;
+  if (manifest === undefined) {
+    throw new Error(`the base-probe fixture has no readable ${MANIFEST_PATH}; expected the committed harness base`);
+  }
+  return manifest;
 }

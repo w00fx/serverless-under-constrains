@@ -6,6 +6,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { NodeCaseModuleLoader } from '../../../tools/golden/lib/case-module-loader.ts';
+import { decodeFixtureBundle } from '../../../tools/golden/lib/fixture-bundle.ts';
 import { NodeFixtureFileSystem } from '../../../tools/golden/lib/fixture-file-system.ts';
 import { boundedJsonText, boundedText, isJsonObject } from '../../../src/record-contract/json-value.ts';
 import type { JsonObject, JsonValue } from '../../../src/record-contract/primitives.ts';
@@ -23,7 +24,7 @@ export const STUDY_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 export interface LoadedGoldenCase {
   readonly golden_case: GoldenCase;
   readonly case_file: string;
-  readonly fixture_directory: string;
+  readonly fixture_file: string;
   /** Package-relative path to committed bytes. */
   readonly files: FixtureBytes;
   /** `trials/<trial_id>` of the subject trial, or `probe`. */
@@ -32,7 +33,8 @@ export interface LoadedGoldenCase {
 
 /**
  * Loads a case module (root-relative path) and its committed fixture; throws with every problem
- * when the case does not parse or its fixture is absent, which fails the calling test.
+ * when the case does not parse or its fixture is absent, empty or does not decode, which fails the
+ * calling test.
  *
  * @example
  * const loaded = await loadGoldenCase('test/golden/trial-oracle/cases/control-pass.case.ts');
@@ -50,20 +52,22 @@ export async function loadGoldenCase(caseFile: string, root: string = STUDY_ROOT
   if (!parsed.ok) {
     throw new Error(`${caseFile} does not parse:\n${parsed.error.join('\n')}`);
   }
-  const fileSystem = new NodeFixtureFileSystem(root);
-  const relativePaths = fileSystem.listFiles(location.fixture_directory);
-  if (relativePaths.length === 0) {
-    throw new Error(`${location.fixture_directory} is empty; expected the committed fixture of ${caseFile}`);
+  const stored = new NodeFixtureFileSystem(root).readFile(location.fixture_file);
+  if (stored === undefined) {
+    throw new Error(`${location.fixture_file} is absent; expected the committed fixture of ${caseFile}`);
   }
-  const files = new Map<string, Uint8Array>();
-  for (const relative of relativePaths) {
-    files.set(relative, fileSystem.readFile(`${location.fixture_directory}/${relative}`) ?? new Uint8Array());
+  const files = decodeFixtureBundle(stored);
+  if (!files.ok) {
+    throw new Error(`${location.fixture_file}: ${files.error}`);
+  }
+  if (files.value.size === 0) {
+    throw new Error(`${location.fixture_file} holds no files; expected the committed fixture of ${caseFile}`);
   }
   return {
     golden_case: parsed.value,
     case_file: caseFile,
-    fixture_directory: location.fixture_directory,
-    files,
+    fixture_file: location.fixture_file,
+    files: files.value,
     subject_directory: subjectDirectoryOf(parsed.value.base),
   };
 }

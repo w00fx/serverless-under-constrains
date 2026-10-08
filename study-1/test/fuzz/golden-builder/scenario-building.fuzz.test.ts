@@ -12,7 +12,9 @@ import fc from 'fast-check';
 
 import type { JsonValue } from '../../../src/record-contract/primitives.ts';
 import { createRecordValidator } from '../../../src/record-contract/schema-registry.ts';
+import { encodeFixtureBundle } from '../../../tools/golden/lib/fixture-bundle.ts';
 import { compareFixture } from '../../../tools/golden/lib/fixture-generation.ts';
+import type { FixtureDiscrepancy } from '../../../tools/golden/lib/fixture-generation.ts';
 import { deriveSettlement, observeSubject, runnerEvents } from '../../golden/_harness/fixture-observations.ts';
 import { expectedMismatches, fixtureRecords } from '../../golden/_harness/golden-harness.ts';
 import type { LoadedGoldenCase } from '../../golden/_harness/golden-harness.ts';
@@ -128,7 +130,7 @@ function loadedOf(base: BaseScenarioId, files: FixtureBytes, subjectDirectory: s
   return {
     golden_case: defineGoldenCase({ case_id: 'fuzz', ac_ids: [], rule_outcomes_reached: [], base, expected: null }),
     case_file: 'test/golden/fuzz/cases/fuzz.case.ts',
-    fixture_directory: 'test/golden/fuzz/fixtures/fuzz',
+    fixture_file: 'test/golden/fuzz/fixtures/fuzz.fixture.json',
     files,
     subject_directory: subjectDirectory,
   };
@@ -253,30 +255,43 @@ describe('golden scenario builder fuzz', () => {
     );
   });
 
-  it('the fixture comparison detects any single changed byte', () => {
-    const directory = 'test/golden/fuzz/fixtures/fuzz';
+  describe('the fixture comparison', () => {
+    const fixtureFile = 'test/golden/fuzz/fixtures/fuzz.fixture.json';
     const paths = [...probeBytes.value.keys()];
+    const bundle = encodeFixtureBundle(probeBytes.value);
     const fixture = {
       case_file: 'test/golden/fuzz/cases/fuzz.case.ts',
       case_id: 'fuzz',
-      fixture_directory: directory,
+      fixture_file: fixtureFile,
       files: probeBytes.value,
+      bundle,
     };
-    fc.assert(
-      fc.property(fc.constantFrom(...paths), fc.nat(), fc.integer({ min: 1, max: 255 }), (path, position, delta) => {
-        const committed = new Map(
-          [...probeBytes.value].map(([relative, bytes]) => [`${directory}/${relative}`, bytes]),
-        );
-        const original = probeBytes.value.get(path) ?? new Uint8Array();
-        const changed = Uint8Array.from(original);
-        const offset = position % changed.length;
-        changed[offset] = ((changed[offset] ?? 0) + delta) % 256;
-        committed.set(`${directory}/${path}`, changed);
-        assert.deepEqual(compareFixture(new MemoryFixtureFileSystem(committed), fixture), [
-          { kind: 'different', path: `${directory}/${path}` },
-        ]);
-      }),
-      fuzzParameters(),
-    );
+    const compared = (committed: Uint8Array): readonly FixtureDiscrepancy[] =>
+      compareFixture(new MemoryFixtureFileSystem(new Map([[fixtureFile, committed]])), fixture);
+
+    it('detects any single changed byte of the committed fixture file', () => {
+      fc.assert(
+        fc.property(fc.nat(), fc.integer({ min: 1, max: 255 }), (position, delta) => {
+          const changed = Uint8Array.from(bundle);
+          const offset = position % changed.length;
+          changed[offset] = ((changed[offset] ?? 0) + delta) % 256;
+          assert.notDeepEqual(compared(changed), []);
+        }),
+        fuzzParameters(),
+      );
+    });
+
+    it('names the evidence file in which a single byte changed', () => {
+      fc.assert(
+        fc.property(fc.constantFrom(...paths), fc.nat(), fc.integer({ min: 1, max: 255 }), (path, position, delta) => {
+          const changed = Uint8Array.from(probeBytes.value.get(path) ?? new Uint8Array());
+          const offset = position % changed.length;
+          changed[offset] = ((changed[offset] ?? 0) + delta) % 256;
+          const edited = encodeFixtureBundle(new Map([...probeBytes.value, [path, changed]]));
+          assert.deepEqual(compared(edited), [{ kind: 'different', path: `${fixtureFile}#${path}` }]);
+        }),
+        fuzzParameters(),
+      );
+    });
   });
 });

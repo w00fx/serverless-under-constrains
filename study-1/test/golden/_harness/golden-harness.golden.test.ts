@@ -1,6 +1,7 @@
 // `loadGoldenCase` against a real study tree in a temporary directory: it loads a case module and
 // its committed fixture bytes, and fails the calling test with the reason when the path is not a
-// case file, the module does not load, the case does not parse, or the fixture is absent.
+// case file, the module does not load, the case does not parse, or the fixture is absent, empty or
+// does not decode.
 
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,11 +26,13 @@ const CASE = { case_id: 'x', ac_ids: [], rule_outcomes_reached: [], base: 'probe
 describe('loadGoldenCase', () => {
   it('loads the case and its committed fixture bytes', async () => {
     put('test/golden/h/cases/x.case.ts', `export default ${JSON.stringify(CASE)};\n`);
-    put('test/golden/h/fixtures/x/probe/a.json', '{"a":1}\n');
-    put('test/golden/h/fixtures/x/runner/runner-journal.jsonl', '{"b":2}\n');
+    put(
+      'test/golden/h/fixtures/x.fixture.json',
+      JSON.stringify({ 'probe/a.json': ['{"a":1}', ''], 'runner/runner-journal.jsonl': ['{"b":2}', ''] }),
+    );
     const loaded = await loadGoldenCase('test/golden/h/cases/x.case.ts', root);
     assert.deepEqual(loaded.golden_case, CASE);
-    assert.equal(loaded.fixture_directory, 'test/golden/h/fixtures/x');
+    assert.equal(loaded.fixture_file, 'test/golden/h/fixtures/x.fixture.json');
     assert.equal(loaded.subject_directory, 'probe');
     assert.deepEqual([...loaded.files.keys()], ['probe/a.json', 'runner/runner-journal.jsonl']);
     assert.equal(new TextDecoder().decode(loaded.files.get('probe/a.json')), '{"a":1}\n');
@@ -62,7 +65,22 @@ describe('loadGoldenCase', () => {
     put('test/golden/h/cases/bare.case.ts', `export default ${JSON.stringify({ ...CASE, case_id: 'bare' })};\n`);
     await assert.rejects(
       loadGoldenCase('test/golden/h/cases/bare.case.ts', root),
-      /test\/golden\/h\/fixtures\/bare is empty; expected the committed fixture of test\/golden\/h\/cases\/bare\.case\.ts/,
+      /^Error: test\/golden\/h\/fixtures\/bare\.fixture\.json is absent; expected the committed fixture of test\/golden\/h\/cases\/bare\.case\.ts$/,
+    );
+  });
+
+  it('fails when the committed fixture holds no files or does not decode', async () => {
+    put('test/golden/h/cases/empty.case.ts', `export default ${JSON.stringify({ ...CASE, case_id: 'empty' })};\n`);
+    put('test/golden/h/fixtures/empty.fixture.json', '{}\n');
+    await assert.rejects(
+      loadGoldenCase('test/golden/h/cases/empty.case.ts', root),
+      /^Error: test\/golden\/h\/fixtures\/empty\.fixture\.json holds no files; expected the committed fixture of test\/golden\/h\/cases\/empty\.case\.ts$/,
+    );
+    put('test/golden/h/cases/broken.case.ts', `export default ${JSON.stringify({ ...CASE, case_id: 'broken' })};\n`);
+    put('test/golden/h/fixtures/broken.fixture.json', '{"probe/a.json":"{}"}\n');
+    await assert.rejects(
+      loadGoldenCase('test/golden/h/cases/broken.case.ts', root),
+      /^Error: test\/golden\/h\/fixtures\/broken\.fixture\.json: member probe\/a\.json is "\{\}"; expected a non-empty array of lines without a newline, or \{"base64": <canonical base64>\}$/,
     );
   });
 });

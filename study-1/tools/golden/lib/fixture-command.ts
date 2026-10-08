@@ -5,7 +5,7 @@
 import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { CaseModuleLoader } from './case-module-loader.ts';
 import type { FixtureFileSystem } from './fixture-file-system.ts';
-import { compareFixture, generateFixtures, orphanFixtureDirectories, writeFixture } from './fixture-generation.ts';
+import { compareFixture, generateFixtures, orphanFixtures, writeFixture } from './fixture-generation.ts';
 
 /** The parsed command line. */
 export interface FixtureCommandOptions {
@@ -93,13 +93,14 @@ export async function runFixtureCommand(
     lines.push(`${fixture.case_id}: ${outcome}`);
     if (outcome === 'refused') {
       errors.push(
-        `${fixture.fixture_directory}: committed fixture differs from its case; expected an unchanged fixture or --overwrite ${fixture.case_id}`,
+        `${fixture.fixture_file}: committed fixture differs from its case; expected an unchanged fixture or --overwrite ${fixture.case_id}`,
       );
     }
   }
   errors.push(
-    ...orphanFixtureDirectories(ports.files, report.fixtures).map(
-      (directory) => `${directory}: no case owns this fixture directory; expected a sibling cases/<case-id>.case.ts`,
+    ...orphanFixtures(ports.files, report.fixtures).map(
+      (entry) =>
+        `${entry}: no case owns this fixture entry; expected fixtures/<case-id>.fixture.json beside cases/<case-id>.case.ts`,
     ),
   );
   const mode = options.value.check ? 'check' : 'write';

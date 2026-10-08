@@ -31,7 +31,7 @@ function built(base: BaseScenarioId, plan?: TrialPlan): LoadedGoldenCase {
   return {
     golden_case: defineGoldenCase({ case_id: 'unit', ac_ids: [], rule_outcomes_reached: [], base, expected: null }),
     case_file: 'test/golden/unit/cases/unit.case.ts',
-    fixture_directory: 'test/golden/unit/fixtures/unit',
+    fixture_file: 'test/golden/unit/fixtures/unit.fixture.json',
     files: bytes.value,
     subject_directory: scenario.value.subject_directory,
   };

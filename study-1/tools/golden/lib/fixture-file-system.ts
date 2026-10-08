@@ -2,28 +2,24 @@
 // POSIX and relative to the study root the generator runs in, so the in-memory fake and the
 // binding answer the same questions with the same paths.
 
-import { globSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { globSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 
 import { CASE_FILE_GLOB } from '../../../test/support/golden-builder/fixture-layout.ts';
 
-/** Every fixture directory a case could own: `fixtures/<case-id>` under `test/golden/`. */
-export const FIXTURE_DIRECTORY_GLOB = 'test/golden/**/fixtures/*';
+/** Every entry a fixture could be, or that could shadow one: anything directly under `fixtures/`. */
+export const FIXTURE_ENTRY_GLOB = 'test/golden/**/fixtures/*';
 
 /** What the generator needs from the files under the study root. */
 export interface FixtureFileSystem {
   /** Case files matching `test/golden/**\/cases/*.case.ts`, sorted. */
   findCaseFiles(): readonly string[];
-  /** Directories matching `test/golden/**\/fixtures/*`, sorted. */
-  findFixtureDirectories(): readonly string[];
-  /** Every file below `directory`, as sorted paths relative to it; empty when it is absent. */
-  listFiles(directory: string): readonly string[];
+  /** Files and directories matching `test/golden/**\/fixtures/*`, sorted. */
+  findFixtureEntries(): readonly string[];
   /** The bytes of a file, or undefined when it does not exist. */
   readFile(path: string): Uint8Array | undefined;
   /** Writes a file, creating its parent directories. */
   writeFile(path: string, bytes: Uint8Array): void;
-  /** Deletes a file; deleting an absent file does nothing. */
-  deleteFile(path: string): void;
 }
 
 /**
@@ -51,32 +47,20 @@ export class NodeFixtureFileSystem implements FixtureFileSystem {
   }
 
   /**
-   * Fixture directories under the root.
+   * Entries directly under a `fixtures/` directory, files and directories alike.
    *
    * @example
-   * files.findFixtureDirectories(); // ['test/golden/_harness/fixtures/base-probe', ...]
+   * files.findFixtureEntries(); // ['test/golden/_harness/fixtures/base-probe.fixture.json', ...]
    */
-  findFixtureDirectories(): readonly string[] {
-    return this.#glob(FIXTURE_DIRECTORY_GLOB).filter((path) => !this.#isFile(path));
-  }
-
-  /**
-   * Files below a directory, relative to it.
-   *
-   * @example
-   * files.listFiles('test/golden/_harness/fixtures/base-probe'); // ['admission/execution-manifest.json', ...]
-   */
-  listFiles(directory: string): readonly string[] {
-    return this.#glob(`${directory}/**/*`)
-      .filter((path) => this.#isFile(path))
-      .map((path) => path.slice(directory.length + 1));
+  findFixtureEntries(): readonly string[] {
+    return this.#glob(FIXTURE_ENTRY_GLOB);
   }
 
   /**
    * A file's bytes, or undefined.
    *
    * @example
-   * files.readFile('test/golden/_harness/fixtures/base-probe/runner/runner-journal.jsonl');
+   * files.readFile('test/golden/_harness/fixtures/base-probe.fixture.json');
    */
   readFile(path: string): Uint8Array | undefined {
     if (!this.#isFile(path)) {
@@ -89,22 +73,12 @@ export class NodeFixtureFileSystem implements FixtureFileSystem {
    * Writes a file and its parent directories.
    *
    * @example
-   * files.writeFile('test/golden/x/fixtures/c/a.json', bytes);
+   * files.writeFile('test/golden/x/fixtures/c.fixture.json', bytes);
    */
   writeFile(path: string, bytes: Uint8Array): void {
     const target = join(this.#root, path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, bytes);
-  }
-
-  /**
-   * Deletes a file if it exists.
-   *
-   * @example
-   * files.deleteFile('test/golden/x/fixtures/c/stale.json');
-   */
-  deleteFile(path: string): void {
-    rmSync(join(this.#root, path), { force: true });
   }
 
   #glob(pattern: string): readonly string[] {

@@ -1,8 +1,9 @@
 // Golden fixture generation and its byte-for-byte check (design §12.4). Every case is loaded,
-// parsed and materialized in memory; `--check` compares the result with the committed fixture and
-// reports every missing, extra or differing file and every fixture directory without a case.
-// Writing creates a missing fixture only: committed fixtures are truth-layer material, so
-// replacing one needs an explicit `--overwrite <case-id>` (`.claude/rules/truth-layer.md`).
+// parsed, materialized and bundled in memory; `--check` compares the bundle with the committed
+// fixture file and reports a missing or differing fixture, every missing, extra or differing file
+// inside it, and every entry under `fixtures/` without a case. Writing creates a missing fixture
+// only: committed fixtures are truth-layer material, so replacing one needs an explicit
+// `--overwrite <case-id>` (`.claude/rules/truth-layer.md`).
 
 import { boundedJsonText } from '../../../src/record-contract/json-value.ts';
 import type { FixtureBytes } from '../../../test/support/golden-builder/digest-links.ts';
@@ -10,14 +11,17 @@ import { locateCase } from '../../../test/support/golden-builder/fixture-layout.
 import { materializeCase } from '../../../test/support/golden-builder/fixture-materializer.ts';
 import { parseGoldenCase } from '../../../test/support/golden-builder/golden-case.ts';
 import type { CaseModuleLoader } from './case-module-loader.ts';
+import { decodeFixtureBundle, encodeFixtureBundle } from './fixture-bundle.ts';
 import type { FixtureFileSystem } from './fixture-file-system.ts';
 
 /** One case's fixture, regenerated in memory. */
 export interface GeneratedFixture {
   readonly case_file: string;
   readonly case_id: string;
-  readonly fixture_directory: string;
+  readonly fixture_file: string;
   readonly files: FixtureBytes;
+  /** The committed form of `files`: their canonical bundle. */
+  readonly bundle: Uint8Array;
 }
 
 /** What regenerating every case produced: the fixtures, and the problems of the cases that failed. */
@@ -29,7 +33,7 @@ export interface GenerationReport {
 /** One way a committed fixture differs from its regeneration. */
 export interface FixtureDiscrepancy {
   readonly kind: 'missing' | 'extra' | 'different';
-  /** Root-relative path of the file. */
+  /** Root-relative path of the fixture file, then `#` and the file inside it when one file differs. */
   readonly path: string;
 }
 
@@ -94,50 +98,64 @@ async function generateOne(
     value: {
       case_file: caseFile,
       case_id: location.case_id,
-      fixture_directory: location.fixture_directory,
+      fixture_file: location.fixture_file,
       files: files.value,
+      bundle: encodeFixtureBundle(files.value),
     },
   };
 }
 
 /**
- * Every difference between a regenerated fixture and the committed bytes.
+ * Every difference between a regenerated fixture and the committed fixture file: the file itself
+ * when it is missing, does not decode, or holds the same files in other bytes; otherwise each
+ * missing, extra or differing file inside it.
  *
  * @example
  * compareFixture(files, fixture); // [] when the committed fixture is reproduced exactly
  */
 export function compareFixture(files: FixtureFileSystem, fixture: GeneratedFixture): readonly FixtureDiscrepancy[] {
-  const committed = new Set(files.listFiles(fixture.fixture_directory));
+  const stored = files.readFile(fixture.fixture_file);
+  if (stored === undefined) {
+    return [{ kind: 'missing', path: fixture.fixture_file }];
+  }
+  if (sameBytes(stored, fixture.bundle)) {
+    return [];
+  }
+  const committed = decodeFixtureBundle(stored);
+  const discrepancies = committed.ok ? memberDiscrepancies(fixture, committed.value) : [];
+  return discrepancies.length > 0 ? discrepancies : [{ kind: 'different', path: fixture.fixture_file }];
+}
+
+// The files of a decoded committed fixture that differ from the regeneration, in path order.
+function memberDiscrepancies(fixture: GeneratedFixture, committed: FixtureBytes): readonly FixtureDiscrepancy[] {
   const discrepancies: FixtureDiscrepancy[] = [];
   for (const [relative, bytes] of [...fixture.files].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    const path = `${fixture.fixture_directory}/${relative}`;
-    const stored = files.readFile(path);
+    const path = `${fixture.fixture_file}#${relative}`;
+    const stored = committed.get(relative);
     if (stored === undefined) {
       discrepancies.push({ kind: 'missing', path });
     } else if (!sameBytes(stored, bytes)) {
       discrepancies.push({ kind: 'different', path });
     }
   }
-  for (const relative of committed) {
+  for (const relative of committed.keys()) {
     if (!fixture.files.has(relative)) {
-      discrepancies.push({ kind: 'extra', path: `${fixture.fixture_directory}/${relative}` });
+      discrepancies.push({ kind: 'extra', path: `${fixture.fixture_file}#${relative}` });
     }
   }
   return discrepancies;
 }
 
 /**
- * Fixture directories that no regenerated case owns.
+ * Entries under `fixtures/` that are not the fixture file of a regenerated case: a fixture whose
+ * case is gone or fails, and any other file or directory there.
  *
  * @example
- * orphanFixtureDirectories(files, report.fixtures); // ['test/golden/x/fixtures/deleted-case']
+ * orphanFixtures(files, report.fixtures); // ['test/golden/x/fixtures/deleted-case.fixture.json']
  */
-export function orphanFixtureDirectories(
-  files: FixtureFileSystem,
-  fixtures: readonly GeneratedFixture[],
-): readonly string[] {
-  const owned = new Set(fixtures.map((fixture) => fixture.fixture_directory));
-  return files.findFixtureDirectories().filter((directory) => !owned.has(directory));
+export function orphanFixtures(files: FixtureFileSystem, fixtures: readonly GeneratedFixture[]): readonly string[] {
+  const owned = new Set(fixtures.map((fixture) => fixture.fixture_file));
+  return files.findFixtureEntries().filter((entry) => !owned.has(entry));
 }
 
 /**
@@ -151,21 +169,15 @@ export function writeFixture(
   fixture: GeneratedFixture,
   overwrite: boolean,
 ): FixtureWriteOutcome {
-  const discrepancies = compareFixture(files, fixture);
-  if (discrepancies.length === 0) {
+  const stored = files.readFile(fixture.fixture_file);
+  if (stored !== undefined && sameBytes(stored, fixture.bundle)) {
     return 'unchanged';
   }
-  const fresh = files.listFiles(fixture.fixture_directory).length === 0;
-  if (!fresh && !overwrite) {
+  if (stored !== undefined && !overwrite) {
     return 'refused';
   }
-  for (const discrepancy of discrepancies.filter((item) => item.kind === 'extra')) {
-    files.deleteFile(discrepancy.path);
-  }
-  for (const [relative, bytes] of fixture.files) {
-    files.writeFile(`${fixture.fixture_directory}/${relative}`, bytes);
-  }
-  return fresh ? 'written' : 'overwritten';
+  files.writeFile(fixture.fixture_file, fixture.bundle);
+  return stored === undefined ? 'written' : 'overwritten';
 }
 
 /**

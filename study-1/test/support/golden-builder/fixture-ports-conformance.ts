@@ -1,8 +1,8 @@
 // The conformance suites of the golden generator's two ports. Each runs unchanged against the
 // local binding (in a temporary directory) and against its in-memory emulator, so the emulators
 // the unit tests use cannot drift from the bindings `npm run test:golden` uses: glob discovery,
-// sorted relative listings, copy-on-read and copy-on-write bytes, idempotent deletion, and the
-// three ways loading a case module ends.
+// copy-on-read and copy-on-write bytes, a directory read as absent, and the three ways loading a
+// case module ends.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -30,9 +30,8 @@ export function describeFixtureFileSystemConformance(name: string, subjectFactor
     it('answers empty for an empty root', () => {
       const files = subjectFactory();
       assert.deepEqual(files.findCaseFiles(), []);
-      assert.deepEqual(files.findFixtureDirectories(), []);
-      assert.deepEqual(files.listFiles('test/golden/x/fixtures/a'), []);
-      assert.equal(files.readFile('test/golden/x/fixtures/a/b.json'), undefined);
+      assert.deepEqual(files.findFixtureEntries(), []);
+      assert.equal(files.readFile('test/golden/x/fixtures/a.fixture.json'), undefined);
     });
 
     it('writes a file under new parent directories and reads its exact bytes back', () => {
@@ -74,36 +73,27 @@ export function describeFixtureFileSystemConformance(name: string, subjectFactor
       ]);
     });
 
-    it('finds fixture directories, not files directly under fixtures/ or their subdirectories', () => {
+    it('finds every file and directory directly under a fixtures/ directory, and nothing below them', () => {
       const files = subjectFactory();
-      files.writeFile('test/golden/x/fixtures/b/runner/runner-journal.jsonl', bytesOf('{}\n'));
-      files.writeFile('test/golden/x/fixtures/a/inputs.json', bytesOf('{}\n'));
+      files.writeFile('test/golden/x/fixtures/b.fixture.json', bytesOf('{}\n'));
+      files.writeFile('test/golden/x/fixtures/a/runner/runner-journal.jsonl', bytesOf('{}\n'));
       files.writeFile('test/golden/y/z/fixtures/c/d.json', bytesOf('{}\n'));
-      files.writeFile('test/golden/x/fixtures/loose.json', bytesOf('{}\n'));
-      assert.deepEqual(files.findFixtureDirectories(), [
+      files.writeFile('test/golden/fixtures/root.fixture.json', bytesOf('{}\n'));
+      files.writeFile('test/golden/x/cases/a.case.ts', bytesOf('export default {};\n'));
+      files.writeFile('test/unit/fixtures/e.fixture.json', bytesOf('{}\n'));
+      assert.deepEqual(files.findFixtureEntries(), [
+        'test/golden/fixtures/root.fixture.json',
         'test/golden/x/fixtures/a',
-        'test/golden/x/fixtures/b',
+        'test/golden/x/fixtures/b.fixture.json',
         'test/golden/y/z/fixtures/c',
       ]);
     });
 
-    it('lists every file below a directory relative to it, sorted, excluding name-prefix siblings', () => {
-      const files = subjectFactory();
-      files.writeFile('test/golden/x/fixtures/a/trials/t/z.json', bytesOf('1'));
-      files.writeFile('test/golden/x/fixtures/a/admission/m.json', bytesOf('1'));
-      files.writeFile('test/golden/x/fixtures/ab/other.json', bytesOf('1'));
-      assert.deepEqual(files.listFiles('test/golden/x/fixtures/a'), ['admission/m.json', 'trials/t/z.json']);
-    });
-
-    it('deletes a file, ignores an absent one, and reads a directory as absent', () => {
+    it('reads a directory and an absent file as absent', () => {
       const files = subjectFactory();
       files.writeFile('test/golden/x/fixtures/a/b.json', bytesOf('1'));
-      files.writeFile('test/golden/x/fixtures/a/c.json', bytesOf('1'));
-      files.deleteFile('test/golden/x/fixtures/a/b.json');
-      files.deleteFile('test/golden/x/fixtures/a/never.json');
-      assert.equal(files.readFile('test/golden/x/fixtures/a/b.json'), undefined);
       assert.equal(files.readFile('test/golden/x/fixtures/a'), undefined);
-      assert.deepEqual(files.listFiles('test/golden/x/fixtures/a'), ['c.json']);
+      assert.equal(files.readFile('test/golden/x/fixtures/a/never.json'), undefined);
     });
   });
 }

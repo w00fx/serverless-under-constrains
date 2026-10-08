@@ -4,7 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -52,12 +52,14 @@ describe('generate-fixtures command line', () => {
       stdout: 'golden fixtures (check): 1 case(s), 0 problem(s)\n',
       stderr: '',
     });
-    writeFileSync(join(root, 'test/golden/cli/fixtures/cli-a/probe/inputs/payment.json'), '{}\n');
+    const fixtureFile = join(root, 'test/golden/cli/fixtures/cli-a.fixture.json');
+    const bundle = JSON.parse(readFileSync(fixtureFile, 'utf8')) as Record<string, readonly string[]>;
+    writeFileSync(fixtureFile, JSON.stringify({ ...bundle, 'probe/inputs/payment.json': ['{}', ''] }, null, 2) + '\n');
     const checked = await cli(['--check']);
     assert.equal(checked.code, 1);
     assert.equal(
       checked.stderr,
-      'test/golden/cli/fixtures/cli-a/probe/inputs/payment.json: different; expected the regenerated fixture bytes\n',
+      'test/golden/cli/fixtures/cli-a.fixture.json#probe/inputs/payment.json: different; expected the regenerated fixture bytes\n',
     );
   });
 

@@ -1,1 +1,0 @@
-{"account_allowlist":["012345678901"],"coordination_stack_id":"arn:aws:cloudformation:us-east-1:012345678901:stack/suc-study-1-coordination/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","coordination_table_arn":"arn:aws:dynamodb:us-east-1:012345678901:table/suc-study-1-coordination","expected_coordination_schema_version":1,"record_type":"environment_input","schema_version":1}

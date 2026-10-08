@@ -136,7 +136,7 @@ describe('observeSubject', () => {
     observeSubject({
       golden_case,
       case_file: '',
-      fixture_directory: '',
+      fixture_file: '',
       files: new Map([
         ['probe/journals/caller-journal.jsonl', encoder.encode(journal)],
         ['runner/runner-journal.jsonl', new Uint8Array()],
