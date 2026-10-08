@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/caller_invocation_started.schema.json",
+  "title": "caller_invocation_started (catalogue group B, row 19)",
+  "description": "Caller journal: one handler invocation began. Conventional and Durable callers record the SQS message id and ApproximateReceiveCount; the Durable caller also records its execution ARN and step attempt; the probe caller records neither. lambda_request_id cross-checks the runner probe_workload_invoked (BR-RUA-020, BR-RUA-024, BR-RUA-027 cardinality).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "enum": ["conventional_caller", "durable_caller"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "message_id": true,
+          "approximate_receive_count": true
+        },
+        "required": ["message_id", "approximate_receive_count"]
+      }
+    },
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "const": "durable_caller"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "durable_execution_arn": true
+        },
+        "required": ["durable_execution_arn"]
+      },
+      "else": {
+        "properties": {
+          "durable_execution_arn": false,
+          "step_attempt": false
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "const": "probe_caller"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "message_id": false,
+          "approximate_receive_count": false
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "caller_invocation_started"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["conventional_caller", "durable_caller", "probe_caller"]
+    },
+    "lambda_request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approximate_receive_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "durable_execution_arn": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "lambda_request_id"],
+  "additionalProperties": false
+}

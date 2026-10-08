@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/treatment_state_snapshot.schema.json",
+  "title": "treatment_state_snapshot (catalogue group B, row 61)",
+  "description": "state/treatment-state-snapshot.json: a strongly consistent read of the control treatment item after settlement (BR-RUA-025, BR-RUA-032). A CONTROL trial has no item. When present, the item carries exactly the identities its state has recorded: ARMED none; the transition to COMMITTED_WAITING records the attempt, provider request, provider call, transaction, commit and commit-event identities together (BR-RUA-025), TIMEOUT_SIGNALLED adds the controller signal and its caller timeout, TIMEOUT_OBSERVED the observation and RESPONSE_RELEASED the release. SAFETY_RELEASED keeps what was recorded before the release (none when released from ARMED) and never a response release; safety_release_cause appears only on SAFETY_RELEASED and may be absent there, because the provider treats a release without a cause as a cleanup release (refund-provider barrier-decision).",
+  "type": "object",
+  "$defs": {
+    "treatment_item": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "ARMED",
+            "COMMITTED_WAITING",
+            "TIMEOUT_SIGNALLED",
+            "TIMEOUT_OBSERVED",
+            "RESPONSE_RELEASED",
+            "SAFETY_RELEASED"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "targeted_attempt_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "provider_request_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "provider_call_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "provider_commit_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "provider_transaction_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "commit_event_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "signal_event_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "signal_caller_event_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "observed_event_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "release_event_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "safety_release_cause": {
+          "enum": ["SAFETY_DEADLINE", "CLEANUP_REQUEST"]
+        }
+      },
+      "required": ["state", "version"],
+      "dependentRequired": {
+        "targeted_attempt_id": [
+          "provider_request_id",
+          "provider_call_id",
+          "provider_commit_id",
+          "provider_transaction_id",
+          "commit_event_id"
+        ],
+        "provider_request_id": [
+          "targeted_attempt_id",
+          "provider_call_id",
+          "provider_commit_id",
+          "provider_transaction_id",
+          "commit_event_id"
+        ],
+        "provider_call_id": [
+          "targeted_attempt_id",
+          "provider_request_id",
+          "provider_commit_id",
+          "provider_transaction_id",
+          "commit_event_id"
+        ],
+        "provider_commit_id": [
+          "targeted_attempt_id",
+          "provider_request_id",
+          "provider_call_id",
+          "provider_transaction_id",
+          "commit_event_id"
+        ],
+        "provider_transaction_id": [
+          "targeted_attempt_id",
+          "provider_request_id",
+          "provider_call_id",
+          "provider_commit_id",
+          "commit_event_id"
+        ],
+        "commit_event_id": [
+          "targeted_attempt_id",
+          "provider_request_id",
+          "provider_call_id",
+          "provider_commit_id",
+          "provider_transaction_id"
+        ],
+        "signal_event_id": ["signal_caller_event_id", "provider_commit_id"],
+        "signal_caller_event_id": ["signal_event_id"],
+        "observed_event_id": ["signal_event_id"],
+        "release_event_id": ["observed_event_id"]
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "const": "ARMED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targeted_attempt_id": false,
+              "provider_request_id": false,
+              "provider_call_id": false,
+              "provider_commit_id": false,
+              "provider_transaction_id": false,
+              "commit_event_id": false,
+              "signal_event_id": false,
+              "signal_caller_event_id": false,
+              "observed_event_id": false,
+              "release_event_id": false,
+              "safety_release_cause": false
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "enum": ["COMMITTED_WAITING", "TIMEOUT_SIGNALLED", "TIMEOUT_OBSERVED", "RESPONSE_RELEASED"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "safety_release_cause": false
+            },
+            "required": [
+              "targeted_attempt_id",
+              "provider_request_id",
+              "provider_call_id",
+              "provider_commit_id",
+              "provider_transaction_id",
+              "commit_event_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "const": "COMMITTED_WAITING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signal_event_id": false,
+              "signal_caller_event_id": false,
+              "observed_event_id": false,
+              "release_event_id": false
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "const": "TIMEOUT_SIGNALLED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed_event_id": false,
+              "release_event_id": false
+            },
+            "required": ["signal_event_id", "signal_caller_event_id"]
+          }
+        },
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "const": "TIMEOUT_OBSERVED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "release_event_id": false
+            },
+            "required": ["signal_event_id", "signal_caller_event_id", "observed_event_id"]
+          }
+        },
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "const": "RESPONSE_RELEASED"
+              }
+            }
+          },
+          "then": {
+            "required": ["signal_event_id", "signal_caller_event_id", "observed_event_id", "release_event_id"]
+          }
+        },
+        {
+          "if": {
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "const": "SAFETY_RELEASED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "release_event_id": false
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    },
+    {
+      "if": {
+        "required": ["item_present"],
+        "properties": {
+          "item_present": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "treatment": true
+        },
+        "required": ["treatment"]
+      },
+      "else": {
+        "properties": {
+          "treatment": false
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "treatment_state_snapshot"
+    },
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "trial_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "partition_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "captured_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "consistent_read": {
+      "type": "boolean"
+    },
+    "item_present": {
+      "type": "boolean"
+    },
+    "treatment": {
+      "$ref": "#/$defs/treatment_item"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "partition_key",
+    "captured_at",
+    "consistent_read",
+    "item_present"
+  ],
+  "dependentRequired": {
+    "trial_id": ["trial_manifest_sha256"],
+    "trial_manifest_sha256": ["trial_id"]
+  },
+  "additionalProperties": false
+}

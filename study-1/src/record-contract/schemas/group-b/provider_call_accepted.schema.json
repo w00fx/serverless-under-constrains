@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/provider_call_accepted.schema.json",
+  "title": "provider_call_accepted (catalogue group B, row 31)",
+  "description": "Provider journal: the call passed every acceptance check; the normalized caller identities it will commit with (BR-RUA-018, BR-RUA-027 cardinality).",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "provider_call_accepted"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["refund_provider"]
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "caller_id": {
+      "enum": ["conventional", "durable", "probe"]
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "payment_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "amount_minor": {
+      "$ref": "_defs.schema.json#/$defs/amount_minor"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "provider_call_id",
+    "caller_id",
+    "attempt_id",
+    "provider_request_id",
+    "refund_request_id",
+    "payment_id",
+    "amount_minor",
+    "currency"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/durable_execution_metadata.schema.json",
+  "title": "durable_execution_metadata (catalogue group B, row 62)",
+  "description": "execution-metadata/durable-executions.json (Durable trials only): every durable execution of the caller version started after publication, from ListDurableExecutionsByFunction, GetDurableExecution and GetDurableExecutionHistory (BR-RUA-037, BR-RUA-020). History event types keep the service spelling. history_event_id is the service's integer history EventId, named apart from the study's UUIDv4 event_id (BR-RUA-033).",
+  "type": "object",
+  "$defs": {
+    "history_event": {
+      "type": "object",
+      "properties": {
+        "history_event_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "event_type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z]*$"
+        },
+        "event_timestamp": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "next_attempt_delay_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["event_type", "event_timestamp"],
+      "additionalProperties": false
+    },
+    "durable_execution": {
+      "type": "object",
+      "properties": {
+        "durable_execution_arn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "durable_execution_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": ["RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "STOPPED"]
+        },
+        "started_at": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "ended_at": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "history_complete": {
+          "type": "boolean"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/history_event"
+          }
+        }
+      },
+      "required": [
+        "durable_execution_arn",
+        "durable_execution_name",
+        "status",
+        "started_at",
+        "history_complete",
+        "history"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "durable_execution_metadata"
+    },
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "trial_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "function_arn": {
+      "type": "string",
+      "minLength": 1
+    },
+    "qualifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "captured_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "started_after": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "list_complete": {
+      "type": "boolean"
+    },
+    "executions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/durable_execution"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "trial_id",
+    "trial_manifest_sha256",
+    "function_arn",
+    "qualifier",
+    "captured_at",
+    "started_after",
+    "list_complete",
+    "executions"
+  ],
+  "additionalProperties": false
+}

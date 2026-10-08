@@ -1,0 +1,80 @@
+{
+  "$comment": "Design §5.4: a module imports only from strictly lower layers plus the declared same-layer edges (the event-journal -> durable-store type-only edge is Owner amendment A-01). Checked by tools/check-module-boundaries.ts in npm run lint.",
+  "layers": {
+    "record-contract": 0,
+    "durable-store": 1,
+    "event-journal": 1,
+    "attempt-lifecycle": 1,
+    "settlement": 1,
+    "provider-client": 2,
+    "refund-provider": 2,
+    "treatment-controller": 2,
+    "trial-message": 2,
+    "evidence-ingestion": 2,
+    "evidence-package": 2,
+    "coordination-lease": 2,
+    "cleanup": 2,
+    "billing-amendment": 2,
+    "safety": 2,
+    "evidence-collection": 2,
+    "transport-probe-caller": 3,
+    "conventional-variant": 3,
+    "durable-variant": 3,
+    "treatment-fidelity": 3,
+    "trial-oracle": 3,
+    "transport-qualification": 3,
+    "study-comparison": 4,
+    "variant-validation": 4,
+    "admission": 4,
+    "deployment-assembly": 4,
+    "trial-execution": 5,
+    "execution-lifecycle": 6,
+    "operator-cli": 7
+  },
+  "same_layer_edges": [
+    { "from": "durable-variant", "to": "conventional-variant", "paths": ["request-state/"] },
+    { "from": "transport-qualification", "to": "treatment-fidelity" },
+    { "from": "trial-oracle", "to": "treatment-fidelity" },
+    { "from": "admission", "to": "deployment-assembly", "type_only": true },
+    { "from": "event-journal", "to": "durable-store", "type_only": true }
+  ],
+  "denied_imports": [
+    {
+      "features": [
+        "trial-oracle",
+        "evidence-ingestion",
+        "treatment-fidelity",
+        "settlement",
+        "study-comparison",
+        "variant-validation"
+      ],
+      "specifiers": ["fs", "fs/promises", "child_process"],
+      "specifier_prefixes": ["node:fs", "node:child_process", "@aws-sdk/"],
+      "path_segments": ["/aws/", "/node/"]
+    },
+    {
+      "features": ["trial-oracle"],
+      "specifiers": [],
+      "specifier_prefixes": ["node:"],
+      "path_segments": []
+    }
+  ],
+  "denied_feature_imports": [
+    {
+      "features": ["conventional-variant", "durable-variant", "transport-probe-caller"],
+      "targets": ["evidence-collection", "refund-provider", "treatment-controller"]
+    }
+  ],
+  "denied_tokens": [
+    {
+      "features": ["conventional-variant", "durable-variant", "transport-probe-caller"],
+      "tokens": ["'ledger'", "\"ledger\"", "'control'", "\"control\"", "'experiment_journal'", "\"experiment_journal\""]
+    },
+    {
+      "features": ["refund-provider"],
+      "tokens": ["ApprovedDecision", "approved_decision"]
+    }
+  ],
+  "infra_may_import": ["record-contract"],
+  "src_may_import_infra": ["infra/ownership/"]
+}

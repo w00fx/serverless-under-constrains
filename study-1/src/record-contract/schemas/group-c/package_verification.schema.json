@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/package_verification.schema.json",
+  "title": "package_verification (catalogue group C, row 80)",
+  "description": "evidence/verifications/<execution_id>/<evaluated_at>-<kind>.json, never inside a package (BR-RUA-044, AC-RUA-022; design §8.16, D-12): eligibility of the original package and the selected amendment chain. eligible exactly when there is no reason, each reason carrying a package-ineligibility code; no selected head means no selected chain; an eligible verification with a selected head lists the chain from sequence 1 to that head, while an ineligible one (for example UNKNOWN_HEAD, design §8.16 step 6) may carry the requested head with an empty or partial chain. Eligibility proves faithful structure and integrity, never scientific or operational success.",
+  "type": "object",
+  "$defs": {
+    "amendment_link": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "amendment_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "amendment_kind": {
+          "enum": ["LATE_EVIDENCE", "OPERATIONAL_RECOVERY", "BILLING", "REASSESSMENT"]
+        },
+        "amendment_index_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["sequence", "amendment_id", "amendment_kind", "amendment_index_sha256"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    },
+    {
+      "if": {
+        "properties": {
+          "package_eligibility": {
+            "const": "eligible"
+          }
+        },
+        "required": ["package_eligibility"]
+      },
+      "then": {
+        "properties": {
+          "package_ineligibility_reasons": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "package_ineligibility_reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_amendment_head_sha256": {
+            "const": null
+          }
+        },
+        "required": ["selected_amendment_head_sha256"]
+      },
+      "then": {
+        "properties": {
+          "selected_chain": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "package_eligibility": {
+            "const": "eligible"
+          },
+          "selected_amendment_head_sha256": {
+            "type": "string"
+          }
+        },
+        "required": ["package_eligibility", "selected_amendment_head_sha256"]
+      },
+      "then": {
+        "properties": {
+          "selected_chain": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "package_verification"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "package_eligibility": {
+      "enum": ["eligible", "ineligible"]
+    },
+    "package_ineligibility_reasons": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "_defs.schema.json#/$defs/structured_reason"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "code": {
+                "enum": [
+                  "INDEX_MISSING",
+                  "ALTERED_BYTES",
+                  "UNINDEXED_FILE",
+                  "UNRESOLVED_REFERENCE",
+                  "NON_TERMINAL_STATUS",
+                  "BROKEN_PARENT",
+                  "SEQUENCE_GAP",
+                  "CYCLE",
+                  "UNKNOWN_HEAD",
+                  "UNSELECTED_DESCENDANT",
+                  "CONTRADICTORY_CHAIN"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "original_package_index_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "selected_amendment_head_sha256": {
+      "oneOf": [
+        {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "selected_chain": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/amendment_link"
+      }
+    },
+    "known_descendants": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/amendment_link"
+      }
+    },
+    "evaluated_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "package_eligibility",
+    "package_ineligibility_reasons",
+    "original_package_index_sha256",
+    "selected_amendment_head_sha256",
+    "selected_chain",
+    "known_descendants",
+    "evaluated_at"
+  ],
+  "additionalProperties": false
+}

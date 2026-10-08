@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/oracle_result.schema.json",
+  "$comment": "Kernel test fixture: a reduced record carrying the shared evidence_refs and structured_reasons at top level so the kernel can exercise them; it is not the CTR-RUA-001 shape, which the WP-03 catalogue schema defines.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "oracle_result" },
+    "result": { "enum": ["pass", "fail", "indeterminate", "not_applicable"] },
+    "evidence_refs": { "$ref": "_defs.schema.json#/$defs/evidence_refs" },
+    "reasons": { "$ref": "_defs.schema.json#/$defs/structured_reasons" }
+  },
+  "required": ["schema_version", "record_type", "result", "evidence_refs", "reasons"],
+  "additionalProperties": false
+}

@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/late_evidence_assessment.schema.json",
+  "title": "late_evidence_assessment (catalogue group C, row 78)",
+  "description": "late-evidence/late-evidence-assessment.json, frozen at cleanup step 2 (BR-RUA-043; design §8.13, D-16): each frozen result reassessed with the late records, compared on its verdict projection. unverified exactly when monitoring was shortened, skipped or failed, with its reasons; none means zero correlated late records and consistent or contradictory at least one; contradictory needs a reassessment that changed; a skipped monitoring has no monitoring times. The frozen results and digests are never touched.",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "artifact_path": {
+          "$ref": "_defs.schema.json#/$defs/package_relative_path"
+        },
+        "artifact_sha256": {
+          "$ref": "_defs.schema.json#/$defs/sha256"
+        }
+      },
+      "required": ["artifact_path", "artifact_sha256"],
+      "additionalProperties": false
+    },
+    "projection_change": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "allOf": [
+            {
+              "$ref": "_defs.schema.json#/$defs/json_pointer"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "frozen": true,
+        "reassessed": true
+      },
+      "required": ["field", "frozen", "reassessed"],
+      "additionalProperties": false
+    },
+    "reassessment": {
+      "type": "object",
+      "properties": {
+        "frozen_result_ref": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "trial_id": {
+          "$ref": "_defs.schema.json#/$defs/uuid4"
+        },
+        "status": {
+          "enum": ["none", "consistent", "contradictory", "unverified"]
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/projection_change"
+          }
+        }
+      },
+      "required": ["frozen_result_ref", "status", "changes"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "contradictory"
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "changes": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": ["none", "consistent"]
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "changes": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/execution_identity"
+    },
+    {
+      "if": {
+        "properties": {
+          "monitoring": {
+            "const": "complete"
+          }
+        },
+        "required": ["monitoring"]
+      },
+      "then": {
+        "properties": {
+          "monitoring_started_at": true,
+          "monitoring_ended_at": true,
+          "late_evidence_status": {
+            "enum": ["none", "consistent", "contradictory"]
+          }
+        },
+        "required": ["monitoring_started_at", "monitoring_ended_at"]
+      },
+      "else": {
+        "properties": {
+          "late_evidence_status": {
+            "const": "unverified"
+          },
+          "reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "monitoring": {
+            "const": "skipped"
+          }
+        },
+        "required": ["monitoring"]
+      },
+      "then": {
+        "properties": {
+          "monitoring_started_at": false,
+          "monitoring_ended_at": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "late_evidence_status": {
+            "const": "none"
+          }
+        },
+        "required": ["late_evidence_status"]
+      },
+      "then": {
+        "properties": {
+          "correlated_record_count": {
+            "const": 0
+          },
+          "reassessments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "late_evidence_status": {
+            "const": "consistent"
+          }
+        },
+        "required": ["late_evidence_status"]
+      },
+      "then": {
+        "properties": {
+          "reassessments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": ["none", "consistent"]
+                }
+              }
+            }
+          },
+          "correlated_record_count": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "late_evidence_status": {
+            "const": "contradictory"
+          }
+        },
+        "required": ["late_evidence_status"]
+      },
+      "then": {
+        "properties": {
+          "reassessments": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "const": "contradictory"
+                }
+              },
+              "required": ["status"]
+            }
+          },
+          "correlated_record_count": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "late_evidence_assessment"
+    },
+    "run_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "variant_validation_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "transport_probe_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "trial_id": false,
+    "trial_manifest_sha256": false,
+    "execution_manifest_sha256": {
+      "$ref": "_defs.schema.json#/$defs/sha256"
+    },
+    "late_evidence_status": {
+      "enum": ["none", "consistent", "contradictory", "unverified"]
+    },
+    "monitoring": {
+      "enum": ["complete", "shortened", "skipped", "failed"]
+    },
+    "monitoring_started_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "monitoring_ended_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "correlated_record_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "reassessments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reassessment"
+      }
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "evidence_refs": {
+      "$ref": "_defs.schema.json#/$defs/evidence_refs"
+    },
+    "assessed_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "execution_manifest_sha256",
+    "late_evidence_status",
+    "monitoring",
+    "correlated_record_count",
+    "reassessments",
+    "reasons",
+    "evidence_refs",
+    "assessed_at"
+  ],
+  "dependentRequired": {
+    "monitoring_ended_at": ["monitoring_started_at"]
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/dispatch_started.schema.json",
+  "$comment": "Kernel test fixture composing the event envelope; not the WP-02 catalogue schema. It closes the root with additionalProperties: false and declares the envelope members itself, as design section 6 and Owner amendment A-07 require of every record schema.",
+  "type": "object",
+  "allOf": [{ "$ref": "_defs.schema.json#/$defs/event_envelope" }],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "record_type": { "const": "dispatch_started" },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "attempt_id": { "$ref": "_defs.schema.json#/$defs/uuid4" }
+  },
+  "required": ["schema_version", "record_type", "attempt_id"],
+  "additionalProperties": false
+}

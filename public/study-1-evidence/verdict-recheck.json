@@ -1,0 +1,118 @@
+[
+  {
+    "trial_id": "2c1a67fd-3a63-4028-ab2c-61ded755769f",
+    "scenario": "COMMIT_THEN_TIMEOUT",
+    "variant_id": "conventional",
+    "ledger_path": "runs/abf41ffd-3008-4b29-81ee-b65d8095188b/trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/ledger/ledger-snapshot.json",
+    "original_ledger_sha256": "e7d65aa99be0af293200839bb6fd6fba973a7df7b048acafef7620513a445837",
+    "redacted_ledger_sha256": "e7d65aa99be0af293200839bb6fd6fba973a7df7b048acafef7620513a445837",
+    "rules": [
+      {
+        "rule_id": "BR-RUA-001",
+        "redacted_ledger": "fail",
+        "oracle_result": "fail"
+      },
+      {
+        "rule_id": "BR-RUA-002",
+        "redacted_ledger": "fail",
+        "oracle_result": "fail"
+      },
+      {
+        "rule_id": "BR-RUA-009",
+        "redacted_ledger": "fail",
+        "oracle_result": "fail"
+      }
+    ],
+    "preservation_verdict": {
+      "redacted_ledger": "fail",
+      "oracle_result": "fail"
+    }
+  },
+  {
+    "trial_id": "5a9bbf55-54bf-4ea8-ab29-f5a83b57a288",
+    "scenario": "CONTROL",
+    "variant_id": "durable",
+    "ledger_path": "runs/abf41ffd-3008-4b29-81ee-b65d8095188b/trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/ledger/ledger-snapshot.json",
+    "original_ledger_sha256": "abf31acf2130824f170ecb74b764a652520354558c6dd8e4ef7e17b9afe73705",
+    "redacted_ledger_sha256": "abf31acf2130824f170ecb74b764a652520354558c6dd8e4ef7e17b9afe73705",
+    "rules": [
+      {
+        "rule_id": "BR-RUA-001",
+        "redacted_ledger": "pass",
+        "oracle_result": "pass"
+      },
+      {
+        "rule_id": "BR-RUA-002",
+        "redacted_ledger": "pass",
+        "oracle_result": "pass"
+      },
+      {
+        "rule_id": "BR-RUA-009",
+        "redacted_ledger": "pass",
+        "oracle_result": "pass"
+      }
+    ],
+    "preservation_verdict": {
+      "redacted_ledger": "pass",
+      "oracle_result": "pass"
+    }
+  },
+  {
+    "trial_id": "7fd96973-1eed-4982-8a4e-b654680ce404",
+    "scenario": "CONTROL",
+    "variant_id": "conventional",
+    "ledger_path": "runs/abf41ffd-3008-4b29-81ee-b65d8095188b/trials/7fd96973-1eed-4982-8a4e-b654680ce404/ledger/ledger-snapshot.json",
+    "original_ledger_sha256": "0b684b26d709fe6a874e1e438e863295343c0f031f87dcf466e0b82a0cd9a75a",
+    "redacted_ledger_sha256": "0b684b26d709fe6a874e1e438e863295343c0f031f87dcf466e0b82a0cd9a75a",
+    "rules": [
+      {
+        "rule_id": "BR-RUA-001",
+        "redacted_ledger": "pass",
+        "oracle_result": "pass"
+      },
+      {
+        "rule_id": "BR-RUA-002",
+        "redacted_ledger": "pass",
+        "oracle_result": "pass"
+      },
+      {
+        "rule_id": "BR-RUA-009",
+        "redacted_ledger": "pass",
+        "oracle_result": "pass"
+      }
+    ],
+    "preservation_verdict": {
+      "redacted_ledger": "pass",
+      "oracle_result": "pass"
+    }
+  },
+  {
+    "trial_id": "d16f2b2c-22fe-477a-b974-a6f63d19726f",
+    "scenario": "COMMIT_THEN_TIMEOUT",
+    "variant_id": "durable",
+    "ledger_path": "runs/abf41ffd-3008-4b29-81ee-b65d8095188b/trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/ledger/ledger-snapshot.json",
+    "original_ledger_sha256": "747bcfff5ab4ce136942f63791039d78b3f4e025a2bc48776f12f886ef8c2333",
+    "redacted_ledger_sha256": "747bcfff5ab4ce136942f63791039d78b3f4e025a2bc48776f12f886ef8c2333",
+    "rules": [
+      {
+        "rule_id": "BR-RUA-001",
+        "redacted_ledger": "fail",
+        "oracle_result": "fail"
+      },
+      {
+        "rule_id": "BR-RUA-002",
+        "redacted_ledger": "fail",
+        "oracle_result": "fail"
+      },
+      {
+        "rule_id": "BR-RUA-009",
+        "redacted_ledger": "fail",
+        "oracle_result": "fail"
+      }
+    ],
+    "preservation_verdict": {
+      "redacted_ledger": "fail",
+      "oracle_result": "fail"
+    }
+  }
+]

@@ -4,7 +4,7 @@ Status: Project charter v0.2
 Date: August 27, 2026
 First deliverable: Study 1, refunds under ambiguous outcomes
 
-Primary specification: [Study 1: Evaluate Refund-Invariant Preservation Under Ambiguous Outcomes](study-1/specs/refund-under-ambiguous-outcome.md)
+Primary specification: [Study 1: Evaluate Refund-Invariant Preservation Under Ambiguous Outcomes](study-1/specs/rua/refund-under-ambiguous-outcome.md)
 
 This charter states the lab's purpose, vocabulary, safety posture, and Study 1 delivery sequence. Protocol rules, acceptance criteria, numeric fixtures, and milestone gates live only in the specification and the Study 1 architecture decisions.
 
@@ -159,11 +159,11 @@ Initial commit layout:
 
 ```text
 .
-├── AGENTS.md
+├── CLAUDE.md
 ├── PROJECT.md
 ├── README.md
 └── study-1/
-    ├── AGENTS.md
+    ├── CLAUDE.md
     ├── architecture/
     │   └── decisions/
     └── specs/
@@ -186,18 +186,6 @@ Before provisioning resources, execution must:
 Every deployment needs idempotent cleanup in a construct equivalent to `finally`. The leak audit searches for resources by run tags. The project does not run against production or move real money.
 
 Baseline coordination is operator-managed infrastructure, not a run-owned resource. Probes and runs may verify and use its frozen identity; they do not bootstrap, migrate, or destroy it as part of trial cleanup.
-
-## Delivery Sequence
-
-Study 1 uses the specification's M0 through M4 sequence. Checkpoint names below are labels only; completion criteria remain in the specification.
-
-- **M0** — protocol foundation and treatment-transport qualification, with internal checkpoints M0-A through M0-D.
-- **M1** — offline oracle and canonical study contracts from immutable synthetic evidence.
-- **M2** — conventional variant vertical validation.
-- **M3** — Durable variant vertical validation.
-- **M4** — canonical four-cell study run.
-
-This charter does not mark any milestone complete. Current code status belongs in [README.md](README.md).
 
 ## Operator Inputs Versus Open Questions
 

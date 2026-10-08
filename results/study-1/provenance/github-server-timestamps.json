@@ -1,0 +1,731 @@
+{
+  "record_type": "github_server_timestamps",
+  "derived_by": "results/study-1/provenance/collect-github-timestamps.sh",
+  "collected_at": "2026-10-07T19:37:59Z",
+  "repository": "w00fx/serverless-under-constrains",
+  "oracle_commits_selector": "git log 694d4c9 -- study-1/src/trial-oracle study-1/src/evidence-ingestion study-1/src/attempt-lifecycle study-1/test/golden study-1/tools/golden study-1/specs",
+  "first_cloud_evidence": {
+    "path": "public/study-1-evidence/transport-probes/4f4a29c7-a8ee-4d30-ac2a-5cc5be9f2ce5/admission/execution-manifest.json",
+    "sha256": "741f49e1cbfcb036fcd254339134e5d6a20207330c70580683d3372ba1081efc",
+    "frozen_at": "2026-10-07T03:46:47.845Z",
+    "note": "frozen_at is the operator machine clock, recorded in the frozen probe package."
+  },
+  "summary": {
+    "oracle_commits": 44,
+    "with_actions_runs": 0,
+    "with_check_runs": 0,
+    "with_commit_statuses": 0,
+    "first_pushed_before_first_cloud_evidence": 1,
+    "first_pushed_after_first_cloud_evidence": 43,
+    "never_pushed": 0,
+    "by_first_push": [
+      {
+        "push": {
+          "id": 45506551740,
+          "timestamp": "2026-10-05T13:08:54Z",
+          "ref": "refs/heads/main",
+          "after": "e69ac8b33774380605ffecc74288416ec0e0d7b0"
+        },
+        "commits": 1
+      },
+      {
+        "push": {
+          "id": 45701888438,
+          "timestamp": "2026-10-07T06:44:19Z",
+          "ref": "refs/heads/feature/rua-study-1",
+          "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+        },
+        "commits": 43
+      }
+    ]
+  },
+  "repository_record": {
+    "created_at": "2026-10-05T13:08:38Z",
+    "pushed_at": "2026-10-07T06:44:19Z",
+    "default_branch": "main"
+  },
+  "repository_actions_runs": {
+    "total_count": 0,
+    "workflow_runs": []
+  },
+  "push_activity": [
+    {
+      "id": 45701888438,
+      "timestamp": "2026-10-07T06:44:19Z",
+      "activity_type": "branch_creation",
+      "ref": "refs/heads/feature/rua-study-1",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60",
+      "actor": "w00fx"
+    },
+    {
+      "id": 45506551740,
+      "timestamp": "2026-10-05T13:08:54Z",
+      "activity_type": "branch_creation",
+      "ref": "refs/heads/main",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "e69ac8b33774380605ffecc74288416ec0e0d7b0",
+      "actor": "w00fx"
+    }
+  ],
+  "events": [
+    {
+      "id": "23252679406",
+      "type": "CreateEvent",
+      "created_at": "2026-10-07T06:44:20Z",
+      "actor": "w00fx",
+      "ref": "feature/rua-study-1",
+      "ref_type": "branch",
+      "action": null,
+      "pull_request_head_sha": null
+    },
+    {
+      "id": "16615719661",
+      "type": "IssueCommentEvent",
+      "created_at": "2026-10-07T06:45:19Z",
+      "actor": "coderabbitai[bot]",
+      "ref": null,
+      "ref_type": null,
+      "action": "created",
+      "pull_request_head_sha": null
+    },
+    {
+      "id": "16613715141",
+      "type": "PullRequestEvent",
+      "created_at": "2026-10-07T06:44:40Z",
+      "actor": "w00fx",
+      "ref": null,
+      "ref_type": null,
+      "action": "opened",
+      "pull_request_head_sha": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+    },
+    {
+      "id": "23062303628",
+      "type": "CreateEvent",
+      "created_at": "2026-10-05T13:08:55Z",
+      "actor": "w00fx",
+      "ref": "main",
+      "ref_type": "branch",
+      "action": null,
+      "pull_request_head_sha": null
+    }
+  ],
+  "oracle_commits": [
+    {
+      "sha": "7116fe7c0a734dd7601081a8980e6176f8fcf493",
+      "subject": "fix: restore the strict golden orphan-fixture check",
+      "committer_date_set_by_committer": "2026-10-06T08:42:25-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "5f7e7d8912cb8417225433367df49a75e4cdb15f",
+      "subject": "fix: apply WP-15 single-pass review",
+      "committer_date_set_by_committer": "2026-10-06T08:29:14-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "7a3f07a96633053ea0f347221c9be6bb2791c52d",
+      "subject": "fix: apply WP-14 single-pass review",
+      "committer_date_set_by_committer": "2026-10-06T08:29:09-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "004bf10da25e962ba859c2129def7c06c043b99a",
+      "subject": "fix: apply WP-10 single-pass review",
+      "committer_date_set_by_committer": "2026-10-06T08:29:04-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "42a54e4bc653927011f5e0d022f3485c94c030c0",
+      "subject": "fix: apply WP-16 single-pass review",
+      "committer_date_set_by_committer": "2026-10-06T08:28:49-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "6d66b35b070e35aea3d95a7ed84c3e1d5d886f48",
+      "subject": "fix: apply WP-12 single-pass review",
+      "committer_date_set_by_committer": "2026-10-06T08:28:44-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "e5c1f959dfef760efef62795f9423febd5cf87e9",
+      "subject": "fix: apply WP-13 single-pass review",
+      "committer_date_set_by_committer": "2026-10-06T08:28:33-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "a1bf91e7bb9b2783c267f931d704b70c1daeea51",
+      "subject": "fix: order fixture observations consistently over hostile values",
+      "committer_date_set_by_committer": "2026-10-06T08:21:51-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "0145ac211be7c528a0aece7743b926402367f988",
+      "subject": "fix: keep golden builder messages total and bounded (A-05)",
+      "committer_date_set_by_committer": "2026-10-06T08:21:46-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "2757e785129c28ef1246ce782047e1d37269dd64",
+      "subject": "fix: let the golden generator skip hand-authored fixtures",
+      "committer_date_set_by_committer": "2026-10-06T08:21:33-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "680d2a3b33c770bb76c85e268f249a4ee4e55050",
+      "subject": "test: assert late stream preservation in AC-RUA-030 goldens",
+      "committer_date_set_by_committer": "2026-10-06T08:10:19-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "bd291a947959c78226061191dd74d96c7360c942",
+      "subject": "fix: reject corrupt carried late records as unverifiable",
+      "committer_date_set_by_committer": "2026-10-06T08:08:11-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "6d9579cf64a06f5f3b25b4d90f1b80b8ad8754e5",
+      "subject": "fix: refuse late reassessment when frozen evidence differs",
+      "committer_date_set_by_committer": "2026-10-06T08:06:56-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "b56f201cc2d3c82849eaeef8b34c66943d695ddc",
+      "subject": "fix: keep whole late problem details and share violation quoting",
+      "committer_date_set_by_committer": "2026-10-06T08:05:54-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "9694337bc1f2ddc787d97a7d42fcad9b7eed4034",
+      "subject": "fix: bound and name the values that gate reasons quote",
+      "committer_date_set_by_committer": "2026-10-06T08:01:48-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "31229ad1732440eafa43735d7f541cebb405c358",
+      "subject": "fix: judge only subject evidence in identity and G8 gates",
+      "committer_date_set_by_committer": "2026-10-06T08:01:25-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "93bda12cf1eff2f8dac08b4c84800c1363587b17",
+      "subject": "fix: reject inherited members when filling correlation",
+      "committer_date_set_by_committer": "2026-10-06T08:01:25-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "844233a8f069c598d872ff4c83c4f3a95bb3ff67",
+      "subject": "test: assert declared outcomes in probe verdict goldens",
+      "committer_date_set_by_committer": "2026-10-06T07:54:48-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "abcb4188428272d9be872122f8dc9d9f6e16996b",
+      "subject": "test: use spec deployment values in study-comparison goldens",
+      "committer_date_set_by_committer": "2026-10-06T07:51:38-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "66a79fa0c6ea11242183114dad411030c3526be7",
+      "subject": "fix: generate AC-010 golden fixtures from case files",
+      "committer_date_set_by_committer": "2026-10-06T07:51:12-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "2541f7b189d55de9adff83bf0372fe4aa83f4fd0",
+      "subject": "fix: judge BR-RUA-004 states at or after the first ambiguity",
+      "committer_date_set_by_committer": "2026-10-06T07:51:04-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "d7bedc732abb2bcda679117809738a438517cb61",
+      "subject": "test: check frozen oracle results against the trial oracle",
+      "committer_date_set_by_committer": "2026-10-06T07:46:49-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "cce0603e0aa5cdc1d207877c2f1c10e74c3cecfb",
+      "subject": "fix: align study-comparison golden oracle results with BR-RUA-030",
+      "committer_date_set_by_committer": "2026-10-06T07:46:48-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "8e1424cedf7e867aa3f96f43af8069942b9a231b",
+      "subject": "test: add integrity, verdict-matrix and rule-coverage goldens",
+      "committer_date_set_by_committer": "2026-10-06T07:20:30-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "d399aa5007cd31afe51d9ebfc8f6bc3951acf6fc",
+      "subject": "feat: assess late evidence against frozen trial results",
+      "committer_date_set_by_committer": "2026-10-06T06:50:21-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "716515ac6b8d7634cc3241e900e097aa9d3c526a",
+      "subject": "test: add the trial oracle core golden cases",
+      "committer_date_set_by_committer": "2026-10-06T06:05:06-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "c5c0796c6e2699f7ade3ba28bf9a455bf6c097b5",
+      "subject": "feat: add the trial oracle core and attempt projection",
+      "committer_date_set_by_committer": "2026-10-06T06:05:06-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "961ea18f5cd5e417f6664132ad19e440ef58e50c",
+      "subject": "feat: integrate WP-10 treatment fidelity and probe verdict",
+      "committer_date_set_by_committer": "2026-10-06T04:45:47-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "7141c1c1342552f4de83b9a8f6fc70ece32e076a",
+      "subject": "test: add probe verdict and usability goldens",
+      "committer_date_set_by_committer": "2026-10-06T04:43:32-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "3bfbcb53e43f4a40e5ad9233c6a4b91c605205e6",
+      "subject": "feat: integrate WP-16 study comparison and run summary",
+      "committer_date_set_by_committer": "2026-10-06T03:36:25-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "d0074843d5a875c5c8bb5a2070776526406f9da1",
+      "subject": "feat: integrate WP-12 evidence ingestion",
+      "committer_date_set_by_committer": "2026-10-06T03:23:32-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "375d21068d940ed8c4d26bbfc7d45a1cc5f67a58",
+      "subject": "test: add AC-RUA-047 duplicate and conflict golden cases",
+      "committer_date_set_by_committer": "2026-10-06T03:19:51-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "fbe0d9452cdb26f086a527be3b77dfb2545eb583",
+      "subject": "feat: add evidence ingestion pipeline and gates",
+      "committer_date_set_by_committer": "2026-10-06T03:19:50-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "ed5215429597db30c1a82bd7a466189d50a5a4ee",
+      "subject": "test: split golden support and add billing amendments",
+      "committer_date_set_by_committer": "2026-10-06T03:12:15-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "0a6cfab727969dcd43f54841fdb69fe50bd38b92",
+      "subject": "test: add study-comparison golden cases for AC-009/012/027/038/050",
+      "committer_date_set_by_committer": "2026-10-06T03:11:49-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "e0dd87c6c0550df36aad00ffa445af452317a9d7",
+      "subject": "test: add variant validation goldens for AC-025/026/035/036/037",
+      "committer_date_set_by_committer": "2026-10-06T02:56:35-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "0721db7b6588516be6c604fe1ba07582ec9343f6",
+      "subject": "feat: integrate WP-09 golden harness and fixture generator",
+      "committer_date_set_by_committer": "2026-10-06T02:23:44-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "9c5de9f033b2c10a208abfda2cd03d22e64b5193",
+      "subject": "test: add golden harness and the nine base fixtures",
+      "committer_date_set_by_committer": "2026-10-06T02:16:37-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "869268d6d0184910820ed9deb98dce54879883fb",
+      "subject": "feat: add golden fixture generator with check mode",
+      "committer_date_set_by_committer": "2026-10-06T02:16:36-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "d24f678353571d9f9b0c9de840987d7b08bc3c61",
+      "subject": "test: cover evidence package indexes, verifier and parsers",
+      "committer_date_set_by_committer": "2026-10-06T01:58:00-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "f14fd7a12a9b930d732f15ea88991501382b947f",
+      "subject": "fix: align outcome and terminality rules with BR-RUA-021/024",
+      "committer_date_set_by_committer": "2026-10-05T21:30:49-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "817b749eaaa90fb1859c6fd1dcbd10e2bebb8476",
+      "subject": "feat: add attempt lifecycle state models",
+      "committer_date_set_by_committer": "2026-10-05T18:46:22-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "d08676a9ed0577b1bdf2488fd9933542b2ba739d",
+      "subject": "chore: migrate harness to Claude and spec to typed IDs",
+      "committer_date_set_by_committer": "2026-10-05T15:22:12-03:00",
+      "first_push_containing_it": {
+        "id": 45701888438,
+        "timestamp": "2026-10-07T06:44:19Z",
+        "ref": "refs/heads/feature/rua-study-1",
+        "after": "9a8f08a6d2b49eb0942621f9eb5f9b3a3e832c60"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    },
+    {
+      "sha": "e69ac8b33774380605ffecc74288416ec0e0d7b0",
+      "subject": "docs: initialize serverless research project",
+      "committer_date_set_by_committer": "2026-08-28T21:30:36-03:00",
+      "first_push_containing_it": {
+        "id": 45506551740,
+        "timestamp": "2026-10-05T13:08:54Z",
+        "ref": "refs/heads/main",
+        "after": "e69ac8b33774380605ffecc74288416ec0e0d7b0"
+      },
+      "actions_runs": [],
+      "check_runs": [],
+      "commit_statuses": []
+    }
+  ]
+}

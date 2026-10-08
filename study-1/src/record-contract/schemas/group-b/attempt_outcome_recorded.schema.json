@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/attempt_outcome_recorded.schema.json",
+  "title": "attempt_outcome_recorded (catalogue group B, row 26)",
+  "description": "Caller journal: the outcome and dispatch state of one attempt (BR-RUA-021, BR-RUA-015). SUCCEEDED, REJECTED and TIMED_OUT imply DISPATCHED. SUCCEEDED echoes the provider call and transaction ids; REJECTED carries the provider call id and rejection reason; FAILED carries a catalogued failure reason. Each failure code fixes the dispatch state (design §5.3 C2/C3, §9.9): CALL_BUILD_FAILED and DISPATCH_TRANSITION_REJECTED never reached transport, so NOT_DISPATCHED, or UNKNOWN when the conditional NOT_DISPATCHED transition itself did not apply (BR-RUA-021: only that transition proves NOT_DISPATCHED); DISPATCH_TRANSITION_CONDITION_FAILED and DISPATCH_TRANSITION_AMBIGUOUS are UNKNOWN; every transport-side code is DISPATCHED. dispatch_to_settlement_ns (step C6) is present exactly when the attempt was DISPATCHED, the only case with a dispatch origin.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["outcome"],
+        "properties": {
+          "outcome": {
+            "enum": ["SUCCEEDED", "REJECTED", "TIMED_OUT"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatch_state": {
+            "const": "DISPATCHED"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["outcome"],
+        "properties": {
+          "outcome": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provider_call_id": true,
+          "provider_transaction_id": true
+        },
+        "required": ["provider_call_id", "provider_transaction_id"]
+      }
+    },
+    {
+      "if": {
+        "required": ["outcome"],
+        "properties": {
+          "outcome": {
+            "const": "REJECTED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provider_call_id": true,
+          "rejection_reason": true,
+          "provider_transaction_id": false
+        },
+        "required": ["provider_call_id", "rejection_reason"]
+      },
+      "else": {
+        "properties": {
+          "rejection_reason": false
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["outcome"],
+        "properties": {
+          "outcome": {
+            "const": "FAILED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "failure": true
+        },
+        "required": ["failure"]
+      },
+      "else": {
+        "properties": {
+          "failure": false
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["outcome", "failure"],
+        "properties": {
+          "outcome": {
+            "const": "FAILED"
+          },
+          "failure": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+              "code": {
+                "enum": ["CALL_BUILD_FAILED", "DISPATCH_TRANSITION_REJECTED"]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatch_state": {
+            "enum": ["NOT_DISPATCHED", "UNKNOWN"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["outcome", "failure"],
+        "properties": {
+          "outcome": {
+            "const": "FAILED"
+          },
+          "failure": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+              "code": {
+                "enum": ["DISPATCH_TRANSITION_CONDITION_FAILED", "DISPATCH_TRANSITION_AMBIGUOUS"]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatch_state": {
+            "const": "UNKNOWN"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["outcome", "failure"],
+        "properties": {
+          "outcome": {
+            "const": "FAILED"
+          },
+          "failure": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {
+              "code": {
+                "enum": [
+                  "FUNCTION_ERROR",
+                  "VERSION_MISMATCH",
+                  "MALFORMED_RESPONSE",
+                  "ABORTED_WITHOUT_DEADLINE",
+                  "TRANSPORT_ERROR",
+                  "TIMEOUT_RECORD_NOT_DURABLE"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatch_state": {
+            "const": "DISPATCHED"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["dispatch_state"],
+        "properties": {
+          "dispatch_state": {
+            "const": "DISPATCHED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dispatch_to_settlement_ns": true
+        },
+        "required": ["dispatch_to_settlement_ns"]
+      },
+      "else": {
+        "properties": {
+          "dispatch_to_settlement_ns": false
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "attempt_outcome_recorded"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["conventional_caller", "durable_caller", "probe_caller"]
+    },
+    "attempt_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_request_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "refund_request_id": {
+      "$ref": "_defs.schema.json#/$defs/nonempty_trimmed"
+    },
+    "outcome": {
+      "enum": ["SUCCEEDED", "REJECTED", "TIMED_OUT", "FAILED"]
+    },
+    "dispatch_state": {
+      "enum": ["NOT_DISPATCHED", "DISPATCHED", "UNKNOWN"]
+    },
+    "provider_call_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "provider_transaction_id": {
+      "$ref": "_defs.schema.json#/$defs/uuid4"
+    },
+    "rejection_reason": {
+      "enum": [
+        "AUTHORIZATION_FAILED",
+        "SCHEMA_INVALID",
+        "EXECUTION_IDENTITY_MISMATCH",
+        "IDENTITY_STRUCTURE_INVALID",
+        "PAYMENT_NOT_FOUND",
+        "AMOUNT_INVALID",
+        "CURRENCY_MISMATCH"
+      ]
+    },
+    "failure": {
+      "allOf": [
+        {
+          "$ref": "_defs.schema.json#/$defs/structured_reason"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "CALL_BUILD_FAILED",
+                "DISPATCH_TRANSITION_REJECTED",
+                "DISPATCH_TRANSITION_CONDITION_FAILED",
+                "DISPATCH_TRANSITION_AMBIGUOUS",
+                "FUNCTION_ERROR",
+                "VERSION_MISMATCH",
+                "MALFORMED_RESPONSE",
+                "ABORTED_WITHOUT_DEADLINE",
+                "TRANSPORT_ERROR",
+                "TIMEOUT_RECORD_NOT_DURABLE"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "dispatch_to_settlement_ns": {
+      "$ref": "_defs.schema.json#/$defs/monotonic_ns"
+    },
+    "function_error": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executed_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "source",
+    "attempt_id",
+    "provider_request_id",
+    "refund_request_id",
+    "outcome",
+    "dispatch_state"
+  ],
+  "additionalProperties": false
+}

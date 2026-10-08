@@ -1,0 +1,4 @@
+{
+  "$comment": "Equivalent mutants accepted only by an authorized human decision (design §15.3, testing rule 5). Humans write this file; each entry needs file, mutator, line, column, replacement, rationale, approved_by and approved_at.",
+  "equivalences": []
+}

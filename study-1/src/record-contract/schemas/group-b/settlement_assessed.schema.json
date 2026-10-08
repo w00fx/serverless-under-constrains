@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rua.serverless-under-constraints.invalid/schemas/settlement_assessed.schema.json",
+  "title": "settlement_assessed (catalogue group B, row 51)",
+  "description": "Runner journal: the settlement observer summary (BR-RUA-032, D-32). established carries the quiet window and the pre-freeze recheck time; not_established carries its reasons. The samples themselves are settlement_sample lines.",
+  "type": "object",
+  "$defs": {
+    "settlement_restart": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "$ref": "_defs.schema.json#/$defs/utc_millis"
+        },
+        "cause": {
+          "enum": [
+            "SOURCE_VISIBLE",
+            "SOURCE_IN_FLIGHT",
+            "SOURCE_DELAYED",
+            "NEW_CORRELATED_DLQ_MESSAGE",
+            "UNCAPTURED_DLQ_MESSAGE",
+            "CORRELATED_JOURNAL_ACTIVITY",
+            "LEDGER_ACTIVITY",
+            "PROVIDER_ACTIVE",
+            "PROCESSING_NOT_TERMINAL",
+            "INNER_EXECUTION_ACTIVE",
+            "TREATMENT_NOT_TERMINAL",
+            "QUEUE_UNAVAILABLE",
+            "PRE_FREEZE_ACTIVITY"
+          ]
+        }
+      },
+      "required": ["at", "cause"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "_defs.schema.json#/$defs/event_envelope"
+    },
+    {
+      "if": {
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "const": "established"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "window_start": true,
+          "established_at": true,
+          "rechecked_at": true,
+          "reasons": {
+            "type": "array",
+            "maxItems": 0
+          }
+        },
+        "required": ["window_start", "established_at", "rechecked_at"]
+      },
+      "else": {
+        "properties": {
+          "window_start": false,
+          "established_at": false,
+          "rechecked_at": false,
+          "reasons": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "settlement_assessed"
+    },
+    "event_id": true,
+    "run_id": true,
+    "variant_validation_id": true,
+    "transport_probe_id": true,
+    "execution_manifest_sha256": true,
+    "trial_id": true,
+    "trial_manifest_sha256": true,
+    "occurred_at": true,
+    "source_instance_id": true,
+    "source_sequence": true,
+    "causation_event_ids": true,
+    "source": {
+      "enum": ["runner"]
+    },
+    "status": {
+      "enum": ["established", "not_established"]
+    },
+    "window_start": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "established_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "rechecked_at": {
+      "$ref": "_defs.schema.json#/$defs/utc_millis"
+    },
+    "reasons": {
+      "$ref": "_defs.schema.json#/$defs/structured_reasons"
+    },
+    "restarts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/settlement_restart"
+      }
+    },
+    "sample_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["schema_version", "record_type", "source", "status", "reasons", "restarts", "sample_count"],
+  "additionalProperties": false
+}

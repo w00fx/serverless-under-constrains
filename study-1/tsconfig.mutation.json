@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src", "tools/lib", "test/unit", "test/golden", "test/contract", "test/support"],
+  "exclude": [
+    "node_modules",
+    "src/**/aws/**",
+    "src/**/node/**",
+    "src/**/*.handler.ts",
+    "test/support/**/aws/**",
+    ".stryker-tmp",
+    "reports"
+  ]
+}

@@ -1,0 +1,1007 @@
+{
+  "record_type": "study_results",
+  "schema_version": 1,
+  "capability": "CAP-RUA",
+  "derived_by": "study-1/tools/derive-study-results.ts",
+  "authority": "Each package's package-index.json digest is the authority; this file is a derived view.",
+  "field_definitions": {
+    "paths": "Every artifact path is relative to its package directory; package and verification paths are relative to the evidence root.",
+    "package_index_sha256": "SHA-256 of the package's package-index.json bytes: the package's identity.",
+    "inputs": "Approved and captured amounts in minor units of currency, and the Region: the execution manifest's, equal to each trial's payment and approved decision and to the spec's OR-RUA-001.",
+    "safety.estimated_cost": "The safety assessment's pre-billing cost estimate (BR-RUA-046), not billed cost.",
+    "safety.active_time": "The safety assessment's observed active time against its declared limit.",
+    "trials[].preservation_verdict": "The frozen oracle result's verdict on the single-refund invariant.",
+    "trials[].successful_transaction_count": "SUCCEEDED transactions in the frozen ledger snapshot, cross-checked with the oracle.",
+    "trials[].refunded_total_minor": "Sum of amount_minor over those transactions, in minor units of currency.",
+    "trials[].commit_gap_seconds": "Seconds from the first to the second commit_requested_at; null with fewer than two commits.",
+    "trials[].retry.source_receive_count": "Highest approximate_receive_count over the caller journal invocations.",
+    "trials[].retry.durable_step_attempt": "Highest step_attempt over the caller journal invocations; null for a conventional caller.",
+    "trials[].retry.durable_executions": "Each Durable execution: its status, last history event and highest step attempt.",
+    "trials[].retry.mechanism": "source_redelivery when receive count > 1; durable_step_retry when step attempt > 1; both or none.",
+    "within_variant_reproductions": "Variant validations: one variant each, never comparative (spec limitation 9). A variant validation is a within-variant reproduction only when its summary states implementation_validation_status verified and validation_validity valid.",
+    "excluded_executions": "Variant validations that fail that criterion: never counted, listed with the status reasons, unverified gates and indeterminate reason codes their own packages state."
+  },
+  "canonical_runs": [
+    {
+      "execution_kind": "run",
+      "execution_id": "abf41ffd-3008-4b29-81ee-b65d8095188b",
+      "role": "canonical_run",
+      "comparative": true,
+      "non_comparative_basis": null,
+      "package_directory": "runs/abf41ffd-3008-4b29-81ee-b65d8095188b",
+      "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+      "source_commit": "9ce4ad74efaff156ec71a60d330dccae66524687",
+      "selected_probe": {
+        "transport_probe_id": "adfca539-508f-4a51-9a98-e1dcf8cec84a",
+        "original_package_index_sha256": "1a1411b2e6956a6c42179896a6a0fff9a8dc064e93b1845e2b163181cb314f87"
+      },
+      "inputs": {
+        "approved_amount_minor": "10000",
+        "captured_amount_minor": "10000",
+        "currency": "BRL",
+        "region": "us-east-1",
+        "evidence_refs": [
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "admission/execution-manifest.json",
+            "artifact_sha256": "3d26529048074578c43c303781c3ff54d17c0f4f22f6916fa1348955b66f202e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+            "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          }
+        ]
+      },
+      "outcome": {
+        "run_terminal_reason": "COMPLETED",
+        "execution_status": "completed",
+        "comparison_eligibility": "eligible"
+      },
+      "closure": {
+        "cleanup_status": "succeeded",
+        "leak_audit_status": "clean",
+        "lease_status": "released",
+        "safety_status": "within_limits",
+        "evidence_integrity_status": "verified"
+      },
+      "safety": {
+        "safety_status": "within_limits",
+        "estimated_cost": {
+          "observed_usd": "0.28",
+          "declared_limit_usd": "5.00",
+          "result": "within_limits"
+        },
+        "active_time": {
+          "observed_ms": 1131625,
+          "declared_limit_ms": 4500000,
+          "result": "within_limits"
+        },
+        "total_time": {
+          "observed_ms": 1512585,
+          "declared_limit_ms": 5400000,
+          "result": "within_limits"
+        }
+      },
+      "verifications": [
+        {
+          "path": "verifications/abf41ffd-3008-4b29-81ee-b65d8095188b/2026-10-07T06:29:26.885Z-package-verification.json",
+          "sha256": "fcaae1a24d097ceba6c01856c119b62f33c7b0d12d123d6bcadb566bb733b088",
+          "record_type": "package_verification",
+          "recorded_at": "2026-10-07T06:29:26.885Z",
+          "outcome": {
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/abf41ffd-3008-4b29-81ee-b65d8095188b/2026-10-07T06:29:26.885Z-study-completion-assessment.json",
+          "sha256": "756ee608180facf0138e94c59460cdd558995bee67a6d936b4ffd831e69c9b0c",
+          "record_type": "study_completion_assessment",
+          "recorded_at": "2026-10-07T06:29:26.885Z",
+          "outcome": {
+            "study_completion": "complete",
+            "comparison_eligibility": "eligible",
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/abf41ffd-3008-4b29-81ee-b65d8095188b/2026-10-07T06:34:37.929Z-package-verification.json",
+          "sha256": "78fc0807ebfc05379b2c07c66f40410ead0804a7d89b7de567aa783bd4283b42",
+          "record_type": "package_verification",
+          "recorded_at": "2026-10-07T06:34:37.929Z",
+          "outcome": {
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/abf41ffd-3008-4b29-81ee-b65d8095188b/2026-10-07T06:34:37.929Z-study-completion-assessment.json",
+          "sha256": "87eb0ab8221eba8926e8d575f635ed01f7c8bb64656d7aa55d1c22d805e4bd47",
+          "record_type": "study_completion_assessment",
+          "recorded_at": "2026-10-07T06:34:37.929Z",
+          "outcome": {
+            "study_completion": "complete",
+            "comparison_eligibility": "eligible",
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/abf41ffd-3008-4b29-81ee-b65d8095188b/2026-10-07T06:38:06.890Z-package-verification.json",
+          "sha256": "e08da0b7e7ffb91d69ff1e6748c280d5296930078b02d2f43389c398dea7b870",
+          "record_type": "package_verification",
+          "recorded_at": "2026-10-07T06:38:06.890Z",
+          "outcome": {
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/abf41ffd-3008-4b29-81ee-b65d8095188b/2026-10-07T06:38:06.890Z-study-completion-assessment.json",
+          "sha256": "711ec0cdac2855628ad10fe1b5ab79ecdf6da0c8ed637ae495ccc0b4fc165996",
+          "record_type": "study_completion_assessment",
+          "recorded_at": "2026-10-07T06:38:06.890Z",
+          "outcome": {
+            "study_completion": "complete",
+            "comparison_eligibility": "eligible",
+            "package_eligibility": "eligible"
+          }
+        }
+      ],
+      "trials": [
+        {
+          "trial_id": "7fd96973-1eed-4982-8a4e-b654680ce404",
+          "sequence": 1,
+          "scenario": "CONTROL",
+          "variant_id": "conventional",
+          "preservation_verdict": "pass",
+          "correct_completion": true,
+          "trial_validity": "valid",
+          "treatment_fidelity": "not_applicable",
+          "successful_transaction_count": 1,
+          "refunded_total_minor": "10000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T06:06:24.643Z"
+          ],
+          "commit_gap_seconds": null,
+          "retry": {
+            "mechanism": "none",
+            "source_receive_count": 1,
+            "durable_step_attempt": null,
+            "durable_executions": []
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/derived/oracle-result.json",
+              "artifact_sha256": "90c38d8d9953af2aa8b42c370b9a3a963fbf4160e6b7281659ff2388649e443c"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/journals/caller-journal.jsonl",
+              "artifact_sha256": "bc398f359191fa5de2b895ab789c4062a75eee2078498f527dd67a1ac12c4fd9"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/ledger/ledger-snapshot.json",
+              "artifact_sha256": "0b684b26d709fe6a874e1e438e863295343c0f031f87dcf466e0b82a0cd9a75a"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/7fd96973-1eed-4982-8a4e-b654680ce404/trial-manifest.json",
+              "artifact_sha256": "eaa542c7f9ec30f12b1bb16655ac57ddd84f51a2b9dff946ef217730a266a78e"
+            }
+          ]
+        },
+        {
+          "trial_id": "5a9bbf55-54bf-4ea8-ab29-f5a83b57a288",
+          "sequence": 2,
+          "scenario": "CONTROL",
+          "variant_id": "durable",
+          "preservation_verdict": "pass",
+          "correct_completion": true,
+          "trial_validity": "valid",
+          "treatment_fidelity": "not_applicable",
+          "successful_transaction_count": 1,
+          "refunded_total_minor": "10000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T06:09:02.914Z"
+          ],
+          "commit_gap_seconds": null,
+          "retry": {
+            "mechanism": "none",
+            "source_receive_count": 1,
+            "durable_step_attempt": 1,
+            "durable_executions": [
+              {
+                "status": "SUCCEEDED",
+                "final_history_event": "ExecutionSucceeded",
+                "highest_step_attempt": 1
+              }
+            ]
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/derived/oracle-result.json",
+              "artifact_sha256": "b5feb0a9cb80bc75a30d03d1f4ab0fed2b528c1b3fdbd3adefe945f4ec8cdbe7"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/execution-metadata/durable-executions.json",
+              "artifact_sha256": "d3e6dca0bec2291da5fbfc5c7711eb947f0059a3419771856a952645a8d197f3"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/journals/caller-journal.jsonl",
+              "artifact_sha256": "36d44205c6901ba0e9274173e73c6f58ada5b4202b005d81ded62721898fd540"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/ledger/ledger-snapshot.json",
+              "artifact_sha256": "abf31acf2130824f170ecb74b764a652520354558c6dd8e4ef7e17b9afe73705"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/5a9bbf55-54bf-4ea8-ab29-f5a83b57a288/trial-manifest.json",
+              "artifact_sha256": "19565e5abacd02b33032a6b305e4d28080569f1ff7c327cfa3a2e83fb5810bb3"
+            }
+          ]
+        },
+        {
+          "trial_id": "2c1a67fd-3a63-4028-ab2c-61ded755769f",
+          "sequence": 3,
+          "scenario": "COMMIT_THEN_TIMEOUT",
+          "variant_id": "conventional",
+          "preservation_verdict": "fail",
+          "correct_completion": false,
+          "trial_validity": "valid",
+          "treatment_fidelity": "verified",
+          "successful_transaction_count": 2,
+          "refunded_total_minor": "20000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T06:12:11.884Z",
+            "2026-10-07T06:13:10.989Z"
+          ],
+          "commit_gap_seconds": 59.105,
+          "retry": {
+            "mechanism": "source_redelivery",
+            "source_receive_count": 2,
+            "durable_step_attempt": null,
+            "durable_executions": []
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/derived/oracle-result.json",
+              "artifact_sha256": "3bb92dd34738d47acce8907c721467219ac7b7db16693aa205ad53e39d77fd91"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/journals/caller-journal.jsonl",
+              "artifact_sha256": "228ea2d7328d11a10962751538161ac926af994c6866042a5879e2e1c1c39af6"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/ledger/ledger-snapshot.json",
+              "artifact_sha256": "e7d65aa99be0af293200839bb6fd6fba973a7df7b048acafef7620513a445837"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/2c1a67fd-3a63-4028-ab2c-61ded755769f/trial-manifest.json",
+              "artifact_sha256": "6805f8b3d3164a1a687046fc2a0eb8bfb8e150e83c2ab012dad2d300dcd6c2a2"
+            }
+          ]
+        },
+        {
+          "trial_id": "d16f2b2c-22fe-477a-b974-a6f63d19726f",
+          "sequence": 4,
+          "scenario": "COMMIT_THEN_TIMEOUT",
+          "variant_id": "durable",
+          "preservation_verdict": "fail",
+          "correct_completion": false,
+          "trial_validity": "valid",
+          "treatment_fidelity": "verified",
+          "successful_transaction_count": 2,
+          "refunded_total_minor": "20000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T06:16:50.344Z",
+            "2026-10-07T06:17:54.439Z"
+          ],
+          "commit_gap_seconds": 64.095,
+          "retry": {
+            "mechanism": "durable_step_retry",
+            "source_receive_count": 1,
+            "durable_step_attempt": 2,
+            "durable_executions": [
+              {
+                "status": "SUCCEEDED",
+                "final_history_event": "ExecutionSucceeded",
+                "highest_step_attempt": 2
+              }
+            ]
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/derived/oracle-result.json",
+              "artifact_sha256": "ea9ccd2db9e501544ef77f6fe8c0286edd723aca04a9500c82e109251b0d876f"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/execution-metadata/durable-executions.json",
+              "artifact_sha256": "9623b40ee8d66c0e3ce4c8ea577a981bc127463523fa038ce1004e19be6bf0fa"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/journals/caller-journal.jsonl",
+              "artifact_sha256": "415c0aa5740caa3dff4db733378c9264732379c73cc0dd443d1bdda32f213ecc"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/ledger/ledger-snapshot.json",
+              "artifact_sha256": "747bcfff5ab4ce136942f63791039d78b3f4e025a2bc48776f12f886ef8c2333"
+            },
+            {
+              "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+              "artifact_path": "trials/d16f2b2c-22fe-477a-b974-a6f63d19726f/trial-manifest.json",
+              "artifact_sha256": "3a6aedfe7c65d9fea214081632449176ec8b0057f1104d1cf7723ce5dfeaf480"
+            }
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+          "artifact_path": "admission/execution-manifest.json",
+          "artifact_sha256": "3d26529048074578c43c303781c3ff54d17c0f4f22f6916fa1348955b66f202e"
+        },
+        {
+          "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+          "artifact_path": "admission/source-provenance.json",
+          "artifact_sha256": "ec1e7edbcaaba92e61ab4cc1b6444c079ae2e90788c36fd6058e6a54f91f20df"
+        },
+        {
+          "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+          "artifact_path": "summary/run-summary.json",
+          "artifact_sha256": "3c343c7a7712430898fed010616711625746e0cab60d9597ba0c3a2e83f72e02"
+        },
+        {
+          "package_index_sha256": "a7f866843ad6a22471993f802241417feda450e9865c3251ff8ea9c0efdeee74",
+          "artifact_path": "summary/safety-assessment.json",
+          "artifact_sha256": "86426b673e94879145df5e074e072a44a6d0558812a3533ed6d672ce7c74d442"
+        }
+      ]
+    }
+  ],
+  "within_variant_reproductions": [
+    {
+      "execution_kind": "variant_validation",
+      "execution_id": "a8a5b2f1-61d2-4712-9c54-34114abfd54e",
+      "role": "within_variant_reproduction",
+      "comparative": false,
+      "non_comparative_basis": "Spec limitation 9: Variant-validation evidence is non-comparative and cannot substitute for the canonical four-cell run.",
+      "package_directory": "variant-validations/a8a5b2f1-61d2-4712-9c54-34114abfd54e",
+      "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+      "source_commit": "111a44cb3c9fd216a163f4a3065fd4ca0a03d859",
+      "selected_probe": {
+        "transport_probe_id": "adfca539-508f-4a51-9a98-e1dcf8cec84a",
+        "original_package_index_sha256": "1a1411b2e6956a6c42179896a6a0fff9a8dc064e93b1845e2b163181cb314f87"
+      },
+      "inputs": {
+        "approved_amount_minor": "10000",
+        "captured_amount_minor": "10000",
+        "currency": "BRL",
+        "region": "us-east-1",
+        "evidence_refs": [
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "admission/execution-manifest.json",
+            "artifact_sha256": "5459474242d205254c43b902dc31625e8ad7681fb9dafcba08a53ee38be92fec"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+            "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          }
+        ]
+      },
+      "outcome": {
+        "validation_terminal_reason": "COMPLETED",
+        "implementation_validation_status": "verified",
+        "validation_validity": "valid"
+      },
+      "closure": {
+        "cleanup_status": "succeeded",
+        "leak_audit_status": "clean",
+        "lease_status": "released",
+        "safety_status": "within_limits",
+        "evidence_integrity_status": "verified"
+      },
+      "safety": {
+        "safety_status": "within_limits",
+        "estimated_cost": {
+          "observed_usd": "0.18",
+          "declared_limit_usd": "5.00",
+          "result": "within_limits"
+        },
+        "active_time": {
+          "observed_ms": 720106,
+          "declared_limit_ms": 4500000,
+          "result": "within_limits"
+        },
+        "total_time": {
+          "observed_ms": 1027004,
+          "declared_limit_ms": 5400000,
+          "result": "within_limits"
+        }
+      },
+      "verifications": [
+        {
+          "path": "verifications/a8a5b2f1-61d2-4712-9c54-34114abfd54e/2026-10-07T05:09:33.330Z-variant-validation-verification.json",
+          "sha256": "79bd55246e3f397b4d907382d90b48c4317a3299f933309ef9c197704003a6dd",
+          "record_type": "variant_validation_verification",
+          "recorded_at": "2026-10-07T05:09:33.330Z",
+          "outcome": {
+            "effective_implementation_validation_status": "verified",
+            "validation_validity": "valid",
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/a8a5b2f1-61d2-4712-9c54-34114abfd54e/2026-10-07T06:34:36.083Z-variant-validation-verification.json",
+          "sha256": "a5ce3296380a097a1155e50e8c1f1ee5d219d3a8a5faaf439de94ed609291a51",
+          "record_type": "variant_validation_verification",
+          "recorded_at": "2026-10-07T06:34:36.083Z",
+          "outcome": {
+            "effective_implementation_validation_status": "verified",
+            "validation_validity": "valid",
+            "package_eligibility": "eligible"
+          }
+        }
+      ],
+      "trials": [
+        {
+          "trial_id": "d0f24b36-9215-492e-80cf-e567f0977476",
+          "sequence": 1,
+          "scenario": "CONTROL",
+          "variant_id": "conventional",
+          "preservation_verdict": "pass",
+          "correct_completion": true,
+          "trial_validity": "valid",
+          "treatment_fidelity": "not_applicable",
+          "successful_transaction_count": 1,
+          "refunded_total_minor": "10000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T04:55:02.710Z"
+          ],
+          "commit_gap_seconds": null,
+          "retry": {
+            "mechanism": "none",
+            "source_receive_count": 1,
+            "durable_step_attempt": null,
+            "durable_executions": []
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/derived/oracle-result.json",
+              "artifact_sha256": "86d87ad79c1de73360cf555c3df62afc856dce44820ce85d699be5a154a0f03c"
+            },
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/journals/caller-journal.jsonl",
+              "artifact_sha256": "8fa057f3a66d0820d0677e967dff936ea8198413118b494e73df5e4b771c09c2"
+            },
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/ledger/ledger-snapshot.json",
+              "artifact_sha256": "b7c0de802d63c00f728751fd3e0d9b744689caf61c9d817eaa2e9097fea1e5c0"
+            },
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/d0f24b36-9215-492e-80cf-e567f0977476/trial-manifest.json",
+              "artifact_sha256": "fd1f3480f44a4c5bd8012e4b0b624d311b5a9db81cd0e2ee54269757e03b9920"
+            }
+          ]
+        },
+        {
+          "trial_id": "617b2979-7ef2-4fc0-8018-60d162b852e0",
+          "sequence": 2,
+          "scenario": "COMMIT_THEN_TIMEOUT",
+          "variant_id": "conventional",
+          "preservation_verdict": "fail",
+          "correct_completion": false,
+          "trial_validity": "valid",
+          "treatment_fidelity": "verified",
+          "successful_transaction_count": 2,
+          "refunded_total_minor": "20000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T04:58:10.900Z",
+            "2026-10-07T04:59:10.871Z"
+          ],
+          "commit_gap_seconds": 59.971,
+          "retry": {
+            "mechanism": "source_redelivery",
+            "source_receive_count": 2,
+            "durable_step_attempt": null,
+            "durable_executions": []
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/derived/oracle-result.json",
+              "artifact_sha256": "0fb2fd3f8dd6b78c1f6ced72eb3b0ad75d79a19ecbca93944704957992e05fef"
+            },
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/journals/caller-journal.jsonl",
+              "artifact_sha256": "de5a0be0b5c68f0ba10545d1dbd5015bf9c30ff7a5cb2bdd4cf7eb4c7358ffbd"
+            },
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/ledger/ledger-snapshot.json",
+              "artifact_sha256": "6449c2e57a5a3dda5fd7a0e05be9e4491521fd2ec2277f45be225e457738f7fa"
+            },
+            {
+              "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+              "artifact_path": "trials/617b2979-7ef2-4fc0-8018-60d162b852e0/trial-manifest.json",
+              "artifact_sha256": "535d36ecaf8be5ee9020b6f147b99e6f7616b8bf647bc972a3357a285f2f5ee1"
+            }
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+          "artifact_path": "admission/execution-manifest.json",
+          "artifact_sha256": "5459474242d205254c43b902dc31625e8ad7681fb9dafcba08a53ee38be92fec"
+        },
+        {
+          "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+          "artifact_path": "admission/source-provenance.json",
+          "artifact_sha256": "f6fc2d27ee57da1464295a1648a7d58eee0ec55c0b5538b64a581284b2c16d9f"
+        },
+        {
+          "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+          "artifact_path": "summary/safety-assessment.json",
+          "artifact_sha256": "c1c0aec8e9c551069111b1eb0043c0d184fb5b639abb7f09e6c9309669a5bf29"
+        },
+        {
+          "package_index_sha256": "9c0beedda6e643f0746e02d3282268798fe8172ce577af4a0a459639be75d62e",
+          "artifact_path": "summary/validation-summary.json",
+          "artifact_sha256": "8a73b3ba0ecb59bbf20287b39a1c76f48b9fd77c785168c5322b1a5628c2c0d7"
+        }
+      ]
+    },
+    {
+      "execution_kind": "variant_validation",
+      "execution_id": "60511328-ab4d-4234-81ab-0b042a20e658",
+      "role": "within_variant_reproduction",
+      "comparative": false,
+      "non_comparative_basis": "Spec limitation 9: Variant-validation evidence is non-comparative and cannot substitute for the canonical four-cell run.",
+      "package_directory": "variant-validations/60511328-ab4d-4234-81ab-0b042a20e658",
+      "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+      "source_commit": "9ce4ad74efaff156ec71a60d330dccae66524687",
+      "selected_probe": {
+        "transport_probe_id": "adfca539-508f-4a51-9a98-e1dcf8cec84a",
+        "original_package_index_sha256": "1a1411b2e6956a6c42179896a6a0fff9a8dc064e93b1845e2b163181cb314f87"
+      },
+      "inputs": {
+        "approved_amount_minor": "10000",
+        "captured_amount_minor": "10000",
+        "currency": "BRL",
+        "region": "us-east-1",
+        "evidence_refs": [
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "admission/execution-manifest.json",
+            "artifact_sha256": "c39605d9b960dacf90d6d55523843d7e08b0e9def09fdbcb0b0263ea191986df"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/inputs/approved-decision.json",
+            "artifact_sha256": "ed9cdc3d2b51385a0a7bf22cb3d4451f65c8246faed2baf84b4ba4d8bd4ed61e"
+          },
+          {
+            "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+            "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/inputs/payment.json",
+            "artifact_sha256": "18f12b6f93070e70fb9e12d069e2dd265c2404aff207f5a9d65278ac5c2e332d"
+          }
+        ]
+      },
+      "outcome": {
+        "validation_terminal_reason": "COMPLETED",
+        "implementation_validation_status": "verified",
+        "validation_validity": "valid"
+      },
+      "closure": {
+        "cleanup_status": "succeeded",
+        "leak_audit_status": "clean",
+        "lease_status": "released",
+        "safety_status": "within_limits",
+        "evidence_integrity_status": "verified"
+      },
+      "safety": {
+        "safety_status": "within_limits",
+        "estimated_cost": {
+          "observed_usd": "0.22",
+          "declared_limit_usd": "5.00",
+          "result": "within_limits"
+        },
+        "active_time": {
+          "observed_ms": 716093,
+          "declared_limit_ms": 4500000,
+          "result": "within_limits"
+        },
+        "total_time": {
+          "observed_ms": 1118947,
+          "declared_limit_ms": 5400000,
+          "result": "within_limits"
+        }
+      },
+      "verifications": [
+        {
+          "path": "verifications/60511328-ab4d-4234-81ab-0b042a20e658/2026-10-07T06:03:17.553Z-variant-validation-verification.json",
+          "sha256": "816510d1763c1b90773e45b91fa1ca075f688aecb19ba9fe346a40bcea723cf1",
+          "record_type": "variant_validation_verification",
+          "recorded_at": "2026-10-07T06:03:17.553Z",
+          "outcome": {
+            "effective_implementation_validation_status": "verified",
+            "validation_validity": "valid",
+            "package_eligibility": "eligible"
+          }
+        },
+        {
+          "path": "verifications/60511328-ab4d-4234-81ab-0b042a20e658/2026-10-07T06:34:37.015Z-variant-validation-verification.json",
+          "sha256": "7021d7c0bcf7a57a76a9bc3ebabdf996149a8e780493c88707ef6c651f78356f",
+          "record_type": "variant_validation_verification",
+          "recorded_at": "2026-10-07T06:34:37.015Z",
+          "outcome": {
+            "effective_implementation_validation_status": "verified",
+            "validation_validity": "valid",
+            "package_eligibility": "eligible"
+          }
+        }
+      ],
+      "trials": [
+        {
+          "trial_id": "abe77042-33ec-4391-8ea3-b655873aff45",
+          "sequence": 1,
+          "scenario": "CONTROL",
+          "variant_id": "durable",
+          "preservation_verdict": "pass",
+          "correct_completion": true,
+          "trial_validity": "valid",
+          "treatment_fidelity": "not_applicable",
+          "successful_transaction_count": 1,
+          "refunded_total_minor": "10000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T05:47:30.247Z"
+          ],
+          "commit_gap_seconds": null,
+          "retry": {
+            "mechanism": "none",
+            "source_receive_count": 1,
+            "durable_step_attempt": 1,
+            "durable_executions": [
+              {
+                "status": "SUCCEEDED",
+                "final_history_event": "ExecutionSucceeded",
+                "highest_step_attempt": 1
+              }
+            ]
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/derived/oracle-result.json",
+              "artifact_sha256": "71426b055931cf4146f65db10d274a55ac91e3670851fa2114833df7dd63891e"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/execution-metadata/durable-executions.json",
+              "artifact_sha256": "c3c66d9bcac1515fb3c93aebee0c9a8155fa480385765dd5ae7d32beddac02ef"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/journals/caller-journal.jsonl",
+              "artifact_sha256": "62dcbb10f4791d804a6fcee1cbb233fc7fc5fd3dd7eeda4246ef9c2504c6f5cf"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/ledger/ledger-snapshot.json",
+              "artifact_sha256": "31e65506ac180c840d6a52165a119caf6c9d30da139fe9db137b4aeb040129f9"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/abe77042-33ec-4391-8ea3-b655873aff45/trial-manifest.json",
+              "artifact_sha256": "a928a81ed7bc92b1a0317a850d949da911d553ad31475bbbb5c4addb5b949764"
+            }
+          ]
+        },
+        {
+          "trial_id": "217c7cb6-6d7a-4a75-95e1-c82aeec69761",
+          "sequence": 2,
+          "scenario": "COMMIT_THEN_TIMEOUT",
+          "variant_id": "durable",
+          "preservation_verdict": "fail",
+          "correct_completion": false,
+          "trial_validity": "valid",
+          "treatment_fidelity": "verified",
+          "successful_transaction_count": 2,
+          "refunded_total_minor": "20000",
+          "currency": "BRL",
+          "commit_times": [
+            "2026-10-07T05:50:08.786Z",
+            "2026-10-07T05:51:12.102Z"
+          ],
+          "commit_gap_seconds": 63.316,
+          "retry": {
+            "mechanism": "durable_step_retry",
+            "source_receive_count": 1,
+            "durable_step_attempt": 2,
+            "durable_executions": [
+              {
+                "status": "SUCCEEDED",
+                "final_history_event": "ExecutionSucceeded",
+                "highest_step_attempt": 2
+              }
+            ]
+          },
+          "evidence_refs": [
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/derived/oracle-result.json",
+              "artifact_sha256": "49edc93e03793afc67e276cca877d311bd77dc476feba2038ab535526bde8285"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/execution-metadata/durable-executions.json",
+              "artifact_sha256": "8dd60291cb12e58e3a48e943bf728165d1794e9cb22f52de6e167ccf4d142fc7"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/journals/caller-journal.jsonl",
+              "artifact_sha256": "cc199c42d70d0773ef88afa73a05c59a3248cef5899181f5482e2e0d705c6210"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/ledger/ledger-snapshot.json",
+              "artifact_sha256": "e1aa267544629036d60eee0665795f7024d44f9f2cd4fa8ee0ae30646493cab8"
+            },
+            {
+              "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+              "artifact_path": "trials/217c7cb6-6d7a-4a75-95e1-c82aeec69761/trial-manifest.json",
+              "artifact_sha256": "8274f2c1116074d11ceab7f30aa191ccfa19efe18845b0e94da2f91ef8127192"
+            }
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+          "artifact_path": "admission/execution-manifest.json",
+          "artifact_sha256": "c39605d9b960dacf90d6d55523843d7e08b0e9def09fdbcb0b0263ea191986df"
+        },
+        {
+          "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+          "artifact_path": "admission/source-provenance.json",
+          "artifact_sha256": "3ec64b3005eb47188913f1d452090dfcd8dc8945557c7a6d878fed5e97ded754"
+        },
+        {
+          "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+          "artifact_path": "summary/safety-assessment.json",
+          "artifact_sha256": "570feadcdafb0895cafad8061af4e1d32c5df0c3cfebe792dad325570de09d4c"
+        },
+        {
+          "package_index_sha256": "b7fc14264129736e8e202fdc2c52cd590efa94bd2ab83bc7b8da9b2631e3edb8",
+          "artifact_path": "summary/validation-summary.json",
+          "artifact_sha256": "49093576104f53f960b6f5ffc29d5d4aa593ccca8ae37368a5e5ca38147bfbec"
+        }
+      ]
+    }
+  ],
+  "excluded_executions": [
+    {
+      "execution_kind": "variant_validation",
+      "execution_id": "eda6019a-0f5d-4565-a809-b129ec432036",
+      "role": "excluded",
+      "comparative": false,
+      "package_directory": "variant-validations/eda6019a-0f5d-4565-a809-b129ec432036",
+      "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+      "source_commit": "111a44cb3c9fd216a163f4a3065fd4ca0a03d859",
+      "outcome": {
+        "validation_terminal_reason": "COMPLETED",
+        "implementation_validation_status": "indeterminate",
+        "validation_validity": "indeterminate"
+      },
+      "closure": {
+        "cleanup_status": "succeeded",
+        "leak_audit_status": "clean",
+        "lease_status": "released",
+        "safety_status": "within_limits",
+        "evidence_integrity_status": "verified"
+      },
+      "verifications": [
+        {
+          "path": "verifications/eda6019a-0f5d-4565-a809-b129ec432036/2026-10-07T05:43:26.091Z-variant-validation-verification.json",
+          "sha256": "581884ff73519aa5b955336d505c7b9ed3ae48a1cd473f057191e4c73a405102",
+          "record_type": "variant_validation_verification",
+          "recorded_at": "2026-10-07T05:43:26.091Z",
+          "outcome": {
+            "effective_implementation_validation_status": "indeterminate",
+            "validation_validity": "indeterminate",
+            "package_eligibility": "eligible"
+          }
+        }
+      ],
+      "exclusion": {
+        "criterion": "A variant validation is a within-variant reproduction only when its summary states implementation_validation_status verified and validation_validity valid.",
+        "status_reasons": [
+          {
+            "code": "TRIAL_NOT_VALID",
+            "subject": "trial 1 (CONTROL)",
+            "detail": "trial_validity is indeterminate; expected valid"
+          },
+          {
+            "code": "CONTROL_VERDICT_INDETERMINATE",
+            "subject": "trial 1 (CONTROL)",
+            "detail": "preservation_verdict is indeterminate; expected a conclusive pass or fail"
+          },
+          {
+            "code": "TRIAL_NOT_VALID",
+            "subject": "trial 2 (COMMIT_THEN_TIMEOUT)",
+            "detail": "trial_validity is indeterminate; expected valid"
+          },
+          {
+            "code": "TREATMENT_VERDICT_INDETERMINATE",
+            "subject": "trial 2 (COMMIT_THEN_TIMEOUT)",
+            "detail": "preservation_verdict is indeterminate; expected a conclusive pass or fail"
+          },
+          {
+            "code": "LATE_EVIDENCE_UNVERIFIED",
+            "subject": "late_evidence_status",
+            "detail": "late_evidence_status is unverified; expected none or consistent"
+          }
+        ]
+      },
+      "trials": [
+        {
+          "trial_id": "7aeb0d62-5c7e-4494-9002-0063c4e65f03",
+          "sequence": 1,
+          "scenario": "CONTROL",
+          "variant_id": "durable",
+          "preservation_verdict": "indeterminate",
+          "trial_validity": "indeterminate",
+          "unverified_gates": [
+            "independent_oracle=unverified",
+            "settlement=unverified"
+          ],
+          "indeterminate_reason_codes": [
+            "INNER_EXECUTION_ACTIVE",
+            "LEDGER_NOT_INDEPENDENT",
+            "SETTLEMENT_NOT_ESTABLISHED"
+          ],
+          "evidence_refs": [
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/7aeb0d62-5c7e-4494-9002-0063c4e65f03/derived/oracle-result.json",
+              "artifact_sha256": "d3abbad4e00f655b838d44e7a0723f0ff2a857693b1b79a60f3eb111c0d6725a"
+            },
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/7aeb0d62-5c7e-4494-9002-0063c4e65f03/trial-manifest.json",
+              "artifact_sha256": "841b8637ca840fe97576069953c47732fdf88a87aea0e91cac8c78fd39ec4043"
+            }
+          ]
+        },
+        {
+          "trial_id": "1eb6ecba-5dc4-4ae0-8bd5-6fcc9a365572",
+          "sequence": 2,
+          "scenario": "COMMIT_THEN_TIMEOUT",
+          "variant_id": "durable",
+          "preservation_verdict": "indeterminate",
+          "trial_validity": "indeterminate",
+          "unverified_gates": [
+            "independent_oracle=unverified",
+            "settlement=unverified"
+          ],
+          "indeterminate_reason_codes": [
+            "INNER_EXECUTION_ACTIVE",
+            "LEDGER_NOT_INDEPENDENT",
+            "SETTLEMENT_NOT_ESTABLISHED"
+          ],
+          "evidence_refs": [
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/1eb6ecba-5dc4-4ae0-8bd5-6fcc9a365572/derived/oracle-result.json",
+              "artifact_sha256": "ae5819cd24cec06af758de5a4bed38dcb8d061c54c5721c355690aee7255a1d3"
+            },
+            {
+              "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+              "artifact_path": "trials/1eb6ecba-5dc4-4ae0-8bd5-6fcc9a365572/trial-manifest.json",
+              "artifact_sha256": "d2ca0ab40649dc05c159baad1169d89dbf895488a52c9ad0fb97085e2ba3c1cd"
+            }
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+          "artifact_path": "admission/source-provenance.json",
+          "artifact_sha256": "c0a0459acf05ce5042d69d78ecff0cc6260d7b3d4ad4f612b74dfdc928623149"
+        },
+        {
+          "package_index_sha256": "f8a19a5a2f5394e13db089bd5be56c4d4bb78209aab5077f4df38c8d86f7934c",
+          "artifact_path": "summary/validation-summary.json",
+          "artifact_sha256": "2b8b43f9a7f3635d01d35dab03f25bca5cd592781da3e4335a2eee7c8cce7e5d"
+        }
+      ]
+    }
+  ]
+}
