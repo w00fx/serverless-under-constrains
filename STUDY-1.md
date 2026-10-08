@@ -91,7 +91,12 @@ things that the owner controls:
   import closure parse or collect evidence, and none of them runs during an oracle evaluation.
   The replay records are private (see [Known gaps](#known-gaps)).
 
-`694d4c9` is not an ancestor of the published branch: it was rebased into it as `47042de`.
+`694d4c9` is not an ancestor of `main`: it was rebased into the published branch as `47042de`.
+The published annotated tag `provenance/rehearsal-694d4c9` keeps it reachable from any clone.
+
+From a clone of `main`, two more published annotated tags reach the other commits this note
+cites: `provenance/study-1-source-9ce4ad7` names `9ce4ad7`, the canonical run's source commit,
+and `provenance/spec-ratified-5d16bfe` names `5d16bfe`, the specification's ratification.
 
 ## Executions not counted
 
@@ -148,8 +153,10 @@ Anchored kit. The ratification commit `5d16bfe` records the same.
 - **Private artifacts**: the raw packages (`study-1/evidence/`, including the amendment above),
   the mutation reports (`study-1/reports/mutation/`), and the owner's working records of the run
   (decision log, ratification memo, oracle replays, CloudTrail extracts). Git ignores all of them.
-- **`694d4c9`**, the source of the first cloud evidence, is kept by the tag
-  `provenance/rehearsal-694d4c9`. That tag is not published yet.
+- **`694d4c9`**, the source of the first cloud evidence, is outside `main`'s history. The
+  published tag `provenance/rehearsal-694d4c9` keeps it. The published tags
+  `provenance/study-1-source-9ce4ad7` and `provenance/spec-ratified-5d16bfe` name `9ce4ad7` and
+  `5d16bfe` (see [Provenance limit](#provenance-limit)).
 - **Billed cost** is unverified (see [Cost](#cost)).
 
 ## How to cite
